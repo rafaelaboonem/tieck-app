@@ -1,0 +1,26 @@
+name: E2E Route Validation
+
+on:
+  deployment_status:
+
+jobs:
+  validate-routes:
+    if: github.event.deployment_status.state == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Verify Routes
+        env:
+          DEPLOY_URL: ${{ github.event.deployment_status.target_url }}
+        run: |
+          URL=${DEPLOY_URL:-"https://checklistapp-wheat.vercel.app"}
+          echo "Validating routes for $URL"
+          sed -i "s|https://checklistapp-wheat.vercel.app|$URL|g" tests/verify_routes.ts
+          bun test:routes

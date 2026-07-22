@@ -1,0 +1,1 @@
+ALTER TABLE public.workspace_categories ADD COLUMN IF NOT EXISTS icon_name TEXT DEFAULT 'Layout';

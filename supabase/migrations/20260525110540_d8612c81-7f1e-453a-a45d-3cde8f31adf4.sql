@@ -1,0 +1,1 @@
+ALTER TABLE public.checklist_responses ALTER COLUMN expires_at DROP NOT NULL;

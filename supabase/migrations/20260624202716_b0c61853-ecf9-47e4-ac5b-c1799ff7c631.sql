@@ -1,0 +1,1 @@
+UPDATE public.checklists SET title = 'Fechamento - Bobs Guarapari' WHERE id = 'b5297889-1efe-44e6-9bdf-826cb7b4b112';

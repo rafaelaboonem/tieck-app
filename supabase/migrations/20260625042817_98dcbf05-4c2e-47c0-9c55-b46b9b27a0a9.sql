@@ -1,0 +1,1 @@
+GRANT ALL ON public.signup_otp_codes TO service_role;

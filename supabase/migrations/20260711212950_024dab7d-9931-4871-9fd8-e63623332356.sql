@@ -1,0 +1,1 @@
+ALTER TABLE public.checklists DROP CONSTRAINT checklists_workspace_id_fkey; ALTER TABLE public.checklists ADD CONSTRAINT checklists_workspace_id_fkey FOREIGN KEY (workspace_id) REFERENCES public.workspaces(id) ON DELETE CASCADE;

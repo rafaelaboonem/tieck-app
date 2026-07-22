@@ -1,6 +1,10 @@
 @import "tailwindcss" source(none);
-@source "../src";
 @import "tw-animate-css";
+@source "../src";
+
+#lovable-badge {
+  display: none !important;
+}
 
 @custom-variant dark (&:is(.dark *));
 
@@ -20,6 +24,8 @@
 
 @theme inline {
   --radius-sm: calc(var(--radius) - 4px);
+  --font-display: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --font-body: "DM Sans", ui-sans-serif, system-ui, sans-serif;
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
@@ -141,4 +147,20 @@
     background-color: var(--color-background);
     color: var(--color-foreground);
   }
+
+  [contenteditable]:empty:before {
+    content: attr(placeholder);
+    color: #a3a3a3;
+    pointer-events: none;
+    display: block;
+  }
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
 }
