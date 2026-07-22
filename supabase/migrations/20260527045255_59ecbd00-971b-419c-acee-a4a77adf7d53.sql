@@ -1,0 +1,1 @@
+ALTER TABLE public.checklists ADD COLUMN view_type TEXT;

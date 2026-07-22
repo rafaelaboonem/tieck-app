@@ -1,29 +1,48 @@
-# Welcome to your Lovable project
+# Tieck
 
-This project was built with [Lovable](https://lovable.dev).
+Plataforma de checklists operacionais, evidências e revisão manual de
+padrões visuais. Este remix é uma base **limpa** — sem integrações de
+treinamento visual externo (Anomalib) e sem Railway.
 
-## Build with Lovable
+## Stack
 
-Open your project in the [Lovable editor](https://lovable.dev) and keep building.
+- TanStack Start (React 19, Vite 7) — SSR + server functions.
+- Tailwind CSS v4 + shadcn/ui + Tremor Raw + Apache ECharts.
+- Lovable Cloud (Supabase gerenciado) — Auth, Postgres com RLS,
+  Storage privado, Realtime.
+- Lovable AI Gateway para análise textual/imagem opcional (`OPENAI_*`).
 
-- **Ship faster**: describe what you want to build and Lovable handles the code.
-- **Stay in sync**: connect the project to GitHub and every change made in Lovable is committed straight to your repository.
-- **Full ownership**: this code is yours. Push to your repository and your changes sync back into Lovable, ready for your next prompt.
+## Módulos
 
-## Development
+- **Checklists** — criação, publicação, respostas e evidências.
+- **Operação** — execução de tarefas por unidade/turno.
+- **Padrão** — biblioteca **manual** de padrões visuais: cadastrar
+  padrões, subir imagens, classificar (correta / anomalia / ignorada)
+  e revisar manualmente. Não há treinamento automático nem inferência
+  externa.
+- **Insights** — dashboards operacionais (Tremor + ECharts).
 
-Prefer working locally? You need Node.js and npm — [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating).
+## Ambiente
 
-```sh
-git clone <this-repository-url>
-cd <repository-name>
-npm i
-npm run dev
+Copie `.env.example` e preencha somente os campos do Supabase do
+projeto. Nenhuma variável do antigo serviço de visão é lida em
+runtime.
+
+```bash
+cp .env.example .env
+bun install
+bun run dev
 ```
 
-## Built with
+## Instalação em um Supabase novo
 
-- TanStack Start
-- TypeScript
-- React
-- Tailwind CSS
+Scripts SQL em `supabase/manual-install/` reproduzem o schema mínimo
+da baseline limpa (sem tabelas de treinamento visual, sem funções de
+dispatch e sem fixtures `__test_*`). Execute-os na ordem numérica.
+Ver `supabase/clean-baseline/README.md` para o escopo.
+
+## Histórico legado
+
+Todo o material da integração Anomalib/Railway removida está em
+`archive/legacy-integration-history/`. Nenhum arquivo desse diretório
+é importado pelo runtime.

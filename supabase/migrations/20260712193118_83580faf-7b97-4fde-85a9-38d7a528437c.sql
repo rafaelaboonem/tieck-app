@@ -1,0 +1,2 @@
+ALTER TABLE public.vision_datasets
+  VALIDATE CONSTRAINT vision_datasets_public_id_format_check;

@@ -1,0 +1,1 @@
+ALTER TABLE public.workspaces ADD COLUMN IF NOT EXISTS icon_url TEXT;

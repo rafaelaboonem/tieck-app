@@ -1,0 +1,1 @@
+CREATE POLICY "Public can view published checklists" ON public.checklists FOR SELECT USING (is_published = true);

@@ -1,0 +1,74 @@
+{
+  "files": [
+    {
+      "name": "00_preflight.sql",
+      "sha256": "7e74a97972e5d9194a7f2479e8673ed4eda1efe07ff265ffbd4eb061541db1d5",
+      "bytes": 622
+    },
+    {
+      "name": "00_reset_partial_install.sql",
+      "sha256": "40e25267c4e7a15482e674c4b9f3bb5a202e858db7d4a0309d010d6e8837afa1",
+      "bytes": 7732
+    },
+    {
+      "name": "01_extensions.sql",
+      "sha256": "07b730908143ae80e162ee70ae665da140a6186c3d72106c0428cd4eec7bf2f3",
+      "bytes": 374
+    },
+    {
+      "name": "02_enums_and_types.sql",
+      "sha256": "ef696a6e3c0a98c0a4dba51d9bc5a3e7ac179bde6fb8ed3184144eff8604d182",
+      "bytes": 963
+    },
+    {
+      "name": "02b_prereq_functions.sql",
+      "sha256": "fa81ff600ffd090775b28b073fa43661f4765f4ad3ffa9d8fc839656d4f6bd64",
+      "bytes": 937
+    },
+    {
+      "name": "03_tables.sql",
+      "sha256": "a17dfb6735321368bcb86509154e0caf3e9900d9e18833cc4a39135e8260a37e",
+      "bytes": 22806
+    },
+    {
+      "name": "03b_views.sql",
+      "sha256": "8d27f8512f751de5d7ac16b3e4921146cb546120b1be6146ca6e853938b21b60",
+      "bytes": 11069
+    },
+    {
+      "name": "04_constraints_and_indexes.sql",
+      "sha256": "feddc0ad018dc98364db8eb8313052803fa1d6f77fb280b0bb3346a66a9ccf0a",
+      "bytes": 29384
+    },
+    {
+      "name": "05_functions_and_rpc.sql",
+      "sha256": "a7a45726548e2eb228a6e5b271d8f50211bb693ca2288c348e9246fa97b3fe1f",
+      "bytes": 25913
+    },
+    {
+      "name": "06_triggers.sql",
+      "sha256": "11f935e78ba377deb967a7d8063185053d586ebbddfd03af7c5ef9c7fba9fa83",
+      "bytes": 5783
+    },
+    {
+      "name": "07_rls_and_policies.sql",
+      "sha256": "58db733ec53a78fec6e9541b905d0ed50bfc12c797d1835f404bedb116c7e157",
+      "bytes": 13427
+    },
+    {
+      "name": "08_storage.sql",
+      "sha256": "5b309a22f9c3d3cf745ea218dcb679afb8b8b87c1d5c06466e81a5a93502a5a0",
+      "bytes": 4449
+    },
+    {
+      "name": "09_realtime_and_cron.sql",
+      "sha256": "b66b7e3aefa198551e0d13d621f5c37823379328a5b49c65dbad0bf70471e29f",
+      "bytes": 1554
+    },
+    {
+      "name": "10_validation.sql",
+      "sha256": "bfd65f810268851d931e779a8841bd63207a298348ce5ec12a8754b8fce26bdf",
+      "bytes": 6786
+    }
+  ]
+}
