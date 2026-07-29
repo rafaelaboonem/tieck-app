@@ -47,6 +47,10 @@ export function AuthPage({ mode, redirect }: Props) {
     return null;
   })();
   const goAfterAuth = () => {
+    if (user && !user.email_confirmed_at) {
+      navigate({ to: "/confirmar-email" });
+      return;
+    }
     if (safeRedirect) {
       window.location.assign(safeRedirect);
     } else {
