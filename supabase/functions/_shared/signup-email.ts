@@ -122,6 +122,10 @@ export async function sendCodeEmail(to: string, code: string) {
   await sendEmail(to, `Bem-vindo à Tieck! Seu código é ${code}`, codeEmailHtml(code));
 }
 
+export async function sendConfirmationCodeEmail(to: string, code: string) {
+  await sendEmail(to, `Confirme seu e-mail — código ${code}`, codeEmailHtml(code));
+}
+
 export async function sendWelcomeEmail(to: string) {
   try {
     await sendEmail(to, "Bem-vindo(a) à Tieck — cadastro confirmado", welcomeHtml());
