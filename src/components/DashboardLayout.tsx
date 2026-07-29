@@ -149,6 +149,14 @@ import logoIcon from "../assets/tieck-logo.png";
        return () => window.removeEventListener('open-search', handleOpenSearch);
      }, [user, currentWorkspace?.id]);
 
+    // Gate: usuário logado com e-mail não confirmado não acessa o app.
+    useEffect(() => {
+      if (authLoading || !user) return;
+      if (needsEmailConfirmation && location.pathname !== "/confirmar-email") {
+        navigate({ to: "/confirmar-email" });
+      }
+    }, [authLoading, user, needsEmailConfirmation, location.pathname, navigate]);
+
     const handleLogout = async () => {
       await signOut();
       navigate({ to: "/login" });
