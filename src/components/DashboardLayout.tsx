@@ -86,7 +86,7 @@ import logoIcon from "../assets/tieck-logo.png";
   
   export function DashboardLayout({ children }: { children: React.ReactNode }) {
     const { sidebarOpen, setSidebarOpen } = useSidebar();
-    const { user, loading: authLoading, signOut } = useAuth();
+    const { user, loading: authLoading, needsEmailConfirmation, signOut } = useAuth();
     const { workspaces, currentWorkspace, setCurrentWorkspace, refreshWorkspaces } = useWorkspace();
     const [createWsOpen, setCreateWsOpen] = useState(false);
     const [newWsName, setNewWsName] = useState("");
@@ -148,6 +148,14 @@ import logoIcon from "../assets/tieck-logo.png";
        window.addEventListener('open-search', handleOpenSearch);
        return () => window.removeEventListener('open-search', handleOpenSearch);
      }, [user, currentWorkspace?.id]);
+
+    // Gate: usuário logado com e-mail não confirmado não acessa o app.
+    useEffect(() => {
+      if (authLoading || !user) return;
+      if (needsEmailConfirmation && location.pathname !== "/confirmar-email") {
+        navigate({ to: "/confirmar-email" });
+      }
+    }, [authLoading, user, needsEmailConfirmation, location.pathname, navigate]);
 
     const handleLogout = async () => {
       await signOut();

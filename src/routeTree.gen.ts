@@ -16,6 +16,7 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as InsightsRouteImport } from './routes/insights'
 import { Route as InicioRouteImport } from './routes/inicio'
 import { Route as DominiosRouteImport } from './routes/dominios'
+import { Route as ConfirmarEmailRouteImport } from './routes/confirmar-email'
 import { Route as ConfiguracoesRouteImport } from './routes/configuracoes'
 import { Route as ChecklistRouteImport } from './routes/checklist'
 import { Route as CadastroRouteImport } from './routes/cadastro'
@@ -61,6 +62,11 @@ const InicioRoute = InicioRouteImport.update({
 const DominiosRoute = DominiosRouteImport.update({
   id: '/dominios',
   path: '/dominios',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ConfirmarEmailRoute = ConfirmarEmailRouteImport.update({
+  id: '/confirmar-email',
+  path: '/confirmar-email',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ConfiguracoesRoute = ConfiguracoesRouteImport.update({
@@ -126,6 +132,7 @@ export interface FileRoutesByFullPath {
   '/cadastro': typeof CadastroRoute
   '/checklist': typeof ChecklistRoute
   '/configuracoes': typeof ConfiguracoesRoute
+  '/confirmar-email': typeof ConfirmarEmailRoute
   '/dominios': typeof DominiosRoute
   '/inicio': typeof InicioRoute
   '/insights': typeof InsightsRoute
@@ -146,6 +153,7 @@ export interface FileRoutesByTo {
   '/cadastro': typeof CadastroRoute
   '/checklist': typeof ChecklistRoute
   '/configuracoes': typeof ConfiguracoesRoute
+  '/confirmar-email': typeof ConfirmarEmailRoute
   '/dominios': typeof DominiosRoute
   '/inicio': typeof InicioRoute
   '/insights': typeof InsightsRoute
@@ -167,6 +175,7 @@ export interface FileRoutesById {
   '/cadastro': typeof CadastroRoute
   '/checklist': typeof ChecklistRoute
   '/configuracoes': typeof ConfiguracoesRoute
+  '/confirmar-email': typeof ConfirmarEmailRoute
   '/dominios': typeof DominiosRoute
   '/inicio': typeof InicioRoute
   '/insights': typeof InsightsRoute
@@ -189,6 +198,7 @@ export interface FileRouteTypes {
     | '/cadastro'
     | '/checklist'
     | '/configuracoes'
+    | '/confirmar-email'
     | '/dominios'
     | '/inicio'
     | '/insights'
@@ -209,6 +219,7 @@ export interface FileRouteTypes {
     | '/cadastro'
     | '/checklist'
     | '/configuracoes'
+    | '/confirmar-email'
     | '/dominios'
     | '/inicio'
     | '/insights'
@@ -229,6 +240,7 @@ export interface FileRouteTypes {
     | '/cadastro'
     | '/checklist'
     | '/configuracoes'
+    | '/confirmar-email'
     | '/dominios'
     | '/inicio'
     | '/insights'
@@ -250,6 +262,7 @@ export interface RootRouteChildren {
   CadastroRoute: typeof CadastroRoute
   ChecklistRoute: typeof ChecklistRoute
   ConfiguracoesRoute: typeof ConfiguracoesRoute
+  ConfirmarEmailRoute: typeof ConfirmarEmailRoute
   DominiosRoute: typeof DominiosRoute
   InicioRoute: typeof InicioRoute
   InsightsRoute: typeof InsightsRoute
@@ -313,6 +326,13 @@ declare module '@tanstack/react-router' {
       path: '/dominios'
       fullPath: '/dominios'
       preLoaderRoute: typeof DominiosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/confirmar-email': {
+      id: '/confirmar-email'
+      path: '/confirmar-email'
+      fullPath: '/confirmar-email'
+      preLoaderRoute: typeof ConfirmarEmailRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/configuracoes': {
@@ -402,6 +422,7 @@ const rootRouteChildren: RootRouteChildren = {
   CadastroRoute: CadastroRoute,
   ChecklistRoute: ChecklistRoute,
   ConfiguracoesRoute: ConfiguracoesRoute,
+  ConfirmarEmailRoute: ConfirmarEmailRoute,
   DominiosRoute: DominiosRoute,
   InicioRoute: InicioRoute,
   InsightsRoute: InsightsRoute,

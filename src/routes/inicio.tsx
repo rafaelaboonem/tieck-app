@@ -36,7 +36,7 @@ export const Route = createFileRoute("/inicio")({
 function Dashboard() {
   const { sidebarOpen } = useSidebar();
   const { currentWorkspace } = useWorkspace();
-  const { user, loading } = useAuth();
+  const { user, loading, needsEmailConfirmation } = useAuth();
   const navigate = useNavigate();
   const [glow, setGlow] = useState(false);
   const [checklists, setChecklists] = useState<any[]>([]);
@@ -51,6 +51,10 @@ function Dashboard() {
   useEffect(() => {
     if (!loading && !user) {
       navigate({ to: "/login" });
+      return;
+    }
+    if (!loading && user && needsEmailConfirmation) {
+      navigate({ to: "/confirmar-email" });
       return;
     }
 

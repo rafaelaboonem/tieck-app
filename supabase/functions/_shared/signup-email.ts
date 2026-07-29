@@ -1,6 +1,12 @@
-// Shared email helper for signup flow.
-const FROM_ADDRESS = "Tieck <notificacao@tieck.com.br>";
-const FALLBACK_FROM = "Tieck <onboarding@resend.dev>";
+// Shared email helper for signup / e-mail confirmation flows.
+// Remetente principal solicitado. Requer o domínio `tieck.com` verificado no Resend.
+const FROM_ADDRESS = "Tieck <suporte@tieck.com>";
+// Fallbacks usados automaticamente enquanto `tieck.com` não estiver verificado.
+const FALLBACK_FROM_CHAIN = [
+  "Tieck <suporte@tieck.com.br>",
+  "Tieck <notificacao@tieck.com.br>",
+  "Tieck <onboarding@resend.dev>",
+];
 const RESEND_API_URL = "https://connector-gateway.lovable.dev/resend/emails";
 const CODE_TTL_MIN = 10;
 
@@ -62,7 +68,7 @@ function codeEmailHtml(code: string) {
       Se você não solicitou este código, pode ignorar este e-mail.
     </p>
   </div>
-  <p style="text-align:center;color:#94a3b8;font-size:11px;margin:16px 0 0">© Tieck · notificacao@tieck.com.br</p>
+  <p style="text-align:center;color:#94a3b8;font-size:11px;margin:16px 0 0">© Tieck · suporte@tieck.com</p>
 </body></html>`;
 }
 
@@ -78,7 +84,7 @@ function welcomeHtml() {
       Sua conta foi criada com sucesso. Já pode acessar a Tieck e organizar seus processos.
     </p>
   </div>
-  <p style="text-align:center;color:#94a3b8;font-size:11px;margin:16px 0 0">© Tieck · notificacao@tieck.com.br</p>
+  <p style="text-align:center;color:#94a3b8;font-size:11px;margin:16px 0 0">© Tieck · suporte@tieck.com</p>
 </body></html>`;
 }
 
@@ -101,22 +107,23 @@ async function sendEmail(to: string, subject: string, html: string) {
     throw new Error("Serviço de e-mail indisponível: conexão Resend não configurada.");
   }
 
-  let res = await postResend(lovableApiKey, resendConnectionKey, FROM_ADDRESS, to, subject, html);
-  if (res.ok) return;
+  let lastError = "";
+  for (const from of [FROM_ADDRESS, ...FALLBACK_FROM_CHAIN]) {
+    const res = await postResend(lovableApiKey, resendConnectionKey, from, to, subject, html);
+    if (res.ok) return;
+    lastError = await res.text();
+    console.error("Resend send failed", from, res.status, lastError);
+  }
 
-  const text = await res.text();
-  console.error("Resend primary failed", res.status, text);
-  // Retry with onboarding fallback for domain/verification errors
-  res = await postResend(lovableApiKey, resendConnectionKey, FALLBACK_FROM, to, subject, html);
-  if (res.ok) return;
-
-  const text2 = await res.text();
-  console.error("Resend fallback failed", res.status, text2);
-  throw new Error(`Não foi possível enviar o e-mail. ${text2}`);
+  throw new Error(`Não foi possível enviar o e-mail. ${lastError}`);
 }
 
 export async function sendCodeEmail(to: string, code: string) {
   await sendEmail(to, `Bem-vindo à Tieck! Seu código é ${code}`, codeEmailHtml(code));
+}
+
+export async function sendConfirmationCodeEmail(to: string, code: string) {
+  await sendEmail(to, `Confirme seu e-mail — código ${code}`, codeEmailHtml(code));
 }
 
 export async function sendWelcomeEmail(to: string) {
