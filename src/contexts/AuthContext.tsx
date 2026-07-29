@@ -6,6 +6,11 @@ interface AuthContextType {
   user: User | null;
   session: Session | null;
   loading: boolean;
+  /** true quando o e-mail do usuário já foi confirmado (ou não há usuário logado ainda) */
+  emailConfirmed: boolean;
+  /** true apenas quando existe um usuário logado com e-mail ainda não confirmado */
+  needsEmailConfirmation: boolean;
+  refreshUser: () => Promise<void>;
   signOut: () => Promise<void>;
 }
 
