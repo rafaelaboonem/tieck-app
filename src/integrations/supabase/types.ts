@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.5"
+    PostgrestVersion: "14.15"
   }
   public: {
     Tables: {
@@ -324,6 +324,8 @@ export type Database = {
           response_token_hash: string
           status: Database["public"]["Enums"]["checklist_response_status"]
           submitted_at: string | null
+          upload_token_expires_at: string | null
+          upload_token_hash: string | null
           visitor_id: string
         }
         Insert: {
@@ -335,6 +337,8 @@ export type Database = {
           response_token_hash: string
           status?: Database["public"]["Enums"]["checklist_response_status"]
           submitted_at?: string | null
+          upload_token_expires_at?: string | null
+          upload_token_hash?: string | null
           visitor_id: string
         }
         Update: {
@@ -346,6 +350,8 @@ export type Database = {
           response_token_hash?: string
           status?: Database["public"]["Enums"]["checklist_response_status"]
           submitted_at?: string | null
+          upload_token_expires_at?: string | null
+          upload_token_hash?: string | null
           visitor_id?: string
         }
         Relationships: [
@@ -611,13 +617,6 @@ export type Database = {
             columns: ["fallback_of"]
             isOneToOne: false
             referencedRelation: "evidence_ai_analyses"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "evidence_ai_analyses_model_id_fkey"
-            columns: ["model_id"]
-            isOneToOne: false
-            referencedRelation: "vision_anomaly_models"
             referencedColumns: ["id"]
           },
           {
@@ -1047,7 +1046,6 @@ export type Database = {
           updated_at: string
           vision_analysis_enabled: boolean
           vision_fallback_mode: string
-          vision_model_id: string | null
           vision_provider: string
           visual_criteria: Json
           weight: Database["public"]["Enums"]["task_weight"]
@@ -1069,7 +1067,6 @@ export type Database = {
           updated_at?: string
           vision_analysis_enabled?: boolean
           vision_fallback_mode?: string
-          vision_model_id?: string | null
           vision_provider?: string
           visual_criteria?: Json
           weight?: Database["public"]["Enums"]["task_weight"]
@@ -1091,7 +1088,6 @@ export type Database = {
           updated_at?: string
           vision_analysis_enabled?: boolean
           vision_fallback_mode?: string
-          vision_model_id?: string | null
           vision_provider?: string
           visual_criteria?: Json
           weight?: Database["public"]["Enums"]["task_weight"]
@@ -1109,13 +1105,6 @@ export type Database = {
             columns: ["unit_id"]
             isOneToOne: false
             referencedRelation: "units"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "tasks_vision_model_id_fkey"
-            columns: ["vision_model_id"]
-            isOneToOne: false
-            referencedRelation: "vision_anomaly_models"
             referencedColumns: ["id"]
           },
         ]
@@ -1200,123 +1189,6 @@ export type Database = {
           status?: string
           updated_at?: string
           user_id?: string
-        }
-        Relationships: []
-      }
-      user_roles: {
-        Row: {
-          created_at: string
-          id: string
-          organization_id: string | null
-          role: Database["public"]["Enums"]["app_role"]
-          shift_id: string | null
-          unit_id: string | null
-          user_id: string
-        }
-        Insert: {
-          created_at?: string
-          id?: string
-          organization_id?: string | null
-          role: Database["public"]["Enums"]["app_role"]
-          shift_id?: string | null
-          unit_id?: string | null
-          user_id: string
-        }
-        Update: {
-          created_at?: string
-          id?: string
-          organization_id?: string | null
-          role?: Database["public"]["Enums"]["app_role"]
-          shift_id?: string | null
-          unit_id?: string | null
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "user_roles_shift_id_fkey"
-            columns: ["shift_id"]
-            isOneToOne: false
-            referencedRelation: "shifts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "user_roles_unit_id_fkey"
-            columns: ["unit_id"]
-            isOneToOne: false
-            referencedRelation: "units"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      vision_anomaly_models: {
-        Row: {
-          activated_at: string | null
-          algorithm: string | null
-          anomalous_test_image_count: number | null
-          created_at: string
-          id: string
-          input_height: number | null
-          input_width: number | null
-          metrics: Json
-          model_storage_path: string | null
-          name: string
-          normal_image_count: number | null
-          organization_id: string | null
-          provider: string
-          retired_at: string | null
-          slug: string
-          status: string
-          task_category: string | null
-          threshold: number | null
-          training_dataset_version: string | null
-          updated_at: string
-          version: string
-        }
-        Insert: {
-          activated_at?: string | null
-          algorithm?: string | null
-          anomalous_test_image_count?: number | null
-          created_at?: string
-          id?: string
-          input_height?: number | null
-          input_width?: number | null
-          metrics?: Json
-          model_storage_path?: string | null
-          name: string
-          normal_image_count?: number | null
-          organization_id?: string | null
-          provider?: string
-          retired_at?: string | null
-          slug: string
-          status?: string
-          task_category?: string | null
-          threshold?: number | null
-          training_dataset_version?: string | null
-          updated_at?: string
-          version?: string
-        }
-        Update: {
-          activated_at?: string | null
-          algorithm?: string | null
-          anomalous_test_image_count?: number | null
-          created_at?: string
-          id?: string
-          input_height?: number | null
-          input_width?: number | null
-          metrics?: Json
-          model_storage_path?: string | null
-          name?: string
-          normal_image_count?: number | null
-          organization_id?: string | null
-          provider?: string
-          retired_at?: string | null
-          slug?: string
-          status?: string
-          task_category?: string | null
-          threshold?: number | null
-          training_dataset_version?: string | null
-          updated_at?: string
-          version?: string
         }
         Relationships: []
       }
@@ -1411,140 +1283,6 @@ export type Database = {
           },
         ]
       }
-      vision_dataset_snapshot_images: {
-        Row: {
-          category: string
-          checklist_evidence_id: string | null
-          checklist_id: string | null
-          classification: string
-          created_at: string
-          curated_image_id: string
-          evidence_id: string | null
-          group_key: string
-          id: string
-          response_id: string | null
-          sha256: string
-          snapshot_id: string
-          source_storage_path: string
-          split: string
-        }
-        Insert: {
-          category: string
-          checklist_evidence_id?: string | null
-          checklist_id?: string | null
-          classification: string
-          created_at?: string
-          curated_image_id: string
-          evidence_id?: string | null
-          group_key: string
-          id?: string
-          response_id?: string | null
-          sha256: string
-          snapshot_id: string
-          source_storage_path: string
-          split: string
-        }
-        Update: {
-          category?: string
-          checklist_evidence_id?: string | null
-          checklist_id?: string | null
-          classification?: string
-          created_at?: string
-          curated_image_id?: string
-          evidence_id?: string | null
-          group_key?: string
-          id?: string
-          response_id?: string | null
-          sha256?: string
-          snapshot_id?: string
-          source_storage_path?: string
-          split?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "vision_dataset_snapshot_images_curated_image_id_fkey"
-            columns: ["curated_image_id"]
-            isOneToOne: false
-            referencedRelation: "vision_curated_images"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "vision_dataset_snapshot_images_snapshot_id_fkey"
-            columns: ["snapshot_id"]
-            isOneToOne: false
-            referencedRelation: "vision_dataset_snapshots"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      vision_dataset_snapshots: {
-        Row: {
-          anomalous_count: number
-          created_at: string
-          created_by: string | null
-          dataset_id: string
-          id: string
-          ignored_count: number
-          image_count: number
-          normal_count: number
-          note: string | null
-          organization_id: string | null
-          seed: number
-          test_anomalous_count: number
-          test_normal_count: number
-          train_normal_count: number
-          validation_anomalous_count: number
-          validation_normal_count: number
-          version: string
-        }
-        Insert: {
-          anomalous_count?: number
-          created_at?: string
-          created_by?: string | null
-          dataset_id: string
-          id?: string
-          ignored_count?: number
-          image_count?: number
-          normal_count?: number
-          note?: string | null
-          organization_id?: string | null
-          seed: number
-          test_anomalous_count?: number
-          test_normal_count?: number
-          train_normal_count?: number
-          validation_anomalous_count?: number
-          validation_normal_count?: number
-          version: string
-        }
-        Update: {
-          anomalous_count?: number
-          created_at?: string
-          created_by?: string | null
-          dataset_id?: string
-          id?: string
-          ignored_count?: number
-          image_count?: number
-          normal_count?: number
-          note?: string | null
-          organization_id?: string | null
-          seed?: number
-          test_anomalous_count?: number
-          test_normal_count?: number
-          train_normal_count?: number
-          validation_anomalous_count?: number
-          validation_normal_count?: number
-          version?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "vision_dataset_snapshots_dataset_id_fkey"
-            columns: ["dataset_id"]
-            isOneToOne: false
-            referencedRelation: "vision_datasets"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       vision_datasets: {
         Row: {
           anomaly_instructions: string | null
@@ -1595,261 +1333,6 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
-      }
-      vision_model_audit: {
-        Row: {
-          actor_id: string | null
-          created_at: string
-          detail: Json
-          event: string
-          id: string
-          model_version_id: string
-        }
-        Insert: {
-          actor_id?: string | null
-          created_at?: string
-          detail?: Json
-          event: string
-          id?: string
-          model_version_id: string
-        }
-        Update: {
-          actor_id?: string | null
-          created_at?: string
-          detail?: Json
-          event?: string
-          id?: string
-          model_version_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "vision_model_audit_model_version_id_fkey"
-            columns: ["model_version_id"]
-            isOneToOne: false
-            referencedRelation: "vision_model_versions"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      vision_model_runs: {
-        Row: {
-          algorithm: string
-          artifact_path: string | null
-          completed_at: string | null
-          created_at: string
-          current_step: string | null
-          error_message: string | null
-          id: string
-          job_id: string | null
-          metrics: Json
-          model_version_id: string
-          private_logs: Json
-          progress: number | null
-          public_message: string | null
-          started_at: string | null
-          status: string
-          threshold: number | null
-          updated_at: string
-        }
-        Insert: {
-          algorithm: string
-          artifact_path?: string | null
-          completed_at?: string | null
-          created_at?: string
-          current_step?: string | null
-          error_message?: string | null
-          id?: string
-          job_id?: string | null
-          metrics?: Json
-          model_version_id: string
-          private_logs?: Json
-          progress?: number | null
-          public_message?: string | null
-          started_at?: string | null
-          status?: string
-          threshold?: number | null
-          updated_at?: string
-        }
-        Update: {
-          algorithm?: string
-          artifact_path?: string | null
-          completed_at?: string | null
-          created_at?: string
-          current_step?: string | null
-          error_message?: string | null
-          id?: string
-          job_id?: string | null
-          metrics?: Json
-          model_version_id?: string
-          private_logs?: Json
-          progress?: number | null
-          public_message?: string | null
-          started_at?: string | null
-          status?: string
-          threshold?: number | null
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "vision_model_runs_model_version_id_fkey"
-            columns: ["model_version_id"]
-            isOneToOne: false
-            referencedRelation: "vision_model_versions"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      vision_model_versions: {
-        Row: {
-          activated_at: string | null
-          activated_model_id: string | null
-          algorithm: string | null
-          approval_exception_reason: string | null
-          approved_at: string | null
-          approved_by: string | null
-          artifact_path: string | null
-          created_at: string
-          current_step: string | null
-          dataset_id: string
-          dispatched_to_service_at: string | null
-          error_message: string | null
-          finished_at: string | null
-          id: string
-          initiated_by: string | null
-          input_height: number | null
-          input_width: number | null
-          job_id: string | null
-          metrics: Json
-          note: string | null
-          organization_id: string | null
-          private_logs: Json
-          progress: number | null
-          public_message: string | null
-          rejected_at: string | null
-          rejected_by: string | null
-          rejection_reason: string | null
-          retired_at: string | null
-          run_token_created_at: string | null
-          run_token_expires_at: string | null
-          run_token_hash: string | null
-          selected_run_id: string | null
-          snapshot_id: string
-          started_at: string | null
-          status: string
-          threshold: number | null
-          updated_at: string
-          version: string
-        }
-        Insert: {
-          activated_at?: string | null
-          activated_model_id?: string | null
-          algorithm?: string | null
-          approval_exception_reason?: string | null
-          approved_at?: string | null
-          approved_by?: string | null
-          artifact_path?: string | null
-          created_at?: string
-          current_step?: string | null
-          dataset_id: string
-          dispatched_to_service_at?: string | null
-          error_message?: string | null
-          finished_at?: string | null
-          id?: string
-          initiated_by?: string | null
-          input_height?: number | null
-          input_width?: number | null
-          job_id?: string | null
-          metrics?: Json
-          note?: string | null
-          organization_id?: string | null
-          private_logs?: Json
-          progress?: number | null
-          public_message?: string | null
-          rejected_at?: string | null
-          rejected_by?: string | null
-          rejection_reason?: string | null
-          retired_at?: string | null
-          run_token_created_at?: string | null
-          run_token_expires_at?: string | null
-          run_token_hash?: string | null
-          selected_run_id?: string | null
-          snapshot_id: string
-          started_at?: string | null
-          status?: string
-          threshold?: number | null
-          updated_at?: string
-          version: string
-        }
-        Update: {
-          activated_at?: string | null
-          activated_model_id?: string | null
-          algorithm?: string | null
-          approval_exception_reason?: string | null
-          approved_at?: string | null
-          approved_by?: string | null
-          artifact_path?: string | null
-          created_at?: string
-          current_step?: string | null
-          dataset_id?: string
-          dispatched_to_service_at?: string | null
-          error_message?: string | null
-          finished_at?: string | null
-          id?: string
-          initiated_by?: string | null
-          input_height?: number | null
-          input_width?: number | null
-          job_id?: string | null
-          metrics?: Json
-          note?: string | null
-          organization_id?: string | null
-          private_logs?: Json
-          progress?: number | null
-          public_message?: string | null
-          rejected_at?: string | null
-          rejected_by?: string | null
-          rejection_reason?: string | null
-          retired_at?: string | null
-          run_token_created_at?: string | null
-          run_token_expires_at?: string | null
-          run_token_hash?: string | null
-          selected_run_id?: string | null
-          snapshot_id?: string
-          started_at?: string | null
-          status?: string
-          threshold?: number | null
-          updated_at?: string
-          version?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "vision_model_versions_activated_model_id_fkey"
-            columns: ["activated_model_id"]
-            isOneToOne: false
-            referencedRelation: "vision_anomaly_models"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "vision_model_versions_dataset_id_fkey"
-            columns: ["dataset_id"]
-            isOneToOne: false
-            referencedRelation: "vision_datasets"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "vision_model_versions_selected_run_fkey"
-            columns: ["selected_run_id", "id"]
-            isOneToOne: false
-            referencedRelation: "vision_model_runs"
-            referencedColumns: ["id", "model_version_id"]
-          },
-          {
-            foreignKeyName: "vision_model_versions_snapshot_id_fkey"
-            columns: ["snapshot_id"]
-            isOneToOne: false
-            referencedRelation: "vision_dataset_snapshots"
-            referencedColumns: ["id"]
-          },
-        ]
       }
       workspace_card_meta: {
         Row: {
@@ -1945,57 +1428,6 @@ export type Database = {
           {
             foreignKeyName: "workspace_categories_workspace_id_fkey"
             columns: ["workspace_id"]
-            isOneToOne: false
-            referencedRelation: "workspaces"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      workspace_members: {
-        Row: {
-          created_at: string
-          email: string | null
-          id: string
-          role: string
-          status: string
-          updated_at: string
-          user_id: string | null
-          workspace_id: string
-          ws_id: string | null
-        }
-        Insert: {
-          created_at?: string
-          email?: string | null
-          id?: string
-          role?: string
-          status?: string
-          updated_at?: string
-          user_id?: string | null
-          workspace_id: string
-          ws_id?: string | null
-        }
-        Update: {
-          created_at?: string
-          email?: string | null
-          id?: string
-          role?: string
-          status?: string
-          updated_at?: string
-          user_id?: string | null
-          workspace_id?: string
-          ws_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "workspace_members_workspace_id_fkey"
-            columns: ["workspace_id"]
-            isOneToOne: false
-            referencedRelation: "workspaces"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "workspace_members_ws_id_fkey"
-            columns: ["ws_id"]
             isOneToOne: false
             referencedRelation: "workspaces"
             referencedColumns: ["id"]
@@ -2239,25 +1671,6 @@ export type Database = {
       }
     }
     Functions: {
-      activate_model_version: {
-        Args: {
-          p_exception_reason?: string
-          p_run_id: string
-          p_version_id: string
-        }
-        Returns: {
-          model_id: string
-          version: string
-        }[]
-      }
-      can_access_unit: {
-        Args: { _org_id: string; _unit_id: string; _user_id: string }
-        Returns: boolean
-      }
-      can_manage_vision_training: {
-        Args: { _user_id: string }
-        Returns: boolean
-      }
       claim_checklist_analysis: {
         Args: { p_analysis_id: string }
         Returns: {
@@ -2293,19 +1706,25 @@ export type Database = {
       }
       generate_dataset_public_id: { Args: never; Returns: string }
       generate_short_slug: { Args: { length?: number }; Returns: string }
+      get_public_checklist: {
+        Args: { p_public_id: string }
+        Returns: {
+          blocks: Json
+          custom_slug: string
+          description: string
+          id: string
+          published_at: string
+          settings: Json
+          short_slug: string
+          title: string
+        }[]
+      }
       get_user_email_by_id: { Args: { user_uuid: string }; Returns: string }
       get_user_id_by_email: {
         Args: { email_to_find: string }
         Returns: {
           user_id: string
         }[]
-      }
-      has_role: {
-        Args: {
-          _role: Database["public"]["Enums"]["app_role"]
-          _user_id: string
-        }
-        Returns: boolean
       }
       hit_public_rate_limit: {
         Args: {
@@ -2328,18 +1747,7 @@ export type Database = {
           unmapped: number
         }[]
       }
-      is_reviewer: { Args: { _user_id: string }; Returns: boolean }
       materialize_task_executions: { Args: never; Returns: number }
-      prepare_model_version: {
-        Args: { p_dataset_id: string; p_note?: string; p_seed?: number }
-        Returns: {
-          run_token: string
-          run_token_expires_at: string
-          snapshot_id: string
-          version: string
-          version_id: string
-        }[]
-      }
       publish_checklist: {
         Args: { p_checklist_id: string }
         Returns: {
@@ -2347,28 +1755,13 @@ export type Database = {
           published_at: string
         }[]
       }
-      reject_model_version: {
-        Args: { p_reason: string; p_version_id: string }
-        Returns: undefined
-      }
-      resolve_model_version_run_token: {
-        Args: { p_token: string }
+      submit_public_response: {
+        Args: { p_answers: Json; p_public_id: string }
         Returns: {
-          dataset_id: string
-          organization_id: string
-          snapshot_id: string
-          version_id: string
-        }[]
-      }
-      revoke_model_version_run_token: {
-        Args: { p_reason?: string; p_version_id: string }
-        Returns: undefined
-      }
-      rotate_model_version_run_token: {
-        Args: { p_reason?: string; p_version_id: string }
-        Returns: {
-          run_token: string
-          run_token_expires_at: string
+          checklist_id: string
+          response_id: string
+          upload_token: string
+          upload_token_expires_at: string
         }[]
       }
       update_checklist_retention: {
@@ -2379,19 +1772,8 @@ export type Database = {
         }
         Returns: undefined
       }
-      user_has_workspace_access: {
-        Args: { p_min_role?: string; p_u_id: string; p_ws_id: string }
-        Returns: boolean
-      }
     }
     Enums: {
-      app_role:
-        | "funcionario"
-        | "gerente"
-        | "supervisor"
-        | "franqueadora"
-        | "admin"
-        | "auditor"
       checklist_evidence_analysis_status:
         | "pending"
         | "processing"
@@ -2529,14 +1911,6 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: [
-        "funcionario",
-        "gerente",
-        "supervisor",
-        "franqueadora",
-        "admin",
-        "auditor",
-      ],
       checklist_evidence_analysis_status: [
         "pending",
         "processing",
