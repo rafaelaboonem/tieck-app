@@ -250,8 +250,14 @@ export function AuthPage({ mode, redirect }: Props) {
     if (isLoading) return;
     setIsLoading(true);
     try {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
+      // Bloqueio de acesso: e-mail ainda não confirmado.
+      if (data.user && !data.user.email_confirmed_at) {
+        toast.info("Confirme seu e-mail para acessar a plataforma.");
+        navigate({ to: "/confirmar-email" });
+        return;
+      }
       toast.success("Bem-vindo de volta!");
       goAfterAuth();
     } catch (err: any) {
