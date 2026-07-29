@@ -107,18 +107,15 @@ async function sendEmail(to: string, subject: string, html: string) {
     throw new Error("Serviço de e-mail indisponível: conexão Resend não configurada.");
   }
 
-  let res = await postResend(lovableApiKey, resendConnectionKey, FROM_ADDRESS, to, subject, html);
-  if (res.ok) return;
+  let lastError = "";
+  for (const from of [FROM_ADDRESS, ...FALLBACK_FROM_CHAIN]) {
+    const res = await postResend(lovableApiKey, resendConnectionKey, from, to, subject, html);
+    if (res.ok) return;
+    lastError = await res.text();
+    console.error("Resend send failed", from, res.status, lastError);
+  }
 
-  const text = await res.text();
-  console.error("Resend primary failed", res.status, text);
-  // Retry with onboarding fallback for domain/verification errors
-  res = await postResend(lovableApiKey, resendConnectionKey, FALLBACK_FROM, to, subject, html);
-  if (res.ok) return;
-
-  const text2 = await res.text();
-  console.error("Resend fallback failed", res.status, text2);
-  throw new Error(`Não foi possível enviar o e-mail. ${text2}`);
+  throw new Error(`Não foi possível enviar o e-mail. ${lastError}`);
 }
 
 export async function sendCodeEmail(to: string, code: string) {
