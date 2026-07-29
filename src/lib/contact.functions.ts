@@ -2,7 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
 const GATEWAY_URL = "https://connector-gateway.lovable.dev/resend";
-const FROM = "Tieck <notificacao@tieck.com>";
+const FROM = "Tieck <notificacao@tieck.com.br>";
 const INTERNAL_TO = "rafaelaboonem@gmail.com";
 
 const schema = z.object({
