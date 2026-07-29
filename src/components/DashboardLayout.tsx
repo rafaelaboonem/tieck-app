@@ -86,7 +86,7 @@ import logoIcon from "../assets/tieck-logo.png";
   
   export function DashboardLayout({ children }: { children: React.ReactNode }) {
     const { sidebarOpen, setSidebarOpen } = useSidebar();
-    const { user, loading: authLoading, signOut } = useAuth();
+    const { user, loading: authLoading, needsEmailConfirmation, signOut } = useAuth();
     const { workspaces, currentWorkspace, setCurrentWorkspace, refreshWorkspaces } = useWorkspace();
     const [createWsOpen, setCreateWsOpen] = useState(false);
     const [newWsName, setNewWsName] = useState("");
