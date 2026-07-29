@@ -39,12 +39,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => subscription.unsubscribe();
   }, []);
 
+  const refreshUser = async () => {
+    const { data } = await supabase.auth.getUser();
+    if (data?.user) setUser(data.user);
+  };
+
   const signOut = async () => {
     await supabase.auth.signOut();
   };
 
+  const emailConfirmed = !user || Boolean(user.email_confirmed_at);
+  const needsEmailConfirmation = Boolean(user) && !user?.email_confirmed_at;
+
   return (
-    <AuthContext.Provider value={{ user, session, loading, signOut }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        session,
+        loading,
+        emailConfirmed,
+        needsEmailConfirmation,
+        refreshUser,
+        signOut,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );
