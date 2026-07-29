@@ -1,6 +1,12 @@
-// Shared email helper for signup flow.
-const FROM_ADDRESS = "Tieck <notificacao@tieck.com.br>";
-const FALLBACK_FROM = "Tieck <onboarding@resend.dev>";
+// Shared email helper for signup / e-mail confirmation flows.
+// Remetente principal solicitado. Requer o domínio `tieck.com` verificado no Resend.
+const FROM_ADDRESS = "Tieck <suporte@tieck.com>";
+// Fallbacks usados automaticamente enquanto `tieck.com` não estiver verificado.
+const FALLBACK_FROM_CHAIN = [
+  "Tieck <suporte@tieck.com.br>",
+  "Tieck <notificacao@tieck.com.br>",
+  "Tieck <onboarding@resend.dev>",
+];
 const RESEND_API_URL = "https://connector-gateway.lovable.dev/resend/emails";
 const CODE_TTL_MIN = 10;
 
