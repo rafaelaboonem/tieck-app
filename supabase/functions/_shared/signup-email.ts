@@ -62,7 +62,7 @@ function codeEmailHtml(code: string) {
       Se você não solicitou este código, pode ignorar este e-mail.
     </p>
   </div>
-  <p style="text-align:center;color:#94a3b8;font-size:11px;margin:16px 0 0">© Tieck · notificacao@tieck.com</p>
+  <p style="text-align:center;color:#94a3b8;font-size:11px;margin:16px 0 0">© Tieck · notificacao@tieck.com.br</p>
 </body></html>`;
 }
 
@@ -78,7 +78,7 @@ function welcomeHtml() {
       Sua conta foi criada com sucesso. Já pode acessar a Tieck e organizar seus processos.
     </p>
   </div>
-  <p style="text-align:center;color:#94a3b8;font-size:11px;margin:16px 0 0">© Tieck · notificacao@tieck.com</p>
+  <p style="text-align:center;color:#94a3b8;font-size:11px;margin:16px 0 0">© Tieck · notificacao@tieck.com.br</p>
 </body></html>`;
 }
 
