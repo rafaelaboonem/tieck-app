@@ -1,0 +1,1 @@
+COMMENT ON SCHEMA public IS 'Tieck baseline restored for Lovable Cloud';
