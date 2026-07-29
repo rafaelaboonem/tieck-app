@@ -1,5 +1,5 @@
 // Shared email helper for signup flow.
-const FROM_ADDRESS = "Tieck <notificacao@tieck.com>";
+const FROM_ADDRESS = "Tieck <notificacao@tieck.com.br>";
 const FALLBACK_FROM = "Tieck <onboarding@resend.dev>";
 const RESEND_API_URL = "https://connector-gateway.lovable.dev/resend/emails";
 const CODE_TTL_MIN = 10;
