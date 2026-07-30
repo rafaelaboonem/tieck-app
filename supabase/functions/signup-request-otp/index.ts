@@ -10,7 +10,8 @@ import {
 } from "../_shared/signup-email.ts";
 
 serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders });
+  if (req.method !== "POST") return json({ error: "Método não permitido" }, 405);
   try {
     const { email: rawEmail } = await req.json();
     const email = String(rawEmail || "").trim().toLowerCase();
@@ -20,6 +21,10 @@ serve(async (req) => {
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+    if (!supabaseUrl || !serviceKey) {
+      console.error("signup-request-otp missing backend configuration");
+      return json({ error: "Serviço de cadastro temporariamente indisponível." }, 503);
+    }
 
     const admin = createClient(supabaseUrl, serviceKey);
 

@@ -23,7 +23,7 @@ export function AuthPage({ mode, redirect }: Props) {
     const { data, error } = await supabase.functions.invoke(name, { body });
     if (error) {
       // Try to surface the JSON error the function returned (supabase-js wraps it in FunctionsHttpError).
-      let message = error.message || "Erro ao contatar o servidor";
+      let message = "Não foi possível enviar o código. Verifique sua conexão e tente novamente.";
       const ctx: any = (error as any).context;
       try {
         const res = ctx?.response ?? ctx;
@@ -33,6 +33,9 @@ export function AuthPage({ mode, redirect }: Props) {
         }
       } catch {
         /* ignore */
+      }
+      if (/timeout|network|fetch/i.test(error.message ?? "")) {
+        message = "Não foi possível conectar ao serviço de cadastro. Tente novamente em instantes.";
       }
       throw new Error(message);
     }
@@ -136,7 +139,7 @@ export function AuthPage({ mode, redirect }: Props) {
       setResendCountdown(30);
     } catch (err: any) {
       console.error("Send OTP error:", err, JSON.stringify(err));
-      const raw = err?.message || err?.error || JSON.stringify(err) || "Erro ao enviar código";
+      const raw = err?.message || "Não foi possível enviar o código. Tente novamente.";
       toast.error(raw);
     } finally {
       setIsLoading(false);
@@ -203,7 +206,7 @@ export function AuthPage({ mode, redirect }: Props) {
       setResendCountdown(30);
     } catch (err: any) {
       console.error("Resend OTP error:", err, JSON.stringify(err));
-      const raw = err?.message || err?.error || JSON.stringify(err) || "Erro ao reenviar código";
+      const raw = err?.message || "Não foi possível reenviar o código. Tente novamente.";
       toast.error(raw);
     } finally {
       setIsLoading(false);
