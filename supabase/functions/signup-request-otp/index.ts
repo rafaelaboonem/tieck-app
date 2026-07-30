@@ -18,21 +18,31 @@ serve(async (req) => {
       return json({ error: "E-mail inválido" }, 400);
     }
 
-    const admin = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
-    );
+    const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 
-    const { data: existing, error: lookupErr } = await admin.rpc("get_user_id_by_email", {
-      email_to_find: email,
-    });
-    if (lookupErr) {
-      console.error("lookup error", lookupErr);
+    const admin = createClient(supabaseUrl, serviceKey);
+
+    // Verifica se o e-mail já existe via Admin API (não depende de acesso ao schema auth).
+    const lookupRes = await fetch(
+      `${supabaseUrl}/auth/v1/admin/users?page=1&per_page=1&filter=${encodeURIComponent(email)}`,
+      {
+        headers: {
+          apikey: serviceKey,
+          Authorization: `Bearer ${serviceKey}`,
+        },
+      },
+    );
+    if (!lookupRes.ok) {
+      console.error("lookup error", lookupRes.status, await lookupRes.text());
       return json({ error: "Não foi possível verificar o e-mail. Tente novamente." }, 500);
     }
-    if (existing && existing.length > 0) {
+    const lookupBody = await lookupRes.json();
+    const users: Array<{ email?: string }> = lookupBody?.users ?? [];
+    if (users.some((u) => (u.email ?? "").toLowerCase() === email)) {
       return json({ ok: false, code: "already_registered" });
     }
+
 
     const code = generateCode();
     const expiresAt = new Date(Date.now() + CODE_TTL_MINUTES * 60_000).toISOString();
