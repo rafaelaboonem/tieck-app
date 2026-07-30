@@ -63,23 +63,14 @@ serve(async (req) => {
       return json({ error: "Conta criada, mas não foi possível preparar seu perfil." }, 500);
     }
 
-    const { data: workspace, error: workspaceErr } = await admin
+    // Modelo owner-only: o acesso ao workspace é validado por workspaces.owner_id.
+    const { error: workspaceErr } = await admin
       .from("workspaces")
-      .insert({ owner_id: userId, name: "Meu Workspace", icon: "📁" })
-      .select("id")
-      .single();
+      .insert({ owner_id: userId, name: "Meu Workspace", icon: "📁" });
     if (workspaceErr) {
       console.error("workspace create error", workspaceErr);
-    } else if (workspace?.id) {
-      const { error: memberErr } = await admin.from("workspace_members").upsert({
-        workspace_id: workspace.id,
-        user_id: userId,
-        email,
-        role: "admin",
-        status: "active",
-      });
-      if (memberErr) console.error("workspace member create error", memberErr);
     }
+
 
     await admin.from("signup_otp_codes").delete().eq("id", row.id);
     await sendWelcomeEmail(email);
