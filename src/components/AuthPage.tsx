@@ -284,6 +284,13 @@ export function AuthPage({ mode, redirect }: Props) {
         { email: normalizedEmail(), verificationToken, password, displayName: displayName.trim() },
       );
       if (!result.ok) {
+        if (result.code === "account_recovered_login_required") {
+          toast.info(
+            "Sua conta já existia e foi restaurada. Entre com sua senha ou use “Esqueci minha senha”.",
+          );
+          navigate({ to: "/login" });
+          return;
+        }
         toast.error("Este e-mail já está cadastrado.");
         resetSignup();
         return;
