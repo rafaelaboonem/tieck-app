@@ -484,7 +484,7 @@ function NovoChecklistPage() {
   const [isSignUp, setIsSignUp] = useState(false);
   const [isAuthLoading, setIsAuthLoading] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
-  // Bloqueio de publicação por bloco Câmera com IA ativa e padrão visual inválido.
+  // Bloqueio de publicação por bloco Câmera com IA ativa e sem critérios.
   const [publishBlocker, setPublishBlocker] = useState<
     | { blockId: string; label: string }
     | null
@@ -984,7 +984,10 @@ function NovoChecklistPage() {
           enabled?: boolean;
           modelId?: string | null;
           modelVersion?: string | null;
-          provider?: "manual";
+          provider?: "cloudflare_workers_ai" | "manual";
+          criteria?: string[];
+          confidenceThreshold?: number | null;
+          model?: string | null;
           threshold?: number | null;       // 0..1 (anomaly score máximo aceitável); null quando não há modelo
           minWidth?: number | null;        // px
           minHeight?: number | null;       // px
@@ -1370,13 +1373,16 @@ function NovoChecklistPage() {
         referenceImageAlt: null,
         vision: {
           enabled: false,
-          modelId: null,
+          modelId: null, // legado: mantido para abrir checklists antigos
           modelVersion: null,
-          provider: "manual",
+          provider: "cloudflare_workers_ai",
+          criteria: [],
+          confidenceThreshold: 0.75,
+          model: null,
           threshold: null,
           minWidth: 640,
           minHeight: 480,
-          onAnomaly: "manual_review",
+          onAnomaly: "require_resubmit",
           onAnalysisFailure: "manual_review",
         },
       };
@@ -1920,12 +1926,15 @@ function NovoChecklistPage() {
     }
 
     if (isSavingRef.current) return;
-    // Bloqueio de publicação: bloco câmera com IA ativa e sem padrão visual válido.
+    // Bloqueio de publicação: a IA precisa de pelo menos um critério objetivo.
     if (isPublishedOverride === true) {
       const invalid = (blocks as any[]).find((b) => {
         if (b?.type !== "camera") return null;
         const v = b.vision ?? {};
-        return v.enabled === true && (!v.modelId || String(v.modelId).length === 0);
+        const criteria = Array.isArray(v.criteria)
+          ? v.criteria.filter((item: unknown) => typeof item === "string" && item.trim().length > 0)
+          : [];
+        return v.enabled === true && criteria.length === 0;
       });
       if (invalid) {
         setPublishBlocker({
@@ -4109,7 +4118,10 @@ function NovoChecklistPage() {
                       enabled?: boolean;
                       modelId?: string | null;
                       modelVersion?: string | null;
-                      provider?: "manual";
+                      provider?: "cloudflare_workers_ai" | "manual";
+                      criteria?: string[];
+                      confidenceThreshold?: number | null;
+                      model?: string | null;
                       threshold?: number | null;
                       minWidth?: number | null;
                       minHeight?: number | null;
@@ -4124,19 +4136,19 @@ function NovoChecklistPage() {
                         ? camVision.onAnalysisFailure
                         : "manual_review";
                     const visionEnabled = camVision.enabled === true;
-                    const visionModelId = camVision.modelId ?? null;
-                    const visionModelVersion = camVision.modelVersion ?? null;
-                    // Sem lookup de modelo no editor por enquanto — assumimos
-                    // que o modelo está ativo quando temos modelId + modelVersion. A validação
-                    // definitiva ocorre no backend/publicação.
-                    const isModelActive = Boolean(visionModelId && visionModelVersion);
-                     // Selo simples com 3 estados: IA desativada / Padrão sem modelo ativo / IA configurada.
+                    const visionCriteria = Array.isArray(camVision.criteria) ? camVision.criteria : [];
+                    const validVisionCriteria = visionCriteria.filter((item) => item.trim().length > 0);
+                    const confidenceThreshold = Math.max(
+                      0.5,
+                      Math.min(0.95, Number(camVision.confidenceThreshold ?? 0.75)),
+                    );
+                     // Selo simples com 3 estados: IA desativada / sem critérios / IA configurada.
                      const visionBadge: { label: string; tone: "off" | "warn" | "active" } =
                        !visionEnabled
                          ? { label: "IA desativada", tone: "off" }
-                         : (visionModelId && isModelActive)
+                         : validVisionCriteria.length > 0
                            ? { label: "IA configurada", tone: "active" }
-                           : { label: "Padrão sem modelo ativo", tone: "warn" };
+                           : { label: "Defina o padrão", tone: "warn" };
                    return (
                      <div
                        key={block.id}
@@ -4293,7 +4305,7 @@ function NovoChecklistPage() {
                                   <div>
                                     <p className="text-xs font-semibold text-neutral-800">Análise visual por IA</p>
                                     <p className="text-[11px] text-neutral-500">
-                                      Compara a foto enviada com um padrão visual aprovado.
+                                      Confere a foto com os critérios definidos abaixo.
                                     </p>
                                   </div>
                                   <Switch
@@ -4307,30 +4319,85 @@ function NovoChecklistPage() {
                                 </div>
 
                                 {visionEnabled && (
-                                  <div className="space-y-1.5">
+                                  <div className="space-y-3">
                                     <label className="block text-[11px] font-semibold text-neutral-500 uppercase tracking-wider">
-                                      Padrão visual
+                                      O que a foto deve mostrar
                                     </label>
-                                    <div className="flex items-center justify-between gap-2 px-2.5 py-1.5 border border-dashed border-neutral-300 rounded-md bg-white">
-                                      <span className="text-xs text-neutral-500">
-                                        {visionModelId ? visionModelId : "Nenhum padrão treinado ainda"}
-                                      </span>
-                                      <button
-                                        type="button"
-                                        disabled
-                                        className="text-[11px] font-semibold px-2 py-1 rounded bg-neutral-100 text-neutral-400 cursor-not-allowed"
-                                        title="Disponível após treinar um padrão visual"
-                                      >
-                                        Selecionar
-                                      </button>
+                                    <textarea
+                                      value={visionCriteria.join("\n")}
+                                      placeholder={"Um critério por linha. Ex.:\nO extintor está visível\nO acesso está desobstruído\nO lacre está intacto"}
+                                      onChange={(e) =>
+                                        updateBlock(block.id, {
+                                          vision: {
+                                            ...(camVision ?? {}),
+                                            provider: "cloudflare_workers_ai",
+                                            criteria: e.target.value.split("\n").slice(0, 10),
+                                          },
+                                        } as any)
+                                      }
+                                      rows={5}
+                                      maxLength={1200}
+                                      className="w-full px-2.5 py-2 text-sm border border-neutral-200 rounded-md bg-white outline-none focus:border-neutral-400 resize-y"
+                                    />
+                                    <div className="flex items-center justify-between gap-3 text-[11px] text-neutral-500">
+                                      <span>Um critério objetivo por linha, no máximo 10.</span>
+                                      <span>{validVisionCriteria.length}/10</span>
                                     </div>
-                                    {!visionModelId && (
+                                    {validVisionCriteria.length === 0 && (
                                       <p className="text-[11px] text-amber-700">
-                                        Você pode salvar o rascunho, mas a publicação exige um padrão visual válido.
+                                        Você pode salvar o rascunho, mas precisa definir o padrão antes de publicar.
                                       </p>
                                     )}
-                                    <p className="text-[11px] text-neutral-500 pt-1">
-                                      Sensibilidade, resolução mínima e política de reprovação são herdadas do padrão visual selecionado em <strong>/ia-visual</strong>.
+
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                                      <label className="space-y-1">
+                                        <span className="block text-[11px] font-semibold text-neutral-500 uppercase tracking-wider">
+                                          Se não corresponder
+                                        </span>
+                                        <select
+                                          value={camOnAnomaly}
+                                          onChange={(e) =>
+                                            updateBlock(block.id, {
+                                              vision: {
+                                                ...(camVision ?? {}),
+                                                onAnomaly: e.target.value as VisionOnAnomaly,
+                                              },
+                                            } as any)
+                                          }
+                                          className="w-full px-2.5 py-2 text-xs border border-neutral-200 rounded-md bg-white outline-none focus:border-neutral-400"
+                                        >
+                                          <option value="require_resubmit">Pedir outra foto</option>
+                                          <option value="manual_review">Enviar para revisão</option>
+                                          <option value="allow_continue">Avisar e permitir continuar</option>
+                                          <option value="block_completion">Bloquear conclusão</option>
+                                        </select>
+                                      </label>
+
+                                      <label className="space-y-1">
+                                        <span className="block text-[11px] font-semibold text-neutral-500 uppercase tracking-wider">
+                                          Confiança mínima
+                                        </span>
+                                        <select
+                                          value={String(confidenceThreshold)}
+                                          onChange={(e) =>
+                                            updateBlock(block.id, {
+                                              vision: {
+                                                ...(camVision ?? {}),
+                                                confidenceThreshold: Number(e.target.value),
+                                              },
+                                            } as any)
+                                          }
+                                          className="w-full px-2.5 py-2 text-xs border border-neutral-200 rounded-md bg-white outline-none focus:border-neutral-400"
+                                        >
+                                          <option value="0.65">Flexível</option>
+                                          <option value="0.75">Equilibrada</option>
+                                          <option value="0.85">Rigorosa</option>
+                                        </select>
+                                      </label>
+                                    </div>
+
+                                    <p className="text-[11px] text-neutral-500">
+                                      Resultados abaixo da confiança mínima são enviados para revisão humana, sem reprovação automática.
                                     </p>
                                   </div>
                                 )}
@@ -6082,8 +6149,8 @@ function NovoChecklistPage() {
               <span className="font-semibold text-neutral-800">
                 “{publishBlocker?.label}”
               </span>{" "}
-              está com a análise visual ativada, mas nenhum padrão visual válido foi
-              selecionado.
+              está com a análise visual ativada, mas nenhum critério de aprovação foi
+              definido.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="flex-col sm:flex-row sm:justify-between gap-2">
@@ -6119,7 +6186,7 @@ function NovoChecklistPage() {
                   });
                 }}
               >
-                Selecionar padrão
+                Definir critérios
               </AlertDialogAction>
             </div>
           </AlertDialogFooter>

@@ -3,11 +3,13 @@ import { Camera, X, RefreshCw, Loader2, CheckCircle2, AlertTriangle, XCircle, Cl
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { compressImage } from "@/lib/compress-image";
+import { checkLocalPhotoQuality } from "@/lib/photo-quality";
 import { useChecklistEvidenceAnalysis, type EvidenceAnalysisResult, type EvidenceAnalysisStatus } from "@/hooks/useChecklistEvidenceAnalysis";
 
 type Phase =
   | "idle"
   | "preview"
+  | "checking"
   | "uploading"
   | "confirming"
   | "analyzing"
@@ -31,6 +33,8 @@ type Props = {
 
 type CameraVision = {
   enabled?: boolean;
+  criteria?: string[];
+  confidenceThreshold?: number | null;
   minWidth?: number | null;
   minHeight?: number | null;
   onAnomaly?: string;
@@ -61,6 +65,14 @@ export function PublicCameraBlock({ block, checklistId, ensureResponseSession, o
   const title = String(block?.title || block?.subtitle || "").trim();
   const description = String(block?.description ?? "").trim();
   const required = block?.required === true;
+  const captureGuidance = String(block?.captureGuidance ?? "").trim();
+  const criteria = Array.isArray(vision?.criteria)
+    ? vision.criteria
+        .filter((item): item is string => typeof item === "string")
+        .map((item) => item.trim())
+        .filter(Boolean)
+        .slice(0, 10)
+    : [];
 
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [phase, setPhase] = useState<Phase>("idle");
@@ -121,7 +133,23 @@ export function PublicCameraBlock({ block, checklistId, ensureResponseSession, o
     const source = fileOverride ?? pendingFile;
     if (!source) return;
     setErrorMsg(null);
-    setPhase("uploading");
+    setPhase("checking");
+
+    const localQuality = await checkLocalPhotoQuality(source, {
+      minWidth: vision?.minWidth,
+      minHeight: vision?.minHeight,
+    });
+    if (!localQuality.ok) {
+      const message =
+        localQuality.reason === "resolution_too_low"
+          ? "A foto tem resolução muito baixa. Aproxime-se e tire outra foto."
+          : localQuality.reason === "too_dark"
+            ? "A foto está muito escura. Melhore a iluminação e tente novamente."
+            : "A foto está clara demais. Ajuste o enquadramento ou a iluminação.";
+      setErrorMsg(message);
+      setPhase("error");
+      return;
+    }
 
     const session = await ensureResponseSession();
     if (!session) {
@@ -129,6 +157,8 @@ export function PublicCameraBlock({ block, checklistId, ensureResponseSession, o
       setPhase("error");
       return;
     }
+
+    setPhase("uploading");
 
     // Comprime imagens grandes antes de subir.
     let file: File = source;
@@ -286,15 +316,40 @@ export function PublicCameraBlock({ block, checklistId, ensureResponseSession, o
         )}
       </div>
 
+      {captureGuidance && phase === "idle" && (
+        <p className="text-xs text-neutral-600 bg-neutral-50 border border-neutral-200 rounded-lg px-3 py-2 mb-2">
+          {captureGuidance}
+        </p>
+      )}
 
-      {phase === "uploading" && previewUrl && (
+      {visionEnabled && criteria.length > 0 && phase === "idle" && (
+        <div className="bg-sky-50/70 border border-sky-100 rounded-lg px-3 py-2.5 mb-3">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-sky-800 mb-1.5">
+            A foto deve mostrar
+          </p>
+          <ul className="space-y-1">
+            {criteria.map((criterion, index) => (
+              <li key={`${criterion}-${index}`} className="flex items-start gap-2 text-xs text-sky-950">
+                <CheckCircle2 className="w-3.5 h-3.5 mt-0.5 shrink-0 text-sky-600" aria-hidden />
+                <span>{criterion}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {(phase === "checking" || phase === "uploading") && previewUrl && (
         <img src={previewUrl} alt="Pré-visualização" className="w-full max-h-80 object-contain rounded-lg border border-neutral-200 bg-black/5 mb-2" />
       )}
 
-      {(phase === "uploading" || phase === "confirming") && (
+      {(phase === "checking" || phase === "uploading" || phase === "confirming") && (
         <div className="flex items-center gap-2 text-sm text-neutral-600 py-2">
           <Loader2 className="w-4 h-4 animate-spin" aria-hidden />
-          {phase === "uploading" ? "Enviando foto..." : "Confirmando envio..."}
+          {phase === "checking"
+            ? "Verificando qualidade da foto..."
+            : phase === "uploading"
+              ? "Enviando foto..."
+              : "Confirmando envio..."}
         </div>
       )}
 
@@ -428,5 +483,6 @@ function publicMessageForInvalid(code: string): string {
   if (code === "attempt_limit_reached") return "Limite de tentativas atingido para esta pergunta.";
   if (code === "file_too_large") return "A foto excede o tamanho máximo.";
   if (code === "unsupported_mime") return "Formato não suportado. Envie JPEG, PNG ou WebP.";
+  if (code === "vision_not_configured") return "A análise visual deste item ainda não foi configurada.";
   return "Não foi possível processar a foto. Tente novamente.";
 }
