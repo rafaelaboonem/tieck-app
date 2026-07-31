@@ -259,27 +259,37 @@ export function AuthPage({ mode, redirect }: Props) {
       return;
     }
     if (!otpVerified || !verificationToken) {
-      toast.error("Sessão expirada. Reinicie o cadastro.");
-      resetSignup();
+      backToCodeStep("Sua verificação expirou. Solicite um novo código.");
       return;
     }
     setIsLoading(true);
     try {
       const result = await invokeSignupFn<{ ok: boolean; code?: string }>(
         "signup-complete",
-        { email, verificationToken, password, displayName: displayName.trim() },
+        { email: normalizedEmail(), verificationToken, password, displayName: displayName.trim() },
       );
       if (!result.ok) {
         toast.error("Este e-mail já está cadastrado.");
         resetSignup();
         return;
       }
-      const { error: signInErr } = await supabase.auth.signInWithPassword({ email, password });
+      const { error: signInErr } = await supabase.auth.signInWithPassword({
+        email: normalizedEmail(),
+        password,
+      });
       if (signInErr) throw signInErr;
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData.session) {
+        throw new Error("Não foi possível iniciar a sessão. Tente entrar novamente.");
+      }
       toast.success("Conta criada com sucesso!");
       goAfterAuth();
     } catch (err: any) {
       console.error("Set password error:", err);
+      if (err?.code === "session_invalid" || err?.code === "session_expired") {
+        backToCodeStep("Sua verificação expirou. Enviamos você de volta para solicitar um novo código.");
+        return;
+      }
       toast.error(mapAuthError(err.message || "Erro ao finalizar cadastro"));
     } finally {
       setIsLoading(false);
