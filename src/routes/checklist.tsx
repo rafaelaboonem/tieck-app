@@ -613,6 +613,12 @@ function NovoChecklistPage() {
   const [currentChecklistId, setCurrentChecklistId] = useState<string | null>(null);
   const [profile, setProfile] = useState<any>(null);
   const [shortSlug, setShortSlug] = useState<string | null>(null);
+  // Identificador público seguro: custom_slug (se existir) ou o id real.
+  // Nunca produz "undefined"/"null"/vazio no link.
+  const publicShareId = [shortSlug, currentChecklistId, checklistId]
+    .map((v) => (typeof v === "string" ? v.trim() : ""))
+    .find((v) => v && v !== "undefined" && v !== "null") || "";
+
   const [customDomain, setCustomDomain] = useState<string | null>(null);
   const [customDomainStatus, setCustomDomainStatus] = useState<'verified' | 'pending' | 'failed' | null>(null);
   const isSavingRef = useRef(false);
@@ -2056,17 +2062,38 @@ function NovoChecklistPage() {
       // os padrões visuais ativos e grava `published_content`
       // + `is_published = true` num único passo, sem confiar em valores técnicos
       // enviados pelo navegador.
+      // Estado de publicação confirmado pelo SERVIDOR (nunca pelo cliente).
+      let serverPublished: boolean = data?.is_published === true;
+      let serverSlug: string | null = data?.custom_slug ?? null;
+
       if (isPublishedOverride === true && data?.id) {
         const { error: pubErr } = await supabase.rpc("publish_checklist", {
           p_checklist_id: data.id,
         });
         if (pubErr) throw pubErr;
+
+        // Releitura obrigatória: só liberamos o link público se o servidor
+        // confirmar is_published = true.
+        const { data: verified, error: verifyErr } = await supabase
+          .from("checklists")
+          .select("id, custom_slug, is_published")
+          .eq("id", data.id)
+          .single();
+        if (verifyErr) throw verifyErr;
+        serverPublished = verified?.is_published === true;
+        serverSlug = verified?.custom_slug ?? null;
+        if (!serverPublished) {
+          throw new Error("Não foi possível confirmar a publicação. O checklist continua como rascunho.");
+        }
+      } else if (is_published === false) {
+        serverPublished = false;
       }
 
       if (!silent) {
-        const isActuallyPublished = is_published === true || (is_published === undefined && data?.is_published);
+        const isActuallyPublished = serverPublished;
         toast.success(isActuallyPublished ? (checklistId ? "Alterações salvas!" : "Checklist publicado com sucesso!") : "Rascunho salvo!");
-        if (data?.custom_slug) setShortSlug(data.custom_slug);
+        if (serverSlug) setShortSlug(serverSlug);
+
 
         if (isActuallyPublished) {
           setTimeout(() => {
@@ -5475,8 +5502,8 @@ function NovoChecklistPage() {
                           <p className="text-xs font-bold text-neutral-400 uppercase mb-1">Link direto</p>
                           <p className="text-sm font-medium text-neutral-600 truncate">
                             {customDomain && customDomainStatus === 'verified' 
-                              ? `https://${customDomain}/${shortSlug || ""}`
-                              : `${window.location.origin}/c/${shortSlug || checklistId}`}
+                              ? `https://${customDomain}/${publicShareId}`
+                              : `${window.location.origin}/c/${publicShareId}`}
                           </p>
                         </div>
                         <div className="flex items-center gap-2">
@@ -5488,10 +5515,16 @@ function NovoChecklistPage() {
                             <Settings className="w-4 h-4" />
                           </Link>
                           <button
+                            disabled={!publicShareId}
                             onClick={() => {
+                              if (!publicShareId) {
+                                toast.error("Link indisponível: publique o checklist primeiro.");
+                                return;
+                              }
                               const url = customDomain && customDomainStatus === 'verified'
-                                ? `https://${customDomain}/${shortSlug || ""}`
-                                : `${window.location.origin}/c/${shortSlug || checklistId}`;
+                                ? `https://${customDomain}/${publicShareId}`
+                                : `${window.location.origin}/c/${publicShareId}`;
+
                               navigator.clipboard.writeText(url);
                               toast.success("Link copiado!");
                             }}
@@ -5505,7 +5538,7 @@ function NovoChecklistPage() {
 
                     <div className="flex gap-4">
                       <a 
-                        href={customDomain && customDomainStatus === 'verified' ? `https://${customDomain}/${shortSlug || ""}` : `/c/${shortSlug || checklistId}`} 
+                        href={customDomain && customDomainStatus === 'verified' ? `https://${customDomain}/${publicShareId}` : `/c/${publicShareId}`} 
 
                         target="_blank" 
                         rel="noreferrer"

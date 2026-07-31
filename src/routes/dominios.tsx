@@ -113,7 +113,7 @@ function DominiosPage() {
 
   const copyToClipboard = (slug: string | null, id: string) => {
     const baseUrl = window.location.origin;
-    const finalSlug = slug || id.substring(0, 6);
+    const finalSlug = slug || id;
     const url = `${baseUrl}/c/${finalSlug}`;
     navigator.clipboard.writeText(url);
     toast.success("Link copiado para a área de transferência!");
@@ -240,7 +240,7 @@ function DominiosPage() {
                           </div>
                         ) : (
                           <span className={`font-medium ${checklist.custom_slug ? "text-blue-600" : "text-neutral-400 font-normal italic"}`}>
-                            {checklist.custom_slug || checklist.id.substring(0, 6)}
+                            {checklist.custom_slug || checklist.id}
                           </span>
                         )}
                       </div>
@@ -275,7 +275,7 @@ function DominiosPage() {
                             title="Ver Checklist"
                           >
                             <a 
-                              href={`/c/${checklist.custom_slug || checklist.id.substring(0, 6)}`} 
+                              href={`/c/${checklist.custom_slug || checklist.id}`} 
                               target="_blank" 
                               rel="noopener noreferrer"
                             >

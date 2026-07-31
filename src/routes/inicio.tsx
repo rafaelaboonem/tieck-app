@@ -311,7 +311,7 @@ function Dashboard() {
                                   toast.error("Você precisa publicar o checklist primeiro");
                                   return;
                                 }
-                                const finalSlug = item.custom_slug || item.id.substring(0, 6);
+                                const finalSlug = item.custom_slug || item.id;
                                 const url = `${window.location.origin}/c/${finalSlug}`;
                                 navigator.clipboard.writeText(url);
                                 toast.success("Link copiado!");
