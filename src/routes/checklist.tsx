@@ -613,6 +613,12 @@ function NovoChecklistPage() {
   const [currentChecklistId, setCurrentChecklistId] = useState<string | null>(null);
   const [profile, setProfile] = useState<any>(null);
   const [shortSlug, setShortSlug] = useState<string | null>(null);
+  // Identificador público seguro: custom_slug (se existir) ou o id real.
+  // Nunca produz "undefined"/"null"/vazio no link.
+  const publicShareId = [shortSlug, currentChecklistId, checklistId]
+    .map((v) => (typeof v === "string" ? v.trim() : ""))
+    .find((v) => v && v !== "undefined" && v !== "null") || "";
+
   const [customDomain, setCustomDomain] = useState<string | null>(null);
   const [customDomainStatus, setCustomDomainStatus] = useState<'verified' | 'pending' | 'failed' | null>(null);
   const isSavingRef = useRef(false);
