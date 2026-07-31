@@ -14,10 +14,10 @@ type Props = {
   redirect?: string;
 };
 
-const SIGNUP_FUNCTIONS_URL =
-  "https://wursmukowkbjuhmvrvbr.supabase.co/functions/v1";
-const SIGNUP_FUNCTIONS_KEY =
-  "sb_publishable_rt1ySRZ8G2OmGqlNODTPlQ_pzefbZJU";
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string | undefined;
+const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined;
+const SIGNUP_FUNCTIONS_URL = SUPABASE_URL ? `${SUPABASE_URL.replace(/\/$/, "")}/functions/v1` : "";
+const SIGNUP_FUNCTIONS_KEY = SUPABASE_PUBLISHABLE_KEY ?? "";
 
 export function AuthPage({ mode, redirect }: Props) {
   const navigate = useNavigate();
@@ -25,6 +25,9 @@ export function AuthPage({ mode, redirect }: Props) {
   const isSignUp = mode === "signup";
 
   async function invokeSignupFn<T = any>(name: string, body: Record<string, unknown>): Promise<T> {
+    if (!SIGNUP_FUNCTIONS_URL || !SIGNUP_FUNCTIONS_KEY) {
+      throw new Error("O serviço de cadastro não está configurado neste ambiente.");
+    }
     const url = `${SIGNUP_FUNCTIONS_URL}/${name}`;
     let response: Response;
     try {
@@ -281,6 +284,13 @@ export function AuthPage({ mode, redirect }: Props) {
         { email: normalizedEmail(), verificationToken, password, displayName: displayName.trim() },
       );
       if (!result.ok) {
+        if (result.code === "account_recovered_login_required") {
+          toast.info(
+            "Sua conta já existia e foi restaurada. Entre com sua senha ou use “Esqueci minha senha”.",
+          );
+          navigate({ to: "/login" });
+          return;
+        }
         toast.error("Este e-mail já está cadastrado.");
         resetSignup();
         return;

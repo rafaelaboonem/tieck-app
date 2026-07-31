@@ -43,10 +43,24 @@ serve(async (req) => {
       return json({ error: "Não foi possível verificar o e-mail. Tente novamente." }, 500);
     }
     const lookupBody = await lookupRes.json();
-    const users: Array<{ email?: string }> = lookupBody?.users ?? [];
-    if (users.some((u) => (u.email ?? "").toLowerCase() === email)) {
-      return json({ ok: false, code: "already_registered" });
+    const users: Array<{ id: string; email?: string }> = lookupBody?.users ?? [];
+    const existing = users.find((u) => (u.email ?? "").trim().toLowerCase() === email);
+    if (existing) {
+      // Contas já completas nunca passam pelo fluxo de cadastro.
+      const { data: state, error: stateErr } = await admin.rpc("signup_account_state", {
+        p_user_id: existing.id,
+      });
+      if (stateErr) {
+        console.error("signup_account_state error", stateErr);
+        return json({ error: "Não foi possível verificar o e-mail. Tente novamente." }, 500);
+      }
+      if (state === "complete") {
+        return json({ ok: false, code: "already_registered" });
+      }
+      // Estado parcial: permite revalidar o e-mail para retomar o cadastro.
     }
+
+    await admin.rpc("cleanup_expired_signup_otps");
 
 
     const code = generateCode();

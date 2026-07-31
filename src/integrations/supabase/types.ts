@@ -1686,6 +1686,13 @@ export type Database = {
         }[]
       }
       cleanup_expired_responses: { Args: never; Returns: undefined }
+      cleanup_expired_signup_otps: { Args: never; Returns: number }
+      consume_signup_verification: {
+        Args: { p_email: string; p_token: string }
+        Returns: {
+          status: string
+        }[]
+      }
       create_checklist_evidence_attempt: {
         Args: {
           p_block_id: string
@@ -1748,6 +1755,10 @@ export type Database = {
         }[]
       }
       materialize_task_executions: { Args: never; Returns: number }
+      provision_signup_account: {
+        Args: { p_display_name: string; p_user_id: string }
+        Returns: string
+      }
       publish_checklist: {
         Args: { p_checklist_id: string }
         Returns: {
@@ -1755,6 +1766,7 @@ export type Database = {
           published_at: string
         }[]
       }
+      signup_account_state: { Args: { p_user_id: string }; Returns: string }
       submit_public_response: {
         Args: { p_answers: Json; p_public_id: string }
         Returns: {
