@@ -1002,7 +1002,7 @@ async function handleSelfTest(req: Request) {
   const expected = String(Deno.env.get("DIAG_VISION_TOKEN") ?? "").trim();
   if (!expected) return err(404, "unknown_action");
   if (req.headers.get("x-diag-token") !== expected) return err(403, "forbidden");
-  const imgRes = await fetch("https://upload.wikimedia.org/wikipedia/commons/thumb/6/6b/Kitchen_sink_with_dishes.jpg/640px-Kitchen_sink_with_dishes.jpg");
+  const imgRes = await fetch("https://picsum.photos/seed/tieck-sink/640/480.jpg", { headers: { "User-Agent": "tieck-selftest" } });
   if (!imgRes.ok) return json(200, { step: "image_fetch", status: imgRes.status });
   const bytes = new Uint8Array(await imgRes.arrayBuffer());
   try {
