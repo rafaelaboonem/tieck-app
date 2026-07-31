@@ -132,6 +132,18 @@ export function AuthPage({ mode, redirect }: Props) {
     setResendCountdown(0);
   };
 
+  const normalizedEmail = () => email.trim().toLowerCase();
+
+  /** Volta para a etapa do código permitindo pedir um novo, em vez de reiniciar tudo. */
+  const backToCodeStep = (message: string) => {
+    setOtp("");
+    setOtpVerified(false);
+    setVerificationToken("");
+    setResendCountdown(0);
+    setSignupStep(2);
+    toast.error(message);
+  };
+
   const handleGoogle = async () => {
     if (isLoading) return;
     setIsLoading(true);
