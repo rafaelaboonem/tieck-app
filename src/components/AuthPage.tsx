@@ -14,33 +14,60 @@ type Props = {
   redirect?: string;
 };
 
+const SIGNUP_FUNCTIONS_URL =
+  "https://wursmukowkbjuhmvrvbr.supabase.co/functions/v1";
+const SIGNUP_FUNCTIONS_KEY =
+  "sb_publishable_rt1ySRZ8G2OmGqlNODTPlQ_pzefbZJU";
+
 export function AuthPage({ mode, redirect }: Props) {
   const navigate = useNavigate();
   const { user } = useAuth();
   const isSignUp = mode === "signup";
 
   async function invokeSignupFn<T = any>(name: string, body: Record<string, unknown>): Promise<T> {
-    const { data, error } = await supabase.functions.invoke(name, { body });
-    if (error) {
-      // Try to surface the JSON error the function returned (supabase-js wraps it in FunctionsHttpError).
-      let message = "Não foi possível enviar o código. Verifique sua conexão e tente novamente.";
-      const ctx: any = (error as any).context;
-      try {
-        const res = ctx?.response ?? ctx;
-        if (res && typeof res.json === "function") {
-          const parsed = await res.json();
-          if (parsed?.error) message = parsed.error;
-        }
-      } catch {
-        /* ignore */
-      }
-      if (/timeout|network|fetch/i.test(error.message ?? "")) {
-        message = "Não foi possível conectar ao serviço de cadastro. Tente novamente em instantes.";
-      }
+    const url = `${SIGNUP_FUNCTIONS_URL}/${name}`;
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        method: "POST",
+        headers: {
+          apikey: SIGNUP_FUNCTIONS_KEY,
+          Authorization: `Bearer ${SIGNUP_FUNCTIONS_KEY}`,
+          "x-client-info": "tieck-web-signup/1.0",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify(body),
+      });
+    } catch (error) {
+      console.error("Signup function network error", { name, url, error });
+      throw new Error("O serviço de cadastro está indisponível no momento. Tente novamente em instantes.");
+    }
+
+    const responseText = await response.text();
+    let data: unknown;
+    try {
+      data = responseText ? JSON.parse(responseText) : null;
+    } catch {
+      data = responseText;
+    }
+
+    if (!response.ok) {
+      console.error("Signup function HTTP error", {
+        name,
+        url,
+        status: response.status,
+        statusText: response.statusText,
+        response: data,
+      });
+      const message =
+        data && typeof data === "object" && "error" in data
+          ? String((data as { error: unknown }).error)
+          : `Falha no serviço de cadastro (${response.status}). Tente novamente.`;
       throw new Error(message);
     }
-    if (data && typeof data === "object" && "error" in (data as any) && (data as any).error) {
-      throw new Error(String((data as any).error));
+    if (data && typeof data === "object" && "error" in data && (data as { error?: unknown }).error) {
+      console.error("Signup function response error", { name, url, status: response.status, response: data });
+      throw new Error(String((data as { error: unknown }).error));
     }
     return data as T;
   }
