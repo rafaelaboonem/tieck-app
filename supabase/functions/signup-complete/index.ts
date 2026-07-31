@@ -32,9 +32,11 @@ serve(async (req) => {
       return json({ error: "Falha ao validar sessão" }, 500);
     }
     const row = rows?.[0];
-    if (!row) return json({ error: "Sessão inválida ou expirada" }, 400);
+    if (!row) {
+      return json({ error: "Sessão inválida ou expirada", code: "session_invalid" }, 400);
+    }
     if (new Date(row.expires_at).getTime() < Date.now()) {
-      return json({ error: "Sessão expirada. Reinicie o cadastro." }, 400);
+      return json({ error: "Sessão expirada. Solicite um novo código.", code: "session_expired" }, 400);
     }
 
     const { data: created, error: createErr } = await admin.auth.admin.createUser({
