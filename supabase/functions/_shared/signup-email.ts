@@ -1,12 +1,6 @@
 // Shared email helper for signup / e-mail confirmation flows.
-// Remetente principal solicitado. Requer o domínio `tieck.com` verificado no Resend.
-const FROM_ADDRESS = "Tieck <suporte@tieck.com>";
-// Fallbacks usados automaticamente enquanto `tieck.com` não estiver verificado.
-const FALLBACK_FROM_CHAIN = [
-  "Tieck <suporte@tieck.com.br>",
-  "Tieck <notificacao@tieck.com.br>",
-  "Tieck <onboarding@resend.dev>",
-];
+// Remetente único: domínio `tieck.com.br` verificado no Resend.
+const FROM_ADDRESS = "Tieck <suporte@tieck.com.br>";
 const RESEND_API_URL = "https://connector-gateway.lovable.dev/resend/emails";
 const CODE_TTL_MIN = 10;
 
@@ -70,7 +64,7 @@ function codeEmailHtml(code: string) {
       Se você não solicitou este código, pode ignorar este e-mail.
     </p>
   </div>
-  <p style="text-align:center;color:#94a3b8;font-size:11px;margin:16px 0 0">© Tieck · suporte@tieck.com</p>
+  <p style="text-align:center;color:#94a3b8;font-size:11px;margin:16px 0 0">© Tieck · suporte@tieck.com.br</p>
 </body></html>`;
 }
 
@@ -86,7 +80,7 @@ function welcomeHtml() {
       Sua conta foi criada com sucesso. Já pode acessar a Tieck e organizar seus processos.
     </p>
   </div>
-  <p style="text-align:center;color:#94a3b8;font-size:11px;margin:16px 0 0">© Tieck · suporte@tieck.com</p>
+  <p style="text-align:center;color:#94a3b8;font-size:11px;margin:16px 0 0">© Tieck · suporte@tieck.com.br</p>
 </body></html>`;
 }
 
