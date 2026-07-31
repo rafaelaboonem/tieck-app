@@ -943,7 +943,7 @@ async function processAnalysis(analysisId: string) {
 
 // ---------------- dispatcher ----------------
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response(null, { headers: CORS });
+  if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
   if (req.method !== "POST") return err(405, "method_not_allowed");
 
   let body: any;
