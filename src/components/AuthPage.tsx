@@ -173,7 +173,7 @@ export function AuthPage({ mode, redirect }: Props) {
     try {
       const result = await invokeSignupFn<{ ok: boolean; code?: string }>(
         "signup-request-otp",
-        { email },
+        { email: normalizedEmail() },
       );
       if (!result.ok) {
         setAlreadyRegistered(true);
@@ -203,7 +203,7 @@ export function AuthPage({ mode, redirect }: Props) {
     try {
       const result = await invokeSignupFn<{ ok: boolean; verificationToken: string }>(
         "signup-verify-otp",
-        { email, code },
+        { email: normalizedEmail(), code },
       );
       setVerificationToken(result.verificationToken);
       setOtpVerified(true);
@@ -239,7 +239,7 @@ export function AuthPage({ mode, redirect }: Props) {
     try {
       const result = await invokeSignupFn<{ ok: boolean; code?: string }>(
         "signup-request-otp",
-        { email },
+        { email: normalizedEmail() },
       );
       if (!result.ok) {
         setAlreadyRegistered(true);
