@@ -2056,17 +2056,38 @@ function NovoChecklistPage() {
       // os padrões visuais ativos e grava `published_content`
       // + `is_published = true` num único passo, sem confiar em valores técnicos
       // enviados pelo navegador.
+      // Estado de publicação confirmado pelo SERVIDOR (nunca pelo cliente).
+      let serverPublished: boolean = data?.is_published === true;
+      let serverSlug: string | null = data?.custom_slug ?? null;
+
       if (isPublishedOverride === true && data?.id) {
         const { error: pubErr } = await supabase.rpc("publish_checklist", {
           p_checklist_id: data.id,
         });
         if (pubErr) throw pubErr;
+
+        // Releitura obrigatória: só liberamos o link público se o servidor
+        // confirmar is_published = true.
+        const { data: verified, error: verifyErr } = await supabase
+          .from("checklists")
+          .select("id, custom_slug, is_published")
+          .eq("id", data.id)
+          .single();
+        if (verifyErr) throw verifyErr;
+        serverPublished = verified?.is_published === true;
+        serverSlug = verified?.custom_slug ?? null;
+        if (!serverPublished) {
+          throw new Error("Não foi possível confirmar a publicação. O checklist continua como rascunho.");
+        }
+      } else if (is_published === false) {
+        serverPublished = false;
       }
 
       if (!silent) {
-        const isActuallyPublished = is_published === true || (is_published === undefined && data?.is_published);
+        const isActuallyPublished = serverPublished;
         toast.success(isActuallyPublished ? (checklistId ? "Alterações salvas!" : "Checklist publicado com sucesso!") : "Rascunho salvo!");
-        if (data?.custom_slug) setShortSlug(data.custom_slug);
+        if (serverSlug) setShortSlug(serverSlug);
+
 
         if (isActuallyPublished) {
           setTimeout(() => {
