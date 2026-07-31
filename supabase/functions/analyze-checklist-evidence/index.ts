@@ -1035,6 +1035,8 @@ Deno.serve(async (req) => {
       case "start-upload":   return await handleStartUpload(body, db);
       case "confirm-upload": return await handleConfirmUpload(body, db);
       case "status":         return await handleStatus(body, db);
+      case "live-check":     return await handleLiveCheck(body, db);
+      case "self-test":      return await handleSelfTest(req);
       default:               return err(400, "unknown_action");
     }
   } catch (e) {
