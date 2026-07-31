@@ -5538,7 +5538,7 @@ function NovoChecklistPage() {
 
                     <div className="flex gap-4">
                       <a 
-                        href={customDomain && customDomainStatus === 'verified' ? `https://${customDomain}/${shortSlug || ""}` : `/c/${shortSlug || checklistId}`} 
+                        href={customDomain && customDomainStatus === 'verified' ? `https://${customDomain}/${publicShareId}` : `/c/${publicShareId}`} 
 
                         target="_blank" 
                         rel="noreferrer"
