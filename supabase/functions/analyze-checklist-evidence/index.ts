@@ -948,7 +948,7 @@ Deno.serve(async (req) => {
 
   let body: any;
   try { body = await req.json(); } catch { return err(400, "invalid_json"); }
-  const action = String(body?.action ?? "") as ActionKey;
+  const action = String(body?.action ?? "");
   const db = admin();
   try {
     switch (action) {
