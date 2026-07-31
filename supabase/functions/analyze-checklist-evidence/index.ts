@@ -604,16 +604,13 @@ function decisionMessage(status: string, errorCode: string | null, policy: Block
       return { publicStatus: "manual_review", publicMessage: "Envio encaminhado para revisão manual.", canContinue: true, requiresResubmit: false };
     }
     case "failed": {
-      const onFail: OnFailurePolicy = policy.onAnalysisFailure ?? "manual_review";
-      switch (onFail) {
-        case "allow_continue":
-          return { publicStatus: "failed", publicMessage: "Não foi possível analisar a foto; envio permitido.", canContinue: true, requiresResubmit: false };
-        case "block_completion":
-          return { publicStatus: "failed", publicMessage: "Falha na análise impede a conclusão do checklist.", canContinue: false, requiresResubmit: false };
-        case "manual_review":
-        default:
-          return { publicStatus: "manual_review", publicMessage: "Falha na análise; envio encaminhado para revisão manual.", canContinue: true, requiresResubmit: false };
+      // Camera AI V2: falha técnica é um estado próprio. Nunca aprova em
+      // silêncio e nunca promete revisão manual inexistente.
+      const onFail: OnFailurePolicy | undefined = policy.onAnalysisFailure;
+      if (onFail === "allow_continue") {
+        return { publicStatus: "failed", publicMessage: "Não foi possível verificar agora; envio permitido.", canContinue: true, requiresResubmit: false };
       }
+      return { publicStatus: "failed", publicMessage: "Não foi possível verificar agora. Tente novamente.", canContinue: false, requiresResubmit: false };
     }
     default:            return { publicStatus: "failed",        publicMessage: "Status desconhecido.", canContinue: false, requiresResubmit: true };
   }
