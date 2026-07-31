@@ -51,6 +51,9 @@ export function AuthPage({ mode, redirect }: Props) {
       data = responseText;
     }
 
+    const errorCode =
+      data && typeof data === "object" && "code" in data ? String((data as { code: unknown }).code) : undefined;
+
     if (!response.ok) {
       console.error("Signup function HTTP error", {
         name,
@@ -63,11 +66,15 @@ export function AuthPage({ mode, redirect }: Props) {
         data && typeof data === "object" && "error" in data
           ? String((data as { error: unknown }).error)
           : `Falha no serviço de cadastro (${response.status}). Tente novamente.`;
-      throw new Error(message);
+      const err = new Error(message) as Error & { code?: string };
+      err.code = errorCode;
+      throw err;
     }
     if (data && typeof data === "object" && "error" in data && (data as { error?: unknown }).error) {
       console.error("Signup function response error", { name, url, status: response.status, response: data });
-      throw new Error(String((data as { error: unknown }).error));
+      const err = new Error(String((data as { error: unknown }).error)) as Error & { code?: string };
+      err.code = errorCode;
+      throw err;
     }
     return data as T;
   }
