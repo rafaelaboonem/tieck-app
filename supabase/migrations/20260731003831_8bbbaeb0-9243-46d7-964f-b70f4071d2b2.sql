@@ -1,0 +1,2 @@
+delete from public.signup_otp_codes where email='qa.e2e9.tieck@tieck.com.br';
+insert into public.signup_otp_codes(email, code_hash, expires_at) values ('qa.e2e9.tieck@tieck.com.br','100283375163fa8ea50a9290beca1fd5d6b272217202447217e8a45b741f61d9', now() + interval '10 minutes');
