@@ -920,6 +920,105 @@ async function processAnalysis(analysisId: string) {
   }
 }
 
+// ---------------- live-check (assistência de enquadramento) ----------------
+// Frame temporário: nunca é gravado em Storage nem no banco, nunca é logado.
+const LIVE_MAX_BYTES = 400 * 1024;
+
+function decodeDataUri(raw: string): { bytes: Uint8Array; mime: string } | null {
+  const match = /^data:(image\/(?:jpeg|jpg|png|webp));base64,([A-Za-z0-9+/=]+)$/.exec(raw.trim());
+  if (!match) return null;
+  try {
+    const binary = atob(match[2]);
+    if (binary.length > LIVE_MAX_BYTES) return null;
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    return { bytes, mime: match[1] === "image/jpg" ? "image/jpeg" : match[1] };
+  } catch {
+    return null;
+  }
+}
+
+async function handleLiveCheck(payload: any, db: ReturnType<typeof admin>) {
+  const responseToken = String(payload?.responseToken ?? "");
+  const blockId = String(payload?.blockId ?? "");
+  const checklistId = String(payload?.checklistId ?? "");
+  const frame = String(payload?.frame ?? "");
+  if (!responseToken || !blockId || !checklistId || !frame) return err(400, "missing_fields");
+
+  const rtHash = await sha256Hex(responseToken);
+  if (!(await enforceRateLimit(db, "live-check", await sha256Hex(`${rtHash}:${blockId}`)))) {
+    return json(200, { state: "uncertain", hint: "" });
+  }
+
+  const resp = await loadResponseByToken(db, responseToken);
+  if (!resp) return err(401, "invalid_response_token");
+  if (resp.checklist_id !== checklistId) return err(403, "checklist_mismatch");
+
+  const decoded = decodeDataUri(frame);
+  if (!decoded) return err(422, "invalid_frame");
+
+  // A instrução verdadeira vem do snapshot publicado — nunca do cliente.
+  const found = findCameraBlock(resp.checklists?.published_content, blockId);
+  if (!found) return err(409, "block_not_found");
+  const instruction = String(found.block?.title || found.block?.subtitle || "").slice(0, 240);
+
+  const question = [
+    "Você orienta o enquadramento de uma foto de checklist, em tempo real.",
+    ...SAFETY_RULES,
+    "",
+    `Objetivo da foto: ${instruction || "registrar o item solicitado"}`,
+    "",
+    'Responda EXCLUSIVAMENTE em JSON: {"state":"ready|adjust|uncertain","hint":""}',
+    "hint: no máximo 6 palavras, em português do Brasil, como",
+    '"Aproxime um pouco.", "Centralize o item.", "Melhore a iluminação.",',
+    '"Mantenha o celular firme." ou "Enquadramento pronto.".',
+  ].join("\n");
+
+  try {
+    const { text } = await runMoondream({
+      image: decoded.bytes,
+      mimeType: decoded.mime,
+      question,
+      maxTokens: 96,
+      timeoutMs: 8_000,
+    });
+    const parsed = parseJsonLoose(text) as any;
+    const state = parsed?.state === "ready" ? "ready" : parsed?.state === "adjust" ? "adjust" : "uncertain";
+    const hint = typeof parsed?.hint === "string"
+      ? parsed.hint.trim().replace(/\s+/g, " ").slice(0, 60)
+      : "";
+    return json(200, { state, hint });
+  } catch (e) {
+    const code = String((e as Error).message ?? "live_check_failed");
+    console.error(`[live-check] ${/^[a-z0-9_-]{1,60}$/i.test(code) ? code : "live_check_failed"}`);
+    return json(200, { state: "uncertain", hint: "" });
+  }
+}
+
+// ---------------- self-test (diagnóstico controlado) ----------------
+// Ativo somente quando o secret DIAG_VISION_TOKEN existe e o header confere.
+// Usa uma imagem pública; não toca em respostas, storage ou banco.
+async function handleSelfTest(req: Request) {
+  const expected = String(Deno.env.get("DIAG_VISION_TOKEN") ?? "").trim();
+  if (!expected) return err(404, "unknown_action");
+  if (req.headers.get("x-diag-token") !== expected) return err(403, "forbidden");
+  const imgRes = await fetch("https://upload.wikimedia.org/wikipedia/commons/thumb/6/6b/Kitchen_sink_with_dishes.jpg/640px-Kitchen_sink_with_dishes.jpg");
+  if (!imgRes.ok) return json(200, { step: "image_fetch", status: imgRes.status });
+  const bytes = new Uint8Array(await imgRes.arrayBuffer());
+  try {
+    const { text, model, inferenceMs } = await runMoondream({
+      image: bytes,
+      mimeType: "image/jpeg",
+      question: buildFinalQuestion("A pia da cozinha está limpa e sem louça?", "", []),
+      maxTokens: 512,
+    });
+    const parsed = parseV2Result(parseJsonLoose(text));
+    return json(200, { ok: true, model, inferenceMs, parsed });
+  } catch (e) {
+    return json(200, { ok: false, code: String((e as Error).message ?? "unknown") });
+  }
+}
+
 // ---------------- dispatcher ----------------
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
