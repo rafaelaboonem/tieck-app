@@ -483,14 +483,10 @@ async function handleConfirmUpload(payload: any, db: ReturnType<typeof admin>) {
     return json(200, { analysisEnabled: false });
   }
 
-  const criteria = normalizeCriteria(vision.criteria);
-  const legacyModelId = typeof vision.modelId === "string" ? vision.modelId.trim() : "";
-  // Compatibilidade: snapshot antigo (enabled + modelId, sem criteria) NUNCA
-  // retorna vision_not_configured — a evidência é aceita e vai para revisão humana.
-  const isLegacySnapshot = criteria.length === 0 && legacyModelId.length > 0;
-  if (criteria.length === 0 && !isLegacySnapshot) return err(409, "vision_not_configured");
+  // Camera AI V2: a pergunta do bloco é suficiente. Critérios manuais são
+  // apenas contexto extra de blocos antigos — nunca um requisito.
   const provider = PROVIDER;
-  const modelId = isLegacySnapshot ? legacyModelId : cloudflareModel();
+  const modelId = cloudflareModel();
   const modelVersion = typeof vision.modelVersion === "string" ? vision.modelVersion : null;
   const threshold = clampConfidence(vision.confidenceThreshold);
 
