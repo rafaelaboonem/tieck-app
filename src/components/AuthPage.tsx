@@ -51,6 +51,9 @@ export function AuthPage({ mode, redirect }: Props) {
       data = responseText;
     }
 
+    const errorCode =
+      data && typeof data === "object" && "code" in data ? String((data as { code: unknown }).code) : undefined;
+
     if (!response.ok) {
       console.error("Signup function HTTP error", {
         name,
@@ -63,11 +66,15 @@ export function AuthPage({ mode, redirect }: Props) {
         data && typeof data === "object" && "error" in data
           ? String((data as { error: unknown }).error)
           : `Falha no serviço de cadastro (${response.status}). Tente novamente.`;
-      throw new Error(message);
+      const err = new Error(message) as Error & { code?: string };
+      err.code = errorCode;
+      throw err;
     }
     if (data && typeof data === "object" && "error" in data && (data as { error?: unknown }).error) {
       console.error("Signup function response error", { name, url, status: response.status, response: data });
-      throw new Error(String((data as { error: unknown }).error));
+      const err = new Error(String((data as { error: unknown }).error)) as Error & { code?: string };
+      err.code = errorCode;
+      throw err;
     }
     return data as T;
   }
@@ -125,6 +132,18 @@ export function AuthPage({ mode, redirect }: Props) {
     setResendCountdown(0);
   };
 
+  const normalizedEmail = () => email.trim().toLowerCase();
+
+  /** Volta para a etapa do código permitindo pedir um novo, em vez de reiniciar tudo. */
+  const backToCodeStep = (message: string) => {
+    setOtp("");
+    setOtpVerified(false);
+    setVerificationToken("");
+    setResendCountdown(0);
+    setSignupStep(2);
+    toast.error(message);
+  };
+
   const handleGoogle = async () => {
     if (isLoading) return;
     setIsLoading(true);
@@ -154,7 +173,7 @@ export function AuthPage({ mode, redirect }: Props) {
     try {
       const result = await invokeSignupFn<{ ok: boolean; code?: string }>(
         "signup-request-otp",
-        { email },
+        { email: normalizedEmail() },
       );
       if (!result.ok) {
         setAlreadyRegistered(true);
@@ -184,7 +203,7 @@ export function AuthPage({ mode, redirect }: Props) {
     try {
       const result = await invokeSignupFn<{ ok: boolean; verificationToken: string }>(
         "signup-verify-otp",
-        { email, code },
+        { email: normalizedEmail(), code },
       );
       setVerificationToken(result.verificationToken);
       setOtpVerified(true);
@@ -220,7 +239,7 @@ export function AuthPage({ mode, redirect }: Props) {
     try {
       const result = await invokeSignupFn<{ ok: boolean; code?: string }>(
         "signup-request-otp",
-        { email },
+        { email: normalizedEmail() },
       );
       if (!result.ok) {
         setAlreadyRegistered(true);
@@ -252,27 +271,37 @@ export function AuthPage({ mode, redirect }: Props) {
       return;
     }
     if (!otpVerified || !verificationToken) {
-      toast.error("Sessão expirada. Reinicie o cadastro.");
-      resetSignup();
+      backToCodeStep("Sua verificação expirou. Solicite um novo código.");
       return;
     }
     setIsLoading(true);
     try {
       const result = await invokeSignupFn<{ ok: boolean; code?: string }>(
         "signup-complete",
-        { email, verificationToken, password, displayName: displayName.trim() },
+        { email: normalizedEmail(), verificationToken, password, displayName: displayName.trim() },
       );
       if (!result.ok) {
         toast.error("Este e-mail já está cadastrado.");
         resetSignup();
         return;
       }
-      const { error: signInErr } = await supabase.auth.signInWithPassword({ email, password });
+      const { error: signInErr } = await supabase.auth.signInWithPassword({
+        email: normalizedEmail(),
+        password,
+      });
       if (signInErr) throw signInErr;
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData.session) {
+        throw new Error("Não foi possível iniciar a sessão. Tente entrar novamente.");
+      }
       toast.success("Conta criada com sucesso!");
       goAfterAuth();
     } catch (err: any) {
       console.error("Set password error:", err);
+      if (err?.code === "session_invalid" || err?.code === "session_expired") {
+        backToCodeStep("Sua verificação expirou. Enviamos você de volta para solicitar um novo código.");
+        return;
+      }
       toast.error(mapAuthError(err.message || "Erro ao finalizar cadastro"));
     } finally {
       setIsLoading(false);

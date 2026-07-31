@@ -127,4 +127,4 @@ export async function sendWelcomeEmail(to: string) {
 }
 
 export const CODE_TTL_MINUTES = CODE_TTL_MIN;
-export const VERIFY_TOKEN_TTL_MINUTES = 15;
+export const VERIFY_TOKEN_TTL_MINUTES = 45;
