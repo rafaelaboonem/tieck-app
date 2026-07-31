@@ -25,6 +25,9 @@ export function AuthPage({ mode, redirect }: Props) {
   const isSignUp = mode === "signup";
 
   async function invokeSignupFn<T = any>(name: string, body: Record<string, unknown>): Promise<T> {
+    if (!SIGNUP_FUNCTIONS_URL || !SIGNUP_FUNCTIONS_KEY) {
+      throw new Error("O serviço de cadastro não está configurado neste ambiente.");
+    }
     const url = `${SIGNUP_FUNCTIONS_URL}/${name}`;
     let response: Response;
     try {
