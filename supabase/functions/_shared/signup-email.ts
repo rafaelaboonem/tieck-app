@@ -1,12 +1,6 @@
 // Shared email helper for signup / e-mail confirmation flows.
-// Remetente principal solicitado. Requer o domínio `tieck.com` verificado no Resend.
-const FROM_ADDRESS = "Tieck <suporte@tieck.com>";
-// Fallbacks usados automaticamente enquanto `tieck.com` não estiver verificado.
-const FALLBACK_FROM_CHAIN = [
-  "Tieck <suporte@tieck.com.br>",
-  "Tieck <notificacao@tieck.com.br>",
-  "Tieck <onboarding@resend.dev>",
-];
+// Remetente único: domínio `tieck.com.br` verificado no Resend.
+const FROM_ADDRESS = "Tieck <suporte@tieck.com.br>";
 const RESEND_API_URL = "https://connector-gateway.lovable.dev/resend/emails";
 const CODE_TTL_MIN = 10;
 
@@ -70,7 +64,7 @@ function codeEmailHtml(code: string) {
       Se você não solicitou este código, pode ignorar este e-mail.
     </p>
   </div>
-  <p style="text-align:center;color:#94a3b8;font-size:11px;margin:16px 0 0">© Tieck · suporte@tieck.com</p>
+  <p style="text-align:center;color:#94a3b8;font-size:11px;margin:16px 0 0">© Tieck · suporte@tieck.com.br</p>
 </body></html>`;
 }
 
@@ -86,7 +80,7 @@ function welcomeHtml() {
       Sua conta foi criada com sucesso. Já pode acessar a Tieck e organizar seus processos.
     </p>
   </div>
-  <p style="text-align:center;color:#94a3b8;font-size:11px;margin:16px 0 0">© Tieck · suporte@tieck.com</p>
+  <p style="text-align:center;color:#94a3b8;font-size:11px;margin:16px 0 0">© Tieck · suporte@tieck.com.br</p>
 </body></html>`;
 }
 
@@ -109,15 +103,11 @@ async function sendEmail(to: string, subject: string, html: string) {
     throw new Error("Serviço de e-mail indisponível: conexão Resend não configurada.");
   }
 
-  let lastError = "";
-  for (const from of [FROM_ADDRESS, ...FALLBACK_FROM_CHAIN]) {
-    const res = await postResend(lovableApiKey, resendConnectionKey, from, to, subject, html);
-    if (res.ok) return;
-    lastError = await res.text();
-    console.error("Resend send failed", from, res.status, lastError);
-  }
-
-  throw new Error(`Não foi possível enviar o e-mail. ${lastError}`);
+  const res = await postResend(lovableApiKey, resendConnectionKey, FROM_ADDRESS, to, subject, html);
+  if (res.ok) return;
+  const errorBody = await res.text();
+  console.error("Resend send failed", FROM_ADDRESS, res.status, errorBody);
+  throw new Error(`Não foi possível enviar o e-mail [${res.status}]: ${errorBody}`);
 }
 
 export async function sendCodeEmail(to: string, code: string) {
