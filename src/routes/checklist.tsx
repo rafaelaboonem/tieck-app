@@ -5502,8 +5502,8 @@ function NovoChecklistPage() {
                           <p className="text-xs font-bold text-neutral-400 uppercase mb-1">Link direto</p>
                           <p className="text-sm font-medium text-neutral-600 truncate">
                             {customDomain && customDomainStatus === 'verified' 
-                              ? `https://${customDomain}/${shortSlug || ""}`
-                              : `${window.location.origin}/c/${shortSlug || checklistId}`}
+                              ? `https://${customDomain}/${publicShareId}`
+                              : `${window.location.origin}/c/${publicShareId}`}
                           </p>
                         </div>
                         <div className="flex items-center gap-2">
@@ -5515,10 +5515,16 @@ function NovoChecklistPage() {
                             <Settings className="w-4 h-4" />
                           </Link>
                           <button
+                            disabled={!publicShareId}
                             onClick={() => {
+                              if (!publicShareId) {
+                                toast.error("Link indisponível: publique o checklist primeiro.");
+                                return;
+                              }
                               const url = customDomain && customDomainStatus === 'verified'
-                                ? `https://${customDomain}/${shortSlug || ""}`
-                                : `${window.location.origin}/c/${shortSlug || checklistId}`;
+                                ? `https://${customDomain}/${publicShareId}`
+                                : `${window.location.origin}/c/${publicShareId}`;
+
                               navigator.clipboard.writeText(url);
                               toast.success("Link copiado!");
                             }}
