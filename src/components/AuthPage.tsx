@@ -14,10 +14,10 @@ type Props = {
   redirect?: string;
 };
 
-const SIGNUP_FUNCTIONS_URL =
-  "https://wursmukowkbjuhmvrvbr.supabase.co/functions/v1";
-const SIGNUP_FUNCTIONS_KEY =
-  "sb_publishable_rt1ySRZ8G2OmGqlNODTPlQ_pzefbZJU";
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string | undefined;
+const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined;
+const SIGNUP_FUNCTIONS_URL = SUPABASE_URL ? `${SUPABASE_URL.replace(/\/$/, "")}/functions/v1` : "";
+const SIGNUP_FUNCTIONS_KEY = SUPABASE_PUBLISHABLE_KEY ?? "";
 
 export function AuthPage({ mode, redirect }: Props) {
   const navigate = useNavigate();
