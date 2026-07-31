@@ -870,7 +870,12 @@ async function processAnalysis(analysisId: string) {
     if (!found) throw new Error("block_not_found");
 
     const criteria = normalizeCriteria(found.vision?.criteria);
-    if (criteria.length === 0) throw new Error("criteria_missing");
+    // Snapshot legado (sem `criteria`): evidência aceita e enviada para revisão humana.
+    if (criteria.length === 0) {
+      await markAnalysisForReview(db, analysisId, "legacy_vision_snapshot");
+      console.log(`[analysis:${logId}] legacy_vision_snapshot → manual_review`);
+      return;
+    }
 
     const { data: imageBlob, error: downloadError } = await db.storage
       .from(BUCKET)
