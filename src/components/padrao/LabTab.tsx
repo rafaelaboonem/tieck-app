@@ -7,17 +7,30 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
-import { Loader2, Play, Eye, Scale, CheckCircle2, RefreshCcw, HelpCircle, AlertTriangle } from "lucide-react";
+import { Loader2, Play, Eye, Scale, CheckCircle2, RefreshCcw, HelpCircle, AlertTriangle, Camera } from "lucide-react";
+import { CameraV3Preview } from "@/components/padrao/CameraV3Preview";
 import {
   blobToBase64,
   referenceBase64,
   runBenchmark,
   isCorrect,
+  ensureStandardProfile,
+  profileOf,
+  RELEASE_CASES,
   type ExpectedResult,
   type LabDecision,
   type LabRun,
+  type ReleaseCase,
   type VisualStandard,
 } from "@/lib/visual-standards";
+
+const emptyMarks = {
+  aiWasRight: null as boolean | null,
+  falseApproval: false,
+  falseRejection: false,
+  liveGuidanceHelped: null as boolean | null,
+  liveGuidanceWrong: false,
+};
 
 const DECISION_META: Record<LabDecision, { label: string; tone: string; icon: typeof CheckCircle2 }> = {
   approved: { label: "Aprovado", tone: "bg-emerald-500/15 text-emerald-700", icon: CheckCircle2 },
@@ -33,15 +46,22 @@ interface Props {
   onSelect: (s: VisualStandard | null) => void;
   runs: LabRun[];
   onRun: (run: LabRun) => void;
+  onUpdateRun?: (id: string, patch: Partial<LabRun>) => void;
 }
 
-export function LabTab({ workspaceId, standards, selected, onSelect, runs, onRun }: Props) {
+
+export function LabTab({ workspaceId, standards, selected, onSelect, runs, onRun, onUpdateRun }: Props) {
   const [question, setQuestion] = useState(selected?.question ?? "");
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [expected, setExpected] = useState<ExpectedResult>("approved");
   const [useReference, setUseReference] = useState(true);
   const [running, setRunning] = useState(false);
+  const [releaseCase, setReleaseCase] = useState<ReleaseCase | "">("");
+  const [cameraOpen, setCameraOpen] = useState(false);
+  const [profiling, setProfiling] = useState(false);
+
+  const profile = profileOf(selected);
 
   useEffect(() => {
     if (selected) setQuestion(selected.question);
@@ -60,6 +80,14 @@ export function LabTab({ workspaceId, standards, selected, onSelect, runs, onRun
   const lastRun = runs[0] ?? null;
   const canRun = useMemo(() => Boolean(file && question.trim() && !running), [file, question, running]);
 
+
+
+  const pushRun = (res: LabRun) => {
+    res.correct = isCorrect(res);
+    onRun(res);
+    if (res.combined.decision === "technical_failure") toast.error("Não foi possível verificar agora.");
+  };
+
   const execute = async () => {
     if (!file) return;
     setRunning(true);
@@ -69,20 +97,24 @@ export function LabTab({ workspaceId, standards, selected, onSelect, runs, onRun
       if (useReference && selected?.reference_path) {
         ref = await referenceBase64(selected.reference_path);
       }
-      const res = await runBenchmark({ workspaceId, question, imageBase64, referenceBase64: ref });
-      const run: LabRun = {
+      const res = await runBenchmark({
+        workspaceId,
+        question,
+        imageBase64,
+        referenceBase64: ref,
+        standardId: selected?.id ?? null,
+        profile,
+      });
+      pushRun({
         ...res,
         id: crypto.randomUUID(),
         at: new Date().toISOString(),
         question,
         expected,
         correct: null,
-      };
-      run.correct = isCorrect(run);
-      onRun(run);
-      if (res.combined.decision === "technical_failure") {
-        toast.error(res.combined.public_message);
-      }
+        source: "upload",
+        releaseCase: releaseCase || null,
+      });
     } catch (e) {
       toast.error(`Não foi possível analisar agora. Tente novamente.`);
       console.error("[lab]", (e as Error).message);
@@ -90,6 +122,25 @@ export function LabTab({ workspaceId, standards, selected, onSelect, runs, onRun
       setRunning(false);
     }
   };
+
+  const openCamera = async () => {
+    if (!selected) {
+      toast.error("Selecione um padrão salvo para testar com a câmera.");
+      return;
+    }
+    if (!profile) {
+      setProfiling(true);
+      const out = await ensureStandardProfile(workspaceId, selected.id);
+      setProfiling(false);
+      if (!out.ok) {
+        toast.error("Não foi possível preparar este padrão agora.");
+        return;
+      }
+      toast.message("Padrão preparado. Recarregue a lista se o resumo não aparecer.");
+    }
+    setCameraOpen(true);
+  };
+
 
   return (
     <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
@@ -164,15 +215,46 @@ export function LabTab({ workspaceId, standards, selected, onSelect, runs, onRun
             </div>
           </div>
 
+          <div className="space-y-2">
+            <Label htmlFor="lab-case">Caso da trava de liberação (opcional)</Label>
+            <select
+              id="lab-case"
+              className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+              value={releaseCase}
+              onChange={(e) => {
+                const v = e.target.value as ReleaseCase | "";
+                setReleaseCase(v);
+                const found = RELEASE_CASES.find((c) => c.key === v);
+                if (found) setExpected(found.expected);
+              }}
+            >
+              <option value="">Não classificar</option>
+              {RELEASE_CASES.map((c) => (
+                <option key={c.key} value={c.key}>{c.label}</option>
+              ))}
+            </select>
+          </div>
+
           <Button className="w-full bg-[#FF007F] hover:bg-[#e6006f]" disabled={!canRun} onClick={execute}>
             {running ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Play className="mr-2 h-4 w-4" />}
             {running ? "Analisando…" : "Rodar teste"}
           </Button>
+
+          <Button variant="outline" className="w-full" onClick={openCamera} disabled={profiling}>
+            {profiling ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Camera className="mr-2 h-4 w-4" />}
+            Testar com a câmera (prévia)
+          </Button>
+          <p className="text-xs text-muted-foreground">
+            A prévia da câmera é interna: as imagens são analisadas em memória e nada é salvo.
+          </p>
         </CardContent>
       </Card>
 
+
       <div className="space-y-4">
-        {lastRun ? <RunDetail run={lastRun} /> : (
+        {lastRun ? (
+          <RunDetail run={lastRun} onMark={(patch) => onUpdateRun?.(lastRun.id, patch)} />
+        ) : (
           <Card>
             <CardContent className="py-16 text-center text-sm text-muted-foreground">
               Envie uma foto e rode o primeiro teste para ver as duas etapas da análise.
@@ -192,6 +274,7 @@ export function LabTab({ workspaceId, standards, selected, onSelect, runs, onRun
                   <div key={r.id} className="flex items-center justify-between gap-3 rounded-md border p-2 text-xs">
                     <span className="truncate">{r.question}</span>
                     <div className="flex shrink-0 items-center gap-2">
+                      {r.source === "camera_v3" && <Badge variant="outline">câmera</Badge>}
                       <Badge variant="outline" className={meta.tone}>{meta.label}</Badge>
                       <span className="text-muted-foreground">
                         {r.correct === null ? "—" : r.correct ? "acerto" : "erro"}
@@ -204,11 +287,38 @@ export function LabTab({ workspaceId, standards, selected, onSelect, runs, onRun
           </Card>
         )}
       </div>
+
+      {selected && (
+        <CameraV3Preview
+          open={cameraOpen}
+          workspaceId={workspaceId}
+          question={question}
+          profile={profile}
+          standardId={selected.id}
+          referencePath={selected.reference_path}
+          useReference={useReference && Boolean(selected.reference_path)}
+          onClose={() => setCameraOpen(false)}
+          onResult={({ response, live }) =>
+            pushRun({
+              ...response,
+              id: crypto.randomUUID(),
+              at: new Date().toISOString(),
+              question,
+              expected,
+              correct: null,
+              source: "camera_v3",
+              releaseCase: releaseCase || null,
+              live,
+            })
+          }
+        />
+      )}
     </div>
   );
 }
 
-function RunDetail({ run }: { run: LabRun }) {
+
+function RunDetail({ run, onMark }: { run: LabRun; onMark?: (patch: Partial<LabRun>) => void }) {
   const meta = DECISION_META[run.combined.decision];
   const Icon = meta.icon;
   return (
@@ -268,7 +378,73 @@ function RunDetail({ run }: { run: LabRun }) {
           <span>Tempo total: {run.totalLatencyMs} ms</span>
           <span>Esperado: {run.expected === "approved" ? "aprovar" : "nova foto"}</span>
           <span>{run.correct === null ? "Sem classificação" : run.correct ? "Acerto" : "Erro"}</span>
+          {run.live && (
+            <>
+              <span>
+                Tempo até encontrar: {run.live.timeToTargetMs == null ? "—" : `${(run.live.timeToTargetMs / 1000).toFixed(1)} s`}
+              </span>
+              <span>
+                Verificações ao vivo: {run.live.liveChecks}
+                {run.live.avgLiveLatencyMs != null ? ` (${run.live.avgLiveLatencyMs} ms)` : ""}
+              </span>
+            </>
+          )}
         </div>
+
+        {onMark && (
+          <div className="space-y-2 rounded-lg border p-3">
+            <p className="text-sm font-medium">Sua avaliação</p>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                variant={run.marks?.aiWasRight === true ? "default" : "outline"}
+                onClick={() => onMark({ marks: { ...emptyMarks, ...run.marks, aiWasRight: true } })}
+              >
+                A IA acertou
+              </Button>
+              <Button
+                size="sm"
+                variant={run.marks?.aiWasRight === false ? "default" : "outline"}
+                onClick={() => onMark({ marks: { ...emptyMarks, ...run.marks, aiWasRight: false } })}
+              >
+                A IA errou
+              </Button>
+              <Button
+                size="sm"
+                variant={run.marks?.falseApproval ? "default" : "outline"}
+                onClick={() => onMark({ marks: { ...emptyMarks, ...run.marks, falseApproval: !run.marks?.falseApproval } })}
+              >
+                Aprovou errado
+              </Button>
+              <Button
+                size="sm"
+                variant={run.marks?.falseRejection ? "default" : "outline"}
+                onClick={() => onMark({ marks: { ...emptyMarks, ...run.marks, falseRejection: !run.marks?.falseRejection } })}
+              >
+                Reprovou errado
+              </Button>
+              {run.source === "camera_v3" && (
+                <>
+                  <Button
+                    size="sm"
+                    variant={run.marks?.liveGuidanceHelped === true ? "default" : "outline"}
+                    onClick={() => onMark({ marks: { ...emptyMarks, ...run.marks, liveGuidanceHelped: true } })}
+                  >
+                    Orientação ajudou
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant={run.marks?.liveGuidanceWrong ? "default" : "outline"}
+                    onClick={() => onMark({ marks: { ...emptyMarks, ...run.marks, liveGuidanceWrong: !run.marks?.liveGuidanceWrong } })}
+                  >
+                    Orientação errada
+                  </Button>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+
       </CardContent>
     </Card>
   );

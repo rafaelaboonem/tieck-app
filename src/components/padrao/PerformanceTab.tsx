@@ -1,9 +1,10 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Download, TrendingUp } from "lucide-react";
+import { Download, TrendingUp, Check, X } from "lucide-react";
 import {
   MIN_LABELED_SAMPLE,
   computeMetrics,
+  computeRelease,
   download,
   exportRows,
   toCsv,
@@ -12,6 +13,7 @@ import {
 
 export function PerformanceTab({ runs }: { runs: LabRun[] }) {
   const m = computeMetrics(runs);
+  const release = computeRelease(runs);
 
   if (!runs.length) {
     return (
@@ -61,7 +63,39 @@ export function PerformanceTab({ runs }: { runs: LabRun[] }) {
         </CardContent>
       </Card>
 
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">Trava de liberação da câmera</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2 text-sm">
+          <p className={release.ready ? "text-emerald-700" : "text-muted-foreground"}>
+            {release.ready
+              ? "Todos os casos obrigatórios passaram nesta sessão."
+              : "A câmera continua em prévia interna até todos os casos passarem."}
+          </p>
+          <ul className="space-y-1">
+            {release.cases.map((c) => (
+              <li key={c.key} className="flex items-center gap-2 text-xs">
+                {c.passed ? (
+                  <Check className="h-3.5 w-3.5 text-emerald-600" aria-hidden />
+                ) : (
+                  <X className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
+                )}
+                <span className={c.passed ? "" : "text-muted-foreground"}>{c.label}</span>
+                {c.falseApproval && <span className="text-rose-600">falsa aprovação</span>}
+              </li>
+            ))}
+          </ul>
+          {release.blockedByFalseApproval && (
+            <p className="text-xs text-rose-600">
+              Há falsa aprovação registrada: a liberação fica bloqueada até um novo teste correto.
+            </p>
+          )}
+        </CardContent>
+      </Card>
+
       <div className="flex flex-wrap gap-3">
+
         <Button
           variant="outline"
           onClick={() => download(`tieck-lab-${Date.now()}.csv`, toCsv(runs), "text/csv;charset=utf-8")}
