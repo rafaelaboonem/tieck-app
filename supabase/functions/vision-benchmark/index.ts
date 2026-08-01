@@ -97,6 +97,10 @@ function toDataUrl(img: Decoded): string {
   return `data:${img.mime};base64,${btoa(s)}`;
 }
 
+// PNG 1x1 usado só para confirmar acesso ao modelo rápido (sem dados de usuário).
+const PING_IMAGE =
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+
 // ---------------- Cloudflare ----------------
 async function cfRun(model: string, body: unknown): Promise<any> {
   const accountId = String(Deno.env.get("CLOUDFLARE_ACCOUNT_ID") ?? "").trim();
@@ -172,8 +176,11 @@ const OBSERVER_QUESTION =
 async function runObserver(image: Decoded, question: string) {
   const started = Date.now();
   const payload = await cfRun(fastModel(), {
-    image: Array.from(image.bytes),
+    image: toDataUrl(image),
     task: "query",
+    reasoning: false,
+    stream: false,
+    temperature: 0.2,
     question: `${OBSERVER_QUESTION} Context: ${question}`,
     max_tokens: 200,
   });
@@ -257,8 +264,11 @@ async function runJudge(args: {
 
 async function describeReference(reference: Decoded, question: string): Promise<string> {
   const payload = await cfRun(fastModel(), {
-    image: Array.from(reference.bytes),
+    image: toDataUrl(reference),
     task: "query",
+    reasoning: false,
+    stream: false,
+    temperature: 0.2,
     question: `Describe the expected correct state shown in this reference photo, related to: ${question}`,
     max_tokens: 160,
   });
@@ -354,7 +364,7 @@ Deno.serve(async (req) => {
   if (action === "capabilities") {
     const out: Record<string, unknown> = { fast: null, final: null };
     for (const [key, model, payload] of [
-      ["fast", fastModel(), { image: [], task: "query", question: "ping", max_tokens: 8 }],
+      ["fast", fastModel(), { image: PING_IMAGE, task: "query", question: "What color dominates this image?", max_tokens: 16 }],
       ["final", finalModel(), { messages: [{ role: "user", content: "Reply with the single word ok." }], max_tokens: 8 }],
     ] as const) {
       const started = Date.now();
