@@ -136,7 +136,9 @@ export function LabTab({ workspaceId, standards, selected, onSelect, runs, onRun
         profile,
         sessionId: session.sessionId,
         attemptId: attempt.attemptId,
+        provider,
       });
+
 
       pushRun({
         ...res,
