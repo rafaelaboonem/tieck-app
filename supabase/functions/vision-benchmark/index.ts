@@ -365,7 +365,7 @@ Deno.serve(async (req) => {
         out[key] = { model, ok: false, code: String((e as Error).message).slice(0, 60), latencyMs: Date.now() - started };
       }
     }
-    console.log(`[lab] capabilities user=${user.id.slice(0, 8)}`);
+    console.log(`[lab] capabilities user=${actorId.slice(0, 8)}`);
     return json(200, out);
   }
 
@@ -386,8 +386,8 @@ Deno.serve(async (req) => {
   const reference = body?.referenceBase64 ? decodeImage(body.referenceBase64) : null;
   if (body?.referenceBase64 && !reference) return err(400, "invalid_reference");
 
-  if (inFlight.has(user.id)) return err(409, "already_running");
-  inFlight.add(user.id);
+  if (inFlight.has(actorId)) return err(409, "already_running");
+  inFlight.add(actorId);
   const t0 = Date.now();
   try {
     const observer = await runObserver(image, question);
@@ -413,7 +413,7 @@ Deno.serve(async (req) => {
     }
 
     const combined = combine(observer, judge.raw);
-    console.log(`[lab] evaluate ok user=${user.id.slice(0, 8)} decision=${combined.decision} ms=${Date.now() - t0}`);
+    console.log(`[lab] evaluate ok user=${actorId.slice(0, 8)} decision=${combined.decision} ms=${Date.now() - t0}`);
     return json(200, {
       observer: {
         observation: observer.observation,
@@ -440,7 +440,7 @@ Deno.serve(async (req) => {
     });
   } catch (e) {
     const code = String((e as Error).message ?? "unknown").slice(0, 60);
-    console.error(`[lab] evaluate_failed user=${user.id.slice(0, 8)} code=${code} ms=${Date.now() - t0}`);
+    console.error(`[lab] evaluate_failed user=${actorId.slice(0, 8)} code=${code} ms=${Date.now() - t0}`);
     return json(200, {
       observer: null,
       judge: null,
@@ -453,6 +453,6 @@ Deno.serve(async (req) => {
       totalLatencyMs: Date.now() - t0,
     });
   } finally {
-    inFlight.delete(user.id);
+    inFlight.delete(actorId);
   }
 });
