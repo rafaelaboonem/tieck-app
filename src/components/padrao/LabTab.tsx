@@ -101,6 +101,23 @@ export function LabTab({ workspaceId, standards, selected, onSelect, runs, onRun
       if (useReference && selected?.reference_path) {
         ref = await referenceBase64(selected.reference_path);
       }
+      // Sessão e tentativa são emitidas pelo servidor: o cliente não escolhe o orçamento.
+      const session = await startLabSession(workspaceId, selected?.id ?? null);
+      if (!session.ok) {
+        toast.error(session.message ?? "Limite de sessões atingido. Tente mais tarde.");
+        return;
+      }
+      const attempt = await createLabAttempt(workspaceId, session.sessionId);
+      if (!attempt.ok || !attempt.attemptId) {
+        toast.error(
+          attempt.reason === "attempt_limit_reached"
+            ? "Esta sessão atingiu o limite de análises. Abra outra em alguns minutos."
+            : "Não foi possível iniciar a análise agora.",
+        );
+        return;
+      }
+      setAttemptsUsed(attempt.attemptsUsed);
+      setAttemptsLimit(attempt.attemptsLimit ?? null);
       const res = await runBenchmark({
         workspaceId,
         question,
@@ -108,8 +125,10 @@ export function LabTab({ workspaceId, standards, selected, onSelect, runs, onRun
         referenceBase64: ref,
         standardId: selected?.id ?? null,
         profile,
-        sessionId: newSessionId(),
+        sessionId: session.sessionId,
+        attemptId: attempt.attemptId,
       });
+
       pushRun({
         ...res,
         id: crypto.randomUUID(),
