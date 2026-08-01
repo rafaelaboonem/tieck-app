@@ -281,7 +281,9 @@ export type ReleaseCase =
   | "wrong_place"
   | "partial_framing"
   | "wrong_condition"
-  | "dark_photo";
+  | "dark_photo"
+  | "not_observable_condition"
+  | "reference_similar_place";
 
 export const RELEASE_CASES: { key: ReleaseCase; label: string; expected: ExpectedResult }[] = [
   { key: "correct_photo", label: "Foto correta aprovada", expected: "approved" },
@@ -291,6 +293,16 @@ export const RELEASE_CASES: { key: ReleaseCase; label: string; expected: Expecte
   { key: "partial_framing", label: "Enquadramento parcial rejeitado", expected: "retake" },
   { key: "wrong_condition", label: "Condição inadequada rejeitada", expected: "retake" },
   { key: "dark_photo", label: "Foto escura rejeitada", expected: "retake" },
+  {
+    key: "not_observable_condition",
+    label: "Condição não verificável por foto sinalizada como tal",
+    expected: "not_observable",
+  },
+  {
+    key: "reference_similar_place",
+    label: "Local parecido com a referência, mas em outra condição, rejeitado",
+    expected: "retake",
+  },
 ];
 
 export interface LiveStats {
@@ -299,6 +311,12 @@ export interface LiveStats {
   liveChecks: number;
   avgLiveLatencyMs: number | null;
   strategy: "detect" | "point" | "query" | "none";
+  /** Consumo somado da sessão de câmera (ao vivo + análise final). */
+  neurons?: number;
+  inputTokens?: number;
+  outputTokens?: number;
+  aiCalls?: number;
+  localChecks?: number;
 }
 
 export interface EvaluatorMarks {
