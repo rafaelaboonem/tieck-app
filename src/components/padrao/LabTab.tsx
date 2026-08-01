@@ -274,6 +274,24 @@ export function LabTab({ workspaceId, standards, selected, onSelect, runs, onRun
             </select>
           </div>
 
+          <div className="space-y-2">
+            <Label htmlFor="lab-provider">Avaliador visual (uso interno)</Label>
+            <select
+              id="lab-provider"
+              className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+              value={provider}
+              onChange={(e) => setProvider(e.target.value as LabProvider)}
+            >
+              {LAB_PROVIDERS.map((p) => (
+                <option key={p.value} value={p.value}>{p.label}</option>
+              ))}
+            </select>
+            <p className="text-xs text-muted-foreground">
+              {LAB_PROVIDERS.find((p) => p.value === provider)?.hint}
+            </p>
+          </div>
+
+
           <Button className="w-full bg-[#FF007F] hover:bg-[#e6006f]" disabled={!canRun} onClick={execute}>
             {running ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Play className="mr-2 h-4 w-4" />}
             {running ? "Analisando…" : "Rodar teste"}
