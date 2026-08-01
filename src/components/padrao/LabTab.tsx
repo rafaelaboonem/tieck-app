@@ -370,7 +370,73 @@ function RunDetail({ run, onMark }: { run: LabRun; onMark?: (patch: Partial<LabR
           <span>Tempo total: {run.totalLatencyMs} ms</span>
           <span>Esperado: {run.expected === "approved" ? "aprovar" : "nova foto"}</span>
           <span>{run.correct === null ? "Sem classificação" : run.correct ? "Acerto" : "Erro"}</span>
+          {run.live && (
+            <>
+              <span>
+                Tempo até encontrar: {run.live.timeToTargetMs == null ? "—" : `${(run.live.timeToTargetMs / 1000).toFixed(1)} s`}
+              </span>
+              <span>
+                Verificações ao vivo: {run.live.liveChecks}
+                {run.live.avgLiveLatencyMs != null ? ` (${run.live.avgLiveLatencyMs} ms)` : ""}
+              </span>
+            </>
+          )}
         </div>
+
+        {onMark && (
+          <div className="space-y-2 rounded-lg border p-3">
+            <p className="text-sm font-medium">Sua avaliação</p>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                variant={run.marks?.aiWasRight === true ? "default" : "outline"}
+                onClick={() => onMark({ marks: { ...emptyMarks, ...run.marks, aiWasRight: true } })}
+              >
+                A IA acertou
+              </Button>
+              <Button
+                size="sm"
+                variant={run.marks?.aiWasRight === false ? "default" : "outline"}
+                onClick={() => onMark({ marks: { ...emptyMarks, ...run.marks, aiWasRight: false } })}
+              >
+                A IA errou
+              </Button>
+              <Button
+                size="sm"
+                variant={run.marks?.falseApproval ? "default" : "outline"}
+                onClick={() => onMark({ marks: { ...emptyMarks, ...run.marks, falseApproval: !run.marks?.falseApproval } })}
+              >
+                Aprovou errado
+              </Button>
+              <Button
+                size="sm"
+                variant={run.marks?.falseRejection ? "default" : "outline"}
+                onClick={() => onMark({ marks: { ...emptyMarks, ...run.marks, falseRejection: !run.marks?.falseRejection } })}
+              >
+                Reprovou errado
+              </Button>
+              {run.source === "camera_v3" && (
+                <>
+                  <Button
+                    size="sm"
+                    variant={run.marks?.liveGuidanceHelped === true ? "default" : "outline"}
+                    onClick={() => onMark({ marks: { ...emptyMarks, ...run.marks, liveGuidanceHelped: true } })}
+                  >
+                    Orientação ajudou
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant={run.marks?.liveGuidanceWrong ? "default" : "outline"}
+                    onClick={() => onMark({ marks: { ...emptyMarks, ...run.marks, liveGuidanceWrong: !run.marks?.liveGuidanceWrong } })}
+                  >
+                    Orientação errada
+                  </Button>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+
       </CardContent>
     </Card>
   );
