@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Download, TrendingUp } from "lucide-react";
@@ -10,22 +11,47 @@ import {
   type LabRun,
 } from "@/lib/visual-standards";
 
-export function PerformanceTab({ runs }: { runs: LabRun[] }) {
+export function PerformanceTab({
+  runs: allRuns,
+  cameraBlockId,
+}: {
+  runs: LabRun[];
+  /** Pergunta selecionada no topo da Central Visual. */
+  cameraBlockId?: string | null;
+}) {
+  const [workspaceWide, setWorkspaceWide] = useState(false);
+  const scoped = cameraBlockId && !workspaceWide;
+  const runs = scoped ? allRuns.filter((r) => r.cameraBlockId === cameraBlockId) : allRuns;
   const m = computeMetrics(runs);
   const usage = computeUsage(runs);
 
+  const scopeToggle = cameraBlockId ? (
+    <div className="flex items-center justify-between gap-3">
+      <p className="text-xs text-muted-foreground">
+        {scoped ? "Métricas da pergunta selecionada." : "Métricas de todas as perguntas desta sessão."}
+      </p>
+      <Button variant="outline" size="sm" onClick={() => setWorkspaceWide((v) => !v)}>
+        {scoped ? "Ver todo o workspace" : "Ver apenas esta pergunta"}
+      </Button>
+    </div>
+  ) : null;
+
   if (!runs.length) {
     return (
-      <Card>
-        <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
-          <TrendingUp className="h-10 w-10 text-muted-foreground" />
-          <p className="max-w-md text-sm text-muted-foreground">
-            Nenhuma análise nesta sessão ainda. Os indicadores aparecem assim que você analisar uma foto no laboratório.
-          </p>
-        </CardContent>
-      </Card>
+      <div className="space-y-4">
+        {scopeToggle}
+        <Card>
+          <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
+            <TrendingUp className="h-10 w-10 text-muted-foreground" />
+            <p className="max-w-md text-sm text-muted-foreground">
+              Nenhuma análise nesta sessão ainda. Os indicadores aparecem assim que você analisar uma foto no laboratório.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
     );
   }
+
 
   return (
     <div className="space-y-5">
