@@ -228,7 +228,7 @@ async function buildProfile(question: string, referenceSummary: string | null) {
   return {
     profile: {
       target_phrase: target,
-      target_phrase_en: String(parsed.target_phrase_en ?? "").trim().slice(0, 60),
+      target_phrase_en: detectorPhrase(parsed.target_phrase_en),
       requested_condition: condition,
       observable_signals: strList(parsed.observable_signals),
       contrary_signals: strList(parsed.contrary_signals),
