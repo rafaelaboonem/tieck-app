@@ -13,6 +13,7 @@ import {
 
 export function PerformanceTab({ runs }: { runs: LabRun[] }) {
   const m = computeMetrics(runs);
+  const release = computeRelease(runs);
 
   if (!runs.length) {
     return (
