@@ -975,7 +975,10 @@ function NovoChecklistPage() {
     | { id: string; type: "ranking"; options: { id: string; value: string }[]; selectedIds: string[] }
     | {
         id: string;
+        /** Identificador estável do bloco, usado para vincular o padrão visual. */
+        cameraBlockId?: string;
         type: "camera";
+
         dataUrls?: string[];
         allowMultiple?: boolean;
         maxPhotos?: number;
