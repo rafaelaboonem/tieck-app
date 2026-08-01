@@ -1334,6 +1334,119 @@ export type Database = {
         }
         Relationships: []
       }
+      vision_lab_attempts: {
+        Row: {
+          created_at: string
+          failures: number
+          id: string
+          result: Json | null
+          session_id: string
+          standard_id: string | null
+          status: string
+          updated_at: string
+          user_id: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          failures?: number
+          id?: string
+          result?: Json | null
+          session_id: string
+          standard_id?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          failures?: number
+          id?: string
+          result?: Json | null
+          session_id?: string
+          standard_id?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vision_lab_attempts_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "vision_lab_sessions"
+            referencedColumns: ["session_id"]
+          },
+        ]
+      }
+      vision_lab_sessions: {
+        Row: {
+          attempts_created: number
+          block_id: string | null
+          created_at: string
+          expires_at: string
+          final_calls: number
+          last_call_at: string | null
+          last_live_at: string | null
+          live_calls: number
+          response_id: string | null
+          session_id: string
+          standard_id: string | null
+          updated_at: string
+          user_id: string
+          workspace_id: string
+        }
+        Insert: {
+          attempts_created?: number
+          block_id?: string | null
+          created_at?: string
+          expires_at: string
+          final_calls?: number
+          last_call_at?: string | null
+          last_live_at?: string | null
+          live_calls?: number
+          response_id?: string | null
+          session_id: string
+          standard_id?: string | null
+          updated_at?: string
+          user_id: string
+          workspace_id: string
+        }
+        Update: {
+          attempts_created?: number
+          block_id?: string | null
+          created_at?: string
+          expires_at?: string
+          final_calls?: number
+          last_call_at?: string | null
+          last_live_at?: string | null
+          live_calls?: number
+          response_id?: string | null
+          session_id?: string
+          standard_id?: string | null
+          updated_at?: string
+          user_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vision_lab_sessions_standard_id_fkey"
+            columns: ["standard_id"]
+            isOneToOne: false
+            referencedRelation: "visual_standards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vision_lab_sessions_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       vision_locks: {
         Row: {
           acquired_at: string
@@ -1402,55 +1515,97 @@ export type Database = {
           },
         ]
       }
+      vision_usage_daily: {
+        Row: {
+          calls: number
+          calls_without_usage: number
+          created_at: string
+          day: string
+          estimated_neurons: number | null
+          input_tokens: number | null
+          model_id: string
+          output_tokens: number | null
+          workspace_id: string
+        }
+        Insert: {
+          calls?: number
+          calls_without_usage?: number
+          created_at?: string
+          day: string
+          estimated_neurons?: number | null
+          input_tokens?: number | null
+          model_id: string
+          output_tokens?: number | null
+          workspace_id: string
+        }
+        Update: {
+          calls?: number
+          calls_without_usage?: number
+          created_at?: string
+          day?: string
+          estimated_neurons?: number | null
+          input_tokens?: number | null
+          model_id?: string
+          output_tokens?: number | null
+          workspace_id?: string
+        }
+        Relationships: []
+      }
       vision_usage_events: {
         Row: {
           action: string
+          attempt_id: string | null
           created_at: string
           decision: string | null
-          estimated_neurons: number
+          estimated_neurons: number | null
           id: string
           inference_ms: number
-          input_tokens: number
+          input_tokens: number | null
           model_id: string
-          output_tokens: number
+          output_tokens: number | null
           provider: string
           session_id: string
           standard_id: string | null
           step: string
+          usage_missing: boolean
           user_id: string
           workspace_id: string
         }
         Insert: {
           action: string
+          attempt_id?: string | null
           created_at?: string
           decision?: string | null
-          estimated_neurons?: number
+          estimated_neurons?: number | null
           id?: string
           inference_ms?: number
-          input_tokens?: number
+          input_tokens?: number | null
           model_id: string
-          output_tokens?: number
+          output_tokens?: number | null
           provider?: string
           session_id: string
           standard_id?: string | null
           step: string
+          usage_missing?: boolean
           user_id: string
           workspace_id: string
         }
         Update: {
           action?: string
+          attempt_id?: string | null
           created_at?: string
           decision?: string | null
-          estimated_neurons?: number
+          estimated_neurons?: number | null
           id?: string
           inference_ms?: number
-          input_tokens?: number
+          input_tokens?: number | null
           model_id?: string
-          output_tokens?: number
+          output_tokens?: number | null
           provider?: string
           session_id?: string
           standard_id?: string | null
           step?: string
+          usage_missing?: boolean
           user_id?: string
           workspace_id?: string
         }
@@ -1467,6 +1622,7 @@ export type Database = {
       visual_standards: {
         Row: {
           accuracy: number | null
+          confidence_threshold: number
           created_at: string
           created_by: string
           id: string
@@ -1478,13 +1634,18 @@ export type Database = {
           profile_version: number
           question: string
           reference_path: string | null
+          reformulation_suggestion: Json
+          required_evidence_count: number
           status: string
           test_count: number
+          unverifiable_conditions: Json
           updated_at: string
+          visual_verifiability: string | null
           workspace_id: string
         }
         Insert: {
           accuracy?: number | null
+          confidence_threshold?: number
           created_at?: string
           created_by: string
           id?: string
@@ -1496,13 +1657,18 @@ export type Database = {
           profile_version?: number
           question: string
           reference_path?: string | null
+          reformulation_suggestion?: Json
+          required_evidence_count?: number
           status?: string
           test_count?: number
+          unverifiable_conditions?: Json
           updated_at?: string
+          visual_verifiability?: string | null
           workspace_id: string
         }
         Update: {
           accuracy?: number | null
+          confidence_threshold?: number
           created_at?: string
           created_by?: string
           id?: string
@@ -1514,9 +1680,13 @@ export type Database = {
           profile_version?: number
           question?: string
           reference_path?: string | null
+          reformulation_suggestion?: Json
+          required_evidence_count?: number
           status?: string
           test_count?: number
+          unverifiable_conditions?: Json
           updated_at?: string
+          visual_verifiability?: string | null
           workspace_id?: string
         }
         Relationships: [
@@ -1994,6 +2164,76 @@ export type Database = {
         }
         Returns: undefined
       }
+      vision_lab_attempt_claim: {
+        Args: {
+          p_attempt_id: string
+          p_max_failures?: number
+          p_user_id: string
+        }
+        Returns: {
+          cached: Json
+          claimed: boolean
+          reason: string
+        }[]
+      }
+      vision_lab_attempt_create: {
+        Args: {
+          p_max_attempts?: number
+          p_session_id: string
+          p_user_id: string
+        }
+        Returns: {
+          attempt_id: string
+          attempts_used: number
+          reason: string
+        }[]
+      }
+      vision_lab_attempt_finish: {
+        Args: {
+          p_attempt_id: string
+          p_result: Json
+          p_technical_failure?: boolean
+          p_user_id: string
+        }
+        Returns: {
+          ok: boolean
+          reason: string
+        }[]
+      }
+      vision_lab_session_consume: {
+        Args: {
+          p_kind: string
+          p_limit: number
+          p_min_interval_ms?: number
+          p_session_id: string
+          p_user_id: string
+          p_workspace_id: string
+        }
+        Returns: {
+          allowed: boolean
+          reason: string
+          remaining: number
+          used: number
+        }[]
+      }
+      vision_lab_session_start: {
+        Args: {
+          p_hourly_limit?: number
+          p_standard_id: string
+          p_ttl_seconds?: number
+          p_user_id: string
+          p_workspace_id: string
+        }
+        Returns: {
+          attempts_used: number
+          expires_at: string
+          final_used: number
+          live_used: number
+          reason: string
+          reused: boolean
+          session_id: string
+        }[]
+      }
       vision_session_consume: {
         Args: {
           p_kind: string
@@ -2008,6 +2248,13 @@ export type Database = {
           reason: string
           remaining: number
           used: number
+        }[]
+      }
+      vision_telemetry_retention: {
+        Args: { p_days?: number }
+        Returns: {
+          aggregated: number
+          deleted: number
         }[]
       }
     }
