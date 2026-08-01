@@ -24,6 +24,7 @@ export function CameraStandardStatus({
   const [status, setStatus] = useState<BlockStandardStatus>("none");
   const [loading, setLoading] = useState(false);
   const [questionChanged, setQuestionChanged] = useState(false);
+  const [snapshotOutdated, setSnapshotOutdated] = useState(false);
 
   const load = useCallback(async () => {
     if (!checklistId || !cameraBlockId) return;
@@ -38,8 +39,21 @@ export function CameraStandardStatus({
     const s = (data as VisualStandard | null) ?? null;
     setStatus(blockStandardStatus(s));
     setQuestionChanged(Boolean(s?.validated_question && s.validated_question !== s.question));
+
+    // Somente leitura: detecta snapshot publicado antes do padrão visual.
+    // Nunca republica nem injeta cameraBlockId silenciosamente.
+    const { data: cl } = await supabase
+      .from("checklists")
+      .select("is_published, published_content")
+      .eq("id", checklistId)
+      .maybeSingle();
+    const published = (cl as any)?.published_content ?? null;
+    setSnapshotOutdated(
+      Boolean((cl as any)?.is_published && published && !JSON.stringify(published).includes(cameraBlockId)),
+    );
     setLoading(false);
   }, [checklistId, cameraBlockId]);
+
 
   useEffect(() => { void load(); }, [load]);
 
