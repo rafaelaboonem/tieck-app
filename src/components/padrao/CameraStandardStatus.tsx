@@ -100,6 +100,12 @@ export function CameraStandardStatus({
           A pergunta foi alterada. Revise o padrão visual antes de ativá-lo novamente.
         </p>
       )}
+      {snapshotOutdated && (
+        <p className="rounded-md border border-amber-200 bg-amber-50 p-2 text-[11px] text-amber-800">
+          Este checklist foi publicado antes da configuração do padrão visual. Publique novamente para aplicar o padrão.
+        </p>
+      )}
+
       {!checklistId && (
         <p className="text-[11px] text-neutral-500">Salve o checklist para configurar o padrão visual.</p>
       )}
