@@ -291,6 +291,7 @@ export async function runBenchmark(input: {
   const { data, error } = await supabase.functions.invoke("vision-benchmark", {
     body: {
       action: "benchmark-evaluate",
+      lab: true,
       workspaceId: input.workspaceId,
       question: input.question,
       imageBase64: input.imageBase64,
