@@ -435,7 +435,7 @@ const HINTS: Record<HintCode, string> = {
  * Localiza o alvo em um frame temporário. Nunca fabrica coordenadas: quando o
  * modelo não devolve caixa válida, `boxes` volta vazio.
  */
-async function locateTarget(frame: Decoded, target: string) {
+async function locateTarget(frame: Decoded, target: string, meter: UsageEntry[]) {
   const started = Date.now();
   const image = toDataUrl(frame);
   const done = (strategy: "detect" | "point" | "query", found: boolean, boxes: Box[]) => ({
@@ -447,7 +447,7 @@ async function locateTarget(frame: Decoded, target: string) {
 
   // 1) detect — única estratégia que produz caixa real
   try {
-    const p = await cfRun(fastModel(), { image, task: "detect", object: target, stream: false }, LIVE_TIMEOUT_MS);
+    const p = await cfMetered(meter, "live_detect", fastModel(), { image, task: "detect", object: target, stream: false }, LIVE_TIMEOUT_MS);
     const boxes = collectBoxes(p)
       .sort((a, b) => b.w * b.h - a.w * a.h)
       .slice(0, 3);
@@ -456,13 +456,13 @@ async function locateTarget(frame: Decoded, target: string) {
 
   // 2) point — confirma presença, sem caixa
   try {
-    const p = await cfRun(fastModel(), { image, task: "point", object: target, stream: false }, LIVE_TIMEOUT_MS);
+    const p = await cfMetered(meter, "live_point", fastModel(), { image, task: "point", object: target, stream: false }, LIVE_TIMEOUT_MS);
     if (collectPoints(p).length) return done("point", true, []);
   } catch { /* segue para query */ }
 
 
   // 3) query — apenas presença
-  const p = await cfRun(fastModel(), {
+  const p = await cfMetered(meter, "live_query", fastModel(), {
     image,
     task: "query",
     stream: false,
