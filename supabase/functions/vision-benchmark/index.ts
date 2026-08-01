@@ -1073,11 +1073,34 @@ Deno.serve(async (req) => {
   const reference = body?.referenceBase64 ? decodeImage(body.referenceBase64) : null;
   if (body?.referenceBase64 && !reference) return err(400, "invalid_reference");
 
+  const sessionId = sessionIdOf(body);
+  if (!sessionId) return err(400, "session_required");
+
   if (inFlight.has(actorId)) return err(409, "already_running");
   inFlight.add(actorId);
   const t0 = Date.now();
+  const meter: UsageEntry[] = [];
   try {
-    const observer = await runObserver(image, question, profile);
+    const budget = await consumeSession(svc, { sessionId, workspaceId, userId: actorId, kind: "final" });
+    if (!budget.allowed) {
+      return json(200, {
+        observer: null,
+        judge: null,
+        combined: {
+          decision: "technical_failure",
+          reason_code: "session_limit_reached",
+          public_message: "Esta sessão atingiu o limite de análises. Abra a câmera novamente para continuar.",
+          condition_status: null,
+          gate: {},
+        },
+        referenceMode: "none",
+        totalLatencyMs: Date.now() - t0,
+        budget: { spent: false, used: budget.used, remaining: budget.remaining, reason: budget.reason },
+        usage: meterTotals(meter),
+      });
+    }
+
+    const observer = await runObserver(image, question, profile, meter);
 
     let referenceMode: "none" | "multi_image" | "derived" = "none";
     let referenceDescription: string | null = profile?.reference_summary ?? null;
@@ -1085,22 +1108,26 @@ Deno.serve(async (req) => {
     if (reference) {
       try {
         judge = await runJudge({
-          image, question, profile,
+          image, question, profile, meter,
           facts: observer.observation,
           multiImage: { reference },
         });
         referenceMode = "multi_image";
       } catch {
-        referenceDescription = referenceDescription ?? await describeReference(reference, question);
-        judge = await runJudge({ image, question, profile, facts: observer.observation, referenceDescription });
+        referenceDescription = referenceDescription ?? await describeReference(reference, question, meter);
+        judge = await runJudge({ image, question, profile, meter, facts: observer.observation, referenceDescription });
         referenceMode = "derived";
       }
     } else {
-      judge = await runJudge({ image, question, profile, facts: observer.observation, referenceDescription });
+      judge = await runJudge({ image, question, profile, meter, facts: observer.observation, referenceDescription });
       if (referenceDescription) referenceMode = "derived";
     }
 
     const combined = combine(observer, judge.raw);
+    await recordUsage(svc, {
+      meter, workspaceId, userId: actorId, sessionId,
+      standardId: standardId || null, action: "benchmark-evaluate", decision: combined.decision,
+    });
     console.log(`[lab] evaluate ok user=${actorId.slice(0, 8)} decision=${combined.decision} ms=${Date.now() - t0}`);
     return json(200, {
       observer: {
@@ -1114,6 +1141,7 @@ Deno.serve(async (req) => {
         decision: judge.raw.decision,
         targetVisible: judge.raw.target_visible ?? null,
         conditionMet: judge.raw.condition_met ?? null,
+        conditionStatus: combined.condition_status,
         qualitySufficient: judge.raw.quality_sufficient ?? null,
         reasonCode: judge.raw.reason_code ?? null,
         observations: [
@@ -1126,9 +1154,15 @@ Deno.serve(async (req) => {
       combined,
       referenceMode,
       totalLatencyMs: Date.now() - t0,
+      budget: { spent: true, used: budget.used, remaining: budget.remaining, reason: "ok" },
+      usage: meterTotals(meter),
     });
   } catch (e) {
     const code = String((e as Error).message ?? "unknown").slice(0, 60);
+    await recordUsage(svc, {
+      meter, workspaceId, userId: actorId, sessionId,
+      standardId: standardId || null, action: "benchmark-evaluate", decision: "technical_failure",
+    });
     console.error(`[lab] evaluate_failed user=${actorId.slice(0, 8)} code=${code} ms=${Date.now() - t0}`);
     return json(200, {
       observer: null,
@@ -1136,12 +1170,13 @@ Deno.serve(async (req) => {
       combined: {
         decision: "technical_failure",
         reason_code: /^[a-z0-9_]{1,40}$/.test(code) ? code : "service_unavailable",
-
         public_message: "Não foi possível verificar agora. Tente novamente.",
+        condition_status: null,
         gate: {},
       },
       referenceMode: "none",
       totalLatencyMs: Date.now() - t0,
+      usage: meterTotals(meter),
     });
   } finally {
     inFlight.delete(actorId);
