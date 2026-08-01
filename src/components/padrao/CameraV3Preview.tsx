@@ -4,7 +4,8 @@ import {
   liveLocate,
   runBenchmark,
   referenceBase64,
-  newSessionId,
+  startLabSession,
+  createLabAttempt,
   LIVE_MIN_INTERVAL_MS,
   type LabResponse,
   type LiveStats,
@@ -96,7 +97,7 @@ export function CameraV3Preview(props: Props) {
     aiCalls: 0,
   });
   const closedRef = useRef(false);
-  const sessionIdRef = useRef<string>(newSessionId());
+  const sessionIdRef = useRef<string>("");
   const lastLiveAtRef = useRef(0);
 
   const [facing, setFacing] = useState<"environment" | "user">("environment");
@@ -111,6 +112,7 @@ export function CameraV3Preview(props: Props) {
   const [result, setResult] = useState<LabResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [liveBudget, setLiveBudget] = useState<{ used: number; remaining: number } | null>(null);
+  const [attempts, setAttempts] = useState<{ used: number; limit: number | null } | null>(null);
 
   const addUsage = useCallback((usage: UsageTotals | undefined) => {
     if (!usage) return;
@@ -149,9 +151,10 @@ export function CameraV3Preview(props: Props) {
       checks: 0, latencySum: 0, firstFoundAt: null, strategy: "none",
       localChecks: 0, neurons: 0, inputTokens: 0, outputTokens: 0, aiCalls: 0,
     };
-    sessionIdRef.current = newSessionId();
+    sessionIdRef.current = "";
     lastLiveAtRef.current = 0;
     setLiveBudget(null);
+    setAttempts(null);
     setPhase("starting");
     setResult(null);
     setFrozen(null);
@@ -161,6 +164,16 @@ export function CameraV3Preview(props: Props) {
     let cancelled = false;
     (async () => {
       try {
+        // A sessão (e o orçamento de IA) é emitida pelo servidor, nunca pelo cliente.
+        const session = await startLabSession(workspaceId, standardId);
+        if (cancelled) return;
+        if (!session.ok) {
+          setError(session.message ?? "Limite de sessões atingido. Tente novamente mais tarde.");
+          return;
+        }
+        sessionIdRef.current = session.sessionId;
+        setLiveBudget({ used: session.liveUsed, remaining: Math.max(0, session.liveLimit - session.liveUsed) });
+        setAttempts({ used: session.attemptsUsed, limit: session.attemptsLimit });
         if (!navigator.mediaDevices?.getUserMedia) throw new Error("unsupported");
         const stream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: { ideal: facing }, width: { ideal: 1920 }, height: { ideal: 1080 } },
@@ -183,7 +196,7 @@ export function CameraV3Preview(props: Props) {
       cancelled = true;
       stopStream();
     };
-  }, [open, facing, stopStream]);
+  }, [open, facing, stopStream, workspaceId, standardId]);
 
   // encerra tracks ao sair da página
   useEffect(() => {
@@ -289,7 +302,7 @@ export function CameraV3Preview(props: Props) {
       if (stopped || closedRef.current) return;
       const sinceLast = Date.now() - lastLiveAtRef.current;
       const stable = !quality.moving && !quality.dark && !quality.overexposed && !quality.blurry;
-      if (liveBusyRef.current || !stable || sinceLast < LIVE_MIN_INTERVAL_MS) {
+      if (!sessionIdRef.current || liveBusyRef.current || !stable || sinceLast < LIVE_MIN_INTERVAL_MS) {
         timer = window.setTimeout(tick, IDLE_INTERVAL_MS);
         return;
       }
@@ -371,6 +384,14 @@ export function CameraV3Preview(props: Props) {
     try {
       let ref: string | null = null;
       if (useReference && referencePath) ref = await referenceBase64(referencePath);
+      if (!sessionIdRef.current) throw new Error("session_missing");
+      // Uma tentativa por foto: o servidor registra e conta a decisão final.
+      const attempt = await createLabAttempt(workspaceId, sessionIdRef.current);
+      if (!attempt.ok || !attempt.attemptId) {
+        setAttempts((a) => ({ used: attempt.attemptsUsed, limit: a?.limit ?? null }));
+        throw new Error(attempt.reason === "attempt_limit_reached" ? "attempt_limit" : "attempt_failed");
+      }
+      setAttempts((a) => ({ used: attempt.attemptsUsed, limit: attempt.attemptsLimit ?? a?.limit ?? null }));
       const res = await runBenchmark({
         workspaceId,
         question,
@@ -379,6 +400,7 @@ export function CameraV3Preview(props: Props) {
         standardId,
         profile,
         sessionId: sessionIdRef.current,
+        attemptId: attempt.attemptId,
       });
       addUsage(res.usage);
       const s = statsRef.current;
@@ -594,6 +616,9 @@ export function CameraV3Preview(props: Props) {
                 ? "Verificação por IA em andamento."
                 : "Checagem de luz, foco e estabilidade feita no aparelho, sem IA."}
             {liveBudget && !liveExhausted ? ` · ${liveBudget.remaining} verificação(ões) de IA restante(s)` : ""}
+            {attempts && attempts.limit != null
+              ? ` · ${Math.max(0, attempts.limit - attempts.used)} análise(s) finais restantes nesta sessão`
+              : ""}
           </p>
           <div className="flex items-center justify-between">
             <div className="flex w-11 justify-start">

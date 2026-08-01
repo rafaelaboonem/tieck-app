@@ -16,7 +16,8 @@ import {
   isCorrect,
   ensureStandardProfile,
   profileOf,
-  newSessionId,
+  startLabSession,
+  createLabAttempt,
   CONDITION_STATUS_LABEL,
   RELEASE_CASES,
   type ExpectedResult,
@@ -25,6 +26,7 @@ import {
   type ReleaseCase,
   type VisualStandard,
 } from "@/lib/visual-standards";
+
 
 const emptyMarks = {
   aiWasRight: null as boolean | null,
@@ -62,6 +64,9 @@ export function LabTab({ workspaceId, standards, selected, onSelect, runs, onRun
   const [releaseCase, setReleaseCase] = useState<ReleaseCase | "">("");
   const [cameraOpen, setCameraOpen] = useState(false);
   const [profiling, setProfiling] = useState(false);
+  const [attemptsUsed, setAttemptsUsed] = useState<number | null>(null);
+  const [attemptsLimit, setAttemptsLimit] = useState<number | null>(null);
+
 
   const profile = profileOf(selected);
 
@@ -99,6 +104,23 @@ export function LabTab({ workspaceId, standards, selected, onSelect, runs, onRun
       if (useReference && selected?.reference_path) {
         ref = await referenceBase64(selected.reference_path);
       }
+      // Sessão e tentativa são emitidas pelo servidor: o cliente não escolhe o orçamento.
+      const session = await startLabSession(workspaceId, selected?.id ?? null);
+      if (!session.ok) {
+        toast.error(session.message ?? "Limite de sessões atingido. Tente mais tarde.");
+        return;
+      }
+      const attempt = await createLabAttempt(workspaceId, session.sessionId);
+      if (!attempt.ok || !attempt.attemptId) {
+        toast.error(
+          attempt.reason === "attempt_limit_reached"
+            ? "Esta sessão atingiu o limite de análises. Abra outra em alguns minutos."
+            : "Não foi possível iniciar a análise agora.",
+        );
+        return;
+      }
+      setAttemptsUsed(attempt.attemptsUsed);
+      setAttemptsLimit(attempt.attemptsLimit ?? null);
       const res = await runBenchmark({
         workspaceId,
         question,
@@ -106,8 +128,10 @@ export function LabTab({ workspaceId, standards, selected, onSelect, runs, onRun
         referenceBase64: ref,
         standardId: selected?.id ?? null,
         profile,
-        sessionId: newSessionId(),
+        sessionId: session.sessionId,
+        attemptId: attempt.attemptId,
       });
+
       pushRun({
         ...res,
         id: crypto.randomUUID(),
@@ -251,6 +275,11 @@ export function LabTab({ workspaceId, standards, selected, onSelect, runs, onRun
             {profiling ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Camera className="mr-2 h-4 w-4" />}
             Testar com a câmera (prévia)
           </Button>
+          {attemptsUsed != null && attemptsLimit != null && (
+            <p className="text-xs text-muted-foreground">
+              Sessão atual: {attemptsUsed} de {attemptsLimit} análises finais usadas.
+            </p>
+          )}
           <p className="text-xs text-muted-foreground">
             A prévia da câmera é interna: as imagens são analisadas em memória e nada é salvo.
           </p>

@@ -1,13 +1,29 @@
-// Laboratório privado de padrões visuais (Camera AI V3 — Fase 2, prévia).
+// Laboratório privado de padrões visuais (Camera AI V3 — Fase 2.2, prévia).
 // Regras:
 //   * verify_jwt = true — nunca aceita responseToken público.
 //   * Autorização por workspace (owner) verificada com o JWT do chamador.
+//   * Sessões e tentativas são criadas e contadas SOMENTE no servidor.
 //   * Imagens candidatas e frames de câmera ficam SOMENTE em memória: não vão
 //     para Storage, não vão para o banco, não entram em logs nem em analytics.
 //   * Logs apenas com códigos sanitizados, modelo, duração e status.
 
 // deno-lint-ignore-file no-explicit-any
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { sanitizeMessage, strList } from "./sanitize.ts";
+import {
+  buildUsageEntry,
+  failedUsageEntry,
+  meterTotals,
+  type UsageEntry,
+} from "./usage.ts";
+import {
+  combine,
+  normalizeThreshold,
+  normalizeVerifiability,
+  technicalFailure,
+  DEFAULT_CONFIDENCE_THRESHOLD,
+} from "./gate.ts";
+
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -100,48 +116,7 @@ const PING_IMAGE =
   "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
 
 // ---------------- consumo (tokens → neurônios) ----------------
-// Tabela pública do Workers AI (neurônios por milhão de tokens).
-const NEURON_RATES: Record<string, { input: number; output: number }> = {
-  "@cf/moondream/moondream3.1-9B-A2B": { input: 27273, output: 90909 },
-  "@cf/meta/llama-4-scout-17b-16e-instruct": { input: 24545, output: 77273 },
-};
-const NEURON_FALLBACK = { input: 27273, output: 90909 };
-const USD_PER_1K_NEURONS = 0.011;
-
-export type UsageEntry = {
-  step: string;
-  model: string;
-  inputTokens: number;
-  outputTokens: number;
-  neurons: number;
-  inferenceMs: number;
-};
-
-function usageTokens(payload: any): { input: number; output: number } {
-  const u = payload?.result?.usage ?? payload?.usage ?? null;
-  const n = (...keys: string[]) => {
-    for (const k of keys) {
-      const v = u?.[k];
-      if (typeof v === "number" && Number.isFinite(v) && v >= 0) return Math.round(v);
-    }
-    return 0;
-  };
-  return { input: n("prompt_tokens", "input_tokens"), output: n("completion_tokens", "output_tokens") };
-}
-
-function meterPush(meter: UsageEntry[], step: string, model: string, payload: any, ms: number) {
-  const { input, output } = usageTokens(payload);
-  const rate = NEURON_RATES[model] ?? NEURON_FALLBACK;
-  const neurons = (input / 1_000_000) * rate.input + (output / 1_000_000) * rate.output;
-  meter.push({
-    step,
-    model,
-    inputTokens: input,
-    outputTokens: output,
-    neurons: Math.round(neurons * 1000) / 1000,
-    inferenceMs: ms,
-  });
-}
+// Tarifas e agregação vivem em ./usage.ts (importável pelos testes).
 
 /** Chamada ao provedor com medição de consumo sempre registrada. */
 async function cfMetered(
@@ -154,27 +129,15 @@ async function cfMetered(
   const started = Date.now();
   try {
     const payload = await cfRun(model, body, timeoutMs);
-    meterPush(meter, step, model, payload, Date.now() - started);
+    meter.push(buildUsageEntry(step, model, payload, Date.now() - started));
     return payload;
   } catch (e) {
-    meter.push({ step: `${step}_failed`, model, inputTokens: 0, outputTokens: 0, neurons: 0, inferenceMs: Date.now() - started });
+    meter.push(failedUsageEntry(step, model, Date.now() - started));
     throw e;
   }
 }
 
-function meterTotals(meter: UsageEntry[]) {
-  const inputTokens = meter.reduce((a, m) => a + m.inputTokens, 0);
-  const outputTokens = meter.reduce((a, m) => a + m.outputTokens, 0);
-  const neurons = Math.round(meter.reduce((a, m) => a + m.neurons, 0) * 1000) / 1000;
-  return {
-    calls: meter.filter((m) => !m.step.endsWith("_failed")).length,
-    inputTokens,
-    outputTokens,
-    neurons,
-    estimatedUsd: Math.round((neurons / 1000) * USD_PER_1K_NEURONS * 1e6) / 1e6,
-    steps: meter,
-  };
-}
+
 
 
 // ---------------- Cloudflare ----------------
@@ -233,25 +196,8 @@ function parseJsonLoose(text: string): any | null {
 }
 
 // ---------------- sanitização ----------------
-const LEAK_PATTERNS = [
-  /prompt/i, /json/i, /schema/i, /system/i, /instru(c|ç)(a|ã)o interna/i,
-  /moondream/i, /llama/i, /cloudflare/i, /model/i, /token/i,
-];
-function sanitizeMessage(raw: unknown, fallback: string): string {
-  const s = typeof raw === "string" ? raw.trim() : "";
-  if (!s || s.length > 160) return fallback;
-  if (LEAK_PATTERNS.some((p) => p.test(s))) return fallback;
-  return s;
-}
+// sanitizeMessage / strList vêm de ./sanitize.ts
 
-function strList(value: unknown, max = 6): string[] {
-  if (!Array.isArray(value)) return [];
-  return value
-    .filter((v) => typeof v === "string")
-    .map((v) => (v as string).trim().slice(0, 120))
-    .filter(Boolean)
-    .slice(0, max);
-}
 
 // ---------------- perfil interno do padrão ----------------
 const PROFILE_SCHEMA = {
@@ -260,12 +206,20 @@ const PROFILE_SCHEMA = {
     target_phrase: { type: "string" },
     target_phrase_en: { type: "string" },
     requested_condition: { type: "string" },
+    conditions: { type: "array", items: { type: "string" } },
     observable_signals: { type: "array", items: { type: "string" } },
     contrary_signals: { type: "array", items: { type: "string" } },
     insufficient_view_signals: { type: "array", items: { type: "string" } },
+    unverifiable_conditions: { type: "array", items: { type: "string" } },
+    visual_verifiability: { type: "string", enum: ["verifiable", "partially_verifiable", "not_verifiable"] },
+    required_evidence_count: { type: "number" },
+    suggested_photos: { type: "array", items: { type: "string" } },
     ambiguous: { type: "boolean" },
   },
-  required: ["target_phrase", "target_phrase_en", "requested_condition", "observable_signals", "ambiguous"],
+  required: [
+    "target_phrase", "target_phrase_en", "requested_condition", "observable_signals",
+    "visual_verifiability", "required_evidence_count", "ambiguous",
+  ],
 };
 
 /** Reduz o alvo em inglês a uma expressão curta que um detector entende. */
@@ -286,10 +240,20 @@ async function buildProfile(question: string, referenceSummary: string | null, m
     `- target_phrase: the main object or place to be photographed (Portuguese, short).\n` +
     `- target_phrase_en: same target in plain English, 1-3 words, suitable for an object detector.\n` +
     `- requested_condition: the condition that must be true about it.\n` +
+    `- conditions: every distinct condition contained in the sentence, one per item (Portuguese).\n` +
     `- observable_signals: things a person could visually confirm to prove the condition.\n` +
     `- contrary_signals: visible things that would prove the condition is NOT met.\n` +
     `- insufficient_view_signals: situations where the photo would not be enough to decide.\n` +
+    `- unverifiable_conditions: the conditions that CANNOT be proven by one single photograph, ` +
+    `because they are hidden, internal, in the past, mutually exclusive in one viewpoint, ` +
+    `or require opening, touching, smelling or measuring (Portuguese).\n` +
+    `- visual_verifiability: "verifiable" when every condition can be proven by one photo; ` +
+    `"partially_verifiable" when some can and some cannot; "not_verifiable" when none can.\n` +
+    `- required_evidence_count: how many separate photographs would be needed to prove all conditions.\n` +
+    `- suggested_photos: if more than one photo is needed, describe each photo to take, in order, ` +
+    `in Brazilian Portuguese, as a short instruction to an operator.\n` +
     `- ambiguous: true if the sentence does not clearly define an object AND a verifiable condition.\n` +
+    `Reason from the conditions themselves; never rely on specific words or object names.\n` +
     `Reply with a single JSON object and nothing else.` +
     (referenceSummary ? `\nStructural summary of a reference photo of the expected result: ${referenceSummary}` : "");
 
@@ -299,7 +263,7 @@ async function buildProfile(question: string, referenceSummary: string | null, m
       const payload = await cfMetered(meter, "profile", finalModel(), {
         messages: [{ role: "user", content: prompt }],
         ...(withSchema ? { response_format: { type: "json_schema", json_schema: PROFILE_SCHEMA } } : {}),
-        max_tokens: 600,
+        max_tokens: 800,
       });
       const text = extractModelText(payload);
       parsed = parseJsonLoose(text);
@@ -314,21 +278,26 @@ async function buildProfile(question: string, referenceSummary: string | null, m
   const target = String(parsed.target_phrase ?? "").trim().slice(0, 80);
   const condition = String(parsed.requested_condition ?? "").trim().slice(0, 160);
   const ambiguous = parsed.ambiguous === true || !target || !condition;
+  const verifiability = normalizeVerifiability(parsed);
   return {
     profile: {
       target_phrase: target,
       target_phrase_en: detectorPhrase(parsed.target_phrase_en),
       requested_condition: condition,
+      conditions: strList(parsed.conditions),
       observable_signals: strList(parsed.observable_signals),
       contrary_signals: strList(parsed.contrary_signals),
       insufficient_view_signals: strList(parsed.insufficient_view_signals),
       reference_summary: referenceSummary,
+      ...verifiability,
       version: PROFILE_VERSION,
       generated_at: new Date().toISOString(),
     },
     ambiguous,
+    verifiability,
   };
 }
+
 
 async function describeReference(reference: Decoded, question: string, meter: UsageEntry[]): Promise<string | null> {
   try {
@@ -644,160 +613,44 @@ async function runJudge(args: {
 }
 
 // ---------------- gate conservador ----------------
-type ConditionStatus = "verified" | "not_met" | "not_observable";
+// A lógica pura vive em ./gate.ts (importável pelos testes, sem rede).
 
-type Combined = {
-  decision: "approved" | "retake" | "uncertain" | "technical_failure";
-  reason_code: string;
-  public_message: string;
-  /** Honestidade visual: o que a foto realmente comprova. */
-  condition_status: ConditionStatus | null;
-  gate: Record<string, boolean>;
-};
-
-const RETAKE_MESSAGES: Record<string, string> = {
-  target_not_found: "Não encontramos o que foi pedido na foto. Tire outra mostrando o local certo.",
-  wrong_object: "A foto mostra outra coisa. Fotografe o item solicitado.",
-  wrong_place: "A foto parece ser de outro lugar. Fotografe o local solicitado.",
-  target_not_visible: "Mostre o item por completo na foto.",
-  too_dark: "A foto está escura. Melhore a iluminação e tente de novo.",
-  blurry: "A foto saiu tremida. Segure firme e tire outra.",
-  bad_framing: "Aproxime e centralize o item na foto.",
-  condition_not_met: "A condição pedida não foi atendida. Ajuste e fotografe de novo.",
-  insufficient_evidence: "A foto não mostra o suficiente para confirmar. Tire outra mais próxima.",
-};
-
-const NOT_OBSERVABLE_MESSAGE =
-  "Esta foto não é capaz de comprovar o que foi pedido. É necessária uma conferência de outra forma.";
-
-function conditionStatusOf(judge: any): ConditionStatus {
-  const raw = String(judge?.condition_status ?? "").trim();
-  if (raw === "verified" || raw === "not_met" || raw === "not_observable") return raw;
-  return judge?.condition_met === true ? "verified" : "not_met";
-}
-
-function combine(observer: Awaited<ReturnType<typeof runObserver>>, judge: any): Combined {
-  const bool = (v: unknown) => v === true;
-  const status = conditionStatusOf(judge);
-  const gate = {
-    target_found: bool(judge.target_found) && observer.targetVisible,
-    target_visible: bool(judge.target_visible),
-    framing_sufficient: bool(judge.framing_sufficient) && !observer.cropped,
-    lighting_sufficient: bool(judge.lighting_sufficient) && !observer.dark && !observer.overexposed,
-    sharpness_sufficient: bool(judge.sharpness_sufficient) && !observer.blurry,
-    quality_sufficient: bool(judge.quality_sufficient),
-    condition_met: bool(judge.condition_met) && status === "verified",
-    no_contrary_evidence: !(Array.isArray(judge.contrary_evidence) && judge.contrary_evidence.length > 0),
-    judge_approved: judge.decision === "approved",
-  };
-
-  // Honestidade visual: nada que a foto não mostre pode ser dado como verificado.
-  if (status === "not_observable") {
-    return {
-      decision: "uncertain",
-      reason_code: "not_observable",
-      public_message: NOT_OBSERVABLE_MESSAGE,
-      condition_status: status,
-      gate,
-    };
-  }
-
-  // Discordância explícita entre etapas → incerto, nunca aprovação.
-  const observerNegative = !observer.targetVisible || observer.dark || observer.blurry ||
-    observer.overexposed || observer.cropped;
-  if (judge.decision === "approved" && observerNegative) {
-    return {
-      decision: "uncertain",
-      reason_code: "models_disagree",
-      public_message: "Não deu para confirmar. Tire outra foto com melhor enquadramento.",
-      condition_status: status,
-      gate,
-    };
-  }
-  if (judge.decision === "uncertain") {
-    // Quando a causa é determinada (alvo ausente, escuro, tremido, condição não atendida),
-    // o operador recebe uma ação clara em vez de um "não deu para confirmar".
-    const determinate = !gate.target_found
-      ? "target_not_found"
-      : !gate.lighting_sufficient
-        ? "too_dark"
-        : !gate.sharpness_sufficient
-          ? "blurry"
-          : !gate.framing_sufficient
-            ? "bad_framing"
-            : !gate.target_visible
-              ? "target_not_visible"
-              : !gate.condition_met
-                ? "condition_not_met"
-                : null;
-    if (determinate) {
-      return {
-        decision: "retake",
-        reason_code: determinate,
-        public_message: RETAKE_MESSAGES[determinate],
-        condition_status: status,
-        gate,
-      };
-    }
-    return {
-      decision: "uncertain",
-      reason_code: "insufficient_evidence",
-      public_message: "Não deu para confirmar. Tire outra foto com melhor enquadramento.",
-      condition_status: status,
-      gate,
-    };
-  }
-
-
-  if (Object.values(gate).every(Boolean)) {
-    return {
-      decision: "approved",
-      reason_code: "condition_met",
-      public_message: sanitizeMessage(judge.public_message, "Foto aprovada."),
-      condition_status: "verified",
-      gate,
-    };
-  }
-
-  const failed = Object.entries(gate).find(([, v]) => !v)?.[0] ?? "insufficient_evidence";
-  const code = !gate.target_found
-    ? "target_not_found"
-    : !gate.target_visible
-      ? "target_not_visible"
-      : !gate.lighting_sufficient
-        ? "too_dark"
-        : !gate.sharpness_sufficient
-          ? "blurry"
-          : !gate.framing_sufficient
-            ? "bad_framing"
-            : !gate.condition_met
-              ? "condition_not_met"
-              : String(judge.reason_code ?? failed);
-  return {
-    decision: "retake",
-    reason_code: code,
-    public_message: RETAKE_MESSAGES[code] ?? sanitizeMessage(judge.public_message, "Tire outra foto."),
-    condition_status: status,
-    gate,
-  };
-}
 
 // ---------------- concorrência por usuário ----------------
 const inFlight = new Set<string>();
 
-// ---------------- orçamento por sessão de câmera ----------------
+// ---------------- orçamento por sessão (decidido 100% no servidor) ----------------
 export const LIVE_CHECKS_PER_SESSION = 3;
-export const FINAL_CHECKS_PER_SESSION = 5;
+export const FINAL_ATTEMPTS_PER_SESSION = 5;
 const LIVE_MIN_INTERVAL_MS = 5000;
+const SESSION_TTL_SECONDS = 900;      // 15 minutos
+const SESSIONS_PER_HOUR = 12;         // impede criação repetida de sessões
 
 type Consume = { allowed: boolean; used: number; remaining: number; reason: string };
+
+/** Inicia OU recupera a sessão ativa do usuário para este padrão. */
+async function startSession(
+  svc: any,
+  args: { workspaceId: string; userId: string; standardId: string | null },
+) {
+  const { data, error } = await svc.rpc("vision_lab_session_start", {
+    p_user_id: args.userId,
+    p_workspace_id: args.workspaceId,
+    p_standard_id: args.standardId,
+    p_ttl_seconds: SESSION_TTL_SECONDS,
+    p_hourly_limit: SESSIONS_PER_HOUR,
+  });
+  if (error) return null;
+  const row = Array.isArray(data) ? data[0] : data;
+  return row ?? null;
+}
 
 async function consumeSession(
   svc: any,
   args: { sessionId: string; workspaceId: string; userId: string; kind: "live" | "final" },
 ): Promise<Consume> {
-  const limit = args.kind === "live" ? LIVE_CHECKS_PER_SESSION : FINAL_CHECKS_PER_SESSION;
-  const { data, error } = await svc.rpc("vision_session_consume", {
+  const limit = args.kind === "live" ? LIVE_CHECKS_PER_SESSION : FINAL_ATTEMPTS_PER_SESSION;
+  const { data, error } = await svc.rpc("vision_lab_session_consume", {
     p_session_id: args.sessionId,
     p_workspace_id: args.workspaceId,
     p_user_id: args.userId,
@@ -824,6 +677,7 @@ async function recordUsage(
     userId: string;
     sessionId: string;
     standardId: string | null;
+    attemptId?: string | null;
     action: string;
     decision?: string | null;
   },
@@ -834,12 +688,15 @@ async function recordUsage(
     user_id: args.userId,
     session_id: args.sessionId,
     standard_id: args.standardId,
+    attempt_id: args.attemptId ?? null,
     action: args.action,
     step: m.step,
     model_id: m.model,
+    // usage ausente vira null + usage_missing: nunca zero silencioso.
     input_tokens: m.inputTokens,
     output_tokens: m.outputTokens,
     estimated_neurons: m.neurons,
+    usage_missing: m.usageMissing,
     inference_ms: m.inferenceMs,
     decision: args.decision ?? null,
   }));
@@ -847,10 +704,28 @@ async function recordUsage(
   if (error) console.error(`[lab] usage_insert_failed code=${String(error.code ?? "unknown").slice(0, 30)}`);
 }
 
+/** Limpeza oportunista da retenção de 90 dias (best-effort, sem bloquear). */
+async function maybeRunRetention(svc: any) {
+  if (Math.random() > 0.02) return;
+  const { error } = await svc.rpc("vision_telemetry_retention", { p_days: 90 });
+  if (error) console.error(`[lab] retention_failed code=${String(error.code ?? "unknown").slice(0, 30)}`);
+}
+
+/**
+ * O identificador de sessão NUNCA é escolhido pelo cliente: ele só pode
+ * devolver um identificador emitido antes pelo servidor, que é revalidado
+ * contra usuário + workspace + validade em cada chamada.
+ */
 function sessionIdOf(body: any): string {
   const s = String(body?.sessionId ?? "").trim();
-  return /^[A-Za-z0-9_-]{8,64}$/.test(s) ? s : "";
+  return /^[a-f0-9]{32}$/.test(s) ? s : "";
 }
+
+function attemptIdOf(body: any): string {
+  const s = String(body?.attemptId ?? "").trim();
+  return /^[0-9a-f-]{36}$/.test(s) ? s : "";
+}
+
 
 
 // ---------------- handler ----------------
@@ -879,12 +754,16 @@ Deno.serve(async (req) => {
   const svc = createClient(url, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
+  // Limites conservadores, coerentes com 3 live-locate por sessão de 15 min.
   const limits: Record<string, number> = {
     capabilities: 10,
-    "profile-standard": 20,
-    "live-locate": 120,
-    "benchmark-evaluate": 20,
+    "profile-standard": 6,
+    "lab-session-start": 6,
+    "lab-attempt-create": 8,
+    "live-locate": 8,
+    "benchmark-evaluate": 8,
   };
+
   const { data: rl } = await svc.rpc("hit_public_rate_limit", {
     p_key_hash: `lab:${actorId}`,
     p_action: action || "unknown",
@@ -919,6 +798,62 @@ Deno.serve(async (req) => {
     .from("workspaces").select("id").eq("id", workspaceId).maybeSingle();
   if (!ws) return err(403, "forbidden");
 
+  await maybeRunRetention(svc);
+
+  // ---------- sessão do laboratório criada pelo servidor ----------
+  if (action === "lab-session-start") {
+    const standardId = String(body?.standardId ?? "") || null;
+    if (standardId) {
+      const { data: std } = await userClient
+        .from("visual_standards").select("id")
+        .eq("id", standardId).eq("workspace_id", workspaceId).maybeSingle();
+      if (!std) return err(403, "forbidden");
+    }
+    const row = await startSession(svc, { workspaceId, userId: actorId, standardId });
+    if (!row) return err(503, "session_unavailable");
+    if (row.reason !== "ok") {
+      return json(200, {
+        ok: false,
+        reason: row.reason,
+        message: "Muitas sessões iniciadas nesta hora. Aguarde antes de abrir outra.",
+      });
+    }
+    return json(200, {
+      ok: true,
+      sessionId: row.session_id,
+      expiresAt: row.expires_at,
+      reused: row.reused === true,
+      liveUsed: Number(row.live_used ?? 0),
+      liveLimit: LIVE_CHECKS_PER_SESSION,
+      attemptsUsed: Number(row.attempts_used ?? 0),
+      attemptsLimit: FINAL_ATTEMPTS_PER_SESSION,
+    });
+  }
+
+  // ---------- nova tentativa (uma decisão final por foto capturada) ----------
+  if (action === "lab-attempt-create") {
+    const sessionId = sessionIdOf(body);
+    if (!sessionId) return err(400, "session_required");
+    const { data, error } = await svc.rpc("vision_lab_attempt_create", {
+      p_session_id: sessionId,
+      p_user_id: actorId,
+      p_max_attempts: FINAL_ATTEMPTS_PER_SESSION,
+    });
+    if (error) return err(503, "attempt_unavailable");
+    const row = Array.isArray(data) ? data[0] : data;
+    if (row?.reason !== "ok") {
+      return json(200, { ok: false, reason: String(row?.reason ?? "unknown"), attemptsUsed: Number(row?.attempts_used ?? 0) });
+    }
+    return json(200, {
+      ok: true,
+      attemptId: row.attempt_id,
+      attemptsUsed: Number(row.attempts_used ?? 0),
+      attemptsLimit: FINAL_ATTEMPTS_PER_SESSION,
+    });
+  }
+
+
+
   // ---------- perfil interno do padrão ----------
   if (action === "profile-standard") {
     const standardId = String(body?.standardId ?? "");
@@ -943,13 +878,17 @@ Deno.serve(async (req) => {
           if (meta) referenceSummary = await describeReference({ bytes, ...meta }, standard.question, meter);
         }
       }
-      const { profile, ambiguous } = await buildProfile(standard.question, referenceSummary, meter);
+      const { profile, ambiguous, verifiability } = await buildProfile(standard.question, referenceSummary, meter);
       const { error: upErr } = await userClient
         .from("visual_standards")
         .update({
           internal_profile: profile,
           profile_version: PROFILE_VERSION,
-          needs_validation: ambiguous,
+          needs_validation: ambiguous || verifiability.visual_verifiability !== "verifiable",
+          visual_verifiability: verifiability.visual_verifiability,
+          required_evidence_count: verifiability.required_evidence_count,
+          unverifiable_conditions: verifiability.unverifiable_conditions,
+          reformulation_suggestion: verifiability.suggested_photos,
         })
         .eq("id", standardId);
       if (upErr) throw new Error("profile_save_failed");
@@ -957,13 +896,21 @@ Deno.serve(async (req) => {
         meter, workspaceId, userId: actorId, sessionId,
         standardId, action: "profile-standard", decision: null,
       });
-      console.log(`[lab] profile ok user=${actorId.slice(0, 8)} ambiguous=${ambiguous}`);
+      console.log(
+        `[lab] profile ok user=${actorId.slice(0, 8)} ambiguous=${ambiguous} verifiability=${verifiability.visual_verifiability}`,
+      );
       return json(200, {
         ok: true,
-        needsValidation: ambiguous,
+        needsValidation: ambiguous || verifiability.visual_verifiability !== "verifiable",
         profileVersion: PROFILE_VERSION,
+        verifiability: verifiability.visual_verifiability,
+        requiredEvidenceCount: verifiability.required_evidence_count,
+        unverifiableConditions: verifiability.unverifiable_conditions,
+        suggestedPhotos: verifiability.suggested_photos,
+        canRelease: verifiability.visual_verifiability === "verifiable" && !ambiguous,
         usage: meterTotals(meter),
       });
+
     } catch (e) {
       const code = String((e as Error).message ?? "unknown").slice(0, 60);
       await recordUsage(svc, {
@@ -1055,17 +1002,25 @@ Deno.serve(async (req) => {
   const question = String(body?.question ?? "").trim();
   if (question.length < 5 || question.length > 300) return err(400, "invalid_question");
 
-  let profile: any = body?.profile && typeof body.profile === "object" ? body.profile : null;
+  // O perfil e o limiar vêm SEMPRE do padrão salvo quando há standardId.
+  let profile: any = null;
+  let threshold = DEFAULT_CONFIDENCE_THRESHOLD;
+  let verifiability = normalizeVerifiability(null);
   const standardId = String(body?.standardId ?? "");
-  if (!profile && standardId) {
+  if (standardId) {
     const { data: std } = await userClient
       .from("visual_standards")
-      .select("internal_profile")
+      .select("internal_profile, confidence_threshold, visual_verifiability")
       .eq("id", standardId)
       .eq("workspace_id", workspaceId)
       .maybeSingle();
     const stored = (std as any)?.internal_profile;
     if (stored && typeof stored === "object" && stored.target_phrase) profile = stored;
+    threshold = normalizeThreshold((std as any)?.confidence_threshold);
+    verifiability = normalizeVerifiability((std as any)?.visual_verifiability);
+  } else if (body?.profile && typeof body.profile === "object") {
+    // pergunta livre no laboratório: perfil efêmero, nunca persistido
+    profile = body.profile;
   }
 
   const image = decodeImage(body?.imageBase64);
@@ -1075,31 +1030,28 @@ Deno.serve(async (req) => {
 
   const sessionId = sessionIdOf(body);
   if (!sessionId) return err(400, "session_required");
+  const attemptId = attemptIdOf(body);
+  if (!attemptId) return err(400, "attempt_required");
+
+  // Uma tentativa = uma decisão final. Reenvio devolve o resultado guardado.
+  const { data: claimData, error: claimErr } = await svc.rpc("vision_lab_attempt_claim", {
+    p_attempt_id: attemptId,
+    p_user_id: actorId,
+  });
+  if (claimErr) return err(503, "attempt_unavailable");
+  const claim = Array.isArray(claimData) ? claimData[0] : claimData;
+  // Reenvio da mesma tentativa devolve a decisão já registrada.
+  if (claim?.reason === "completed") {
+    return json(200, { ...((claim.cached as any) ?? {}), replayed: true });
+  }
+  if (claim?.reason === "running") return err(409, "already_running");
+  if (claim?.claimed !== true) return err(400, String(claim?.reason ?? "attempt_invalid"));
 
   if (inFlight.has(actorId)) return err(409, "already_running");
   inFlight.add(actorId);
   const t0 = Date.now();
   const meter: UsageEntry[] = [];
   try {
-    const budget = await consumeSession(svc, { sessionId, workspaceId, userId: actorId, kind: "final" });
-    if (!budget.allowed) {
-      return json(200, {
-        observer: null,
-        judge: null,
-        combined: {
-          decision: "technical_failure",
-          reason_code: "session_limit_reached",
-          public_message: "Esta sessão atingiu o limite de análises. Abra a câmera novamente para continuar.",
-          condition_status: null,
-          gate: {},
-        },
-        referenceMode: "none",
-        totalLatencyMs: Date.now() - t0,
-        budget: { spent: false, used: budget.used, remaining: budget.remaining, reason: budget.reason },
-        usage: meterTotals(meter),
-      });
-    }
-
     const observer = await runObserver(image, question, profile, meter);
 
     let referenceMode: "none" | "multi_image" | "derived" = "none";
@@ -1123,13 +1075,14 @@ Deno.serve(async (req) => {
       if (referenceDescription) referenceMode = "derived";
     }
 
-    const combined = combine(observer, judge.raw);
-    await recordUsage(svc, {
-      meter, workspaceId, userId: actorId, sessionId,
-      standardId: standardId || null, action: "benchmark-evaluate", decision: combined.decision,
+    // Gate conservador: aprova só com confiança >= limiar, JSON completo e
+    // padrão realmente verificável por foto.
+    const combined = combine(observer, judge.raw, {
+      confidenceThreshold: threshold,
+      verifiability: verifiability.visual_verifiability,
     });
-    console.log(`[lab] evaluate ok user=${actorId.slice(0, 8)} decision=${combined.decision} ms=${Date.now() - t0}`);
-    return json(200, {
+    const usage = meterTotals(meter);
+    const payload = {
       observer: {
         observation: observer.observation,
         targetVisible: observer.targetVisible,
@@ -1153,28 +1106,48 @@ Deno.serve(async (req) => {
       },
       combined,
       referenceMode,
+      threshold,
+      verifiability: verifiability.visual_verifiability,
+      requiredEvidenceCount: verifiability.required_evidence_count,
+      attemptId,
       totalLatencyMs: Date.now() - t0,
-      budget: { spent: true, used: budget.used, remaining: budget.remaining, reason: "ok" },
-      usage: meterTotals(meter),
+      usage,
+    };
+
+    await svc.rpc("vision_lab_attempt_finish", {
+      p_attempt_id: attemptId,
+      p_user_id: actorId,
+      p_result: payload,
+      p_technical_failure: false,
     });
+    await recordUsage(svc, {
+      meter, workspaceId, userId: actorId, sessionId, attemptId,
+      standardId: standardId || null, action: "benchmark-evaluate", decision: combined.decision,
+    });
+    console.log(`[lab] evaluate ok user=${actorId.slice(0, 8)} decision=${combined.decision} ms=${Date.now() - t0}`);
+    return json(200, payload);
   } catch (e) {
     const code = String((e as Error).message ?? "unknown").slice(0, 60);
+    // Falha técnica NÃO consome a tentativa: ela volta para "pending".
+    // Falha técnica não consome a tentativa: ela volta a ficar disponível.
+    await svc.rpc("vision_lab_attempt_finish", {
+      p_attempt_id: attemptId,
+      p_user_id: actorId,
+      p_result: null,
+      p_technical_failure: true,
+    });
     await recordUsage(svc, {
-      meter, workspaceId, userId: actorId, sessionId,
+      meter, workspaceId, userId: actorId, sessionId, attemptId,
       standardId: standardId || null, action: "benchmark-evaluate", decision: "technical_failure",
     });
     console.error(`[lab] evaluate_failed user=${actorId.slice(0, 8)} code=${code} ms=${Date.now() - t0}`);
     return json(200, {
       observer: null,
       judge: null,
-      combined: {
-        decision: "technical_failure",
-        reason_code: /^[a-z0-9_]{1,40}$/.test(code) ? code : "service_unavailable",
-        public_message: "Não foi possível verificar agora. Tente novamente.",
-        condition_status: null,
-        gate: {},
-      },
+      combined: technicalFailure(code, threshold),
       referenceMode: "none",
+      attemptId,
+      attemptConsumed: false,
       totalLatencyMs: Date.now() - t0,
       usage: meterTotals(meter),
     });
@@ -1182,3 +1155,4 @@ Deno.serve(async (req) => {
     inFlight.delete(actorId);
   }
 });
+
