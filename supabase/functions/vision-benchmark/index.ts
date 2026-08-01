@@ -726,8 +726,31 @@ function combine(observer: Awaited<ReturnType<typeof runObserver>>, judge: any):
 
 }
 
-// ---------------- concorrência por usuário ----------------
-const inFlight = new Set<string>();
+// ---------------- concorrência persistente (entre isolates) ----------------
+/** Trava atômica no banco por usuário + workspace + operação, com TTL. */
+async function acquireLock(
+  svc: any,
+  userId: string,
+  workspaceId: string | null,
+  operation: string,
+  ttlSeconds: number,
+): Promise<string | null> {
+  const { data, error } = await svc.rpc("acquire_vision_lock", {
+    p_user_id: userId,
+    p_workspace_id: workspaceId,
+    p_operation: operation,
+    p_ttl_seconds: ttlSeconds,
+  });
+  if (error) return null; // falha na trava nunca bloqueia o fluxo do usuário
+  const row = Array.isArray(data) ? data[0] : data;
+  return row?.acquired ? String(row.lock_key) : null;
+}
+
+async function releaseLock(svc: any, lockKey: string | null) {
+  if (!lockKey) return;
+  try { await svc.rpc("release_vision_lock", { p_lock_key: lockKey }); } catch { /* TTL cobre */ }
+}
+
 
 // ---------------- handler ----------------
 Deno.serve(async (req) => {
