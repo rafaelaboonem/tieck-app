@@ -931,6 +931,8 @@ Deno.serve(async (req) => {
       .maybeSingle();
     if (!standard) return err(403, "forbidden");
 
+    const meter: UsageEntry[] = [];
+    const sessionId = sessionIdOf(body) || `profile-${standardId}`;
     try {
       let referenceSummary: string | null = null;
       if (standard.reference_path) {
@@ -938,10 +940,10 @@ Deno.serve(async (req) => {
         if (file) {
           const bytes = new Uint8Array(await file.arrayBuffer());
           const meta = sniff(bytes);
-          if (meta) referenceSummary = await describeReference({ bytes, ...meta }, standard.question);
+          if (meta) referenceSummary = await describeReference({ bytes, ...meta }, standard.question, meter);
         }
       }
-      const { profile, ambiguous } = await buildProfile(standard.question, referenceSummary);
+      const { profile, ambiguous } = await buildProfile(standard.question, referenceSummary, meter);
       const { error: upErr } = await userClient
         .from("visual_standards")
         .update({
@@ -951,12 +953,25 @@ Deno.serve(async (req) => {
         })
         .eq("id", standardId);
       if (upErr) throw new Error("profile_save_failed");
+      await recordUsage(svc, {
+        meter, workspaceId, userId: actorId, sessionId,
+        standardId, action: "profile-standard", decision: null,
+      });
       console.log(`[lab] profile ok user=${actorId.slice(0, 8)} ambiguous=${ambiguous}`);
-      return json(200, { ok: true, needsValidation: ambiguous, profileVersion: PROFILE_VERSION });
+      return json(200, {
+        ok: true,
+        needsValidation: ambiguous,
+        profileVersion: PROFILE_VERSION,
+        usage: meterTotals(meter),
+      });
     } catch (e) {
       const code = String((e as Error).message ?? "unknown").slice(0, 60);
+      await recordUsage(svc, {
+        meter, workspaceId, userId: actorId, sessionId,
+        standardId, action: "profile-standard", decision: "failed",
+      });
       console.error(`[lab] profile_failed user=${actorId.slice(0, 8)} code=${code}`);
-      return json(200, { ok: false, code });
+      return json(200, { ok: false, code, usage: meterTotals(meter) });
     }
   }
 
