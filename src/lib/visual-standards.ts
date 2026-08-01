@@ -32,6 +32,12 @@ export interface VisualStandard {
   last_validated_at: string | null;
   created_at: string;
   updated_at: string;
+  /** Vínculo com a pergunta /Camera do checklist (fonte oficial do texto). */
+  checklist_id?: string | null;
+  camera_block_id?: string | null;
+  archived_at?: string | null;
+  /** Texto da pergunta na última validação — usado para detectar edições. */
+  validated_question?: string | null;
   /** Perfil interno gerado no servidor — nunca exibido ao usuário final. */
   internal_profile?: StandardProfile | Record<string, never> | null;
   profile_version?: number;
@@ -42,6 +48,7 @@ export interface VisualStandard {
   required_evidence_count?: number | null;
   confidence_threshold?: number | null;
 }
+
 
 export interface StandardProfile {
   target_phrase: string;
