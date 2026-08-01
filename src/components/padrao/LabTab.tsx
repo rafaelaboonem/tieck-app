@@ -42,13 +42,18 @@ interface Props {
 }
 
 
-export function LabTab({ workspaceId, standards, selected, onSelect, runs, onRun }: Props) {
+export function LabTab({ workspaceId, standards, selected, onSelect, runs, onRun, onUpdateRun }: Props) {
   const [question, setQuestion] = useState(selected?.question ?? "");
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [expected, setExpected] = useState<ExpectedResult>("approved");
   const [useReference, setUseReference] = useState(true);
   const [running, setRunning] = useState(false);
+  const [releaseCase, setReleaseCase] = useState<ReleaseCase | "">("");
+  const [cameraOpen, setCameraOpen] = useState(false);
+  const [profiling, setProfiling] = useState(false);
+
+  const profile = profileOf(selected);
 
   useEffect(() => {
     if (selected) setQuestion(selected.question);
@@ -67,6 +72,14 @@ export function LabTab({ workspaceId, standards, selected, onSelect, runs, onRun
   const lastRun = runs[0] ?? null;
   const canRun = useMemo(() => Boolean(file && question.trim() && !running), [file, question, running]);
 
+  const register = (res: Parameters<typeof isCorrect>[0] extends never ? never : LabRun) => res;
+
+  const pushRun = (res: LabRun) => {
+    res.correct = isCorrect(res);
+    onRun(res);
+    if (res.combined.decision === "technical_failure") toast.error("Não foi possível verificar agora.");
+  };
+
   const execute = async () => {
     if (!file) return;
     setRunning(true);
@@ -76,20 +89,24 @@ export function LabTab({ workspaceId, standards, selected, onSelect, runs, onRun
       if (useReference && selected?.reference_path) {
         ref = await referenceBase64(selected.reference_path);
       }
-      const res = await runBenchmark({ workspaceId, question, imageBase64, referenceBase64: ref });
-      const run: LabRun = {
+      const res = await runBenchmark({
+        workspaceId,
+        question,
+        imageBase64,
+        referenceBase64: ref,
+        standardId: selected?.id ?? null,
+        profile,
+      });
+      pushRun({
         ...res,
         id: crypto.randomUUID(),
         at: new Date().toISOString(),
         question,
         expected,
         correct: null,
-      };
-      run.correct = isCorrect(run);
-      onRun(run);
-      if (res.combined.decision === "technical_failure") {
-        toast.error(res.combined.public_message);
-      }
+        source: "upload",
+        releaseCase: releaseCase || null,
+      });
     } catch (e) {
       toast.error(`Não foi possível analisar agora. Tente novamente.`);
       console.error("[lab]", (e as Error).message);
@@ -97,6 +114,25 @@ export function LabTab({ workspaceId, standards, selected, onSelect, runs, onRun
       setRunning(false);
     }
   };
+
+  const openCamera = async () => {
+    if (!selected) {
+      toast.error("Selecione um padrão salvo para testar com a câmera.");
+      return;
+    }
+    if (!profile) {
+      setProfiling(true);
+      const out = await ensureStandardProfile(workspaceId, selected.id);
+      setProfiling(false);
+      if (!out.ok) {
+        toast.error("Não foi possível preparar este padrão agora.");
+        return;
+      }
+      toast.message("Padrão preparado. Recarregue a lista se o resumo não aparecer.");
+    }
+    setCameraOpen(true);
+  };
+
 
   return (
     <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
