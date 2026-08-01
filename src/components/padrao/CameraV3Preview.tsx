@@ -4,10 +4,13 @@ import {
   liveLocate,
   runBenchmark,
   referenceBase64,
+  newSessionId,
+  LIVE_MIN_INTERVAL_MS,
   type LabResponse,
   type LiveStats,
   type LocateResult,
   type StandardProfile,
+  type UsageTotals,
 } from "@/lib/visual-standards";
 
 type Phase = "starting" | "live" | "captured" | "result";
@@ -81,8 +84,20 @@ export function CameraV3Preview(props: Props) {
   const liveBusyRef = useRef(false);
   const liveSeqRef = useRef(0);
   const openedAtRef = useRef<number>(0);
-  const statsRef = useRef({ checks: 0, latencySum: 0, firstFoundAt: null as number | null, strategy: "none" as LiveStats["strategy"] });
+  const statsRef = useRef({
+    checks: 0,
+    latencySum: 0,
+    firstFoundAt: null as number | null,
+    strategy: "none" as LiveStats["strategy"],
+    localChecks: 0,
+    neurons: 0,
+    inputTokens: 0,
+    outputTokens: 0,
+    aiCalls: 0,
+  });
   const closedRef = useRef(false);
+  const sessionIdRef = useRef<string>(newSessionId());
+  const lastLiveAtRef = useRef(0);
 
   const [facing, setFacing] = useState<"environment" | "user">("environment");
   const [phase, setPhase] = useState<Phase>("starting");
@@ -95,6 +110,16 @@ export function CameraV3Preview(props: Props) {
   const [frozen, setFrozen] = useState<string | null>(null);
   const [result, setResult] = useState<LabResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [liveBudget, setLiveBudget] = useState<{ used: number; remaining: number } | null>(null);
+
+  const addUsage = useCallback((usage: UsageTotals | undefined) => {
+    if (!usage) return;
+    const s = statsRef.current;
+    s.neurons += usage.neurons ?? 0;
+    s.inputTokens += usage.inputTokens ?? 0;
+    s.outputTokens += usage.outputTokens ?? 0;
+    s.aiCalls += usage.calls ?? 0;
+  }, []);
 
   const target = profile?.target_phrase_en?.trim() || "";
   const targetPt = profile?.target_phrase?.trim() || "o item";
@@ -120,7 +145,13 @@ export function CameraV3Preview(props: Props) {
     }
     closedRef.current = false;
     openedAtRef.current = Date.now();
-    statsRef.current = { checks: 0, latencySum: 0, firstFoundAt: null, strategy: "none" };
+    statsRef.current = {
+      checks: 0, latencySum: 0, firstFoundAt: null, strategy: "none",
+      localChecks: 0, neurons: 0, inputTokens: 0, outputTokens: 0, aiCalls: 0,
+    };
+    sessionIdRef.current = newSessionId();
+    lastLiveAtRef.current = 0;
+    setLiveBudget(null);
     setPhase("starting");
     setResult(null);
     setFrozen(null);
@@ -224,7 +255,10 @@ export function CameraV3Preview(props: Props) {
     if (!open || phase !== "live") return;
     const id = setInterval(() => {
       const q = sampleFrame();
-      if (q) setQuality(q);
+      if (q) {
+        statsRef.current.localChecks++;
+        setQuality(q);
+      }
     }, 200);
     return () => clearInterval(id);
   }, [open, phase, sampleFrame]);
@@ -242,22 +276,27 @@ export function CameraV3Preview(props: Props) {
     return canvas.toDataURL("image/jpeg", quality);
   }, []);
 
-  // ---- localização remota adaptativa ----
+  // ---- localização remota: só por evento (cena estável e com qualidade) ----
+  const liveExhausted = liveBudget !== null && liveBudget.remaining <= 0;
+
   useEffect(() => {
     if (!open || phase !== "live" || !target || !standardId) return;
+    if (liveExhausted) return;
     let stopped = false;
     let timer: number | undefined;
 
     const tick = async () => {
       if (stopped || closedRef.current) return;
-      const stable = !quality.moving && !quality.dark;
-      if (liveBusyRef.current || !stable) {
+      const sinceLast = Date.now() - lastLiveAtRef.current;
+      const stable = !quality.moving && !quality.dark && !quality.overexposed && !quality.blurry;
+      if (liveBusyRef.current || !stable || sinceLast < LIVE_MIN_INTERVAL_MS) {
         timer = window.setTimeout(tick, IDLE_INTERVAL_MS);
         return;
       }
       const frame = grabDataUrl(FRAME_WIDTH, 0.6);
       if (!frame) { timer = window.setTimeout(tick, IDLE_INTERVAL_MS); return; }
       liveBusyRef.current = true;
+      lastLiveAtRef.current = Date.now();
       const seq = ++liveSeqRef.current;
       setChecking(true);
       const started = Date.now();
@@ -267,10 +306,17 @@ export function CameraV3Preview(props: Props) {
           standardId,
           frameBase64: frame,
           requestId: `${seq}`,
+          sessionId: sessionIdRef.current,
         });
         if (stopped || closedRef.current || seq !== liveSeqRef.current) return;
         // Descarta respostas fora de ordem.
         if (res.requestId && res.requestId !== `${seq}`) return;
+        if (res.budget) setLiveBudget({ used: res.budget.used, remaining: res.budget.remaining });
+        addUsage(res.usage);
+        if (res.budget && !res.budget.spent) {
+          // servidor recusou (cooldown ou limite): mantém orientação local.
+          return;
+        }
         statsRef.current.checks++;
         statsRef.current.latencySum += Date.now() - started;
         statsRef.current.strategy = res.strategy;
@@ -293,7 +339,7 @@ export function CameraV3Preview(props: Props) {
       liveSeqRef.current++;
       if (timer) window.clearTimeout(timer);
     };
-  }, [open, phase, target, standardId, workspaceId, grabDataUrl, quality.moving, quality.dark]);
+  }, [open, phase, target, standardId, workspaceId, grabDataUrl, addUsage, liveExhausted, quality.moving, quality.dark, quality.overexposed, quality.blurry]);
 
   // ---- estado + orientação (decididos no servidor) ----
   const box = locate?.boxes?.[0] ?? null;
@@ -332,7 +378,9 @@ export function CameraV3Preview(props: Props) {
         referenceBase64: ref,
         standardId,
         profile,
+        sessionId: sessionIdRef.current,
       });
+      addUsage(res.usage);
       const s = statsRef.current;
       setResult(res);
       setPhase("result");
@@ -343,6 +391,11 @@ export function CameraV3Preview(props: Props) {
           liveChecks: s.checks,
           avgLiveLatencyMs: s.checks ? Math.round(s.latencySum / s.checks) : null,
           strategy: s.strategy,
+          neurons: Math.round(s.neurons * 1000) / 1000,
+          inputTokens: s.inputTokens,
+          outputTokens: s.outputTokens,
+          aiCalls: s.aiCalls,
+          localChecks: s.localChecks,
         },
       });
     } catch {
@@ -469,13 +522,24 @@ export function CameraV3Preview(props: Props) {
               </>
             ) : decision === "uncertain" ? (
               <>
-                <p className="text-base font-semibold text-sky-300">Tire outra foto</p>
-                <p className="text-sm text-white/85">Não deu para confirmar. Melhore o enquadramento e tente de novo.</p>
+                <p className="text-base font-semibold text-sky-300">
+                  {result?.combined.condition_status === "not_observable"
+                    ? "Não dá para confirmar por foto"
+                    : "Tire outra foto"}
+                </p>
+                <p className="text-sm text-white/85">
+                  {result?.combined.public_message ??
+                    "Não deu para confirmar. Melhore o enquadramento e tente de novo."}
+                </p>
               </>
             ) : decision === "technical_failure" ? (
               <>
                 <p className="text-base font-semibold text-rose-300">Não foi possível verificar agora.</p>
-                <p className="text-sm text-white/85">Tente novamente.</p>
+                <p className="text-sm text-white/85">
+                  {result?.combined.reason_code === "session_limit_reached"
+                    ? result.combined.public_message
+                    : "Tente novamente."}
+                </p>
               </>
             ) : (
               <>
@@ -523,6 +587,14 @@ export function CameraV3Preview(props: Props) {
       {phase === "live" && (
         <div className="space-y-3 px-5 pb-6 pt-3">
           <p className="text-center text-sm font-medium text-white">{guidance}</p>
+          <p className="text-center text-[11px] text-white/55">
+            {liveExhausted
+              ? "Orientação por IA pausada nesta sessão. A checagem de luz, foco e estabilidade continua no aparelho."
+              : checking
+                ? "Verificação por IA em andamento."
+                : "Checagem de luz, foco e estabilidade feita no aparelho, sem IA."}
+            {liveBudget && !liveExhausted ? ` · ${liveBudget.remaining} verificação(ões) de IA restante(s)` : ""}
+          </p>
           <div className="flex items-center justify-between">
             <div className="flex w-11 justify-start">
               <span className="text-[10px] leading-tight text-white/60">

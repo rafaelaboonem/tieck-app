@@ -5,6 +5,7 @@ import {
   MIN_LABELED_SAMPLE,
   computeMetrics,
   computeRelease,
+  computeUsage,
   download,
   exportRows,
   toCsv,
@@ -14,6 +15,7 @@ import {
 export function PerformanceTab({ runs }: { runs: LabRun[] }) {
   const m = computeMetrics(runs);
   const release = computeRelease(runs);
+  const usage = computeUsage(runs);
 
   if (!runs.length) {
     return (
@@ -59,6 +61,28 @@ export function PerformanceTab({ runs }: { runs: LabRun[] }) {
           )}
           <p className="text-xs text-muted-foreground">
             Com referência: {m.withReference} · Sem referência: {m.withoutReference}
+          </p>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">Consumo de IA nesta sessão</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2 text-sm">
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+            <Metric label="Chamadas de IA" value={String(usage.aiCalls)} />
+            <Metric label="Neurônios" value={usage.neurons.toFixed(2)} />
+            <Metric label="Custo estimado" value={`US$ ${usage.estimatedUsd.toFixed(5)}`} />
+            <Metric label="Checagens locais (sem IA)" value={String(usage.localChecks)} />
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Tokens: {usage.inputTokens} de entrada · {usage.outputTokens} de saída.
+            {usage.avgNeuronsPerRun != null && ` Média por teste: ${usage.avgNeuronsPerRun.toFixed(2)} neurônios.`}
+          </p>
+          <p className="text-xs text-muted-foreground">
+            O trabalho local (luz, foco, estabilidade e enquadramento) não consome IA. A IA só é chamada quando a cena
+            fica estável, respeitando o intervalo mínimo e o limite por sessão.
           </p>
         </CardContent>
       </Card>

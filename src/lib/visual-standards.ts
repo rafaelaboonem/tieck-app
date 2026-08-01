@@ -197,7 +197,49 @@ export function blobToBase64(blob: Blob): Promise<string> {
 // ---------------- laboratório ----------------
 
 export type LabDecision = "approved" | "retake" | "uncertain" | "technical_failure";
-export type ExpectedResult = "approved" | "retake";
+export type ExpectedResult = "approved" | "retake" | "not_observable";
+export type ConditionStatus = "verified" | "not_met" | "not_observable";
+
+export const CONDITION_STATUS_LABEL: Record<ConditionStatus, string> = {
+  verified: "Verificado pela foto",
+  not_met: "Não atendido",
+  not_observable: "Não verificável por foto",
+};
+
+/** Orçamento de IA por sessão de câmera — decidido e aplicado no servidor. */
+export const LIVE_CHECKS_PER_SESSION = 3;
+export const FINAL_CHECKS_PER_SESSION = 5;
+export const LIVE_MIN_INTERVAL_MS = 5000;
+
+export interface UsageStep {
+  step: string;
+  model: string;
+  inputTokens: number;
+  outputTokens: number;
+  neurons: number;
+  inferenceMs: number;
+}
+
+export interface UsageTotals {
+  calls: number;
+  inputTokens: number;
+  outputTokens: number;
+  neurons: number;
+  estimatedUsd: number;
+  steps: UsageStep[];
+}
+
+export interface BudgetInfo {
+  spent: boolean;
+  used: number;
+  remaining: number;
+  reason: string;
+}
+
+/** Identificador de sessão de câmera (não é dado pessoal, só agrupa chamadas). */
+export function newSessionId(): string {
+  return crypto.randomUUID().replaceAll("-", "").slice(0, 32);
+}
 
 export interface LabResponse {
   observer: {
@@ -211,6 +253,7 @@ export interface LabResponse {
     decision: string;
     targetVisible: boolean | null;
     conditionMet: boolean | null;
+    conditionStatus?: ConditionStatus | null;
     qualitySufficient: boolean | null;
     reasonCode: string | null;
     observations: string[];
@@ -221,10 +264,13 @@ export interface LabResponse {
     decision: LabDecision;
     reason_code: string;
     public_message: string;
+    condition_status?: ConditionStatus | null;
     gate?: Record<string, boolean>;
   };
   referenceMode: "none" | "multi_image" | "derived";
   totalLatencyMs: number;
+  budget?: BudgetInfo;
+  usage?: UsageTotals;
 }
 
 /** Casos obrigatórios antes de liberar a Camera V3 nos checklists públicos. */
@@ -235,7 +281,9 @@ export type ReleaseCase =
   | "wrong_place"
   | "partial_framing"
   | "wrong_condition"
-  | "dark_photo";
+  | "dark_photo"
+  | "not_observable_condition"
+  | "reference_similar_place";
 
 export const RELEASE_CASES: { key: ReleaseCase; label: string; expected: ExpectedResult }[] = [
   { key: "correct_photo", label: "Foto correta aprovada", expected: "approved" },
@@ -245,6 +293,16 @@ export const RELEASE_CASES: { key: ReleaseCase; label: string; expected: Expecte
   { key: "partial_framing", label: "Enquadramento parcial rejeitado", expected: "retake" },
   { key: "wrong_condition", label: "Condição inadequada rejeitada", expected: "retake" },
   { key: "dark_photo", label: "Foto escura rejeitada", expected: "retake" },
+  {
+    key: "not_observable_condition",
+    label: "Condição não verificável por foto sinalizada como tal",
+    expected: "not_observable",
+  },
+  {
+    key: "reference_similar_place",
+    label: "Local parecido com a referência, mas em outra condição, rejeitado",
+    expected: "retake",
+  },
 ];
 
 export interface LiveStats {
@@ -253,6 +311,12 @@ export interface LiveStats {
   liveChecks: number;
   avgLiveLatencyMs: number | null;
   strategy: "detect" | "point" | "query" | "none";
+  /** Consumo somado da sessão de câmera (ao vivo + análise final). */
+  neurons?: number;
+  inputTokens?: number;
+  outputTokens?: number;
+  aiCalls?: number;
+  localChecks?: number;
 }
 
 export interface EvaluatorMarks {
@@ -282,6 +346,7 @@ export async function runBenchmark(input: {
   referenceBase64?: string | null;
   standardId?: string | null;
   profile?: StandardProfile | null;
+  sessionId: string;
 }): Promise<LabResponse> {
   const { data, error } = await supabase.functions.invoke("vision-benchmark", {
     body: {
@@ -292,6 +357,7 @@ export async function runBenchmark(input: {
       referenceBase64: input.referenceBase64 ?? undefined,
       standardId: input.standardId ?? undefined,
       profile: input.profile ?? undefined,
+      sessionId: input.sessionId,
     },
   });
   if (error) throw error;
@@ -302,12 +368,12 @@ export async function runBenchmark(input: {
 export async function ensureStandardProfile(
   workspaceId: string,
   standardId: string,
-): Promise<{ ok: boolean; needsValidation?: boolean }> {
+): Promise<{ ok: boolean; needsValidation?: boolean; usage?: UsageTotals }> {
   const { data, error } = await supabase.functions.invoke("vision-benchmark", {
     body: { action: "profile-standard", workspaceId, standardId },
   });
   if (error) return { ok: false };
-  return data as { ok: boolean; needsValidation?: boolean };
+  return data as { ok: boolean; needsValidation?: boolean; usage?: UsageTotals };
 }
 
 export type LiveState = "searching" | "adjust" | "ready" | "uncertain";
@@ -322,6 +388,8 @@ export interface LocateResult {
   hintCode: string;
   hint: string;
   inferenceMs: number;
+  budget?: BudgetInfo;
+  usage?: UsageTotals;
 }
 
 /** Localização ao vivo — o frame é enviado em memória e nunca armazenado. */
@@ -330,6 +398,7 @@ export async function liveLocate(input: {
   standardId: string;
   frameBase64: string;
   requestId: string;
+  sessionId: string;
 }): Promise<LocateResult> {
   const { data, error } = await supabase.functions.invoke("vision-benchmark", {
     body: {
@@ -338,6 +407,7 @@ export async function liveLocate(input: {
       standardId: input.standardId,
       frameBase64: input.frameBase64,
       requestId: input.requestId,
+      sessionId: input.sessionId,
     },
   });
   if (error) throw error;
@@ -345,13 +415,21 @@ export async function liveLocate(input: {
 }
 
 
+/** Uma execução atende ao resultado esperado? */
+function matchesExpected(run: Pick<LabRun, "combined" | "expected">): boolean {
+  if (run.expected === "not_observable") {
+    return run.combined.condition_status === "not_observable";
+  }
+  return run.combined.decision === run.expected;
+}
+
 /** Trava de liberação: só libera com todos os casos críticos corretos. */
 export function computeRelease(runs: LabRun[]) {
   const cases = RELEASE_CASES.map((c) => {
     const matching = runs.filter((r) => r.releaseCase === c.key && r.source === "camera_v3");
-    const passed = matching.some((r) => r.combined.decision === c.expected && r.marks?.aiWasRight !== false);
+    const passed = matching.some((r) => matchesExpected(r) && r.marks?.aiWasRight !== false);
     const falseApproval = matching.some(
-      (r) => c.expected === "retake" && (r.combined.decision === "approved" || r.marks?.falseApproval === true),
+      (r) => c.expected !== "approved" && (r.combined.decision === "approved" || r.marks?.falseApproval === true),
     );
     return { ...c, tested: matching.length, passed, falseApproval };
   });
@@ -365,8 +443,50 @@ export function computeRelease(runs: LabRun[]) {
 
 export function isCorrect(run: Pick<LabRun, "combined" | "expected">): boolean | null {
   const d = run.combined.decision;
+  if (run.expected === "not_observable") {
+    if (d === "technical_failure") return null;
+    return run.combined.condition_status === "not_observable";
+  }
   if (d === "uncertain" || d === "technical_failure") return null;
   return d === run.expected;
+}
+
+/** Consumo somado das execuções registradas na sessão do laboratório. */
+export interface UsageSummary {
+  aiCalls: number;
+  neurons: number;
+  inputTokens: number;
+  outputTokens: number;
+  estimatedUsd: number;
+  runsWithUsage: number;
+  avgNeuronsPerRun: number | null;
+  localChecks: number;
+}
+
+export const USD_PER_1K_NEURONS = 0.011;
+
+export function computeUsage(runs: LabRun[]): UsageSummary {
+  let aiCalls = 0, neurons = 0, inputTokens = 0, outputTokens = 0, runsWithUsage = 0, localChecks = 0;
+  for (const r of runs) {
+    if (r.usage) {
+      runsWithUsage++;
+      aiCalls += r.usage.calls ?? 0;
+      neurons += r.usage.neurons ?? 0;
+      inputTokens += r.usage.inputTokens ?? 0;
+      outputTokens += r.usage.outputTokens ?? 0;
+    }
+    localChecks += r.live?.localChecks ?? 0;
+  }
+  return {
+    aiCalls,
+    neurons: Math.round(neurons * 1000) / 1000,
+    inputTokens,
+    outputTokens,
+    estimatedUsd: Math.round((neurons / 1000) * USD_PER_1K_NEURONS * 1e6) / 1e6,
+    runsWithUsage,
+    avgNeuronsPerRun: runsWithUsage ? Math.round((neurons / runsWithUsage) * 1000) / 1000 : null,
+    localChecks,
+  };
 }
 
 // ---------------- métricas da sessão ----------------
@@ -395,9 +515,10 @@ export function computeMetrics(runs: LabRun[]): SessionMetrics {
 
   for (const r of runs) {
     const d = r.combined.decision;
+    const ok = matchesExpected(r);
     if (d === "technical_failure") failures++;
+    else if (ok) hits++;
     else if (d === "uncertain") uncertain++;
-    else if (d === r.expected) hits++;
     else if (d === "approved") falseApprovals++;
     else falseRejections++;
 
@@ -435,6 +556,7 @@ export function exportRows(runs: LabRun[]) {
     question: r.question,
     expected: r.expected,
     combined_decision: r.combined.decision,
+    condition_status: r.combined.condition_status ?? null,
     reason_code: r.combined.reason_code,
     judge_decision: r.judge?.decision ?? null,
     observer_target_visible: r.observer?.targetVisible ?? null,
@@ -442,6 +564,13 @@ export function exportRows(runs: LabRun[]) {
     observer_dark: r.observer?.dark ?? null,
     reference_mode: r.referenceMode,
     correct: r.correct,
+    ai_calls: r.usage?.calls ?? null,
+    input_tokens: r.usage?.inputTokens ?? null,
+    output_tokens: r.usage?.outputTokens ?? null,
+    neurons: r.usage?.neurons ?? null,
+    estimated_usd: r.usage?.estimatedUsd ?? null,
+    live_ai_checks: r.live?.liveChecks ?? null,
+    local_checks: r.live?.localChecks ?? null,
     observer_latency_ms: r.observer?.latencyMs ?? null,
     judge_latency_ms: r.judge?.latencyMs ?? null,
     total_latency_ms: r.totalLatencyMs,

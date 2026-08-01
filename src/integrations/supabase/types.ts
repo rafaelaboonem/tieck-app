@@ -1334,6 +1334,136 @@ export type Database = {
         }
         Relationships: []
       }
+      vision_locks: {
+        Row: {
+          acquired_at: string
+          expires_at: string
+          lock_key: string
+          operation: string
+          user_id: string
+          workspace_id: string | null
+        }
+        Insert: {
+          acquired_at?: string
+          expires_at: string
+          lock_key: string
+          operation: string
+          user_id: string
+          workspace_id?: string | null
+        }
+        Update: {
+          acquired_at?: string
+          expires_at?: string
+          lock_key?: string
+          operation?: string
+          user_id?: string
+          workspace_id?: string | null
+        }
+        Relationships: []
+      }
+      vision_session_usage: {
+        Row: {
+          created_at: string
+          final_calls: number
+          last_call_at: string | null
+          live_calls: number
+          session_id: string
+          updated_at: string
+          user_id: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          final_calls?: number
+          last_call_at?: string | null
+          live_calls?: number
+          session_id: string
+          updated_at?: string
+          user_id: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          final_calls?: number
+          last_call_at?: string | null
+          live_calls?: number
+          session_id?: string
+          updated_at?: string
+          user_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vision_session_usage_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vision_usage_events: {
+        Row: {
+          action: string
+          created_at: string
+          decision: string | null
+          estimated_neurons: number
+          id: string
+          inference_ms: number
+          input_tokens: number
+          model_id: string
+          output_tokens: number
+          provider: string
+          session_id: string
+          standard_id: string | null
+          step: string
+          user_id: string
+          workspace_id: string
+        }
+        Insert: {
+          action: string
+          created_at?: string
+          decision?: string | null
+          estimated_neurons?: number
+          id?: string
+          inference_ms?: number
+          input_tokens?: number
+          model_id: string
+          output_tokens?: number
+          provider?: string
+          session_id: string
+          standard_id?: string | null
+          step: string
+          user_id: string
+          workspace_id: string
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          decision?: string | null
+          estimated_neurons?: number
+          id?: string
+          inference_ms?: number
+          input_tokens?: number
+          model_id?: string
+          output_tokens?: number
+          provider?: string
+          session_id?: string
+          standard_id?: string | null
+          step?: string
+          user_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vision_usage_events_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       visual_standards: {
         Row: {
           accuracy: number | null
@@ -1736,6 +1866,18 @@ export type Database = {
       }
     }
     Functions: {
+      acquire_vision_lock: {
+        Args: {
+          p_operation: string
+          p_ttl_seconds?: number
+          p_user_id: string
+          p_workspace_id: string
+        }
+        Returns: {
+          acquired: boolean
+          key: string
+        }[]
+      }
       claim_checklist_analysis: {
         Args: { p_analysis_id: string }
         Returns: {
@@ -1831,6 +1973,7 @@ export type Database = {
           published_at: string
         }[]
       }
+      release_vision_lock: { Args: { p_lock_key: string }; Returns: undefined }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
       signup_account_state: { Args: { p_user_id: string }; Returns: string }
@@ -1850,6 +1993,22 @@ export type Database = {
           p_retention_days: number
         }
         Returns: undefined
+      }
+      vision_session_consume: {
+        Args: {
+          p_kind: string
+          p_limit: number
+          p_min_interval_ms?: number
+          p_session_id: string
+          p_user_id: string
+          p_workspace_id: string
+        }
+        Returns: {
+          allowed: boolean
+          reason: string
+          remaining: number
+          used: number
+        }[]
       }
     }
     Enums: {

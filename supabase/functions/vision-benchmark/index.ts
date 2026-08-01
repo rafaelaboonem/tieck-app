@@ -99,6 +99,84 @@ function toDataUrl(img: Decoded): string {
 const PING_IMAGE =
   "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
 
+// ---------------- consumo (tokens → neurônios) ----------------
+// Tabela pública do Workers AI (neurônios por milhão de tokens).
+const NEURON_RATES: Record<string, { input: number; output: number }> = {
+  "@cf/moondream/moondream3.1-9B-A2B": { input: 27273, output: 90909 },
+  "@cf/meta/llama-4-scout-17b-16e-instruct": { input: 24545, output: 77273 },
+};
+const NEURON_FALLBACK = { input: 27273, output: 90909 };
+const USD_PER_1K_NEURONS = 0.011;
+
+export type UsageEntry = {
+  step: string;
+  model: string;
+  inputTokens: number;
+  outputTokens: number;
+  neurons: number;
+  inferenceMs: number;
+};
+
+function usageTokens(payload: any): { input: number; output: number } {
+  const u = payload?.result?.usage ?? payload?.usage ?? null;
+  const n = (...keys: string[]) => {
+    for (const k of keys) {
+      const v = u?.[k];
+      if (typeof v === "number" && Number.isFinite(v) && v >= 0) return Math.round(v);
+    }
+    return 0;
+  };
+  return { input: n("prompt_tokens", "input_tokens"), output: n("completion_tokens", "output_tokens") };
+}
+
+function meterPush(meter: UsageEntry[], step: string, model: string, payload: any, ms: number) {
+  const { input, output } = usageTokens(payload);
+  const rate = NEURON_RATES[model] ?? NEURON_FALLBACK;
+  const neurons = (input / 1_000_000) * rate.input + (output / 1_000_000) * rate.output;
+  meter.push({
+    step,
+    model,
+    inputTokens: input,
+    outputTokens: output,
+    neurons: Math.round(neurons * 1000) / 1000,
+    inferenceMs: ms,
+  });
+}
+
+/** Chamada ao provedor com medição de consumo sempre registrada. */
+async function cfMetered(
+  meter: UsageEntry[],
+  step: string,
+  model: string,
+  body: unknown,
+  timeoutMs = CALL_TIMEOUT_MS,
+): Promise<any> {
+  const started = Date.now();
+  try {
+    const payload = await cfRun(model, body, timeoutMs);
+    meterPush(meter, step, model, payload, Date.now() - started);
+    return payload;
+  } catch (e) {
+    meter.push({ step: `${step}_failed`, model, inputTokens: 0, outputTokens: 0, neurons: 0, inferenceMs: Date.now() - started });
+    throw e;
+  }
+}
+
+function meterTotals(meter: UsageEntry[]) {
+  const inputTokens = meter.reduce((a, m) => a + m.inputTokens, 0);
+  const outputTokens = meter.reduce((a, m) => a + m.outputTokens, 0);
+  const neurons = Math.round(meter.reduce((a, m) => a + m.neurons, 0) * 1000) / 1000;
+  return {
+    calls: meter.filter((m) => !m.step.endsWith("_failed")).length,
+    inputTokens,
+    outputTokens,
+    neurons,
+    estimatedUsd: Math.round((neurons / 1000) * USD_PER_1K_NEURONS * 1e6) / 1e6,
+    steps: meter,
+  };
+}
+
+
 // ---------------- Cloudflare ----------------
 async function cfRun(model: string, body: unknown, timeoutMs = CALL_TIMEOUT_MS): Promise<any> {
   const accountId = String(Deno.env.get("CLOUDFLARE_ACCOUNT_ID") ?? "").trim();
@@ -201,7 +279,7 @@ function detectorPhrase(raw: unknown): string {
 }
 
 
-async function buildProfile(question: string, referenceSummary: string | null) {
+async function buildProfile(question: string, referenceSummary: string | null, meter: UsageEntry[]) {
   const prompt =
     `An inspection standard was written by a facility owner in Brazilian Portuguese:\n"${question}"\n\n` +
     `Extract, WITHOUT inventing requirements that are not implied by the sentence:\n` +
@@ -218,7 +296,7 @@ async function buildProfile(question: string, referenceSummary: string | null) {
   let parsed: any = null;
   for (const withSchema of [true, false]) {
     try {
-      const payload = await cfRun(finalModel(), {
+      const payload = await cfMetered(meter, "profile", finalModel(), {
         messages: [{ role: "user", content: prompt }],
         ...(withSchema ? { response_format: { type: "json_schema", json_schema: PROFILE_SCHEMA } } : {}),
         max_tokens: 600,
@@ -252,9 +330,9 @@ async function buildProfile(question: string, referenceSummary: string | null) {
   };
 }
 
-async function describeReference(reference: Decoded, question: string): Promise<string | null> {
+async function describeReference(reference: Decoded, question: string, meter: UsageEntry[]): Promise<string | null> {
   try {
-    const payload = await cfRun(fastModel(), {
+    const payload = await cfMetered(meter, "reference_summary", fastModel(), {
       image: toDataUrl(reference),
       task: "query",
       stream: false,
@@ -357,7 +435,7 @@ const HINTS: Record<HintCode, string> = {
  * Localiza o alvo em um frame temporário. Nunca fabrica coordenadas: quando o
  * modelo não devolve caixa válida, `boxes` volta vazio.
  */
-async function locateTarget(frame: Decoded, target: string) {
+async function locateTarget(frame: Decoded, target: string, meter: UsageEntry[]) {
   const started = Date.now();
   const image = toDataUrl(frame);
   const done = (strategy: "detect" | "point" | "query", found: boolean, boxes: Box[]) => ({
@@ -369,7 +447,7 @@ async function locateTarget(frame: Decoded, target: string) {
 
   // 1) detect — única estratégia que produz caixa real
   try {
-    const p = await cfRun(fastModel(), { image, task: "detect", object: target, stream: false }, LIVE_TIMEOUT_MS);
+    const p = await cfMetered(meter, "live_detect", fastModel(), { image, task: "detect", object: target, stream: false }, LIVE_TIMEOUT_MS);
     const boxes = collectBoxes(p)
       .sort((a, b) => b.w * b.h - a.w * a.h)
       .slice(0, 3);
@@ -378,13 +456,13 @@ async function locateTarget(frame: Decoded, target: string) {
 
   // 2) point — confirma presença, sem caixa
   try {
-    const p = await cfRun(fastModel(), { image, task: "point", object: target, stream: false }, LIVE_TIMEOUT_MS);
+    const p = await cfMetered(meter, "live_point", fastModel(), { image, task: "point", object: target, stream: false }, LIVE_TIMEOUT_MS);
     if (collectPoints(p).length) return done("point", true, []);
   } catch { /* segue para query */ }
 
 
   // 3) query — apenas presença
-  const p = await cfRun(fastModel(), {
+  const p = await cfMetered(meter, "live_query", fastModel(), {
     image,
     task: "query",
     stream: false,
@@ -413,11 +491,11 @@ function liveGuidance(found: boolean, boxes: Box[]): { state: LiveState; hintCod
 
 
 // ---------------- etapa 1: Moondream (observador, evidência primeiro) ----------------
-async function runObserver(image: Decoded, question: string, profile: any) {
+async function runObserver(image: Decoded, question: string, profile: any, meter: UsageEntry[]) {
   const started = Date.now();
   const target = String(profile?.target_phrase_en || profile?.target_phrase || "").trim();
   const askedTarget = target ? `The inspector asked for: "${target}".` : "";
-  const payload = await cfRun(fastModel(), {
+  const payload = await cfMetered(meter, "observer", fastModel(), {
     image: toDataUrl(image),
     task: "query",
     reasoning: false,
@@ -481,6 +559,7 @@ const DECISION_SCHEMA = {
     sharpness_sufficient: { type: "boolean" },
     quality_sufficient: { type: "boolean" },
     condition_met: { type: "boolean" },
+    condition_status: { type: "string", enum: ["verified", "not_met", "not_observable"] },
     supporting_evidence: { type: "array", items: { type: "string" } },
     contrary_evidence: { type: "array", items: { type: "string" } },
     same_place_as_reference: { type: "boolean" },
@@ -491,6 +570,7 @@ const DECISION_SCHEMA = {
       enum: [
         "condition_met",
         "condition_not_met",
+        "not_observable",
         "target_not_found",
         "wrong_object",
         "wrong_place",
@@ -507,7 +587,7 @@ const DECISION_SCHEMA = {
   required: [
     "visible_description", "target_found", "target_visible", "framing_sufficient",
     "lighting_sufficient", "sharpness_sufficient", "quality_sufficient", "condition_met",
-    "decision", "reason_code", "public_message", "confidence",
+    "condition_status", "decision", "reason_code", "public_message", "confidence",
   ],
 };
 
@@ -518,6 +598,7 @@ async function runJudge(args: {
   profile: any;
   referenceDescription?: string | null;
   multiImage?: { reference: Decoded } | null;
+  meter: UsageEntry[];
 }) {
   const started = Date.now();
   const p = args.profile ?? {};
@@ -536,6 +617,10 @@ async function runJudge(args: {
     `Fast-observer notes about the candidate photo: ${args.facts}\n` +
     (args.referenceDescription ? `Description of a reference photo of the expected result: ${args.referenceDescription}\n` : "") +
     (args.multiImage ? `The FIRST image is the reference of the expected result; the SECOND image is the candidate. Compare condition, organisation and relevant elements. Angle, colour balance and lighting do NOT need to match. Distinguish "same kind of place" from "same condition".\n` : "") +
+    `condition_status must be exactly one of: "verified" (the photo itself shows the condition is true), ` +
+    `"not_met" (the photo shows it is false), "not_observable" (this photo cannot show it — the fact is hidden, ` +
+    `internal, in the past, requires touching, smelling, opening or measuring, or needs another viewpoint). ` +
+    `Never claim to have verified something that a single photo cannot show; use "not_observable" instead.\n` +
     `Rules: if the requested target is absent, a different object, a different place, cut off, too dark or unverifiable, you must NOT approve. ` +
     `Never treat high confidence alone as proof. If you are not sure, use "uncertain".\n` +
     `public_message must be one short sentence in Brazilian Portuguese for an operator, with no technical terms. ` +
@@ -547,7 +632,7 @@ async function runJudge(args: {
   }
   content.push({ type: "image_url", image_url: { url: toDataUrl(args.image) } });
 
-  const payload = await cfRun(finalModel(), {
+  const payload = await cfMetered(args.meter, "judge", finalModel(), {
     messages: [{ role: "user", content }],
     response_format: { type: "json_schema", json_schema: DECISION_SCHEMA },
     max_tokens: 700,
@@ -559,10 +644,14 @@ async function runJudge(args: {
 }
 
 // ---------------- gate conservador ----------------
+type ConditionStatus = "verified" | "not_met" | "not_observable";
+
 type Combined = {
   decision: "approved" | "retake" | "uncertain" | "technical_failure";
   reason_code: string;
   public_message: string;
+  /** Honestidade visual: o que a foto realmente comprova. */
+  condition_status: ConditionStatus | null;
   gate: Record<string, boolean>;
 };
 
@@ -578,8 +667,18 @@ const RETAKE_MESSAGES: Record<string, string> = {
   insufficient_evidence: "A foto não mostra o suficiente para confirmar. Tire outra mais próxima.",
 };
 
+const NOT_OBSERVABLE_MESSAGE =
+  "Esta foto não é capaz de comprovar o que foi pedido. É necessária uma conferência de outra forma.";
+
+function conditionStatusOf(judge: any): ConditionStatus {
+  const raw = String(judge?.condition_status ?? "").trim();
+  if (raw === "verified" || raw === "not_met" || raw === "not_observable") return raw;
+  return judge?.condition_met === true ? "verified" : "not_met";
+}
+
 function combine(observer: Awaited<ReturnType<typeof runObserver>>, judge: any): Combined {
   const bool = (v: unknown) => v === true;
+  const status = conditionStatusOf(judge);
   const gate = {
     target_found: bool(judge.target_found) && observer.targetVisible,
     target_visible: bool(judge.target_visible),
@@ -587,10 +686,21 @@ function combine(observer: Awaited<ReturnType<typeof runObserver>>, judge: any):
     lighting_sufficient: bool(judge.lighting_sufficient) && !observer.dark && !observer.overexposed,
     sharpness_sufficient: bool(judge.sharpness_sufficient) && !observer.blurry,
     quality_sufficient: bool(judge.quality_sufficient),
-    condition_met: bool(judge.condition_met),
+    condition_met: bool(judge.condition_met) && status === "verified",
     no_contrary_evidence: !(Array.isArray(judge.contrary_evidence) && judge.contrary_evidence.length > 0),
     judge_approved: judge.decision === "approved",
   };
+
+  // Honestidade visual: nada que a foto não mostre pode ser dado como verificado.
+  if (status === "not_observable") {
+    return {
+      decision: "uncertain",
+      reason_code: "not_observable",
+      public_message: NOT_OBSERVABLE_MESSAGE,
+      condition_status: status,
+      gate,
+    };
+  }
 
   // Discordância explícita entre etapas → incerto, nunca aprovação.
   const observerNegative = !observer.targetVisible || observer.dark || observer.blurry ||
@@ -600,6 +710,7 @@ function combine(observer: Awaited<ReturnType<typeof runObserver>>, judge: any):
       decision: "uncertain",
       reason_code: "models_disagree",
       public_message: "Não deu para confirmar. Tire outra foto com melhor enquadramento.",
+      condition_status: status,
       gate,
     };
   }
@@ -624,6 +735,7 @@ function combine(observer: Awaited<ReturnType<typeof runObserver>>, judge: any):
         decision: "retake",
         reason_code: determinate,
         public_message: RETAKE_MESSAGES[determinate],
+        condition_status: status,
         gate,
       };
     }
@@ -631,6 +743,7 @@ function combine(observer: Awaited<ReturnType<typeof runObserver>>, judge: any):
       decision: "uncertain",
       reason_code: "insufficient_evidence",
       public_message: "Não deu para confirmar. Tire outra foto com melhor enquadramento.",
+      condition_status: status,
       gate,
     };
   }
@@ -641,6 +754,7 @@ function combine(observer: Awaited<ReturnType<typeof runObserver>>, judge: any):
       decision: "approved",
       reason_code: "condition_met",
       public_message: sanitizeMessage(judge.public_message, "Foto aprovada."),
+      condition_status: "verified",
       gate,
     };
   }
@@ -663,12 +777,81 @@ function combine(observer: Awaited<ReturnType<typeof runObserver>>, judge: any):
     decision: "retake",
     reason_code: code,
     public_message: RETAKE_MESSAGES[code] ?? sanitizeMessage(judge.public_message, "Tire outra foto."),
+    condition_status: status,
     gate,
   };
 }
 
 // ---------------- concorrência por usuário ----------------
 const inFlight = new Set<string>();
+
+// ---------------- orçamento por sessão de câmera ----------------
+export const LIVE_CHECKS_PER_SESSION = 3;
+export const FINAL_CHECKS_PER_SESSION = 5;
+const LIVE_MIN_INTERVAL_MS = 5000;
+
+type Consume = { allowed: boolean; used: number; remaining: number; reason: string };
+
+async function consumeSession(
+  svc: any,
+  args: { sessionId: string; workspaceId: string; userId: string; kind: "live" | "final" },
+): Promise<Consume> {
+  const limit = args.kind === "live" ? LIVE_CHECKS_PER_SESSION : FINAL_CHECKS_PER_SESSION;
+  const { data, error } = await svc.rpc("vision_session_consume", {
+    p_session_id: args.sessionId,
+    p_workspace_id: args.workspaceId,
+    p_user_id: args.userId,
+    p_kind: args.kind,
+    p_limit: limit,
+    p_min_interval_ms: args.kind === "live" ? LIVE_MIN_INTERVAL_MS : 0,
+  });
+  if (error) return { allowed: false, used: 0, remaining: 0, reason: "budget_unavailable" };
+  const row = Array.isArray(data) ? data[0] : data;
+  return {
+    allowed: row?.allowed === true,
+    used: Number(row?.used ?? 0),
+    remaining: Number(row?.remaining ?? 0),
+    reason: String(row?.reason ?? "unknown"),
+  };
+}
+
+/** Telemetria de consumo: números, nunca imagens ou conteúdo do modelo. */
+async function recordUsage(
+  svc: any,
+  args: {
+    meter: UsageEntry[];
+    workspaceId: string;
+    userId: string;
+    sessionId: string;
+    standardId: string | null;
+    action: string;
+    decision?: string | null;
+  },
+) {
+  if (!args.meter.length) return;
+  const rows = args.meter.map((m) => ({
+    workspace_id: args.workspaceId,
+    user_id: args.userId,
+    session_id: args.sessionId,
+    standard_id: args.standardId,
+    action: args.action,
+    step: m.step,
+    model_id: m.model,
+    input_tokens: m.inputTokens,
+    output_tokens: m.outputTokens,
+    estimated_neurons: m.neurons,
+    inference_ms: m.inferenceMs,
+    decision: args.decision ?? null,
+  }));
+  const { error } = await svc.from("vision_usage_events").insert(rows);
+  if (error) console.error(`[lab] usage_insert_failed code=${String(error.code ?? "unknown").slice(0, 30)}`);
+}
+
+function sessionIdOf(body: any): string {
+  const s = String(body?.sessionId ?? "").trim();
+  return /^[A-Za-z0-9_-]{8,64}$/.test(s) ? s : "";
+}
+
 
 // ---------------- handler ----------------
 Deno.serve(async (req) => {
@@ -748,6 +931,8 @@ Deno.serve(async (req) => {
       .maybeSingle();
     if (!standard) return err(403, "forbidden");
 
+    const meter: UsageEntry[] = [];
+    const sessionId = sessionIdOf(body) || `profile-${standardId}`;
     try {
       let referenceSummary: string | null = null;
       if (standard.reference_path) {
@@ -755,10 +940,10 @@ Deno.serve(async (req) => {
         if (file) {
           const bytes = new Uint8Array(await file.arrayBuffer());
           const meta = sniff(bytes);
-          if (meta) referenceSummary = await describeReference({ bytes, ...meta }, standard.question);
+          if (meta) referenceSummary = await describeReference({ bytes, ...meta }, standard.question, meter);
         }
       }
-      const { profile, ambiguous } = await buildProfile(standard.question, referenceSummary);
+      const { profile, ambiguous } = await buildProfile(standard.question, referenceSummary, meter);
       const { error: upErr } = await userClient
         .from("visual_standards")
         .update({
@@ -768,12 +953,25 @@ Deno.serve(async (req) => {
         })
         .eq("id", standardId);
       if (upErr) throw new Error("profile_save_failed");
+      await recordUsage(svc, {
+        meter, workspaceId, userId: actorId, sessionId,
+        standardId, action: "profile-standard", decision: null,
+      });
       console.log(`[lab] profile ok user=${actorId.slice(0, 8)} ambiguous=${ambiguous}`);
-      return json(200, { ok: true, needsValidation: ambiguous, profileVersion: PROFILE_VERSION });
+      return json(200, {
+        ok: true,
+        needsValidation: ambiguous,
+        profileVersion: PROFILE_VERSION,
+        usage: meterTotals(meter),
+      });
     } catch (e) {
       const code = String((e as Error).message ?? "unknown").slice(0, 60);
+      await recordUsage(svc, {
+        meter, workspaceId, userId: actorId, sessionId,
+        standardId, action: "profile-standard", decision: "failed",
+      });
       console.error(`[lab] profile_failed user=${actorId.slice(0, 8)} code=${code}`);
-      return json(200, { ok: false, code });
+      return json(200, { ok: false, code, usage: meterTotals(meter) });
     }
   }
 
@@ -782,6 +980,8 @@ Deno.serve(async (req) => {
     const requestId = String(body?.requestId ?? "").slice(0, 40) || null;
     const standardId = String(body?.standardId ?? "");
     if (!standardId) return err(400, "standard_required");
+    const sessionId = sessionIdOf(body);
+    if (!sessionId) return err(400, "session_required");
     const { data: std } = await userClient
       .from("visual_standards")
       .select("internal_profile")
@@ -796,6 +996,7 @@ Deno.serve(async (req) => {
         requestId, strategy: "none", found: false, boxes: [], inferenceMs: 0,
         state: "uncertain", hintCode: "no_target_configured",
         hint: "Este padrão ainda não está pronto para orientação na câmera.",
+        budget: { spent: false, used: 0, remaining: LIVE_CHECKS_PER_SESSION, reason: "no_target" },
       });
     }
     const frame = decodeImage(body?.frameBase64, MIN_DIM);
@@ -804,16 +1005,44 @@ Deno.serve(async (req) => {
     const liveKey = `live:${actorId}`;
     if (inFlight.has(liveKey)) return err(409, "already_running");
     inFlight.add(liveKey);
+    const meter: UsageEntry[] = [];
     try {
-      const r = await locateTarget(frame, target);
+      // Orçamento decidido no servidor: cooldown e teto por sessão.
+      const budget = await consumeSession(svc, { sessionId, workspaceId, userId: actorId, kind: "live" });
+      if (!budget.allowed) {
+        return json(200, {
+          requestId, strategy: "none", found: false, boxes: [], inferenceMs: 0,
+          state: "uncertain",
+          hintCode: budget.reason === "cooldown" ? "cooldown" : "budget_exhausted",
+          hint: budget.reason === "cooldown"
+            ? "Aguarde um instante antes da próxima verificação."
+            : "As verificações automáticas desta sessão terminaram. Enquadre e tire a foto.",
+          budget: { spent: false, used: budget.used, remaining: budget.remaining, reason: budget.reason },
+        });
+      }
+      const r = await locateTarget(frame, target, meter);
       const g = liveGuidance(r.found, r.boxes);
-      return json(200, { requestId, ...r, ...g, hint: HINTS[g.hintCode] });
+      await recordUsage(svc, {
+        meter, workspaceId, userId: actorId, sessionId,
+        standardId, action: "live-locate", decision: g.state,
+      });
+      return json(200, {
+        requestId, ...r, ...g, hint: HINTS[g.hintCode],
+        budget: { spent: true, used: budget.used, remaining: budget.remaining, reason: "ok" },
+        usage: meterTotals(meter),
+      });
     } catch (e) {
       const code = String((e as Error).message ?? "unknown").slice(0, 60);
+      await recordUsage(svc, {
+        meter, workspaceId, userId: actorId, sessionId,
+        standardId, action: "live-locate", decision: "failed",
+      });
       console.error(`[lab] locate_failed user=${actorId.slice(0, 8)} code=${code}`);
       return json(200, {
         requestId, strategy: "none", found: false, boxes: [], inferenceMs: 0,
         state: "uncertain", hintCode: "uncertain", hint: HINTS.uncertain,
+        budget: { spent: true, used: 0, remaining: 0, reason: "error" },
+        usage: meterTotals(meter),
       });
     } finally {
       inFlight.delete(liveKey);
@@ -844,11 +1073,34 @@ Deno.serve(async (req) => {
   const reference = body?.referenceBase64 ? decodeImage(body.referenceBase64) : null;
   if (body?.referenceBase64 && !reference) return err(400, "invalid_reference");
 
+  const sessionId = sessionIdOf(body);
+  if (!sessionId) return err(400, "session_required");
+
   if (inFlight.has(actorId)) return err(409, "already_running");
   inFlight.add(actorId);
   const t0 = Date.now();
+  const meter: UsageEntry[] = [];
   try {
-    const observer = await runObserver(image, question, profile);
+    const budget = await consumeSession(svc, { sessionId, workspaceId, userId: actorId, kind: "final" });
+    if (!budget.allowed) {
+      return json(200, {
+        observer: null,
+        judge: null,
+        combined: {
+          decision: "technical_failure",
+          reason_code: "session_limit_reached",
+          public_message: "Esta sessão atingiu o limite de análises. Abra a câmera novamente para continuar.",
+          condition_status: null,
+          gate: {},
+        },
+        referenceMode: "none",
+        totalLatencyMs: Date.now() - t0,
+        budget: { spent: false, used: budget.used, remaining: budget.remaining, reason: budget.reason },
+        usage: meterTotals(meter),
+      });
+    }
+
+    const observer = await runObserver(image, question, profile, meter);
 
     let referenceMode: "none" | "multi_image" | "derived" = "none";
     let referenceDescription: string | null = profile?.reference_summary ?? null;
@@ -856,22 +1108,26 @@ Deno.serve(async (req) => {
     if (reference) {
       try {
         judge = await runJudge({
-          image, question, profile,
+          image, question, profile, meter,
           facts: observer.observation,
           multiImage: { reference },
         });
         referenceMode = "multi_image";
       } catch {
-        referenceDescription = referenceDescription ?? await describeReference(reference, question);
-        judge = await runJudge({ image, question, profile, facts: observer.observation, referenceDescription });
+        referenceDescription = referenceDescription ?? await describeReference(reference, question, meter);
+        judge = await runJudge({ image, question, profile, meter, facts: observer.observation, referenceDescription });
         referenceMode = "derived";
       }
     } else {
-      judge = await runJudge({ image, question, profile, facts: observer.observation, referenceDescription });
+      judge = await runJudge({ image, question, profile, meter, facts: observer.observation, referenceDescription });
       if (referenceDescription) referenceMode = "derived";
     }
 
     const combined = combine(observer, judge.raw);
+    await recordUsage(svc, {
+      meter, workspaceId, userId: actorId, sessionId,
+      standardId: standardId || null, action: "benchmark-evaluate", decision: combined.decision,
+    });
     console.log(`[lab] evaluate ok user=${actorId.slice(0, 8)} decision=${combined.decision} ms=${Date.now() - t0}`);
     return json(200, {
       observer: {
@@ -885,6 +1141,7 @@ Deno.serve(async (req) => {
         decision: judge.raw.decision,
         targetVisible: judge.raw.target_visible ?? null,
         conditionMet: judge.raw.condition_met ?? null,
+        conditionStatus: combined.condition_status,
         qualitySufficient: judge.raw.quality_sufficient ?? null,
         reasonCode: judge.raw.reason_code ?? null,
         observations: [
@@ -897,9 +1154,15 @@ Deno.serve(async (req) => {
       combined,
       referenceMode,
       totalLatencyMs: Date.now() - t0,
+      budget: { spent: true, used: budget.used, remaining: budget.remaining, reason: "ok" },
+      usage: meterTotals(meter),
     });
   } catch (e) {
     const code = String((e as Error).message ?? "unknown").slice(0, 60);
+    await recordUsage(svc, {
+      meter, workspaceId, userId: actorId, sessionId,
+      standardId: standardId || null, action: "benchmark-evaluate", decision: "technical_failure",
+    });
     console.error(`[lab] evaluate_failed user=${actorId.slice(0, 8)} code=${code} ms=${Date.now() - t0}`);
     return json(200, {
       observer: null,
@@ -907,12 +1170,13 @@ Deno.serve(async (req) => {
       combined: {
         decision: "technical_failure",
         reason_code: /^[a-z0-9_]{1,40}$/.test(code) ? code : "service_unavailable",
-
         public_message: "Não foi possível verificar agora. Tente novamente.",
+        condition_status: null,
         gate: {},
       },
       referenceMode: "none",
       totalLatencyMs: Date.now() - t0,
+      usage: meterTotals(meter),
     });
   } finally {
     inFlight.delete(actorId);
