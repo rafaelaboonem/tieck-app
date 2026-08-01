@@ -440,6 +440,8 @@ export async function runBenchmark(input: {
   profile?: StandardProfile | null;
   sessionId: string;
   attemptId: string;
+  /** Seletor interno do laboratório. O servidor valida e decide. */
+  provider?: LabProvider;
 }): Promise<LabResponse> {
   const { data, error } = await supabase.functions.invoke("vision-benchmark", {
     body: {
@@ -447,17 +449,23 @@ export async function runBenchmark(input: {
       workspaceId: input.workspaceId,
       question: input.question,
       imageBase64: input.imageBase64,
-      referenceBase64: input.referenceBase64 ?? undefined,
+      // No provedor Gemini a referência é carregada pelo servidor a partir do
+      // bucket privado — o cliente não envia imagem de referência.
+      referenceBase64: (input.provider ?? DEFAULT_LAB_PROVIDER) === "google_gemini"
+        ? undefined
+        : (input.referenceBase64 ?? undefined),
       standardId: input.standardId ?? undefined,
       profile: input.profile ?? undefined,
       sessionId: input.sessionId,
       attemptId: input.attemptId,
+      provider: input.provider ?? DEFAULT_LAB_PROVIDER,
     },
   });
 
   if (error) throw error;
   return data as LabResponse;
 }
+
 
 /** Gera/atualiza o perfil interno do padrão no servidor. Best-effort. */
 export async function ensureStandardProfile(
