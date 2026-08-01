@@ -491,11 +491,11 @@ function liveGuidance(found: boolean, boxes: Box[]): { state: LiveState; hintCod
 
 
 // ---------------- etapa 1: Moondream (observador, evidência primeiro) ----------------
-async function runObserver(image: Decoded, question: string, profile: any) {
+async function runObserver(image: Decoded, question: string, profile: any, meter: UsageEntry[]) {
   const started = Date.now();
   const target = String(profile?.target_phrase_en || profile?.target_phrase || "").trim();
   const askedTarget = target ? `The inspector asked for: "${target}".` : "";
-  const payload = await cfRun(fastModel(), {
+  const payload = await cfMetered(meter, "observer", fastModel(), {
     image: toDataUrl(image),
     task: "query",
     reasoning: false,
