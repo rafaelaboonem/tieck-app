@@ -145,7 +145,13 @@ export function CameraV3Preview(props: Props) {
     }
     closedRef.current = false;
     openedAtRef.current = Date.now();
-    statsRef.current = { checks: 0, latencySum: 0, firstFoundAt: null, strategy: "none" };
+    statsRef.current = {
+      checks: 0, latencySum: 0, firstFoundAt: null, strategy: "none",
+      localChecks: 0, neurons: 0, inputTokens: 0, outputTokens: 0, aiCalls: 0,
+    };
+    sessionIdRef.current = newSessionId();
+    lastLiveAtRef.current = 0;
+    setLiveBudget(null);
     setPhase("starting");
     setResult(null);
     setFrozen(null);
