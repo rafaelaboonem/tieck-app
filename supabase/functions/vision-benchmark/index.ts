@@ -420,18 +420,41 @@ async function runObserver(image: Decoded, question: string, profile: any) {
   });
   const text = extractModelText(payload).trim();
   if (!text) throw new Error("observer_empty_response");
+  // O observador às vezes responde em JSON: nesse caso os campos valem mais que o texto.
+  const obj = parseJsonLoose(text);
   const lower = text.toLowerCase();
-  const absent = /\bnot (present|visible|shown|there)\b|\bno (visible|sign of)\b|cannot see|isn'?t visible|does not (show|contain)|nao (esta|há)/.test(lower);
+  const flag = (keys: string[], re: RegExp): boolean => {
+    if (obj) {
+      for (const k of keys) {
+        const v = obj[k];
+        if (typeof v === "boolean") return v;
+        if (typeof v === "string" && re.test(v.toLowerCase())) return true;
+        if (typeof v === "string") return false;
+      }
+    }
+    return re.test(lower);
+  };
+  const absentRe = /\bnot (present|visible|shown|there)\b|\bno (visible|sign of)\b|cannot see|isn'?t visible|does not (show|contain)|n(a|ã)o (est(a|á)|h(a|á))/;
+  let targetVisible = target ? !absentRe.test(lower) : !/not visible|cannot see/.test(lower);
+  if (obj) {
+    for (const k of ["present", "target_present", "visible", "target_visible"]) {
+      const v = obj[k];
+      if (typeof v === "boolean") { targetVisible = v; break; }
+    }
+  }
   return {
     latencyMs: Date.now() - started,
     observation: text.slice(0, 500),
-    blurry: /blurry|out of focus|unfocused|motion blur/.test(lower),
-    dark: /too dark|very dark|poorly lit|low light|underexposed/.test(lower),
-    overexposed: /overexposed|blown out|too bright/.test(lower),
-    cropped: /cut off|cropped|partially visible|only part/.test(lower),
-    targetVisible: target ? !absent : !/not visible|cannot see/.test(lower),
+    blurry: flag(["blurry", "blur", "is_blurry"], /blurry|out of focus|unfocused|motion blur/),
+    dark: flag(["dark", "too_dark"], /too dark|very dark|poorly lit|low light|underexposed/) ||
+      (typeof obj?.lighting === "string" && /dark|underexposed|low/.test(obj.lighting.toLowerCase())),
+    overexposed: flag(["overexposed"], /overexposed|blown out|too bright/) ||
+      (typeof obj?.lighting === "string" && /overexposed|too bright/.test(obj.lighting.toLowerCase())),
+    cropped: flag(["cropped", "cut_off"], /cut off|cropped|partially visible|only part/),
+    targetVisible,
   };
 }
+
 
 // ---------------- etapa 2: Llama 4 Scout (juiz) ----------------
 const DECISION_SCHEMA = {
