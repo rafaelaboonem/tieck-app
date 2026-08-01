@@ -362,6 +362,8 @@ async function locateTarget(frame: Decoded, target: string) {
     const boxes = collectBoxes(p)
       .sort((a, b) => b.w * b.h - a.w * a.h)
       .slice(0, 3);
+    if (!boxes.length) console.log(`[lab] detect_shape ${JSON.stringify(p).slice(0, 300)}`);
+
     return done("detect", boxes.length > 0, boxes);
   } catch { /* segue para point */ }
 
