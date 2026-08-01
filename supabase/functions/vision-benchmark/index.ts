@@ -615,6 +615,28 @@ const RETAKE_MESSAGES: Record<string, string> = {
   insufficient_evidence: "A foto não mostra o suficiente para confirmar. Tire outra mais próxima.",
 };
 
+// Allowlist fechada de códigos públicos. Nada fora desta lista sai da função.
+const PUBLIC_REASON_CODES = new Set([
+  "condition_met",
+  "condition_not_met",
+  "target_not_found",
+  "wrong_object",
+  "wrong_place",
+  "target_not_visible",
+  "too_dark",
+  "blurry",
+  "bad_framing",
+  "insufficient_evidence",
+  "models_disagree",
+  "manual_review",
+  "technical_failure",
+]);
+const publicReason = (code: unknown, fallback = "technical_failure"): string => {
+  const s = typeof code === "string" ? code.trim() : "";
+  return PUBLIC_REASON_CODES.has(s) ? s : fallback;
+};
+
+
 function combine(observer: Awaited<ReturnType<typeof runObserver>>, judge: any): Combined {
   const bool = (v: unknown) => v === true;
   const gate = {
