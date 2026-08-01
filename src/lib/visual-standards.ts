@@ -391,6 +391,7 @@ export async function runBenchmark(input: {
   standardId?: string | null;
   profile?: StandardProfile | null;
   sessionId: string;
+  attemptId: string;
 }): Promise<LabResponse> {
   const { data, error } = await supabase.functions.invoke("vision-benchmark", {
     body: {
@@ -402,8 +403,10 @@ export async function runBenchmark(input: {
       standardId: input.standardId ?? undefined,
       profile: input.profile ?? undefined,
       sessionId: input.sessionId,
+      attemptId: input.attemptId,
     },
   });
+
   if (error) throw error;
   return data as LabResponse;
 }
