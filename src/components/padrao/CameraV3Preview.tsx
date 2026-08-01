@@ -378,7 +378,9 @@ export function CameraV3Preview(props: Props) {
         referenceBase64: ref,
         standardId,
         profile,
+        sessionId: sessionIdRef.current,
       });
+      addUsage(res.usage);
       const s = statsRef.current;
       setResult(res);
       setPhase("result");
@@ -389,6 +391,11 @@ export function CameraV3Preview(props: Props) {
           liveChecks: s.checks,
           avgLiveLatencyMs: s.checks ? Math.round(s.latencySum / s.checks) : null,
           strategy: s.strategy,
+          neurons: Math.round(s.neurons * 1000) / 1000,
+          inputTokens: s.inputTokens,
+          outputTokens: s.outputTokens,
+          aiCalls: s.aiCalls,
+          localChecks: s.localChecks,
         },
       });
     } catch {
