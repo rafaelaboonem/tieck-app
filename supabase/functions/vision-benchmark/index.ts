@@ -704,7 +704,6 @@ function combine(observer: Awaited<ReturnType<typeof runObserver>>, judge: any):
     };
   }
 
-  const failed = Object.entries(gate).find(([, v]) => !v)?.[0] ?? "insufficient_evidence";
   const code = !gate.target_found
     ? "target_not_found"
     : !gate.target_visible
@@ -717,13 +716,14 @@ function combine(observer: Awaited<ReturnType<typeof runObserver>>, judge: any):
             ? "bad_framing"
             : !gate.condition_met
               ? "condition_not_met"
-              : String(judge.reason_code ?? failed);
+              : publicReason(judge.reason_code, "insufficient_evidence");
   return {
     decision: "retake",
     reason_code: code,
     public_message: RETAKE_MESSAGES[code] ?? sanitizeMessage(judge.public_message, "Tire outra foto."),
     gate,
   };
+
 }
 
 // ---------------- concorrência por usuário ----------------
