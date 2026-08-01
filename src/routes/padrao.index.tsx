@@ -123,7 +123,10 @@ function CentralVisualPage() {
             loading={loading}
             onCreated={() => void load()}
             onTest={(s) => { setSelected(s); setTab("laboratorio"); }}
+            presetChecklistId={search.checklist ?? null}
+            presetCameraBlockId={search.block ?? null}
           />
+
         ) : tab === "laboratorio" ? (
           <LabTab
             workspaceId={currentWorkspace.id}
