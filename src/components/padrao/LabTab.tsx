@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import { Loader2, Play, Eye, Scale, CheckCircle2, RefreshCcw, HelpCircle, AlertTriangle, Camera, ImageIcon } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { CameraV3Preview } from "@/components/padrao/CameraV3Preview";
-import { listChecklistProjects, type ChecklistProject } from "@/lib/camera-blocks";
+
 
 import {
   blobToBase64,
@@ -36,14 +36,13 @@ const DECISION_META: Record<LabDecision, { label: string; tone: string; icon: ty
 
 interface Props {
   workspaceId: string;
-  standards: VisualStandard[];
+  /** Padrão da pergunta selecionada no topo da Central Visual. */
   selected: VisualStandard | null;
-  onSelect: (s: VisualStandard | null) => void;
   runs: LabRun[];
   onRun: (run: LabRun) => void;
 }
 
-export function LabTab({ workspaceId, standards, selected, onSelect, runs, onRun }: Props) {
+export function LabTab({ workspaceId, selected, runs, onRun }: Props) {
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
