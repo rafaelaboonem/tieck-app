@@ -310,30 +310,40 @@ export async function ensureStandardProfile(
   return data as { ok: boolean; needsValidation?: boolean };
 }
 
+export type LiveState = "searching" | "adjust" | "ready" | "uncertain";
+
 export interface LocateResult {
+  requestId: string | null;
   strategy: "detect" | "point" | "query" | "none";
   found: boolean;
-  box: { x: number; y: number; w: number; h: number } | null;
-  latencyMs: number;
+  /** Caixas reais do modelo; vazio quando não há coordenadas confiáveis. */
+  boxes: { x: number; y: number; w: number; h: number }[];
+  state: LiveState;
+  hintCode: string;
+  hint: string;
+  inferenceMs: number;
 }
 
 /** Localização ao vivo — o frame é enviado em memória e nunca armazenado. */
 export async function liveLocate(input: {
   workspaceId: string;
-  target: string;
+  standardId: string;
   frameBase64: string;
+  requestId: string;
 }): Promise<LocateResult> {
   const { data, error } = await supabase.functions.invoke("vision-benchmark", {
     body: {
       action: "live-locate",
       workspaceId: input.workspaceId,
-      target: input.target,
+      standardId: input.standardId,
       frameBase64: input.frameBase64,
+      requestId: input.requestId,
     },
   });
   if (error) throw error;
   return data as LocateResult;
 }
+
 
 /** Trava de liberação: só libera com todos os casos críticos corretos. */
 export function computeRelease(runs: LabRun[]) {
