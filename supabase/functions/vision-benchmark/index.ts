@@ -99,6 +99,84 @@ function toDataUrl(img: Decoded): string {
 const PING_IMAGE =
   "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
 
+// ---------------- consumo (tokens → neurônios) ----------------
+// Tabela pública do Workers AI (neurônios por milhão de tokens).
+const NEURON_RATES: Record<string, { input: number; output: number }> = {
+  "@cf/moondream/moondream3.1-9B-A2B": { input: 27273, output: 90909 },
+  "@cf/meta/llama-4-scout-17b-16e-instruct": { input: 24545, output: 77273 },
+};
+const NEURON_FALLBACK = { input: 27273, output: 90909 };
+const USD_PER_1K_NEURONS = 0.011;
+
+export type UsageEntry = {
+  step: string;
+  model: string;
+  inputTokens: number;
+  outputTokens: number;
+  neurons: number;
+  inferenceMs: number;
+};
+
+function usageTokens(payload: any): { input: number; output: number } {
+  const u = payload?.result?.usage ?? payload?.usage ?? null;
+  const n = (...keys: string[]) => {
+    for (const k of keys) {
+      const v = u?.[k];
+      if (typeof v === "number" && Number.isFinite(v) && v >= 0) return Math.round(v);
+    }
+    return 0;
+  };
+  return { input: n("prompt_tokens", "input_tokens"), output: n("completion_tokens", "output_tokens") };
+}
+
+function meterPush(meter: UsageEntry[], step: string, model: string, payload: any, ms: number) {
+  const { input, output } = usageTokens(payload);
+  const rate = NEURON_RATES[model] ?? NEURON_FALLBACK;
+  const neurons = (input / 1_000_000) * rate.input + (output / 1_000_000) * rate.output;
+  meter.push({
+    step,
+    model,
+    inputTokens: input,
+    outputTokens: output,
+    neurons: Math.round(neurons * 1000) / 1000,
+    inferenceMs: ms,
+  });
+}
+
+/** Chamada ao provedor com medição de consumo sempre registrada. */
+async function cfMetered(
+  meter: UsageEntry[],
+  step: string,
+  model: string,
+  body: unknown,
+  timeoutMs = CALL_TIMEOUT_MS,
+): Promise<any> {
+  const started = Date.now();
+  try {
+    const payload = await cfRun(model, body, timeoutMs);
+    meterPush(meter, step, model, payload, Date.now() - started);
+    return payload;
+  } catch (e) {
+    meter.push({ step: `${step}_failed`, model, inputTokens: 0, outputTokens: 0, neurons: 0, inferenceMs: Date.now() - started });
+    throw e;
+  }
+}
+
+function meterTotals(meter: UsageEntry[]) {
+  const inputTokens = meter.reduce((a, m) => a + m.inputTokens, 0);
+  const outputTokens = meter.reduce((a, m) => a + m.outputTokens, 0);
+  const neurons = Math.round(meter.reduce((a, m) => a + m.neurons, 0) * 1000) / 1000;
+  return {
+    calls: meter.filter((m) => !m.step.endsWith("_failed")).length,
+    inputTokens,
+    outputTokens,
+    neurons,
+    estimatedUsd: Math.round((neurons / 1000) * USD_PER_1K_NEURONS * 1e6) / 1e6,
+    steps: meter,
+  };
+}
+
+
 // ---------------- Cloudflare ----------------
 async function cfRun(model: string, body: unknown, timeoutMs = CALL_TIMEOUT_MS): Promise<any> {
   const accountId = String(Deno.env.get("CLOUDFLARE_ACCOUNT_ID") ?? "").trim();
