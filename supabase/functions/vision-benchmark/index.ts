@@ -754,12 +754,16 @@ Deno.serve(async (req) => {
   const svc = createClient(url, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
+  // Limites conservadores, coerentes com 3 live-locate por sessão de 15 min.
   const limits: Record<string, number> = {
     capabilities: 10,
-    "profile-standard": 20,
-    "live-locate": 120,
-    "benchmark-evaluate": 20,
+    "profile-standard": 6,
+    "lab-session-start": 6,
+    "lab-attempt-create": 8,
+    "live-locate": 8,
+    "benchmark-evaluate": 8,
   };
+
   const { data: rl } = await svc.rpc("hit_public_rate_limit", {
     p_key_hash: `lab:${actorId}`,
     p_action: action || "unknown",
