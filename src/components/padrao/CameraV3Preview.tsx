@@ -84,8 +84,20 @@ export function CameraV3Preview(props: Props) {
   const liveBusyRef = useRef(false);
   const liveSeqRef = useRef(0);
   const openedAtRef = useRef<number>(0);
-  const statsRef = useRef({ checks: 0, latencySum: 0, firstFoundAt: null as number | null, strategy: "none" as LiveStats["strategy"] });
+  const statsRef = useRef({
+    checks: 0,
+    latencySum: 0,
+    firstFoundAt: null as number | null,
+    strategy: "none" as LiveStats["strategy"],
+    localChecks: 0,
+    neurons: 0,
+    inputTokens: 0,
+    outputTokens: 0,
+    aiCalls: 0,
+  });
   const closedRef = useRef(false);
+  const sessionIdRef = useRef<string>(newSessionId());
+  const lastLiveAtRef = useRef(0);
 
   const [facing, setFacing] = useState<"environment" | "user">("environment");
   const [phase, setPhase] = useState<Phase>("starting");
@@ -98,6 +110,16 @@ export function CameraV3Preview(props: Props) {
   const [frozen, setFrozen] = useState<string | null>(null);
   const [result, setResult] = useState<LabResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [liveBudget, setLiveBudget] = useState<{ used: number; remaining: number } | null>(null);
+
+  const addUsage = useCallback((usage: UsageTotals | undefined) => {
+    if (!usage) return;
+    const s = statsRef.current;
+    s.neurons += usage.neurons ?? 0;
+    s.inputTokens += usage.inputTokens ?? 0;
+    s.outputTokens += usage.outputTokens ?? 0;
+    s.aiCalls += usage.calls ?? 0;
+  }, []);
 
   const target = profile?.target_phrase_en?.trim() || "";
   const targetPt = profile?.target_phrase?.trim() || "o item";
