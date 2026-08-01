@@ -341,7 +341,7 @@ function RunDetail({ run, onMark }: { run: LabRun; onMark?: (patch: Partial<LabR
         >
           {run.observer ? (
             <div className="space-y-1">
-              <p>{run.observer.observation ?? run.observer.summary}</p>
+              <p>{run.observer.observation}</p>
               <p className="text-xs text-muted-foreground">
                 Item visível: {yn(run.observer.targetVisible)} · Desfocada: {yn(run.observer.blurry)} · Escura: {yn(run.observer.dark)}
               </p>
