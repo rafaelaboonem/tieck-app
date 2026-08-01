@@ -8,6 +8,7 @@
 
 // deno-lint-ignore-file no-explicit-any
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { parseObserver, parseJsonLoose } from "../_shared/observer-parse.ts";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -147,12 +148,6 @@ function extractModelText(payload: any): string {
   return "";
 }
 
-function parseJsonLoose(text: string): any | null {
-  const first = text.indexOf("{");
-  const last = text.lastIndexOf("}");
-  if (first === -1 || last <= first) return null;
-  try { return JSON.parse(text.slice(first, last + 1)); } catch { return null; }
-}
 
 // ---------------- sanitização ----------------
 const LEAK_PATTERNS = [
