@@ -16,6 +16,8 @@ import {
   isCorrect,
   ensureStandardProfile,
   profileOf,
+  newSessionId,
+  CONDITION_STATUS_LABEL,
   RELEASE_CASES,
   type ExpectedResult,
   type LabDecision,
