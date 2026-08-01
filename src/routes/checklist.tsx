@@ -1372,7 +1372,9 @@ function NovoChecklistPage() {
       case "Código QR": return { id: newId(), type: "qr-code", value: "" };
       case "Câmera": return {
         id: newId(),
+        cameraBlockId: crypto.randomUUID(),
         type: "camera",
+
         dataUrls: [],
         allowMultiple: false,
         maxPhotos: 5,
