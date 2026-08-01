@@ -64,6 +64,9 @@ export function LabTab({ workspaceId, standards, selected, onSelect, runs, onRun
   const [releaseCase, setReleaseCase] = useState<ReleaseCase | "">("");
   const [cameraOpen, setCameraOpen] = useState(false);
   const [profiling, setProfiling] = useState(false);
+  const [attemptsUsed, setAttemptsUsed] = useState<number | null>(null);
+  const [attemptsLimit, setAttemptsLimit] = useState<number | null>(null);
+
 
   const profile = profileOf(selected);
 
