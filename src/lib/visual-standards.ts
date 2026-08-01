@@ -366,23 +366,27 @@ export type ReleaseCase =
   | "correct_other_angle"
   | "wrong_object"
   | "wrong_place"
+  | "missing_target"
   | "partial_framing"
   | "wrong_condition"
   | "dark_photo"
+  | "blurry_photo"
   | "not_observable_condition"
   | "reference_similar_place";
 
 export const RELEASE_CASES: { key: ReleaseCase; label: string; expected: ExpectedResult }[] = [
-  { key: "correct_photo", label: "Foto correta aprovada", expected: "approved" },
-  { key: "correct_other_angle", label: "Foto correta em outro ângulo aprovada", expected: "approved" },
-  { key: "wrong_object", label: "Objeto errado rejeitado", expected: "retake" },
-  { key: "wrong_place", label: "Ambiente errado rejeitado", expected: "retake" },
-  { key: "partial_framing", label: "Enquadramento parcial rejeitado", expected: "retake" },
+  { key: "correct_photo", label: "Objeto correto aprovado", expected: "approved" },
+  { key: "correct_other_angle", label: "Objeto correto em outro ângulo aprovado", expected: "approved" },
+  { key: "wrong_object", label: "Objeto incorreto rejeitado", expected: "retake" },
+  { key: "wrong_place", label: "Ambiente diferente rejeitado", expected: "retake" },
+  { key: "missing_target", label: "Objeto ausente rejeitado", expected: "retake" },
+  { key: "partial_framing", label: "Foto cortada rejeitada", expected: "retake" },
   { key: "wrong_condition", label: "Condição inadequada rejeitada", expected: "retake" },
   { key: "dark_photo", label: "Foto escura rejeitada", expected: "retake" },
+  { key: "blurry_photo", label: "Foto desfocada rejeitada", expected: "retake" },
   {
     key: "not_observable_condition",
-    label: "Condição não verificável por foto sinalizada como tal",
+    label: "Condição impossível de comprovar por foto sinalizada como tal",
     expected: "not_observable",
   },
   {
@@ -391,6 +395,7 @@ export const RELEASE_CASES: { key: ReleaseCase; label: string; expected: Expecte
     expected: "retake",
   },
 ];
+
 
 export interface LiveStats {
   /** ms entre abrir a câmera e a primeira detecção real do alvo. */
