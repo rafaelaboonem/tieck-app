@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,7 +14,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Loader2, Plus, ImageIcon, FlaskConical, Check, X, ExternalLink, Archive } from "lucide-react";
+import { Loader2, Plus, ImageIcon, FlaskConical, Check, X, Archive } from "lucide-react";
 import {
   STATUS_LABEL,
   STATUS_TONE,
@@ -26,117 +26,105 @@ import {
   activateStandard,
   type VisualStandard,
 } from "@/lib/visual-standards";
-import { listChecklistProjects, type ChecklistProject } from "@/lib/camera-blocks";
+import type { CameraQuestion, ChecklistProject } from "@/lib/camera-blocks";
 
 interface Props {
   workspaceId: string;
+  /** Contexto global da Central Visual (topo da página). */
+  project: ChecklistProject | null;
+  question: CameraQuestion | null;
+  standard: VisualStandard | null;
   standards: VisualStandard[];
   loading: boolean;
-  onCreated: () => void;
+  onChanged: () => void;
   onTest: (standard: VisualStandard) => void;
-  /** Pré-seleção vinda do editor de checklist (?checklist=&block=). */
-  presetChecklistId?: string | null;
-  presetCameraBlockId?: string | null;
 }
 
 export function StandardsTab({
   workspaceId,
+  project,
+  question,
+  standard,
   standards,
   loading,
-  onCreated,
+  onChanged,
   onTest,
-  presetChecklistId,
-  presetCameraBlockId,
 }: Props) {
   const [open, setOpen] = useState(false);
-  const [projects, setProjects] = useState<ChecklistProject[]>([]);
-  const [projectsLoading, setProjectsLoading] = useState(true);
+  const archived = standards.filter(
+    (s) => s.archived_at && s.camera_block_id === question?.cameraBlockId,
+  );
+  const unlinked = standards.filter((s) => !s.archived_at && !s.camera_block_id);
 
-  useEffect(() => {
-    let cancelled = false;
-    setProjectsLoading(true);
-    listChecklistProjects(workspaceId)
-      .then((p) => { if (!cancelled) setProjects(p); })
-      .catch((e) => toast.error(`Erro ao carregar projetos: ${(e as Error).message}`))
-      .finally(() => { if (!cancelled) setProjectsLoading(false); });
-    return () => { cancelled = true; };
-  }, [workspaceId, standards]);
+  if (loading) {
+    return (
+      <div className="flex justify-center py-16">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
-  // Abrir automaticamente quando o editor de checklist envia projeto + bloco.
-  useEffect(() => {
-    if (presetChecklistId && presetCameraBlockId) {
-      const exists = standards.some(
-        (s) => s.camera_block_id === presetCameraBlockId && !s.archived_at,
-      );
-      if (!exists) setOpen(true);
-    }
-  }, [presetChecklistId, presetCameraBlockId, standards]);
-
-  const active = standards.filter((s) => !s.archived_at);
-  const archived = standards.filter((s) => s.archived_at);
+  if (!project) {
+    return <EmptyState text="Selecione um projeto para começar." />;
+  }
+  if (project.cameraBlocks.length === 0) {
+    return <EmptyState text="Este projeto ainda não possui perguntas com câmera." />;
+  }
+  if (!question) {
+    return <EmptyState text="Selecione uma pergunta com câmera para ver o padrão visual." />;
+  }
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-sm text-muted-foreground">
-          Cada padrão está ligado a uma pergunta com câmera de um projeto. A pergunta é escrita uma única vez, no checklist.
-        </p>
-        <Button className="bg-[#FF007F] hover:bg-[#e6006f]" onClick={() => setOpen(true)}>
-          <Plus className="mr-2 h-4 w-4" /> Novo padrão
-        </Button>
-      </div>
+      {standard ? (
+        <StandardCard standard={standard} onChanged={onChanged} onTest={onTest} />
+      ) : (
+        <Card>
+          <CardContent className="flex flex-col items-center gap-3 py-14 text-center">
+            <ImageIcon className="h-10 w-10 text-muted-foreground" />
+            <p className="max-w-md text-sm text-muted-foreground">
+              Esta pergunta ainda não possui um padrão visual.
+            </p>
+            <Button className="bg-[#FF007F] hover:bg-[#e6006f]" onClick={() => setOpen(true)}>
+              <Plus className="mr-2 h-4 w-4" /> Configurar padrão visual
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
       <Dialog open={open} onOpenChange={setOpen}>
         <CreateStandardDialog
           workspaceId={workspaceId}
-          projects={projects}
-          projectsLoading={projectsLoading}
-          standards={standards}
-          presetChecklistId={presetChecklistId ?? null}
-          presetCameraBlockId={presetCameraBlockId ?? null}
-          onDone={() => { setOpen(false); onCreated(); }}
+          projectId={project.id}
+          question={question}
+          onDone={() => { setOpen(false); onChanged(); }}
         />
       </Dialog>
 
-      {loading ? (
-        <div className="flex justify-center py-16">
-          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-        </div>
-      ) : active.length === 0 ? (
+      {!standard && unlinked.length > 0 && (
         <Card>
-          <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
-            <ImageIcon className="h-10 w-10 text-muted-foreground" />
-            <p className="max-w-md text-sm text-muted-foreground">
-              Nenhum padrão visual ainda. Escolha um projeto e uma pergunta com câmera para criar o primeiro.
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Padrões antigos sem vínculo</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            <p className="text-xs text-muted-foreground">
+              Vincule um padrão criado antes desta estrutura à pergunta selecionada.
             </p>
+            {unlinked.map((s) => (
+              <LinkRow key={s.id} standard={s} projectId={project.id} question={question} onChanged={onChanged} />
+            ))}
           </CardContent>
         </Card>
-      ) : (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          {active.map((s) => (
-            <StandardCard
-              key={s.id}
-              standard={s}
-              projects={projects}
-              standards={standards}
-              onChanged={onCreated}
-              onTest={onTest}
-            />
-          ))}
-        </div>
       )}
 
       {archived.length > 0 && (
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-base">
-              <Archive className="h-4 w-4" /> Padrões arquivados
+              <Archive className="h-4 w-4" /> Padrões arquivados desta pergunta
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
-            <p className="text-xs text-muted-foreground">
-              A pergunta de câmera foi removida do projeto. A referência e o histórico foram preservados.
-            </p>
             {archived.map((s) => (
               <div key={s.id} className="flex items-center justify-between gap-3 rounded-md border p-2 text-xs">
                 <span className="truncate">{s.question}</span>
@@ -147,7 +135,7 @@ export function StandardsTab({
                     try {
                       await restoreStandard(s);
                       toast.success("Padrão restaurado.");
-                      onChangedSafe(onCreated);
+                      onChanged();
                     } catch (e) {
                       toast.error((e as Error).message);
                     }
@@ -164,34 +152,33 @@ export function StandardsTab({
   );
 }
 
-function onChangedSafe(fn: () => void) {
-  try { fn(); } catch { /* noop */ }
+function EmptyState({ text }: { text: string }) {
+  return (
+    <Card>
+      <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
+        <ImageIcon className="h-10 w-10 text-muted-foreground" />
+        <p className="max-w-md text-sm text-muted-foreground">{text}</p>
+      </CardContent>
+    </Card>
+  );
 }
 
 function StandardCard({
   standard: s,
-  projects,
-  standards,
   onChanged,
   onTest,
 }: {
   standard: VisualStandard;
-  projects: ChecklistProject[];
-  standards: VisualStandard[];
   onChanged: () => void;
   onTest: (s: VisualStandard) => void;
 }) {
-  const project = projects.find((p) => p.id === s.checklist_id) ?? null;
-  const linked = Boolean(s.checklist_id && s.camera_block_id);
-  const questionChanged = Boolean(
-    s.validated_question && s.validated_question !== s.question,
-  );
+  const questionChanged = Boolean(s.validated_question && s.validated_question !== s.question);
 
   return (
-    <Card className="flex h-full flex-col">
+    <Card>
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between gap-3">
-          <CardTitle className="truncate text-lg">{project ? project.title : "Sem projeto vinculado"}</CardTitle>
+          <CardTitle className="text-lg">Padrão visual desta pergunta</CardTitle>
           <div className="flex shrink-0 flex-wrap justify-end gap-1">
             {s.needs_validation && (
               <Badge variant="outline" className="bg-amber-500/15 text-amber-700">
@@ -204,107 +191,67 @@ function StandardCard({
           </div>
         </div>
       </CardHeader>
-      <CardContent className="flex flex-1 flex-col justify-between gap-4">
-        <div className="space-y-2">
-          <p className="text-sm text-foreground">“{s.question}”</p>
-          {questionChanged && (
-            <p className="rounded-md border border-amber-500/30 bg-amber-500/10 p-2 text-xs text-amber-800">
-              A pergunta foi alterada. Revise o padrão visual antes de ativá-lo novamente.
-            </p>
-          )}
-          {s.internal_notes && (
-            <p className="line-clamp-2 text-xs text-muted-foreground">{s.internal_notes}</p>
-          )}
-          <div className="flex gap-4 text-xs text-muted-foreground">
-            <span>{s.reference_path ? "Com referência" : "Sem referência"}</span>
-          </div>
-        </div>
-        <div className="space-y-2">
-          {linked ? (
-            <ActivationPanel standard={s} onChanged={onChanged} />
-          ) : (
-            <LinkPanel standard={s} projects={projects} standards={standards} onChanged={onChanged} />
-          )}
-          <Button variant="outline" size="sm" className="w-full" onClick={() => onTest(s)}>
-            <FlaskConical className="mr-2 h-4 w-4" /> Testar no laboratório
-          </Button>
-        </div>
+      <CardContent className="space-y-4">
+        <p className="text-sm text-foreground">“{s.question}”</p>
+        {questionChanged && (
+          <p className="rounded-md border border-amber-500/30 bg-amber-500/10 p-2 text-xs text-amber-800">
+            A pergunta foi alterada. Revise o padrão visual antes de ativá-lo novamente.
+          </p>
+        )}
+        {s.internal_notes && <p className="text-xs text-muted-foreground">{s.internal_notes}</p>}
+        <p className="text-xs text-muted-foreground">
+          {s.reference_path ? "Com foto de referência" : "Sem foto de referência"}
+        </p>
+
+        <ActivationPanel standard={s} onChanged={onChanged} />
+
+        <Button variant="outline" size="sm" className="w-full" onClick={() => onTest(s)}>
+          <FlaskConical className="mr-2 h-4 w-4" /> Testar no laboratório
+        </Button>
       </CardContent>
     </Card>
   );
 }
 
 /** Vínculo manual: usado por padrões antigos, criados antes desta estrutura. */
-function LinkPanel({
+function LinkRow({
   standard,
-  projects,
-  standards,
+  projectId,
+  question,
   onChanged,
 }: {
   standard: VisualStandard;
-  projects: ChecklistProject[];
-  standards: VisualStandard[];
+  projectId: string;
+  question: CameraQuestion;
   onChanged: () => void;
 }) {
-  const [checklistId, setChecklistId] = useState("");
-  const [blockId, setBlockId] = useState("");
   const [busy, setBusy] = useState(false);
-  const project = projects.find((p) => p.id === checklistId) ?? null;
-
-  const takenBlockIds = new Set(
-    standards.filter((s) => !s.archived_at && s.camera_block_id).map((s) => s.camera_block_id!),
-  );
-
-  const submit = async () => {
-    const q = project?.cameraBlocks.find((b) => b.cameraBlockId === blockId);
-    if (!project || !q) return;
-    setBusy(true);
-    try {
-      await linkStandardToBlock(standard, {
-        checklistId: project.id,
-        cameraBlockId: q.cameraBlockId,
-        question: q.question,
-      });
-      toast.success("Padrão vinculado à pergunta.");
-      onChanged();
-    } catch (e) {
-      toast.error((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  };
-
   return (
-    <div className="space-y-2 rounded-md border p-2">
-      <p className="text-xs text-muted-foreground">
-        Este padrão ainda não está ligado a uma pergunta. Selecione o projeto e a pergunta.
-      </p>
-      <select
-        className="h-9 w-full rounded-md border border-input bg-background px-2 text-xs"
-        value={checklistId}
-        onChange={(e) => { setChecklistId(e.target.value); setBlockId(""); }}
+    <div className="flex items-center justify-between gap-3 rounded-md border p-2 text-xs">
+      <span className="truncate">{standard.question || standard.name}</span>
+      <Button
+        size="sm"
+        variant="outline"
+        disabled={busy}
+        onClick={async () => {
+          setBusy(true);
+          try {
+            await linkStandardToBlock(standard, {
+              checklistId: projectId,
+              cameraBlockId: question.cameraBlockId,
+              question: question.question,
+            });
+            toast.success("Padrão vinculado à pergunta.");
+            onChanged();
+          } catch (e) {
+            toast.error((e as Error).message);
+          } finally {
+            setBusy(false);
+          }
+        }}
       >
-        <option value="">Selecione o projeto</option>
-        {projects.map((p) => (
-          <option key={p.id} value={p.id}>{p.title}</option>
-        ))}
-      </select>
-      <select
-        className="h-9 w-full rounded-md border border-input bg-background px-2 text-xs"
-        value={blockId}
-        disabled={!project}
-        onChange={(e) => setBlockId(e.target.value)}
-      >
-        <option value="">Selecione a pergunta</option>
-        {(project?.cameraBlocks ?? []).map((b) => (
-          <option key={b.cameraBlockId} value={b.cameraBlockId} disabled={takenBlockIds.has(b.cameraBlockId)}>
-            {b.question}{takenBlockIds.has(b.cameraBlockId) ? " — Padrão configurado" : ""}
-          </option>
-        ))}
-      </select>
-      <Button size="sm" className="w-full" disabled={!blockId || busy} onClick={submit}>
-        {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-        Vincular à pergunta
+        {busy && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
+        Vincular
       </Button>
     </div>
   );
@@ -361,54 +308,27 @@ function ActivationPanel({ standard, onChanged }: { standard: VisualStandard; on
 
 function CreateStandardDialog({
   workspaceId,
-  projects,
-  projectsLoading,
-  standards,
-  presetChecklistId,
-  presetCameraBlockId,
+  projectId,
+  question,
   onDone,
 }: {
   workspaceId: string;
-  projects: ChecklistProject[];
-  projectsLoading: boolean;
-  standards: VisualStandard[];
-  presetChecklistId: string | null;
-  presetCameraBlockId: string | null;
+  projectId: string;
+  question: CameraQuestion;
   onDone: () => void;
 }) {
-  const [checklistId, setChecklistId] = useState(presetChecklistId ?? "");
-  const [blockId, setBlockId] = useState(presetCameraBlockId ?? "");
   const [notes, setNotes] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    if (presetChecklistId) setChecklistId(presetChecklistId);
-    if (presetCameraBlockId) setBlockId(presetCameraBlockId);
-  }, [presetChecklistId, presetCameraBlockId]);
-
-  const project = projects.find((p) => p.id === checklistId) ?? null;
-  const takenBlockIds = useMemo(
-    () => new Set(standards.filter((s) => !s.archived_at && s.camera_block_id).map((s) => s.camera_block_id!)),
-    [standards],
-  );
-  const question = project?.cameraBlocks.find((b) => b.cameraBlockId === blockId) ?? null;
-  const alreadyConfigured = Boolean(blockId && takenBlockIds.has(blockId));
+  useEffect(() => { setNotes(""); setFile(null); }, [question.cameraBlockId]);
 
   const submit = async () => {
-    if (!project || !question) {
-      toast.error("Selecione o projeto e a pergunta.");
-      return;
-    }
-    if (alreadyConfigured) {
-      toast.error("Esta pergunta já possui um padrão visual.");
-      return;
-    }
     setSaving(true);
     try {
       await createStandard({
         workspaceId,
-        checklistId: project.id,
+        checklistId: projectId,
         cameraBlockId: question.cameraBlockId,
         question: question.question,
         internalNotes: notes,
@@ -426,63 +346,16 @@ function CreateStandardDialog({
   return (
     <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto">
       <DialogHeader>
-        <DialogTitle>Novo padrão visual</DialogTitle>
+        <DialogTitle>Configurar padrão visual</DialogTitle>
         <DialogDescription>
-          A pergunta vem do bloco de câmera do projeto. Você não precisa digitá-la novamente.
+          A pergunta vem do bloco de câmera do projeto e não precisa ser digitada novamente.
         </DialogDescription>
       </DialogHeader>
       <div className="space-y-4">
-        <div className="space-y-2">
-          <Label htmlFor="vs-project">Selecione o projeto</Label>
-          <select
-            id="vs-project"
-            className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-            value={checklistId}
-            onChange={(e) => { setChecklistId(e.target.value); setBlockId(""); }}
-            disabled={projectsLoading}
-          >
-            <option value="">{projectsLoading ? "Carregando…" : "Selecione o projeto"}</option>
-            {projects.map((p) => (
-              <option key={p.id} value={p.id}>{p.title}</option>
-            ))}
-          </select>
+        <div className="rounded-lg border p-3 text-sm">
+          <p className="text-xs text-muted-foreground">Pergunta selecionada</p>
+          <p className="mt-1">“{question.question}”</p>
         </div>
-
-        {project && project.cameraBlocks.length === 0 ? (
-          <div className="space-y-2 rounded-lg border p-3">
-            <p className="text-sm text-muted-foreground">
-              Este projeto ainda não possui perguntas com câmera.
-            </p>
-            <a
-              href={`/checklist?id=${project.id}`}
-              className="inline-flex items-center gap-2 text-sm font-medium text-[#FF007F]"
-            >
-              <ExternalLink className="h-4 w-4" /> Abrir projeto
-            </a>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            <Label htmlFor="vs-question">Selecione a pergunta</Label>
-            <select
-              id="vs-question"
-              className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-              value={blockId}
-              disabled={!project}
-              onChange={(e) => setBlockId(e.target.value)}
-            >
-              <option value="">Selecione a pergunta</option>
-              {(project?.cameraBlocks ?? []).map((b) => (
-                <option key={b.cameraBlockId} value={b.cameraBlockId} disabled={takenBlockIds.has(b.cameraBlockId)}>
-                  {b.question}{takenBlockIds.has(b.cameraBlockId) ? " — Padrão configurado" : ""}
-                </option>
-              ))}
-            </select>
-            {alreadyConfigured && (
-              <p className="text-xs text-amber-700">Esta pergunta já possui um padrão visual.</p>
-            )}
-          </div>
-        )}
-
         <div className="space-y-2">
           <Label htmlFor="vs-notes">Notas internas (opcional)</Label>
           <Textarea id="vs-notes" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} />
@@ -501,7 +374,7 @@ function CreateStandardDialog({
         </div>
       </div>
       <DialogFooter>
-        <Button onClick={submit} disabled={saving || !question || alreadyConfigured}>
+        <Button onClick={submit} disabled={saving}>
           {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           Salvar padrão
         </Button>

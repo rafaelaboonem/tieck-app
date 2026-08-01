@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import { Loader2, Play, Eye, Scale, CheckCircle2, RefreshCcw, HelpCircle, AlertTriangle, Camera, ImageIcon } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { CameraV3Preview } from "@/components/padrao/CameraV3Preview";
-import { listChecklistProjects, type ChecklistProject } from "@/lib/camera-blocks";
+
 
 import {
   blobToBase64,
@@ -36,14 +36,13 @@ const DECISION_META: Record<LabDecision, { label: string; tone: string; icon: ty
 
 interface Props {
   workspaceId: string;
-  standards: VisualStandard[];
+  /** Padrão da pergunta selecionada no topo da Central Visual. */
   selected: VisualStandard | null;
-  onSelect: (s: VisualStandard | null) => void;
   runs: LabRun[];
   onRun: (run: LabRun) => void;
 }
 
-export function LabTab({ workspaceId, standards, selected, onSelect, runs, onRun }: Props) {
+export function LabTab({ workspaceId, selected, runs, onRun }: Props) {
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
@@ -56,30 +55,12 @@ export function LabTab({ workspaceId, standards, selected, onSelect, runs, onRun
   const [attemptsUsed, setAttemptsUsed] = useState<number | null>(null);
   const [attemptsLimit, setAttemptsLimit] = useState<number | null>(null);
 
-  const [projects, setProjects] = useState<ChecklistProject[]>([]);
-  const [projectsLoading, setProjectsLoading] = useState(true);
-  const [projectId, setProjectId] = useState<string>(selected?.checklist_id ?? "");
-
   const profile = profileOf(selected);
   const question = selected?.question ?? "";
   const hasReference = Boolean(selected?.reference_path);
   const isOwner = Boolean(userId && selected && selected.created_by === userId);
-  const project = projects.find((p) => p.id === projectId) ?? null;
 
-  useEffect(() => {
-    let cancelled = false;
-    setProjectsLoading(true);
-    listChecklistProjects(workspaceId)
-      .then((p) => { if (!cancelled) setProjects(p); })
-      .catch(() => { /* silencioso: a lista continua vazia */ })
-      .finally(() => { if (!cancelled) setProjectsLoading(false); });
-    return () => { cancelled = true; };
-  }, [workspaceId]);
 
-  // Padrão escolhido em outra aba: sincroniza o projeto exibido.
-  useEffect(() => {
-    if (selected?.checklist_id) setProjectId(selected.checklist_id);
-  }, [selected?.checklist_id]);
 
 
   useEffect(() => {
@@ -154,6 +135,7 @@ export function LabTab({ workspaceId, standards, selected, onSelect, runs, onRun
         id: crypto.randomUUID(),
         at: new Date().toISOString(),
         question,
+        cameraBlockId: selected?.camera_block_id ?? null,
         source: "upload",
       });
     } catch (e) {
@@ -189,52 +171,13 @@ export function LabTab({ workspaceId, standards, selected, onSelect, runs, onRun
           <CardTitle className="text-lg">Analisar uma foto</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="lab-project">Selecione o projeto</Label>
-            <select
-              id="lab-project"
-              className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-              value={projectId}
-              onChange={(e) => { setProjectId(e.target.value); onSelect(null); }}
-              disabled={projectsLoading}
-            >
-              <option value="">{projectsLoading ? "Carregando…" : "Selecione o projeto"}</option>
-              {projects.map((p) => (
-                <option key={p.id} value={p.id}>{p.title}</option>
-              ))}
-            </select>
-          </div>
+          {!selected && (
+            <p className="rounded-lg border p-3 text-sm text-muted-foreground">
+              Esta pergunta ainda não possui um padrão visual. Configure o padrão para testar aqui.
+            </p>
+          )}
 
-          <div className="space-y-2">
-            <Label htmlFor="lab-question">Selecione a pergunta</Label>
-            <select
-              id="lab-question"
-              className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-              value={selected?.camera_block_id ?? ""}
-              disabled={!project}
-              onChange={(e) => {
-                const std = standards.find(
-                  (s) => !s.archived_at && s.camera_block_id === e.target.value,
-                );
-                onSelect(std ?? null);
-              }}
-            >
-              <option value="">Selecione a pergunta</option>
-              {(project?.cameraBlocks ?? []).map((b) => {
-                const std = standards.find((s) => !s.archived_at && s.camera_block_id === b.cameraBlockId);
-                return (
-                  <option key={b.cameraBlockId} value={b.cameraBlockId} disabled={!std}>
-                    {b.question}{std ? "" : " — sem padrão configurado"}
-                  </option>
-                );
-              })}
-            </select>
-            {project && project.cameraBlocks.length === 0 && (
-              <p className="text-xs text-muted-foreground">
-                Este projeto ainda não possui perguntas com câmera.
-              </p>
-            )}
-          </div>
+
 
           <div className="space-y-1 rounded-lg border p-3">
             <p className="text-sm font-medium">O que será verificado</p>
@@ -377,6 +320,7 @@ export function LabTab({ workspaceId, standards, selected, onSelect, runs, onRun
               id: crypto.randomUUID(),
               at: new Date().toISOString(),
               question,
+              cameraBlockId: selected.camera_block_id ?? null,
               source: "camera_v3",
               live,
             })
