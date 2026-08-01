@@ -734,17 +734,20 @@ async function acquireLock(
   workspaceId: string | null,
   operation: string,
   ttlSeconds: number,
-): Promise<string | null> {
+): Promise<{ ok: boolean; key: string | null; busy: boolean }> {
   const { data, error } = await svc.rpc("acquire_vision_lock", {
     p_user_id: userId,
     p_workspace_id: workspaceId,
     p_operation: operation,
     p_ttl_seconds: ttlSeconds,
   });
-  if (error) return null; // falha na trava nunca bloqueia o fluxo do usuário
+  // Falha de infraestrutura na trava não deve bloquear o usuário.
+  if (error) return { ok: true, key: null, busy: false };
   const row = Array.isArray(data) ? data[0] : data;
-  return row?.acquired ? String(row.lock_key) : null;
+  if (row?.acquired) return { ok: true, key: String(row.lock_key), busy: false };
+  return { ok: false, key: null, busy: true };
 }
+
 
 async function releaseLock(svc: any, lockKey: string | null) {
   if (!lockKey) return;
