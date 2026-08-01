@@ -330,9 +330,9 @@ async function buildProfile(question: string, referenceSummary: string | null, m
   };
 }
 
-async function describeReference(reference: Decoded, question: string): Promise<string | null> {
+async function describeReference(reference: Decoded, question: string, meter: UsageEntry[]): Promise<string | null> {
   try {
-    const payload = await cfRun(fastModel(), {
+    const payload = await cfMetered(meter, "reference_summary", fastModel(), {
       image: toDataUrl(reference),
       task: "query",
       stream: false,
