@@ -197,7 +197,49 @@ export function blobToBase64(blob: Blob): Promise<string> {
 // ---------------- laboratório ----------------
 
 export type LabDecision = "approved" | "retake" | "uncertain" | "technical_failure";
-export type ExpectedResult = "approved" | "retake";
+export type ExpectedResult = "approved" | "retake" | "not_observable";
+export type ConditionStatus = "verified" | "not_met" | "not_observable";
+
+export const CONDITION_STATUS_LABEL: Record<ConditionStatus, string> = {
+  verified: "Verificado pela foto",
+  not_met: "Não atendido",
+  not_observable: "Não verificável por foto",
+};
+
+/** Orçamento de IA por sessão de câmera — decidido e aplicado no servidor. */
+export const LIVE_CHECKS_PER_SESSION = 3;
+export const FINAL_CHECKS_PER_SESSION = 5;
+export const LIVE_MIN_INTERVAL_MS = 5000;
+
+export interface UsageStep {
+  step: string;
+  model: string;
+  inputTokens: number;
+  outputTokens: number;
+  neurons: number;
+  inferenceMs: number;
+}
+
+export interface UsageTotals {
+  calls: number;
+  inputTokens: number;
+  outputTokens: number;
+  neurons: number;
+  estimatedUsd: number;
+  steps: UsageStep[];
+}
+
+export interface BudgetInfo {
+  spent: boolean;
+  used: number;
+  remaining: number;
+  reason: string;
+}
+
+/** Identificador de sessão de câmera (não é dado pessoal, só agrupa chamadas). */
+export function newSessionId(): string {
+  return crypto.randomUUID().replaceAll("-", "").slice(0, 32);
+}
 
 export interface LabResponse {
   observer: {
@@ -211,6 +253,7 @@ export interface LabResponse {
     decision: string;
     targetVisible: boolean | null;
     conditionMet: boolean | null;
+    conditionStatus?: ConditionStatus | null;
     qualitySufficient: boolean | null;
     reasonCode: string | null;
     observations: string[];
@@ -221,10 +264,13 @@ export interface LabResponse {
     decision: LabDecision;
     reason_code: string;
     public_message: string;
+    condition_status?: ConditionStatus | null;
     gate?: Record<string, boolean>;
   };
   referenceMode: "none" | "multi_image" | "derived";
   totalLatencyMs: number;
+  budget?: BudgetInfo;
+  usage?: UsageTotals;
 }
 
 /** Casos obrigatórios antes de liberar a Camera V3 nos checklists públicos. */
