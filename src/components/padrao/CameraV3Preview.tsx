@@ -4,10 +4,13 @@ import {
   liveLocate,
   runBenchmark,
   referenceBase64,
+  newSessionId,
+  LIVE_MIN_INTERVAL_MS,
   type LabResponse,
   type LiveStats,
   type LocateResult,
   type StandardProfile,
+  type UsageTotals,
 } from "@/lib/visual-standards";
 
 type Phase = "starting" | "live" | "captured" | "result";
