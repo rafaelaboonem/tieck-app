@@ -56,7 +56,7 @@ export function PublicCameraBlock({ block, checklistId, ensureResponseSession, o
   const [analysisToken, setAnalysisToken] = useState<string | null>(null);
   const [restartKey, setRestartKey] = useState(0);
   const [retrying, setRetrying] = useState(false);
-  const [retryCooldown, setRetryCooldown] = useState(false);
+  const [retryAfter, setRetryAfter] = useState<number | null>(null);
   const [evidenceId, setEvidenceId] = useState<string | null>(null);
   const [analysisEnabled, setAnalysisEnabled] = useState(false);
   const [session, setSession] = useState<{ responseId: string; responseToken: string } | null>(null);
@@ -98,7 +98,7 @@ export function PublicCameraBlock({ block, checklistId, ensureResponseSession, o
     setAnalysisToken(null);
     setAnalysisEnabled(false);
     setRetrying(false);
-    setRetryCooldown(false);
+    setRetryAfter(null);
     lastEmittedRef.current = "";
     onAnswer(block.id, null);
   };
@@ -121,15 +121,17 @@ export function PublicCameraBlock({ block, checklistId, ensureResponseSession, o
 
   /** Nova verificação da MESMA evidência: não reenvia imagem, não cria evidência. */
   const retryVerification = async () => {
-    if (!analysisToken || retrying || retryCooldown) return;
+    if (!analysisToken || retrying || retryAfter !== null) return;
     setRetrying(true);
-    setRetryCooldown(true);
     try {
       const res = await supabase.functions.invoke("analyze-checklist-evidence", {
         body: { action: "retry-analysis", analysisToken },
       });
-      const data = res.data as { restarted?: boolean; error?: string } | null;
+      const data = res.data as { restarted?: boolean; error?: string; retryAfter?: number } | null;
       if (res.error || data?.error === "rate_limited") {
+        // Só promete tempo quando o servidor devolve um Retry-After confiável.
+        const wait = Number(data?.retryAfter);
+        if (Number.isFinite(wait) && wait > 0) startRetryCountdown(Math.min(300, Math.round(wait)));
         setPhase("provider_rate_limited");
         return;
       }
@@ -139,9 +141,20 @@ export function PublicCameraBlock({ block, checklistId, ensureResponseSession, o
       setPhase("technical_failure");
     } finally {
       setRetrying(false);
-      // Cooldown local: impede rajada de cliques mesmo com resposta rápida.
-      setTimeout(() => setRetryCooldown(false), 10_000);
     }
+  };
+
+  const startRetryCountdown = (seconds: number) => {
+    setRetryAfter(seconds);
+    const id = setInterval(() => {
+      setRetryAfter((current) => {
+        if (current === null || current <= 1) {
+          clearInterval(id);
+          return null;
+        }
+        return current - 1;
+      });
+    }, 1_000);
   };
 
   const runUpload = async (source: File) => {
@@ -369,23 +382,18 @@ export function PublicCameraBlock({ block, checklistId, ensureResponseSession, o
         <div className="space-y-2">
           <div className="flex items-start gap-2 text-sm text-neutral-700 bg-neutral-50 border border-neutral-200 rounded-lg px-3 py-2">
             <XCircle className="w-4 h-4 mt-0.5" aria-hidden />
-            <span>
-              {errorMsg ??
-                (phase === "provider_rate_limited"
-                  ? "Não foi possível verificar esta foto agora. Aguarde alguns segundos."
-                  : "Não foi possível verificar esta foto agora.")}
-            </span>
+            <span>{errorMsg ?? "Verificação temporariamente indisponível."}</span>
           </div>
           <div className="flex flex-wrap gap-2">
             {analysisToken && (
               <button
                 type="button"
                 onClick={() => void retryVerification()}
-                disabled={retrying || retryCooldown}
+                disabled={retrying || retryAfter !== null}
                 className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-neutral-200 bg-white text-sm hover:bg-neutral-50 disabled:opacity-50"
               >
                 {retrying ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden /> : <RefreshCw className="w-4 h-4" aria-hidden />}
-                Tentar verificar novamente
+                {retryAfter !== null ? `Tentar novamente (${retryAfter}s)` : "Tentar novamente"}
               </button>
             )}
             <button

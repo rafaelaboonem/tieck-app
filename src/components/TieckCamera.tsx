@@ -9,22 +9,34 @@ type Props = {
   onCapture: (file: File) => void;
 };
 
+type LocalWarning = "low_light" | "shaky" | "blurry";
+
+const WARNING_LABEL: Record<LocalWarning, string> = {
+  low_light: "Pouca luz",
+  shaky: "Mantenha o celular firme",
+  blurry: "Imagem desfocada",
+};
+
 /**
  * Câmera nativa do Tieck: fullscreen, mobile-first.
  *
  * Camera V2 — nenhuma inferência de IA acontece enquanto a câmera está aberta:
- * nenhum frame é enviado a provedor algum, não há polling, badge de análise,
- * bounding box ou orientação "inteligente". A única verificação é local, feita
- * DEPOIS da captura.
+ * nenhum frame é enviado a provedor algum, não há polling nem badge de análise.
+ * No estado normal a tela mostra apenas o vídeo e os controles. Avisos locais
+ * (luz/foco/tremor) são calculados 100% no aparelho e só aparecem quando um
+ * problema real é detectado.
  */
-export function TieckCamera({ open, title, hint, onClose, onCapture }: Props) {
+export function TieckCamera({ open, title, onClose, onCapture }: Props) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const fallbackInputRef = useRef<HTMLInputElement | null>(null);
+  const prevSampleRef = useRef<Float32Array | null>(null);
 
   const [ready, setReady] = useState(false);
   const [denied, setDenied] = useState(false);
   const [capturing, setCapturing] = useState(false);
+  const [warning, setWarning] = useState<LocalWarning | null>(null);
+  const [dismissed, setDismissed] = useState(false);
 
   const stopStream = useCallback(() => {
     streamRef.current?.getTracks().forEach((track) => track.stop());
@@ -35,6 +47,8 @@ export function TieckCamera({ open, title, hint, onClose, onCapture }: Props) {
   useEffect(() => {
     if (!open) {
       stopStream();
+      setWarning(null);
+      setDismissed(false);
       return;
     }
     let cancelled = false;
@@ -68,6 +82,64 @@ export function TieckCamera({ open, title, hint, onClose, onCapture }: Props) {
       stopStream();
     };
   }, [open, stopStream]);
+
+  /** Amostragem local do vídeo — nunca sai do aparelho, nenhuma requisição. */
+  useEffect(() => {
+    if (!open || !ready) return;
+    const canvas = document.createElement("canvas");
+    canvas.width = 64;
+    canvas.height = 48;
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    if (!ctx) return;
+
+    const id = setInterval(() => {
+      const video = videoRef.current;
+      if (!video || !video.videoWidth) return;
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const { data } = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const luma = new Float32Array(canvas.width * canvas.height);
+      let total = 0;
+      for (let i = 0, p = 0; i < data.length; i += 4, p++) {
+        const l = data[i] * 0.2126 + data[i + 1] * 0.7152 + data[i + 2] * 0.0722;
+        luma[p] = l;
+        total += l;
+      }
+      const average = total / luma.length;
+
+      // Nitidez: energia de gradiente horizontal/vertical normalizada.
+      let gradient = 0;
+      for (let y = 1; y < canvas.height; y++) {
+        for (let x = 1; x < canvas.width; x++) {
+          const i = y * canvas.width + x;
+          gradient += Math.abs(luma[i] - luma[i - 1]) + Math.abs(luma[i] - luma[i - canvas.width]);
+        }
+      }
+      const sharpness = gradient / luma.length;
+
+      // Movimento: diferença média entre amostras consecutivas.
+      let motion = 0;
+      const prev = prevSampleRef.current;
+      if (prev && prev.length === luma.length) {
+        let diff = 0;
+        for (let i = 0; i < luma.length; i++) diff += Math.abs(luma[i] - prev[i]);
+        motion = diff / luma.length;
+      }
+      prevSampleRef.current = luma;
+
+      const next: LocalWarning | null =
+        average < 28 ? "low_light" : motion > 26 ? "shaky" : average > 30 && sharpness < 2.2 ? "blurry" : null;
+
+      setWarning((current) => {
+        if (next !== current) setDismissed(false);
+        return next;
+      });
+    }, 700);
+
+    return () => {
+      clearInterval(id);
+      prevSampleRef.current = null;
+    };
+  }, [open, ready]);
 
   const shoot = useCallback(async () => {
     const video = videoRef.current;
@@ -121,21 +193,6 @@ export function TieckCamera({ open, title, hint, onClose, onCapture }: Props) {
           className="absolute inset-0 w-full h-full object-cover"
         />
 
-        {/* Guias estáticas de composição — não representam análise de IA. */}
-        <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-          <div className="w-[82%] aspect-square max-h-[70%] border-2 border-white/40 rounded-3xl" />
-        </div>
-
-        <p className="absolute top-3 left-1/2 -translate-x-1/2 max-w-[90%] text-center text-xs text-white/90 bg-black/50 rounded-full px-3 py-1.5">
-          Posicione o item solicitado e tire a foto.
-        </p>
-
-        {hint && (
-          <p className="absolute bottom-4 left-1/2 -translate-x-1/2 max-w-[90%] text-center text-xs text-white/80 bg-black/50 rounded-full px-3 py-1.5">
-            {hint}
-          </p>
-        )}
-
         {denied && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-8 text-center bg-black/80">
             <p className="text-sm text-white/90">
@@ -167,7 +224,24 @@ export function TieckCamera({ open, title, hint, onClose, onCapture }: Props) {
         )}
       </div>
 
-      <div className="flex items-center justify-center gap-8 py-6">
+      <div className="relative flex items-center justify-center gap-8 py-6">
+        {warning && !dismissed && !denied && (
+          <div
+            className="absolute -top-1 left-1/2 -translate-x-1/2 flex items-center gap-2 rounded-full bg-black/70 px-3 py-1.5 text-xs text-white/90"
+            aria-live="polite"
+          >
+            <span>{WARNING_LABEL[warning]}</span>
+            <button
+              type="button"
+              onClick={() => setDismissed(true)}
+              aria-label="Fechar aviso"
+              className="text-white/60 hover:text-white"
+            >
+              <X className="w-3.5 h-3.5" aria-hidden />
+            </button>
+          </div>
+        )}
+
         <button
           type="button"
           onClick={() => {
@@ -186,7 +260,7 @@ export function TieckCamera({ open, title, hint, onClose, onCapture }: Props) {
           onClick={shoot}
           disabled={!ready || capturing}
           aria-label="Tirar foto"
-          className="w-18 h-18 p-1 rounded-full bg-white/25 disabled:opacity-40"
+          className="p-1 rounded-full bg-white/25 disabled:opacity-40"
           style={{ width: 72, height: 72 }}
         >
           <span className="block w-full h-full rounded-full bg-white" />
