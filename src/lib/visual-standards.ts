@@ -561,8 +561,10 @@ export async function activateStandard(s: VisualStandard): Promise<VisualStandar
     .update({
       status: "validated",
       needs_validation: false,
+      validated_question: s.question,
       last_validated_at: new Date().toISOString(),
     })
+
     .eq("id", s.id)
     .select("*")
     .single();
