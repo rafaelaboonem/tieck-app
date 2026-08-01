@@ -433,40 +433,77 @@ async function runObserver(image: Decoded, question: string, profile: any) {
   });
   const text = extractModelText(payload).trim();
   if (!text) throw new Error("observer_empty_response");
-  // O observador às vezes responde em JSON: nesse caso os campos valem mais que o texto.
+  // Prioridade absoluta ao JSON estruturado; texto só quando não há JSON válido.
   const obj = parseJsonLoose(text);
   const lower = text.toLowerCase();
-  const flag = (keys: string[], re: RegExp): boolean => {
-    if (obj) {
-      for (const k of keys) {
-        const v = obj[k];
-        if (typeof v === "boolean") return v;
-        if (typeof v === "string" && re.test(v.toLowerCase())) return true;
-        if (typeof v === "string") return false;
+
+  /** Lê um booleano de aliases. Retorna null quando ausente/indefinido. */
+  const boolField = (keys: string[], truthyRe?: RegExp): boolean | null => {
+    if (!obj || typeof obj !== "object") return null;
+    for (const k of keys) {
+      if (!(k in obj)) continue;
+      const v = (obj as any)[k];
+      if (typeof v === "boolean") return v;
+      if (typeof v === "number") return v !== 0;
+      if (typeof v === "string") {
+        const s = v.trim().toLowerCase();
+        if (s === "true" || s === "yes" || s === "sim") return true;
+        if (s === "false" || s === "no" || s === "não" || s === "nao" || s === "none") return false;
+        if (s === "unknown" || s === "n/a" || s === "") return null;
+        if (truthyRe) return truthyRe.test(s);
+        return null;
       }
+      if (v === null) return null;
     }
-    return re.test(lower);
+    return null;
   };
+
+  const blurryRe = /blurry|out of focus|unfocused|motion blur/;
+  const darkRe = /too dark|very dark|poorly lit|low light|underexposed/;
+  const brightRe = /overexposed|blown out|too bright/;
+  const croppedRe = /cut off|cropped|partially visible|only part/;
+
+  const lighting = typeof (obj as any)?.lighting === "string"
+    ? String((obj as any).lighting).toLowerCase()
+    : null;
+
+  // Fallback textual apenas quando a resposta não é JSON válido.
+  const fromText = (re: RegExp) => (obj ? false : re.test(lower));
+
+  const blurry = boolField(["photo_blurry", "is_blurry", "blurry", "blur", "image_blurry"], blurryRe)
+    ?? fromText(blurryRe);
+  const darkField = boolField(["too_dark", "is_dark", "dark", "photo_dark"], darkRe);
+  const dark = darkField ?? (lighting ? /dark|underexposed|low/.test(lighting) : fromText(darkRe));
+  const overField = boolField(["overexposed", "is_overexposed", "too_bright"], brightRe);
+  const overexposed = overField ?? (lighting ? /overexposed|too bright/.test(lighting) : fromText(brightRe));
+  const cropped = boolField(["cropped", "is_cropped", "cut_off", "partially_visible"], croppedRe)
+    ?? fromText(croppedRe);
+
   const absentRe = /\bnot (present|visible|shown|there)\b|\bno (visible|sign of)\b|cannot see|isn'?t visible|does not (show|contain)|n(a|ã)o (est(a|á)|h(a|á))/;
-  let targetVisible = target ? !absentRe.test(lower) : !/not visible|cannot see/.test(lower);
-  if (obj) {
-    for (const k of ["present", "target_present", "visible", "target_visible"]) {
-      const v = obj[k];
-      if (typeof v === "boolean") { targetVisible = v; break; }
-    }
-  }
+  const presentField = boolField(
+    ["object_present", "target_present", "present", "target_visible", "visible", "object_visible"],
+  );
+  // Campo ausente/indefinido ⇒ desconhecido: nunca presume presença.
+  const targetVisibleKnown = presentField !== null || !obj;
+  const targetVisible = presentField !== null
+    ? presentField
+    : obj
+      ? false // JSON válido sem o campo: desconhecido → tratado como não confirmado
+      : (target ? !absentRe.test(lower) : !/not visible|cannot see/.test(lower));
+
   return {
     latencyMs: Date.now() - started,
     observation: text.slice(0, 500),
-    blurry: flag(["blurry", "blur", "is_blurry"], /blurry|out of focus|unfocused|motion blur/),
-    dark: flag(["dark", "too_dark"], /too dark|very dark|poorly lit|low light|underexposed/) ||
-      (typeof obj?.lighting === "string" && /dark|underexposed|low/.test(obj.lighting.toLowerCase())),
-    overexposed: flag(["overexposed"], /overexposed|blown out|too bright/) ||
-      (typeof obj?.lighting === "string" && /overexposed|too bright/.test(obj.lighting.toLowerCase())),
-    cropped: flag(["cropped", "cut_off"], /cut off|cropped|partially visible|only part/),
+    structured: !!obj,
+    blurry,
+    dark,
+    overexposed,
+    cropped,
     targetVisible,
+    targetVisibleKnown,
   };
 }
+
 
 
 // ---------------- etapa 2: Llama 4 Scout (juiz) ----------------
