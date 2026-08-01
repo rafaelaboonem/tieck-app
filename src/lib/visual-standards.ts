@@ -251,18 +251,25 @@ export async function syncStandardsWithBlocks(input: {
       continue;
     }
 
-    const patch: Record<string, unknown> = {};
-    if (raw.archived_at) { patch["archived_at"] = null; restored++; }
+    const patch: {
+      archived_at?: string | null;
+      question?: string;
+      name?: string;
+      needs_validation?: boolean;
+      status?: StandardStatus;
+    } = {};
+    if (raw.archived_at) { patch.archived_at = null; restored++; }
     if (current !== raw.question) {
-      patch["question"] = current;
-      patch["name"] = current.slice(0, 120);
-      patch["needs_validation"] = true;
-      patch["status"] = "needs_improvement";
+      patch.question = current;
+      patch.name = current.slice(0, 120);
+      patch.needs_validation = true;
+      patch.status = "needs_improvement";
       revalidate++;
     }
     if (Object.keys(patch).length > 0) {
       await supabase.from("visual_standards").update(patch).eq("id", raw.id);
     }
+
   }
   return { revalidate, archived, restored };
 }
