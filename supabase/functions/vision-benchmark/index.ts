@@ -191,27 +191,37 @@ const PROFILE_SCHEMA = {
 };
 
 async function buildProfile(question: string, referenceSummary: string | null) {
-  const payload = await cfRun(finalModel(), {
-    messages: [{
-      role: "user",
-      content:
-        `An inspection standard was written by a facility owner in Brazilian Portuguese:\n"${question}"\n\n` +
-        `Extract, WITHOUT inventing requirements that are not implied by the sentence:\n` +
-        `- target_phrase: the main object or place to be photographed (Portuguese, short).\n` +
-        `- target_phrase_en: same target in plain English, 1-3 words, suitable for an object detector.\n` +
-        `- requested_condition: the condition that must be true about it.\n` +
-        `- observable_signals: things a person could visually confirm to prove the condition.\n` +
-        `- contrary_signals: visible things that would prove the condition is NOT met.\n` +
-        `- insufficient_view_signals: situations where the photo would not be enough to decide.\n` +
-        `- ambiguous: true if the sentence does not clearly define an object AND a verifiable condition.\n` +
-        `Reply strictly as JSON matching the schema.` +
-        (referenceSummary ? `\nStructural summary of a reference photo of the expected result: ${referenceSummary}` : ""),
-    }],
-    response_format: { type: "json_schema", json_schema: PROFILE_SCHEMA },
-    max_tokens: 600,
-  });
-  const parsed = parseJsonLoose(extractModelText(payload));
+  const prompt =
+    `An inspection standard was written by a facility owner in Brazilian Portuguese:\n"${question}"\n\n` +
+    `Extract, WITHOUT inventing requirements that are not implied by the sentence:\n` +
+    `- target_phrase: the main object or place to be photographed (Portuguese, short).\n` +
+    `- target_phrase_en: same target in plain English, 1-3 words, suitable for an object detector.\n` +
+    `- requested_condition: the condition that must be true about it.\n` +
+    `- observable_signals: things a person could visually confirm to prove the condition.\n` +
+    `- contrary_signals: visible things that would prove the condition is NOT met.\n` +
+    `- insufficient_view_signals: situations where the photo would not be enough to decide.\n` +
+    `- ambiguous: true if the sentence does not clearly define an object AND a verifiable condition.\n` +
+    `Reply with a single JSON object and nothing else.` +
+    (referenceSummary ? `\nStructural summary of a reference photo of the expected result: ${referenceSummary}` : "");
+
+  let parsed: any = null;
+  for (const withSchema of [true, false]) {
+    try {
+      const payload = await cfRun(finalModel(), {
+        messages: [{ role: "user", content: prompt }],
+        ...(withSchema ? { response_format: { type: "json_schema", json_schema: PROFILE_SCHEMA } } : {}),
+        max_tokens: 600,
+      });
+      const text = extractModelText(payload);
+      parsed = parseJsonLoose(text);
+      if (parsed) break;
+      console.error(`[lab] profile_no_json schema=${withSchema} len=${text.length}`);
+    } catch (e) {
+      console.error(`[lab] profile_call_failed schema=${withSchema} code=${String((e as Error).message).slice(0, 60)}`);
+    }
+  }
   if (!parsed) throw new Error("profile_parse_failed");
+
   const target = String(parsed.target_phrase ?? "").trim().slice(0, 80);
   const condition = String(parsed.requested_condition ?? "").trim().slice(0, 160);
   const ambiguous = parsed.ambiguous === true || !target || !condition;
