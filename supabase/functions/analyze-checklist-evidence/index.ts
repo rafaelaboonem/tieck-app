@@ -640,13 +640,23 @@ async function handleStatus(payload: any, db: ReturnType<typeof admin>) {
     typeof (data.raw_response as any)?.publicMessage === "string"
       ? String((data.raw_response as any).publicMessage).trim().slice(0, 280)
       : "";
+  // Estado técnico explícito para o cliente distinguir falha recuperável de
+  // decisão real. Nunca expõe detalhes internos do provedor.
+  const errorCode = (data.error_code as string | null) ?? null;
+  const rateLimited = !!errorCode && /rate|429|limit/i.test(errorCode);
+  const technicalFailure = view.publicStatus === "failed" && !!errorCode;
   return json(200, {
     status: view.publicStatus,
-    publicMessage: generatedMessage || view.publicMessage,
+    publicMessage: technicalFailure
+      ? "Não foi possível verificar esta foto agora."
+      : (generatedMessage || view.publicMessage),
     canContinue: view.canContinue,
     requiresResubmit: view.requiresResubmit,
     finishedAt: data.processing_finished_at ?? null,
+    failureKind: technicalFailure ? (rateLimited ? "provider_rate_limited" : "technical_failure") : null,
+    retryable: technicalFailure,
   });
+
 }
 
 // ---------------- processamento interno ----------------
