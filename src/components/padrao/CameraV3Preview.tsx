@@ -255,7 +255,10 @@ export function CameraV3Preview(props: Props) {
     if (!open || phase !== "live") return;
     const id = setInterval(() => {
       const q = sampleFrame();
-      if (q) setQuality(q);
+      if (q) {
+        statsRef.current.localChecks++;
+        setQuality(q);
+      }
     }, 200);
     return () => clearInterval(id);
   }, [open, phase, sampleFrame]);
@@ -273,22 +276,27 @@ export function CameraV3Preview(props: Props) {
     return canvas.toDataURL("image/jpeg", quality);
   }, []);
 
-  // ---- localização remota adaptativa ----
+  // ---- localização remota: só por evento (cena estável e com qualidade) ----
+  const liveExhausted = liveBudget !== null && liveBudget.remaining <= 0;
+
   useEffect(() => {
     if (!open || phase !== "live" || !target || !standardId) return;
+    if (liveExhausted) return;
     let stopped = false;
     let timer: number | undefined;
 
     const tick = async () => {
       if (stopped || closedRef.current) return;
-      const stable = !quality.moving && !quality.dark;
-      if (liveBusyRef.current || !stable) {
+      const sinceLast = Date.now() - lastLiveAtRef.current;
+      const stable = !quality.moving && !quality.dark && !quality.overexposed && !quality.blurry;
+      if (liveBusyRef.current || !stable || sinceLast < LIVE_MIN_INTERVAL_MS) {
         timer = window.setTimeout(tick, IDLE_INTERVAL_MS);
         return;
       }
       const frame = grabDataUrl(FRAME_WIDTH, 0.6);
       if (!frame) { timer = window.setTimeout(tick, IDLE_INTERVAL_MS); return; }
       liveBusyRef.current = true;
+      lastLiveAtRef.current = Date.now();
       const seq = ++liveSeqRef.current;
       setChecking(true);
       const started = Date.now();
@@ -298,10 +306,17 @@ export function CameraV3Preview(props: Props) {
           standardId,
           frameBase64: frame,
           requestId: `${seq}`,
+          sessionId: sessionIdRef.current,
         });
         if (stopped || closedRef.current || seq !== liveSeqRef.current) return;
         // Descarta respostas fora de ordem.
         if (res.requestId && res.requestId !== `${seq}`) return;
+        if (res.budget) setLiveBudget({ used: res.budget.used, remaining: res.budget.remaining });
+        addUsage(res.usage);
+        if (res.budget && !res.budget.spent) {
+          // servidor recusou (cooldown ou limite): mantém orientação local.
+          return;
+        }
         statsRef.current.checks++;
         statsRef.current.latencySum += Date.now() - started;
         statsRef.current.strategy = res.strategy;
@@ -324,7 +339,7 @@ export function CameraV3Preview(props: Props) {
       liveSeqRef.current++;
       if (timer) window.clearTimeout(timer);
     };
-  }, [open, phase, target, standardId, workspaceId, grabDataUrl, quality.moving, quality.dark]);
+  }, [open, phase, target, standardId, workspaceId, grabDataUrl, addUsage, liveExhausted, quality.moving, quality.dark, quality.overexposed, quality.blurry]);
 
   // ---- estado + orientação (decididos no servidor) ----
   const box = locate?.boxes?.[0] ?? null;
