@@ -104,6 +104,7 @@ export function LabTab({ workspaceId, standards, selected, onSelect, runs, onRun
         referenceBase64: ref,
         standardId: selected?.id ?? null,
         profile,
+        sessionId: newSessionId(),
       });
       pushRun({
         ...res,
