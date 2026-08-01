@@ -65,18 +65,18 @@ export async function createStandard(input: {
   const { data: auth } = await supabase.auth.getUser();
   const userId = auth.user?.id;
   if (!userId) throw new Error("Usuário não autenticado.");
+  if (!input.workspaceId) throw new Error("Nenhum workspace válido selecionado.");
 
-  let referencePath: string | null = null;
-  if (input.referenceFile) {
-    const ext = input.referenceFile.type.includes("png") ? "png"
-      : input.referenceFile.type.includes("webp") ? "webp" : "jpg";
-    referencePath = `${input.workspaceId}/${crypto.randomUUID()}.${ext}`;
-    const { error: upErr } = await supabase.storage
-      .from(STANDARDS_BUCKET)
-      .upload(referencePath, input.referenceFile, { contentType: input.referenceFile.type, upsert: false });
-    if (upErr) throw upErr;
-  }
+  // Fonte autoritativa: só workspaces visíveis pela sessão (RLS) são aceitos.
+  const { data: ws, error: wsErr } = await supabase
+    .from("workspaces")
+    .select("id")
+    .eq("id", input.workspaceId)
+    .maybeSingle();
+  if (wsErr) throw wsErr;
+  if (!ws) throw new Error("Você não tem acesso a este workspace.");
 
+  // 1) Cria o registro autorizado primeiro (evita arquivos órfãos).
   const { data, error } = await supabase
     .from("visual_standards")
     .insert({
@@ -85,14 +85,70 @@ export async function createStandard(input: {
       name: input.name.trim(),
       question: input.question.trim(),
       internal_notes: input.internalNotes?.trim() || null,
-      reference_path: referencePath,
+      reference_path: null,
       status: "draft",
     })
     .select("*")
     .single();
   if (error) throw error;
+  const standard = data as VisualStandard;
+
+  // 2) Envia a referência e 3) atualiza o registro com o caminho.
+  if (input.referenceFile) {
+    try {
+      const updated = await uploadReference(standard, input.referenceFile);
+      return updated;
+    } catch (e) {
+      throw new Error(
+        `Padrão criado, mas a foto de referência não pôde ser enviada: ${(e as Error).message}`,
+      );
+    }
+  }
+  return standard;
+}
+
+function extFor(file: File): string {
+  return file.type.includes("png") ? "png" : file.type.includes("webp") ? "webp" : "jpg";
+}
+
+/** Envia/substitui a referência de um padrão existente, sem deixar arquivo órfão. */
+export async function uploadReference(
+  standard: VisualStandard,
+  file: File,
+): Promise<VisualStandard> {
+  const path = `${standard.workspace_id}/${standard.id}/reference.${extFor(file)}`;
+  const { error: upErr } = await supabase.storage
+    .from(STANDARDS_BUCKET)
+    .upload(path, file, { contentType: file.type, upsert: true });
+  if (upErr) throw upErr;
+
+  const { data, error } = await supabase
+    .from("visual_standards")
+    .update({ reference_path: path })
+    .eq("id", standard.id)
+    .select("*")
+    .single();
+  if (error) {
+    // Falha no banco depois do upload: remove apenas este arquivo.
+    await supabase.storage.from(STANDARDS_BUCKET).remove([path]);
+    throw error;
+  }
+
+  // Remove referência anterior somente se o caminho mudou.
+  if (standard.reference_path && standard.reference_path !== path) {
+    await supabase.storage.from(STANDARDS_BUCKET).remove([standard.reference_path]);
+  }
   return data as VisualStandard;
 }
+
+export async function deleteStandard(standard: VisualStandard): Promise<void> {
+  const { error } = await supabase.from("visual_standards").delete().eq("id", standard.id);
+  if (error) throw error;
+  if (standard.reference_path) {
+    await supabase.storage.from(STANDARDS_BUCKET).remove([standard.reference_path]);
+  }
+}
+
 
 /** Signed URL curta (bucket privado, nunca URL pública permanente). */
 export async function referenceSignedUrl(path: string): Promise<string | null> {
