@@ -325,12 +325,8 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
   if (req.method !== "POST") return err(405, "method_not_allowed");
 
-  // Modo diagnóstico interno: exige segredo de servidor (nunca público, nunca no frontend).
-  const diagSecret = String(Deno.env.get("LAB_DIAG_TOKEN") ?? "").trim();
-  const diagMode = diagSecret.length > 0 && req.headers.get("x-diag-token") === diagSecret;
-
   const authHeader = req.headers.get("Authorization") ?? "";
-  if (!diagMode && !authHeader.toLowerCase().startsWith("bearer ")) return err(401, "unauthorized");
+  if (!authHeader.toLowerCase().startsWith("bearer ")) return err(401, "unauthorized");
 
   const url = Deno.env.get("SUPABASE_URL")!;
   const anon = Deno.env.get("SUPABASE_ANON_KEY") ?? Deno.env.get("SUPABASE_PUBLISHABLE_KEYS") ?? "";
@@ -340,8 +336,8 @@ Deno.serve(async (req) => {
   });
   const { data: userData } = await userClient.auth.getUser();
   const user = userData?.user;
-  if (!user && !diagMode) return err(401, "unauthorized");
-  const actorId = user?.id ?? "diag";
+  if (!user) return err(401, "unauthorized");
+  const actorId = user.id;
 
   let body: any;
   try { body = await req.json(); } catch { return err(400, "invalid_body"); }
@@ -381,14 +377,12 @@ Deno.serve(async (req) => {
 
   if (action !== "benchmark-evaluate") return err(400, "unknown_action");
 
-  // autorização por workspace (o modo diagnóstico interno não toca em dados de workspace)
-  if (!diagMode) {
-    const workspaceId = String(body?.workspaceId ?? "");
-    if (!workspaceId) return err(400, "workspace_required");
-    const { data: ws } = await userClient
-      .from("workspaces").select("id").eq("id", workspaceId).maybeSingle();
-    if (!ws) return err(403, "forbidden");
-  }
+  // autorização por workspace
+  const workspaceId = String(body?.workspaceId ?? "");
+  if (!workspaceId) return err(400, "workspace_required");
+  const { data: ws } = await userClient
+    .from("workspaces").select("id").eq("id", workspaceId).maybeSingle();
+  if (!ws) return err(403, "forbidden");
 
   const question = String(body?.question ?? "").trim();
   if (question.length < 5 || question.length > 300) return err(400, "invalid_question");
