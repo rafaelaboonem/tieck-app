@@ -236,10 +236,54 @@ export interface BudgetInfo {
   reason: string;
 }
 
-/** Identificador de sessão de câmera (não é dado pessoal, só agrupa chamadas). */
-export function newSessionId(): string {
-  return crypto.randomUUID().replaceAll("-", "").slice(0, 32);
+/**
+ * Sessão do laboratório: o identificador é emitido pelo servidor e validado
+ * a cada chamada. O cliente nunca inventa nem reinicia um orçamento.
+ */
+export interface LabSession {
+  ok: boolean;
+  sessionId: string;
+  expiresAt: string | null;
+  reused: boolean;
+  liveUsed: number;
+  liveLimit: number;
+  attemptsUsed: number;
+  attemptsLimit: number;
+  reason?: string;
+  message?: string;
 }
+
+export async function startLabSession(
+  workspaceId: string,
+  standardId: string | null,
+): Promise<LabSession> {
+  const { data, error } = await supabase.functions.invoke("vision-benchmark", {
+    body: { action: "lab-session-start", workspaceId, standardId: standardId ?? undefined },
+  });
+  if (error) throw error;
+  return data as LabSession;
+}
+
+export interface LabAttempt {
+  ok: boolean;
+  attemptId?: string;
+  attemptsUsed: number;
+  attemptsLimit?: number;
+  reason?: string;
+}
+
+/** Uma tentativa = uma foto = uma decisão final. */
+export async function createLabAttempt(
+  workspaceId: string,
+  sessionId: string,
+): Promise<LabAttempt> {
+  const { data, error } = await supabase.functions.invoke("vision-benchmark", {
+    body: { action: "lab-attempt-create", workspaceId, sessionId },
+  });
+  if (error) throw error;
+  return data as LabAttempt;
+}
+
 
 export interface LabResponse {
   observer: {
