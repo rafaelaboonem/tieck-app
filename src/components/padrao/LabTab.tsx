@@ -244,7 +244,9 @@ export function LabTab({ workspaceId, standards, selected, onSelect, runs, onRun
 
 
       <div className="space-y-4">
-        {lastRun ? <RunDetail run={lastRun} /> : (
+        {lastRun ? (
+          <RunDetail run={lastRun} onMark={(patch) => onUpdateRun?.(lastRun.id, patch)} />
+        ) : (
           <Card>
             <CardContent className="py-16 text-center text-sm text-muted-foreground">
               Envie uma foto e rode o primeiro teste para ver as duas etapas da análise.
@@ -264,6 +266,7 @@ export function LabTab({ workspaceId, standards, selected, onSelect, runs, onRun
                   <div key={r.id} className="flex items-center justify-between gap-3 rounded-md border p-2 text-xs">
                     <span className="truncate">{r.question}</span>
                     <div className="flex shrink-0 items-center gap-2">
+                      {r.source === "camera_v3" && <Badge variant="outline">câmera</Badge>}
                       <Badge variant="outline" className={meta.tone}>{meta.label}</Badge>
                       <span className="text-muted-foreground">
                         {r.correct === null ? "—" : r.correct ? "acerto" : "erro"}
@@ -276,9 +279,36 @@ export function LabTab({ workspaceId, standards, selected, onSelect, runs, onRun
           </Card>
         )}
       </div>
+
+      {selected && (
+        <CameraV3Preview
+          open={cameraOpen}
+          workspaceId={workspaceId}
+          question={question}
+          profile={profile}
+          standardId={selected.id}
+          referencePath={selected.reference_path}
+          useReference={useReference && Boolean(selected.reference_path)}
+          onClose={() => setCameraOpen(false)}
+          onResult={({ response, live }) =>
+            pushRun({
+              ...response,
+              id: crypto.randomUUID(),
+              at: new Date().toISOString(),
+              question,
+              expected,
+              correct: null,
+              source: "camera_v3",
+              releaseCase: releaseCase || null,
+              live,
+            })
+          }
+        />
+      )}
     </div>
   );
 }
+
 
 function RunDetail({ run }: { run: LabRun }) {
   const meta = DECISION_META[run.combined.decision];
