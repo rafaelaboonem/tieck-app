@@ -217,9 +217,50 @@ export interface LabResponse {
     confidence: number | null;
     latencyMs: number;
   } | null;
-  combined: { decision: LabDecision; reason_code: string; public_message: string };
+  combined: {
+    decision: LabDecision;
+    reason_code: string;
+    public_message: string;
+    gate?: Record<string, boolean>;
+  };
   referenceMode: "none" | "multi_image" | "derived";
   totalLatencyMs: number;
+}
+
+/** Casos obrigatórios antes de liberar a Camera V3 nos checklists públicos. */
+export type ReleaseCase =
+  | "correct_photo"
+  | "correct_other_angle"
+  | "wrong_object"
+  | "wrong_place"
+  | "partial_framing"
+  | "wrong_condition"
+  | "dark_photo";
+
+export const RELEASE_CASES: { key: ReleaseCase; label: string; expected: ExpectedResult }[] = [
+  { key: "correct_photo", label: "Foto correta aprovada", expected: "approved" },
+  { key: "correct_other_angle", label: "Foto correta em outro ângulo aprovada", expected: "approved" },
+  { key: "wrong_object", label: "Objeto errado rejeitado", expected: "retake" },
+  { key: "wrong_place", label: "Ambiente errado rejeitado", expected: "retake" },
+  { key: "partial_framing", label: "Enquadramento parcial rejeitado", expected: "retake" },
+  { key: "wrong_condition", label: "Condição inadequada rejeitada", expected: "retake" },
+  { key: "dark_photo", label: "Foto escura rejeitada", expected: "retake" },
+];
+
+export interface LiveStats {
+  /** ms entre abrir a câmera e a primeira detecção real do alvo. */
+  timeToTargetMs: number | null;
+  liveChecks: number;
+  avgLiveLatencyMs: number | null;
+  strategy: "detect" | "point" | "query" | "none";
+}
+
+export interface EvaluatorMarks {
+  aiWasRight: boolean | null;
+  falseApproval: boolean;
+  falseRejection: boolean;
+  liveGuidanceHelped: boolean | null;
+  liveGuidanceWrong: boolean;
 }
 
 export interface LabRun extends LabResponse {
@@ -228,6 +269,10 @@ export interface LabRun extends LabResponse {
   question: string;
   expected: ExpectedResult;
   correct: boolean | null;
+  source?: "upload" | "camera_v3";
+  releaseCase?: ReleaseCase | null;
+  live?: LiveStats | null;
+  marks?: EvaluatorMarks | null;
 }
 
 export async function runBenchmark(input: {
@@ -235,6 +280,8 @@ export async function runBenchmark(input: {
   question: string;
   imageBase64: string;
   referenceBase64?: string | null;
+  standardId?: string | null;
+  profile?: StandardProfile | null;
 }): Promise<LabResponse> {
   const { data, error } = await supabase.functions.invoke("vision-benchmark", {
     body: {
@@ -243,10 +290,67 @@ export async function runBenchmark(input: {
       question: input.question,
       imageBase64: input.imageBase64,
       referenceBase64: input.referenceBase64 ?? undefined,
+      standardId: input.standardId ?? undefined,
+      profile: input.profile ?? undefined,
     },
   });
   if (error) throw error;
   return data as LabResponse;
+}
+
+/** Gera/atualiza o perfil interno do padrão no servidor. Best-effort. */
+export async function ensureStandardProfile(
+  workspaceId: string,
+  standardId: string,
+): Promise<{ ok: boolean; needsValidation?: boolean }> {
+  const { data, error } = await supabase.functions.invoke("vision-benchmark", {
+    body: { action: "profile-standard", workspaceId, standardId },
+  });
+  if (error) return { ok: false };
+  return data as { ok: boolean; needsValidation?: boolean };
+}
+
+export interface LocateResult {
+  strategy: "detect" | "point" | "query" | "none";
+  found: boolean;
+  box: { x: number; y: number; w: number; h: number } | null;
+  latencyMs: number;
+}
+
+/** Localização ao vivo — o frame é enviado em memória e nunca armazenado. */
+export async function liveLocate(input: {
+  workspaceId: string;
+  target: string;
+  frameBase64: string;
+}): Promise<LocateResult> {
+  const { data, error } = await supabase.functions.invoke("vision-benchmark", {
+    body: {
+      action: "live-locate",
+      workspaceId: input.workspaceId,
+      target: input.target,
+      frameBase64: input.frameBase64,
+    },
+  });
+  if (error) throw error;
+  return data as LocateResult;
+}
+
+/** Trava de liberação: só libera com todos os casos críticos corretos. */
+export function computeRelease(runs: LabRun[]) {
+  const cases = RELEASE_CASES.map((c) => {
+    const matching = runs.filter((r) => r.releaseCase === c.key && r.source === "camera_v3");
+    const passed = matching.some((r) => r.combined.decision === c.expected && r.marks?.aiWasRight !== false);
+    const falseApproval = matching.some(
+      (r) => c.expected === "retake" && (r.combined.decision === "approved" || r.marks?.falseApproval === true),
+    );
+    return { ...c, tested: matching.length, passed, falseApproval };
+  });
+  const blockedByFalseApproval = cases.some((c) => c.falseApproval);
+  return {
+    cases,
+    ready: cases.every((c) => c.passed) && !blockedByFalseApproval,
+    blockedByFalseApproval,
+  };
 }
 
 export function isCorrect(run: Pick<LabRun, "combined" | "expected">): boolean | null {
