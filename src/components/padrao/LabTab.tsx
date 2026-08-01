@@ -20,12 +20,16 @@ import {
   createLabAttempt,
   CONDITION_STATUS_LABEL,
   RELEASE_CASES,
+  LAB_PROVIDERS,
+  DEFAULT_LAB_PROVIDER,
   type ExpectedResult,
   type LabDecision,
+  type LabProvider,
   type LabRun,
   type ReleaseCase,
   type VisualStandard,
 } from "@/lib/visual-standards";
+
 
 
 const emptyMarks = {
