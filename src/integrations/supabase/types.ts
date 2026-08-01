@@ -1772,7 +1772,7 @@ export type Database = {
         }
         Returns: {
           acquired: boolean
-          lock_key: string
+          key: string
         }[]
       }
       claim_checklist_analysis: {
