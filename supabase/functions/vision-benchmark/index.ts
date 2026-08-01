@@ -980,6 +980,8 @@ Deno.serve(async (req) => {
     const requestId = String(body?.requestId ?? "").slice(0, 40) || null;
     const standardId = String(body?.standardId ?? "");
     if (!standardId) return err(400, "standard_required");
+    const sessionId = sessionIdOf(body);
+    if (!sessionId) return err(400, "session_required");
     const { data: std } = await userClient
       .from("visual_standards")
       .select("internal_profile")
@@ -994,6 +996,7 @@ Deno.serve(async (req) => {
         requestId, strategy: "none", found: false, boxes: [], inferenceMs: 0,
         state: "uncertain", hintCode: "no_target_configured",
         hint: "Este padrão ainda não está pronto para orientação na câmera.",
+        budget: { spent: false, used: 0, remaining: LIVE_CHECKS_PER_SESSION, reason: "no_target" },
       });
     }
     const frame = decodeImage(body?.frameBase64, MIN_DIM);
@@ -1002,16 +1005,44 @@ Deno.serve(async (req) => {
     const liveKey = `live:${actorId}`;
     if (inFlight.has(liveKey)) return err(409, "already_running");
     inFlight.add(liveKey);
+    const meter: UsageEntry[] = [];
     try {
-      const r = await locateTarget(frame, target);
+      // Orçamento decidido no servidor: cooldown e teto por sessão.
+      const budget = await consumeSession(svc, { sessionId, workspaceId, userId: actorId, kind: "live" });
+      if (!budget.allowed) {
+        return json(200, {
+          requestId, strategy: "none", found: false, boxes: [], inferenceMs: 0,
+          state: "uncertain",
+          hintCode: budget.reason === "cooldown" ? "cooldown" : "budget_exhausted",
+          hint: budget.reason === "cooldown"
+            ? "Aguarde um instante antes da próxima verificação."
+            : "As verificações automáticas desta sessão terminaram. Enquadre e tire a foto.",
+          budget: { spent: false, used: budget.used, remaining: budget.remaining, reason: budget.reason },
+        });
+      }
+      const r = await locateTarget(frame, target, meter);
       const g = liveGuidance(r.found, r.boxes);
-      return json(200, { requestId, ...r, ...g, hint: HINTS[g.hintCode] });
+      await recordUsage(svc, {
+        meter, workspaceId, userId: actorId, sessionId,
+        standardId, action: "live-locate", decision: g.state,
+      });
+      return json(200, {
+        requestId, ...r, ...g, hint: HINTS[g.hintCode],
+        budget: { spent: true, used: budget.used, remaining: budget.remaining, reason: "ok" },
+        usage: meterTotals(meter),
+      });
     } catch (e) {
       const code = String((e as Error).message ?? "unknown").slice(0, 60);
+      await recordUsage(svc, {
+        meter, workspaceId, userId: actorId, sessionId,
+        standardId, action: "live-locate", decision: "failed",
+      });
       console.error(`[lab] locate_failed user=${actorId.slice(0, 8)} code=${code}`);
       return json(200, {
         requestId, strategy: "none", found: false, boxes: [], inferenceMs: 0,
         state: "uncertain", hintCode: "uncertain", hint: HINTS.uncertain,
+        budget: { spent: true, used: 0, remaining: 0, reason: "error" },
+        usage: meterTotals(meter),
       });
     } finally {
       inFlight.delete(liveKey);
