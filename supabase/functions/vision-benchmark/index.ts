@@ -559,6 +559,7 @@ const DECISION_SCHEMA = {
     sharpness_sufficient: { type: "boolean" },
     quality_sufficient: { type: "boolean" },
     condition_met: { type: "boolean" },
+    condition_status: { type: "string", enum: ["verified", "not_met", "not_observable"] },
     supporting_evidence: { type: "array", items: { type: "string" } },
     contrary_evidence: { type: "array", items: { type: "string" } },
     same_place_as_reference: { type: "boolean" },
@@ -569,6 +570,7 @@ const DECISION_SCHEMA = {
       enum: [
         "condition_met",
         "condition_not_met",
+        "not_observable",
         "target_not_found",
         "wrong_object",
         "wrong_place",
@@ -585,7 +587,7 @@ const DECISION_SCHEMA = {
   required: [
     "visible_description", "target_found", "target_visible", "framing_sufficient",
     "lighting_sufficient", "sharpness_sufficient", "quality_sufficient", "condition_met",
-    "decision", "reason_code", "public_message", "confidence",
+    "condition_status", "decision", "reason_code", "public_message", "confidence",
   ],
 };
 
