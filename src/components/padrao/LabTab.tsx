@@ -171,52 +171,13 @@ export function LabTab({ workspaceId, standards, selected, onSelect, runs, onRun
           <CardTitle className="text-lg">Analisar uma foto</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="lab-project">Selecione o projeto</Label>
-            <select
-              id="lab-project"
-              className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-              value={projectId}
-              onChange={(e) => { setProjectId(e.target.value); onSelect(null); }}
-              disabled={projectsLoading}
-            >
-              <option value="">{projectsLoading ? "Carregando…" : "Selecione o projeto"}</option>
-              {projects.map((p) => (
-                <option key={p.id} value={p.id}>{p.title}</option>
-              ))}
-            </select>
-          </div>
+          {!selected && (
+            <p className="rounded-lg border p-3 text-sm text-muted-foreground">
+              Esta pergunta ainda não possui um padrão visual. Configure o padrão para testar aqui.
+            </p>
+          )}
 
-          <div className="space-y-2">
-            <Label htmlFor="lab-question">Selecione a pergunta</Label>
-            <select
-              id="lab-question"
-              className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-              value={selected?.camera_block_id ?? ""}
-              disabled={!project}
-              onChange={(e) => {
-                const std = standards.find(
-                  (s) => !s.archived_at && s.camera_block_id === e.target.value,
-                );
-                onSelect(std ?? null);
-              }}
-            >
-              <option value="">Selecione a pergunta</option>
-              {(project?.cameraBlocks ?? []).map((b) => {
-                const std = standards.find((s) => !s.archived_at && s.camera_block_id === b.cameraBlockId);
-                return (
-                  <option key={b.cameraBlockId} value={b.cameraBlockId} disabled={!std}>
-                    {b.question}{std ? "" : " — sem padrão configurado"}
-                  </option>
-                );
-              })}
-            </select>
-            {project && project.cameraBlocks.length === 0 && (
-              <p className="text-xs text-muted-foreground">
-                Este projeto ainda não possui perguntas com câmera.
-              </p>
-            )}
-          </div>
+
 
           <div className="space-y-1 rounded-lg border p-3">
             <p className="text-sm font-medium">O que será verificado</p>
