@@ -315,8 +315,12 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
   if (req.method !== "POST") return err(405, "method_not_allowed");
 
+  // Modo diagnóstico interno: exige segredo de servidor (nunca público, nunca no frontend).
+  const diagSecret = String(Deno.env.get("LAB_DIAG_TOKEN") ?? "").trim();
+  const diagMode = diagSecret.length > 0 && req.headers.get("x-diag-token") === diagSecret;
+
   const authHeader = req.headers.get("Authorization") ?? "";
-  if (!authHeader.toLowerCase().startsWith("bearer ")) return err(401, "unauthorized");
+  if (!diagMode && !authHeader.toLowerCase().startsWith("bearer ")) return err(401, "unauthorized");
 
   const url = Deno.env.get("SUPABASE_URL")!;
   const anon = Deno.env.get("SUPABASE_ANON_KEY") ?? Deno.env.get("SUPABASE_PUBLISHABLE_KEYS") ?? "";
@@ -326,7 +330,8 @@ Deno.serve(async (req) => {
   });
   const { data: userData } = await userClient.auth.getUser();
   const user = userData?.user;
-  if (!user) return err(401, "unauthorized");
+  if (!user && !diagMode) return err(401, "unauthorized");
+  const actorId = user?.id ?? "diag";
 
   let body: any;
   try { body = await req.json(); } catch { return err(400, "invalid_body"); }
@@ -337,13 +342,14 @@ Deno.serve(async (req) => {
     auth: { persistSession: false, autoRefreshToken: false },
   });
   const { data: rl } = await svc.rpc("hit_public_rate_limit", {
-    p_key_hash: `lab:${user.id}`,
+    p_key_hash: `lab:${actorId}`,
     p_action: action || "unknown",
     p_window_seconds: 60,
     p_limit: action === "capabilities" ? 10 : 20,
   });
   const allowed = Array.isArray(rl) ? rl[0]?.allowed : (rl as any)?.allowed;
   if (allowed === false) return err(429, "rate_limited");
+
 
   if (action === "capabilities") {
     const out: Record<string, unknown> = { fast: null, final: null };
