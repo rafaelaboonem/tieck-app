@@ -1341,8 +1341,11 @@ export type Database = {
           created_by: string
           id: string
           internal_notes: string | null
+          internal_profile: Json
           last_validated_at: string | null
           name: string
+          needs_validation: boolean
+          profile_version: number
           question: string
           reference_path: string | null
           status: string
@@ -1356,8 +1359,11 @@ export type Database = {
           created_by: string
           id?: string
           internal_notes?: string | null
+          internal_profile?: Json
           last_validated_at?: string | null
           name: string
+          needs_validation?: boolean
+          profile_version?: number
           question: string
           reference_path?: string | null
           status?: string
@@ -1371,8 +1377,11 @@ export type Database = {
           created_by?: string
           id?: string
           internal_notes?: string | null
+          internal_profile?: Json
           last_validated_at?: string | null
           name?: string
+          needs_validation?: boolean
+          profile_version?: number
           question?: string
           reference_path?: string | null
           status?: string
