@@ -65,7 +65,9 @@ export function LabTab({ workspaceId, standards, selected, onSelect, runs, onRun
   const [expected, setExpected] = useState<ExpectedResult>("approved");
   const [useReference, setUseReference] = useState(true);
   const [running, setRunning] = useState(false);
+  const [provider, setProvider] = useState<LabProvider>(DEFAULT_LAB_PROVIDER);
   const [releaseCase, setReleaseCase] = useState<ReleaseCase | "">("");
+
   const [cameraOpen, setCameraOpen] = useState(false);
   const [profiling, setProfiling] = useState(false);
   const [attemptsUsed, setAttemptsUsed] = useState<number | null>(null);
