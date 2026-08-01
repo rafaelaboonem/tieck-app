@@ -235,7 +235,20 @@ export function combine(
     };
   }
 
+  // Verificação parcial: uma foto só não basta para dar como cumprido.
+  if (options.verifiability === "partially_verifiable" && Object.values(gate).every(Boolean)) {
+    return {
+      ...base,
+      decision: "uncertain",
+      reason_code: "needs_more_evidence",
+      public_message: NOT_OBSERVABLE_MESSAGE,
+      condition_status: status,
+      gate,
+    };
+  }
+
   if (Object.values(gate).every(Boolean)) {
+
     return {
       ...base,
       decision: "approved",
