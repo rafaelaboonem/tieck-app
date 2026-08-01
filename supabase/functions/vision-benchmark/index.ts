@@ -709,19 +709,47 @@ Deno.serve(async (req) => {
 
   // ---------- localização ao vivo (frame só em memória) ----------
   if (action === "live-locate") {
-    const target = String(body?.target ?? "").trim().slice(0, 60);
-    if (!target) return err(400, "target_required");
+    const requestId = String(body?.requestId ?? "").slice(0, 40) || null;
+    const standardId = String(body?.standardId ?? "");
+    if (!standardId) return err(400, "standard_required");
+    const { data: std } = await userClient
+      .from("visual_standards")
+      .select("internal_profile")
+      .eq("id", standardId)
+      .eq("workspace_id", workspaceId)
+      .maybeSingle();
+    const stored = (std as any)?.internal_profile;
+    // Alvo vem sempre do padrão salvo — nunca do que o cliente enviar.
+    const target = String(stored?.target_phrase_en || stored?.target_phrase || "").trim().slice(0, 60);
+    if (!target) {
+      return json(200, {
+        requestId, strategy: "none", found: false, boxes: [], inferenceMs: 0,
+        state: "uncertain", hintCode: "no_target_configured",
+        hint: "Este padrão ainda não está pronto para orientação na câmera.",
+      });
+    }
     const frame = decodeImage(body?.frameBase64, MIN_DIM);
     if (!frame) return err(400, "invalid_image");
+
+    const liveKey = `live:${actorId}`;
+    if (inFlight.has(liveKey)) return err(409, "already_running");
+    inFlight.add(liveKey);
     try {
       const r = await locateTarget(frame, target);
-      return json(200, r);
+      const g = liveGuidance(r.found, r.boxes);
+      return json(200, { requestId, ...r, ...g, hint: HINTS[g.hintCode] });
     } catch (e) {
       const code = String((e as Error).message ?? "unknown").slice(0, 60);
       console.error(`[lab] locate_failed user=${actorId.slice(0, 8)} code=${code}`);
-      return json(200, { strategy: "none", found: false, box: null, latencyMs: 0, code });
+      return json(200, {
+        requestId, strategy: "none", found: false, boxes: [], inferenceMs: 0,
+        state: "uncertain", hintCode: "uncertain", hint: HINTS.uncertain,
+      });
+    } finally {
+      inFlight.delete(liveKey);
     }
   }
+
 
   if (action !== "benchmark-evaluate") return err(400, "unknown_action");
 
