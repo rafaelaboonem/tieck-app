@@ -264,25 +264,8 @@ function parseJsonLoose(text: string): any | null {
 }
 
 // ---------------- sanitização ----------------
-const LEAK_PATTERNS = [
-  /prompt/i, /json/i, /schema/i, /system/i, /instru(c|ç)(a|ã)o interna/i,
-  /moondream/i, /llama/i, /cloudflare/i, /model/i, /token/i,
-];
-function sanitizeMessage(raw: unknown, fallback: string): string {
-  const s = typeof raw === "string" ? raw.trim() : "";
-  if (!s || s.length > 160) return fallback;
-  if (LEAK_PATTERNS.some((p) => p.test(s))) return fallback;
-  return s;
-}
+// sanitizeMessage / strList vêm de ./sanitize.ts
 
-function strList(value: unknown, max = 6): string[] {
-  if (!Array.isArray(value)) return [];
-  return value
-    .filter((v) => typeof v === "string")
-    .map((v) => (v as string).trim().slice(0, 120))
-    .filter(Boolean)
-    .slice(0, max);
-}
 
 // ---------------- perfil interno do padrão ----------------
 const PROFILE_SCHEMA = {
