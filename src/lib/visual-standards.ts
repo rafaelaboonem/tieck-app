@@ -88,10 +88,46 @@ export async function listStandards(workspaceId: string): Promise<VisualStandard
   return (data ?? []) as VisualStandard[];
 }
 
+/** Padrão ativo (não arquivado) de uma pergunta /Camera. */
+export function standardForBlock(
+  standards: VisualStandard[],
+  checklistId: string,
+  cameraBlockId: string,
+): VisualStandard | null {
+  return (
+    standards.find(
+      (s) =>
+        !s.archived_at &&
+        s.checklist_id === checklistId &&
+        s.camera_block_id === cameraBlockId,
+    ) ?? null
+  );
+}
+
+export type BlockStandardStatus = "none" | "validating" | "active";
+
+export function blockStandardStatus(s: VisualStandard | null): BlockStandardStatus {
+  if (!s) return "none";
+  return s.status === "validated" && !s.needs_validation ? "active" : "validating";
+}
+
+export const BLOCK_STATUS_LABEL: Record<BlockStandardStatus, string> = {
+  none: "Padrão não configurado",
+  validating: "Padrão em validação",
+  active: "Padrão ativo",
+};
+
+/**
+ * Cria o padrão a partir de uma pergunta /Camera existente. O texto da
+ * pergunta vem do bloco — nunca é digitado novamente aqui.
+ */
 export async function createStandard(input: {
   workspaceId: string;
-  name: string;
+  checklistId: string;
+  cameraBlockId: string;
   question: string;
+  /** Opcional: preenchido automaticamente a partir da pergunta. */
+  name?: string;
   internalNotes?: string;
   referenceFile?: File | null;
 }): Promise<VisualStandard> {
@@ -99,6 +135,9 @@ export async function createStandard(input: {
   const userId = auth.user?.id;
   if (!userId) throw new Error("Usuário não autenticado.");
   if (!input.workspaceId) throw new Error("Nenhum workspace válido selecionado.");
+  if (!input.checklistId || !input.cameraBlockId) {
+    throw new Error("Selecione o projeto e a pergunta de câmera.");
+  }
 
   // Fonte autoritativa: só workspaces visíveis pela sessão (RLS) são aceitos.
   const { data: ws, error: wsErr } = await supabase
@@ -109,21 +148,32 @@ export async function createStandard(input: {
   if (wsErr) throw wsErr;
   if (!ws) throw new Error("Você não tem acesso a este workspace.");
 
+  const question = input.question.trim();
+  const autoName = (input.name?.trim() || question).slice(0, 120);
+
   // 1) Cria o registro autorizado primeiro (evita arquivos órfãos).
   const { data, error } = await supabase
     .from("visual_standards")
     .insert({
       workspace_id: input.workspaceId,
       created_by: userId,
-      name: input.name.trim(),
-      question: input.question.trim(),
+      checklist_id: input.checklistId,
+      camera_block_id: input.cameraBlockId,
+      name: autoName,
+      question,
+      validated_question: question,
       internal_notes: input.internalNotes?.trim() || null,
       reference_path: null,
       status: "draft",
     })
     .select("*")
     .single();
-  if (error) throw error;
+  if (error) {
+    if ((error as { code?: string }).code === "23505") {
+      throw new Error("Esta pergunta já possui um padrão visual.");
+    }
+    throw error;
+  }
   const standard = data as VisualStandard;
 
   // 2) Envia a referência e 3) atualiza o registro com o caminho.
@@ -139,6 +189,93 @@ export async function createStandard(input: {
   }
   return standard;
 }
+
+/** Vincula manualmente um padrão antigo a uma pergunta /Camera existente. */
+export async function linkStandardToBlock(
+  standard: VisualStandard,
+  input: { checklistId: string; cameraBlockId: string; question: string },
+): Promise<VisualStandard> {
+  const question = input.question.trim();
+  const { data, error } = await supabase
+    .from("visual_standards")
+    .update({
+      checklist_id: input.checklistId,
+      camera_block_id: input.cameraBlockId,
+      question,
+      archived_at: null,
+      needs_validation: question !== (standard.validated_question ?? standard.question),
+    })
+    .eq("id", standard.id)
+    .select("*")
+    .single();
+  if (error) {
+    if ((error as { code?: string }).code === "23505") {
+      throw new Error("Esta pergunta já possui um padrão visual.");
+    }
+    throw error;
+  }
+  return data as VisualStandard;
+}
+
+/**
+ * Sincroniza os padrões com os blocos /Camera atuais do checklist:
+ * pergunta editada → revalidação obrigatória; bloco removido → arquivado.
+ * Nada é apagado e nenhuma inferência é executada aqui.
+ */
+export async function syncStandardsWithBlocks(input: {
+  checklistId: string;
+  blocks: { cameraBlockId: string; question: string }[];
+}): Promise<{ revalidate: number; archived: number; restored: number }> {
+  const { data, error } = await supabase
+    .from("visual_standards")
+    .select("*")
+    .eq("checklist_id", input.checklistId);
+  if (error || !data) return { revalidate: 0, archived: 0, restored: 0 };
+
+  const byBlock = new Map(input.blocks.map((b) => [b.cameraBlockId, b.question.trim()]));
+  let revalidate = 0, archived = 0, restored = 0;
+
+  for (const raw of data as VisualStandard[]) {
+    if (!raw.camera_block_id) continue;
+    const current = byBlock.get(raw.camera_block_id);
+
+    if (current === undefined) {
+      // Bloco removido: arquiva sem apagar referência nem histórico.
+      if (!raw.archived_at) {
+        await supabase
+          .from("visual_standards")
+          .update({ archived_at: new Date().toISOString() })
+          .eq("id", raw.id);
+        archived++;
+      }
+      continue;
+    }
+
+    const patch: Record<string, unknown> = {};
+    if (raw.archived_at) { patch["archived_at"] = null; restored++; }
+    if (current !== raw.question) {
+      patch["question"] = current;
+      patch["name"] = current.slice(0, 120);
+      patch["needs_validation"] = true;
+      patch["status"] = "needs_improvement";
+      revalidate++;
+    }
+    if (Object.keys(patch).length > 0) {
+      await supabase.from("visual_standards").update(patch).eq("id", raw.id);
+    }
+  }
+  return { revalidate, archived, restored };
+}
+
+/** Restauração manual de um padrão arquivado (bloco reinserido). */
+export async function restoreStandard(standard: VisualStandard): Promise<void> {
+  const { error } = await supabase
+    .from("visual_standards")
+    .update({ archived_at: null })
+    .eq("id", standard.id);
+  if (error) throw error;
+}
+
 
 function extFor(file: File): string {
   return file.type.includes("png") ? "png" : file.type.includes("webp") ? "webp" : "jpg";
