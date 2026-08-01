@@ -1036,16 +1036,16 @@ Deno.serve(async (req) => {
   // Uma tentativa = uma decisão final. Reenvio devolve o resultado guardado.
   const { data: claimData, error: claimErr } = await svc.rpc("vision_lab_attempt_claim", {
     p_attempt_id: attemptId,
-    p_session_id: sessionId,
     p_user_id: actorId,
   });
   if (claimErr) return err(503, "attempt_unavailable");
   const claim = Array.isArray(claimData) ? claimData[0] : claimData;
+  // Reenvio da mesma tentativa devolve a decisão já registrada.
   if (claim?.reason === "completed") {
-    return json(200, { ...(claim.result ?? {}), replayed: true });
+    return json(200, { ...((claim.cached as any) ?? {}), replayed: true });
   }
   if (claim?.reason === "running") return err(409, "already_running");
-  if (claim?.reason !== "ok") return err(400, String(claim?.reason ?? "attempt_invalid"));
+  if (claim?.claimed !== true) return err(400, String(claim?.reason ?? "attempt_invalid"));
 
   if (inFlight.has(actorId)) return err(409, "already_running");
   inFlight.add(actorId);
@@ -1116,9 +1116,9 @@ Deno.serve(async (req) => {
 
     await svc.rpc("vision_lab_attempt_finish", {
       p_attempt_id: attemptId,
-      p_status: "completed",
-      p_decision: combined.decision,
+      p_user_id: actorId,
       p_result: payload,
+      p_technical_failure: false,
     });
     await recordUsage(svc, {
       meter, workspaceId, userId: actorId, sessionId, attemptId,
@@ -1129,11 +1129,12 @@ Deno.serve(async (req) => {
   } catch (e) {
     const code = String((e as Error).message ?? "unknown").slice(0, 60);
     // Falha técnica NÃO consome a tentativa: ela volta para "pending".
+    // Falha técnica não consome a tentativa: ela volta a ficar disponível.
     await svc.rpc("vision_lab_attempt_finish", {
       p_attempt_id: attemptId,
-      p_status: "technical_failure",
-      p_decision: "technical_failure",
+      p_user_id: actorId,
       p_result: null,
+      p_technical_failure: true,
     });
     await recordUsage(svc, {
       meter, workspaceId, userId: actorId, sessionId, attemptId,
