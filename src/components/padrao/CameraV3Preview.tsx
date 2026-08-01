@@ -522,13 +522,24 @@ export function CameraV3Preview(props: Props) {
               </>
             ) : decision === "uncertain" ? (
               <>
-                <p className="text-base font-semibold text-sky-300">Tire outra foto</p>
-                <p className="text-sm text-white/85">Não deu para confirmar. Melhore o enquadramento e tente de novo.</p>
+                <p className="text-base font-semibold text-sky-300">
+                  {result?.combined.condition_status === "not_observable"
+                    ? "Não dá para confirmar por foto"
+                    : "Tire outra foto"}
+                </p>
+                <p className="text-sm text-white/85">
+                  {result?.combined.public_message ??
+                    "Não deu para confirmar. Melhore o enquadramento e tente de novo."}
+                </p>
               </>
             ) : decision === "technical_failure" ? (
               <>
                 <p className="text-base font-semibold text-rose-300">Não foi possível verificar agora.</p>
-                <p className="text-sm text-white/85">Tente novamente.</p>
+                <p className="text-sm text-white/85">
+                  {result?.combined.reason_code === "session_limit_reached"
+                    ? result.combined.public_message
+                    : "Tente novamente."}
+                </p>
               </>
             ) : (
               <>
