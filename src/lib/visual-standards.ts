@@ -346,6 +346,7 @@ export async function runBenchmark(input: {
   referenceBase64?: string | null;
   standardId?: string | null;
   profile?: StandardProfile | null;
+  sessionId: string;
 }): Promise<LabResponse> {
   const { data, error } = await supabase.functions.invoke("vision-benchmark", {
     body: {
@@ -356,6 +357,7 @@ export async function runBenchmark(input: {
       referenceBase64: input.referenceBase64 ?? undefined,
       standardId: input.standardId ?? undefined,
       profile: input.profile ?? undefined,
+      sessionId: input.sessionId,
     },
   });
   if (error) throw error;
@@ -366,12 +368,12 @@ export async function runBenchmark(input: {
 export async function ensureStandardProfile(
   workspaceId: string,
   standardId: string,
-): Promise<{ ok: boolean; needsValidation?: boolean }> {
+): Promise<{ ok: boolean; needsValidation?: boolean; usage?: UsageTotals }> {
   const { data, error } = await supabase.functions.invoke("vision-benchmark", {
     body: { action: "profile-standard", workspaceId, standardId },
   });
   if (error) return { ok: false };
-  return data as { ok: boolean; needsValidation?: boolean };
+  return data as { ok: boolean; needsValidation?: boolean; usage?: UsageTotals };
 }
 
 export type LiveState = "searching" | "adjust" | "ready" | "uncertain";
@@ -386,6 +388,8 @@ export interface LocateResult {
   hintCode: string;
   hint: string;
   inferenceMs: number;
+  budget?: BudgetInfo;
+  usage?: UsageTotals;
 }
 
 /** Localização ao vivo — o frame é enviado em memória e nunca armazenado. */
@@ -394,6 +398,7 @@ export async function liveLocate(input: {
   standardId: string;
   frameBase64: string;
   requestId: string;
+  sessionId: string;
 }): Promise<LocateResult> {
   const { data, error } = await supabase.functions.invoke("vision-benchmark", {
     body: {
@@ -402,6 +407,7 @@ export async function liveLocate(input: {
       standardId: input.standardId,
       frameBase64: input.frameBase64,
       requestId: input.requestId,
+      sessionId: input.sessionId,
     },
   });
   if (error) throw error;
