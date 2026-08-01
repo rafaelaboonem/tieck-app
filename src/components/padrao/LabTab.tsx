@@ -310,7 +310,7 @@ export function LabTab({ workspaceId, standards, selected, onSelect, runs, onRun
 }
 
 
-function RunDetail({ run }: { run: LabRun }) {
+function RunDetail({ run, onMark }: { run: LabRun; onMark?: (patch: Partial<LabRun>) => void }) {
   const meta = DECISION_META[run.combined.decision];
   const Icon = meta.icon;
   return (
