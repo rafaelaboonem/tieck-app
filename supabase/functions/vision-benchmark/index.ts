@@ -906,7 +906,8 @@ Deno.serve(async (req) => {
       judge: null,
       combined: {
         decision: "technical_failure",
-        reason_code: code,
+        reason_code: /^[a-z0-9_]{1,40}$/.test(code) ? code : "service_unavailable",
+
         public_message: "Não foi possível verificar agora. Tente novamente.",
         gate: {},
       },
