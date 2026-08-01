@@ -644,10 +644,14 @@ async function runJudge(args: {
 }
 
 // ---------------- gate conservador ----------------
+type ConditionStatus = "verified" | "not_met" | "not_observable";
+
 type Combined = {
   decision: "approved" | "retake" | "uncertain" | "technical_failure";
   reason_code: string;
   public_message: string;
+  /** Honestidade visual: o que a foto realmente comprova. */
+  condition_status: ConditionStatus | null;
   gate: Record<string, boolean>;
 };
 
@@ -663,8 +667,18 @@ const RETAKE_MESSAGES: Record<string, string> = {
   insufficient_evidence: "A foto não mostra o suficiente para confirmar. Tire outra mais próxima.",
 };
 
+const NOT_OBSERVABLE_MESSAGE =
+  "Esta foto não é capaz de comprovar o que foi pedido. É necessária uma conferência de outra forma.";
+
+function conditionStatusOf(judge: any): ConditionStatus {
+  const raw = String(judge?.condition_status ?? "").trim();
+  if (raw === "verified" || raw === "not_met" || raw === "not_observable") return raw;
+  return judge?.condition_met === true ? "verified" : "not_met";
+}
+
 function combine(observer: Awaited<ReturnType<typeof runObserver>>, judge: any): Combined {
   const bool = (v: unknown) => v === true;
+  const status = conditionStatusOf(judge);
   const gate = {
     target_found: bool(judge.target_found) && observer.targetVisible,
     target_visible: bool(judge.target_visible),
@@ -672,10 +686,21 @@ function combine(observer: Awaited<ReturnType<typeof runObserver>>, judge: any):
     lighting_sufficient: bool(judge.lighting_sufficient) && !observer.dark && !observer.overexposed,
     sharpness_sufficient: bool(judge.sharpness_sufficient) && !observer.blurry,
     quality_sufficient: bool(judge.quality_sufficient),
-    condition_met: bool(judge.condition_met),
+    condition_met: bool(judge.condition_met) && status === "verified",
     no_contrary_evidence: !(Array.isArray(judge.contrary_evidence) && judge.contrary_evidence.length > 0),
     judge_approved: judge.decision === "approved",
   };
+
+  // Honestidade visual: nada que a foto não mostre pode ser dado como verificado.
+  if (status === "not_observable") {
+    return {
+      decision: "uncertain",
+      reason_code: "not_observable",
+      public_message: NOT_OBSERVABLE_MESSAGE,
+      condition_status: status,
+      gate,
+    };
+  }
 
   // Discordância explícita entre etapas → incerto, nunca aprovação.
   const observerNegative = !observer.targetVisible || observer.dark || observer.blurry ||
