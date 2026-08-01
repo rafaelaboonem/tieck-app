@@ -392,7 +392,6 @@ async function locateTarget(frame: Decoded, target: string) {
     max_tokens: 32,
   }, LIVE_TIMEOUT_MS);
   const text = extractModelText(p).toLowerCase();
-  console.log(`[lab] locate_query_answer ${JSON.stringify(text.slice(0, 80))}`);
   const yes = /\byes\b|\bsim\b|"?answer"?\s*:\s*"?yes/.test(text) && !/^\s*"?no\b/.test(text.trim());
   return done("query", yes, []);
 
