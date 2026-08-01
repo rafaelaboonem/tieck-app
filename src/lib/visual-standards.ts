@@ -415,13 +415,21 @@ export async function liveLocate(input: {
 }
 
 
+/** Uma execução atende ao resultado esperado? */
+function matchesExpected(run: Pick<LabRun, "combined" | "expected">): boolean {
+  if (run.expected === "not_observable") {
+    return run.combined.condition_status === "not_observable";
+  }
+  return run.combined.decision === run.expected;
+}
+
 /** Trava de liberação: só libera com todos os casos críticos corretos. */
 export function computeRelease(runs: LabRun[]) {
   const cases = RELEASE_CASES.map((c) => {
     const matching = runs.filter((r) => r.releaseCase === c.key && r.source === "camera_v3");
-    const passed = matching.some((r) => r.combined.decision === c.expected && r.marks?.aiWasRight !== false);
+    const passed = matching.some((r) => matchesExpected(r) && r.marks?.aiWasRight !== false);
     const falseApproval = matching.some(
-      (r) => c.expected === "retake" && (r.combined.decision === "approved" || r.marks?.falseApproval === true),
+      (r) => c.expected !== "approved" && (r.combined.decision === "approved" || r.marks?.falseApproval === true),
     );
     return { ...c, tested: matching.length, passed, falseApproval };
   });
@@ -435,8 +443,50 @@ export function computeRelease(runs: LabRun[]) {
 
 export function isCorrect(run: Pick<LabRun, "combined" | "expected">): boolean | null {
   const d = run.combined.decision;
+  if (run.expected === "not_observable") {
+    if (d === "technical_failure") return null;
+    return run.combined.condition_status === "not_observable";
+  }
   if (d === "uncertain" || d === "technical_failure") return null;
   return d === run.expected;
+}
+
+/** Consumo somado das execuções registradas na sessão do laboratório. */
+export interface UsageSummary {
+  aiCalls: number;
+  neurons: number;
+  inputTokens: number;
+  outputTokens: number;
+  estimatedUsd: number;
+  runsWithUsage: number;
+  avgNeuronsPerRun: number | null;
+  localChecks: number;
+}
+
+export const USD_PER_1K_NEURONS = 0.011;
+
+export function computeUsage(runs: LabRun[]): UsageSummary {
+  let aiCalls = 0, neurons = 0, inputTokens = 0, outputTokens = 0, runsWithUsage = 0, localChecks = 0;
+  for (const r of runs) {
+    if (r.usage) {
+      runsWithUsage++;
+      aiCalls += r.usage.calls ?? 0;
+      neurons += r.usage.neurons ?? 0;
+      inputTokens += r.usage.inputTokens ?? 0;
+      outputTokens += r.usage.outputTokens ?? 0;
+    }
+    localChecks += r.live?.localChecks ?? 0;
+  }
+  return {
+    aiCalls,
+    neurons: Math.round(neurons * 1000) / 1000,
+    inputTokens,
+    outputTokens,
+    estimatedUsd: Math.round((neurons / 1000) * USD_PER_1K_NEURONS * 1e6) / 1e6,
+    runsWithUsage,
+    avgNeuronsPerRun: runsWithUsage ? Math.round((neurons / runsWithUsage) * 1000) / 1000 : null,
+    localChecks,
+  };
 }
 
 // ---------------- métricas da sessão ----------------
