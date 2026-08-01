@@ -1334,6 +1334,33 @@ export type Database = {
         }
         Relationships: []
       }
+      vision_locks: {
+        Row: {
+          acquired_at: string
+          expires_at: string
+          lock_key: string
+          operation: string
+          user_id: string
+          workspace_id: string | null
+        }
+        Insert: {
+          acquired_at?: string
+          expires_at: string
+          lock_key: string
+          operation: string
+          user_id: string
+          workspace_id?: string | null
+        }
+        Update: {
+          acquired_at?: string
+          expires_at?: string
+          lock_key?: string
+          operation?: string
+          user_id?: string
+          workspace_id?: string | null
+        }
+        Relationships: []
+      }
       visual_standards: {
         Row: {
           accuracy: number | null
@@ -1736,6 +1763,18 @@ export type Database = {
       }
     }
     Functions: {
+      acquire_vision_lock: {
+        Args: {
+          p_operation: string
+          p_ttl_seconds?: number
+          p_user_id: string
+          p_workspace_id: string
+        }
+        Returns: {
+          acquired: boolean
+          key: string
+        }[]
+      }
       claim_checklist_analysis: {
         Args: { p_analysis_id: string }
         Returns: {
@@ -1831,6 +1870,7 @@ export type Database = {
           published_at: string
         }[]
       }
+      release_vision_lock: { Args: { p_lock_key: string }; Returns: undefined }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
       signup_account_state: { Args: { p_user_id: string }; Returns: string }
