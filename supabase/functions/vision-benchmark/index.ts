@@ -291,13 +291,23 @@ const PROFILE_SCHEMA = {
     target_phrase: { type: "string" },
     target_phrase_en: { type: "string" },
     requested_condition: { type: "string" },
+    conditions: { type: "array", items: { type: "string" } },
     observable_signals: { type: "array", items: { type: "string" } },
     contrary_signals: { type: "array", items: { type: "string" } },
     insufficient_view_signals: { type: "array", items: { type: "string" } },
+    unverifiable_conditions: { type: "array", items: { type: "string" } },
+    visual_verifiability: { type: "string", enum: ["verifiable", "partially_verifiable", "not_verifiable"] },
+    required_evidence_count: { type: "number" },
+    suggested_photos: { type: "array", items: { type: "string" } },
     ambiguous: { type: "boolean" },
   },
-  required: ["target_phrase", "target_phrase_en", "requested_condition", "observable_signals", "ambiguous"],
+  required: [
+    "target_phrase", "target_phrase_en", "requested_condition", "observable_signals",
+    "visual_verifiability", "required_evidence_count", "ambiguous",
+  ],
 };
+
+export type Verifiability = "verifiable" | "partially_verifiable" | "not_verifiable";
 
 /** Reduz o alvo em inglês a uma expressão curta que um detector entende. */
 function detectorPhrase(raw: unknown): string {
@@ -309,6 +319,43 @@ function detectorPhrase(raw: unknown): string {
   return s.split(" ").slice(0, 3).join(" ").slice(0, 40);
 }
 
+/**
+ * Normaliza a verificabilidade a partir da resposta do modelo, de forma
+ * genérica: qualquer condição declarada como não observável rebaixa o padrão.
+ * Não há regra codificada para nenhuma palavra específica.
+ */
+export function normalizeVerifiability(parsed: any): {
+  visual_verifiability: Verifiability;
+  required_evidence_count: number;
+  unverifiable_conditions: string[];
+  suggested_photos: string[];
+} {
+  const unverifiable = strList(parsed?.unverifiable_conditions, 6);
+  const conditions = strList(parsed?.conditions, 6);
+  const suggested = strList(parsed?.suggested_photos, 4);
+  const raw = String(parsed?.visual_verifiability ?? "").trim();
+  let level: Verifiability =
+    raw === "verifiable" || raw === "partially_verifiable" || raw === "not_verifiable"
+      ? raw as Verifiability
+      : "partially_verifiable";
+
+  if (unverifiable.length > 0 && level === "verifiable") level = "partially_verifiable";
+  if (conditions.length > 0 && unverifiable.length >= conditions.length) level = "not_verifiable";
+
+  let count = Number(parsed?.required_evidence_count);
+  if (!Number.isFinite(count) || count < 1) count = 1;
+  count = Math.min(Math.round(count), 4);
+  // Condições que não coexistem em uma única foto exigem mais de uma evidência.
+  if (level !== "verifiable" && count < 2) count = 2;
+  if (level === "verifiable") count = Math.max(1, count);
+
+  return {
+    visual_verifiability: level,
+    required_evidence_count: count,
+    unverifiable_conditions: unverifiable,
+    suggested_photos: suggested.length ? suggested : (level === "verifiable" ? [] : conditions.slice(0, 2)),
+  };
+}
 
 async function buildProfile(question: string, referenceSummary: string | null, meter: UsageEntry[]) {
   const prompt =
@@ -317,10 +364,20 @@ async function buildProfile(question: string, referenceSummary: string | null, m
     `- target_phrase: the main object or place to be photographed (Portuguese, short).\n` +
     `- target_phrase_en: same target in plain English, 1-3 words, suitable for an object detector.\n` +
     `- requested_condition: the condition that must be true about it.\n` +
+    `- conditions: every distinct condition contained in the sentence, one per item (Portuguese).\n` +
     `- observable_signals: things a person could visually confirm to prove the condition.\n` +
     `- contrary_signals: visible things that would prove the condition is NOT met.\n` +
     `- insufficient_view_signals: situations where the photo would not be enough to decide.\n` +
+    `- unverifiable_conditions: the conditions that CANNOT be proven by one single photograph, ` +
+    `because they are hidden, internal, in the past, mutually exclusive in one viewpoint, ` +
+    `or require opening, touching, smelling or measuring (Portuguese).\n` +
+    `- visual_verifiability: "verifiable" when every condition can be proven by one photo; ` +
+    `"partially_verifiable" when some can and some cannot; "not_verifiable" when none can.\n` +
+    `- required_evidence_count: how many separate photographs would be needed to prove all conditions.\n` +
+    `- suggested_photos: if more than one photo is needed, describe each photo to take, in order, ` +
+    `in Brazilian Portuguese, as a short instruction to an operator.\n` +
     `- ambiguous: true if the sentence does not clearly define an object AND a verifiable condition.\n` +
+    `Reason from the conditions themselves; never rely on specific words or object names.\n` +
     `Reply with a single JSON object and nothing else.` +
     (referenceSummary ? `\nStructural summary of a reference photo of the expected result: ${referenceSummary}` : "");
 
@@ -330,7 +387,7 @@ async function buildProfile(question: string, referenceSummary: string | null, m
       const payload = await cfMetered(meter, "profile", finalModel(), {
         messages: [{ role: "user", content: prompt }],
         ...(withSchema ? { response_format: { type: "json_schema", json_schema: PROFILE_SCHEMA } } : {}),
-        max_tokens: 600,
+        max_tokens: 800,
       });
       const text = extractModelText(payload);
       parsed = parseJsonLoose(text);
@@ -345,21 +402,26 @@ async function buildProfile(question: string, referenceSummary: string | null, m
   const target = String(parsed.target_phrase ?? "").trim().slice(0, 80);
   const condition = String(parsed.requested_condition ?? "").trim().slice(0, 160);
   const ambiguous = parsed.ambiguous === true || !target || !condition;
+  const verifiability = normalizeVerifiability(parsed);
   return {
     profile: {
       target_phrase: target,
       target_phrase_en: detectorPhrase(parsed.target_phrase_en),
       requested_condition: condition,
+      conditions: strList(parsed.conditions),
       observable_signals: strList(parsed.observable_signals),
       contrary_signals: strList(parsed.contrary_signals),
       insufficient_view_signals: strList(parsed.insufficient_view_signals),
       reference_summary: referenceSummary,
+      ...verifiability,
       version: PROFILE_VERSION,
       generated_at: new Date().toISOString(),
     },
     ambiguous,
+    verifiability,
   };
 }
+
 
 async function describeReference(reference: Decoded, question: string, meter: UsageEntry[]): Promise<string | null> {
   try {
