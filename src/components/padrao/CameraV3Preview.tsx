@@ -154,6 +154,7 @@ export function CameraV3Preview(props: Props) {
     sessionIdRef.current = "";
     lastLiveAtRef.current = 0;
     setLiveBudget(null);
+    setAttempts(null);
     setPhase("starting");
     setResult(null);
     setFrozen(null);
@@ -195,7 +196,7 @@ export function CameraV3Preview(props: Props) {
       cancelled = true;
       stopStream();
     };
-  }, [open, facing, stopStream]);
+  }, [open, facing, stopStream, workspaceId, standardId]);
 
   // encerra tracks ao sair da página
   useEffect(() => {
@@ -615,6 +616,9 @@ export function CameraV3Preview(props: Props) {
                 ? "Verificação por IA em andamento."
                 : "Checagem de luz, foco e estabilidade feita no aparelho, sem IA."}
             {liveBudget && !liveExhausted ? ` · ${liveBudget.remaining} verificação(ões) de IA restante(s)` : ""}
+            {attempts && attempts.limit != null
+              ? ` · ${Math.max(0, attempts.limit - attempts.used)} análise(s) finais restantes nesta sessão`
+              : ""}
           </p>
           <div className="flex items-center justify-between">
             <div className="flex w-11 justify-start">
