@@ -55,6 +55,7 @@ export function PerformanceTab({
 
   return (
     <div className="space-y-5">
+      {scopeToggle}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <Metric label="Análises na sessão" value={String(m.total)} />
         <Metric label="Aprovadas" value={String(m.approved)} tone="text-emerald-700" />
