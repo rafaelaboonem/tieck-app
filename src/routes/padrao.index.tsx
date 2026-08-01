@@ -127,10 +127,9 @@ function CentralVisualPage() {
             onSelect={setSelected}
             runs={runs}
             onRun={(run) => setRuns((prev) => [run, ...prev])}
-            onUpdateRun={(id, patch) =>
-              setRuns((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)))
-            }
           />
+
+
 
         ) : (
           <PerformanceTab runs={runs} />

@@ -87,16 +87,15 @@ export function StandardsTab({ workspaceId, standards, loading, onCreated, onTes
                     <p className="line-clamp-2 text-xs text-muted-foreground">{s.internal_notes}</p>
                   )}
                   <div className="flex gap-4 text-xs text-muted-foreground">
-                    <span>{s.test_count} teste(s)</span>
-                    <span>
-                      Assertividade: {s.accuracy == null ? "—" : `${Math.round(Number(s.accuracy) * 100)}%`}
-                    </span>
                     <span>{s.reference_path ? "Com referência" : "Sem referência"}</span>
                   </div>
                 </div>
-                <Button variant="outline" size="sm" className="w-full" onClick={() => onTest(s)}>
-                  <FlaskConical className="mr-2 h-4 w-4" /> Testar no laboratório
-                </Button>
+                <div className="space-y-2">
+                  <ActivationPanel standard={s} onChanged={onCreated} />
+                  <Button variant="outline" size="sm" className="w-full" onClick={() => onTest(s)}>
+                    <FlaskConical className="mr-2 h-4 w-4" /> Testar no laboratório
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           ))}
