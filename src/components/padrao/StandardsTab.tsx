@@ -7,11 +7,14 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Loader2, Plus, ImageIcon, FlaskConical } from "lucide-react";
+import { Loader2, Plus, ImageIcon, FlaskConical, Check, X } from "lucide-react";
 import {
   STATUS_LABEL,
   STATUS_TONE,
   createStandard,
+  activationChecks,
+  canActivate,
+  activateStandard,
   type VisualStandard,
 } from "@/lib/visual-standards";
 
@@ -87,21 +90,69 @@ export function StandardsTab({ workspaceId, standards, loading, onCreated, onTes
                     <p className="line-clamp-2 text-xs text-muted-foreground">{s.internal_notes}</p>
                   )}
                   <div className="flex gap-4 text-xs text-muted-foreground">
-                    <span>{s.test_count} teste(s)</span>
-                    <span>
-                      Assertividade: {s.accuracy == null ? "—" : `${Math.round(Number(s.accuracy) * 100)}%`}
-                    </span>
                     <span>{s.reference_path ? "Com referência" : "Sem referência"}</span>
                   </div>
                 </div>
-                <Button variant="outline" size="sm" className="w-full" onClick={() => onTest(s)}>
-                  <FlaskConical className="mr-2 h-4 w-4" /> Testar no laboratório
-                </Button>
+                <div className="space-y-2">
+                  <ActivationPanel standard={s} onChanged={onCreated} />
+                  <Button variant="outline" size="sm" className="w-full" onClick={() => onTest(s)}>
+                    <FlaskConical className="mr-2 h-4 w-4" /> Testar no laboratório
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+function ActivationPanel({ standard, onChanged }: { standard: VisualStandard; onChanged: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const checks = activationChecks(standard);
+  const ready = canActivate(standard);
+  const active = standard.status === "validated";
+
+  const activate = async () => {
+    setBusy(true);
+    try {
+      await activateStandard(standard);
+      toast.success("Padrão ativado.");
+      onChanged();
+    } catch (e) {
+      toast.error(`Não foi possível ativar: ${(e as Error).message}`);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (active) {
+    return (
+      <p className="rounded-md border border-emerald-500/30 bg-emerald-500/10 p-2 text-xs text-emerald-700">
+        Padrão ativo.
+      </p>
+    );
+  }
+
+  return (
+    <div className="space-y-2 rounded-md border p-2">
+      <ul className="space-y-1">
+        {checks.map((c) => (
+          <li key={c.key} className="flex items-center gap-2 text-xs">
+            {c.ok ? (
+              <Check className="h-3.5 w-3.5 text-emerald-600" aria-hidden />
+            ) : (
+              <X className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
+            )}
+            <span className={c.ok ? "" : "text-muted-foreground"}>{c.label}</span>
+          </li>
+        ))}
+      </ul>
+      <Button size="sm" className="w-full" disabled={!ready || busy} onClick={activate}>
+        {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+        Ativar padrão
+      </Button>
     </div>
   );
 }

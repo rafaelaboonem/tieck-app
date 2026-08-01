@@ -36,6 +36,11 @@ export interface VisualStandard {
   internal_profile?: StandardProfile | Record<string, never> | null;
   profile_version?: number;
   needs_validation?: boolean;
+  /** Verificabilidade avaliada no servidor. */
+  visual_verifiability?: string | null;
+  unverifiable_conditions?: unknown[] | null;
+  required_evidence_count?: number | null;
+  confidence_threshold?: number | null;
 }
 
 export interface StandardProfile {
@@ -197,7 +202,7 @@ export function blobToBase64(blob: Blob): Promise<string> {
 // ---------------- laboratório ----------------
 
 export type LabDecision = "approved" | "retake" | "uncertain" | "technical_failure";
-export type ExpectedResult = "approved" | "retake" | "not_observable";
+export type ConditionStatusOnly = ConditionStatus;
 export type ConditionStatus = "verified" | "not_met" | "not_observable";
 
 export const CONDITION_STATUS_LABEL: Record<ConditionStatus, string> = {
@@ -360,41 +365,60 @@ export interface LabResponse {
 }
 
 
-/** Casos obrigatórios antes de liberar a Camera V3 nos checklists públicos. */
-export type ReleaseCase =
-  | "correct_photo"
-  | "correct_other_angle"
-  | "wrong_object"
-  | "wrong_place"
-  | "missing_target"
-  | "partial_framing"
-  | "wrong_condition"
-  | "dark_photo"
-  | "blurry_photo"
-  | "not_observable_condition"
-  | "reference_similar_place";
+// ---------------- ativação de padrão ----------------
+// Sem gabarito manual: a liberação depende apenas de condições objetivas
+// avaliadas no servidor e da confirmação do proprietário.
 
-export const RELEASE_CASES: { key: ReleaseCase; label: string; expected: ExpectedResult }[] = [
-  { key: "correct_photo", label: "Objeto correto aprovado", expected: "approved" },
-  { key: "correct_other_angle", label: "Objeto correto em outro ângulo aprovado", expected: "approved" },
-  { key: "wrong_object", label: "Objeto incorreto rejeitado", expected: "retake" },
-  { key: "wrong_place", label: "Ambiente diferente rejeitado", expected: "retake" },
-  { key: "missing_target", label: "Objeto ausente rejeitado", expected: "retake" },
-  { key: "partial_framing", label: "Foto cortada rejeitada", expected: "retake" },
-  { key: "wrong_condition", label: "Condição inadequada rejeitada", expected: "retake" },
-  { key: "dark_photo", label: "Foto escura rejeitada", expected: "retake" },
-  { key: "blurry_photo", label: "Foto desfocada rejeitada", expected: "retake" },
-  {
-    key: "not_observable_condition",
-    label: "Condição impossível de comprovar por foto sinalizada como tal",
-    expected: "not_observable",
-  },
-  {
-    key: "reference_similar_place",
-    label: "Local parecido com a referência, mas em outra condição, rejeitado",
-    expected: "retake",
-  },
-];
+export interface ActivationCheck {
+  key: string;
+  label: string;
+  ok: boolean;
+}
+
+export function activationChecks(s: VisualStandard): ActivationCheck[] {
+  const profile = profileOf(s);
+  const unverifiable = Array.isArray(s.unverifiable_conditions) ? s.unverifiable_conditions : [];
+  const needsReference = Number(s.required_evidence_count ?? 0) > 0;
+  return [
+    { key: "profile", label: "Perfil visual gerado", ok: Boolean(profile) },
+    {
+      key: "verifiability",
+      label: "Padrão verificável por foto",
+      ok: s.visual_verifiability === "verifiable",
+    },
+    {
+      key: "conditions",
+      label: "Sem condições impossíveis de comprovar por foto",
+      ok: unverifiable.length === 0,
+    },
+    {
+      key: "reference",
+      label: needsReference ? "Foto de referência enviada" : "Referência não é exigida",
+      ok: !needsReference || Boolean(s.reference_path),
+    },
+  ];
+}
+
+export function canActivate(s: VisualStandard): boolean {
+  return activationChecks(s).every((c) => c.ok);
+}
+
+/** Ativação confirmada pelo proprietário. Não usa métricas manuais. */
+export async function activateStandard(s: VisualStandard): Promise<VisualStandard> {
+  const { data, error } = await supabase
+    .from("visual_standards")
+    .update({
+      status: "validated",
+      needs_validation: false,
+      last_validated_at: new Date().toISOString(),
+    })
+    .eq("id", s.id)
+    .select("*")
+    .single();
+  if (error) throw error;
+  return data as VisualStandard;
+}
+
 
 
 export interface LiveStats {
@@ -411,24 +435,12 @@ export interface LiveStats {
   localChecks?: number;
 }
 
-export interface EvaluatorMarks {
-  aiWasRight: boolean | null;
-  falseApproval: boolean;
-  falseRejection: boolean;
-  liveGuidanceHelped: boolean | null;
-  liveGuidanceWrong: boolean;
-}
-
 export interface LabRun extends LabResponse {
   id: string;
   at: string;
   question: string;
-  expected: ExpectedResult;
-  correct: boolean | null;
   source?: "upload" | "camera_v3";
-  releaseCase?: ReleaseCase | null;
   live?: LiveStats | null;
-  marks?: EvaluatorMarks | null;
 }
 
 export async function runBenchmark(input: {
@@ -518,41 +530,7 @@ export async function liveLocate(input: {
 }
 
 
-/** Uma execução atende ao resultado esperado? */
-function matchesExpected(run: Pick<LabRun, "combined" | "expected">): boolean {
-  if (run.expected === "not_observable") {
-    return run.combined.condition_status === "not_observable";
-  }
-  return run.combined.decision === run.expected;
-}
 
-/** Trava de liberação: só libera com todos os casos críticos corretos. */
-export function computeRelease(runs: LabRun[]) {
-  const cases = RELEASE_CASES.map((c) => {
-    const matching = runs.filter((r) => r.releaseCase === c.key && r.source === "camera_v3");
-    const passed = matching.some((r) => matchesExpected(r) && r.marks?.aiWasRight !== false);
-    const falseApproval = matching.some(
-      (r) => c.expected !== "approved" && (r.combined.decision === "approved" || r.marks?.falseApproval === true),
-    );
-    return { ...c, tested: matching.length, passed, falseApproval };
-  });
-  const blockedByFalseApproval = cases.some((c) => c.falseApproval);
-  return {
-    cases,
-    ready: cases.every((c) => c.passed) && !blockedByFalseApproval,
-    blockedByFalseApproval,
-  };
-}
-
-export function isCorrect(run: Pick<LabRun, "combined" | "expected">): boolean | null {
-  const d = run.combined.decision;
-  if (run.expected === "not_observable") {
-    if (d === "technical_failure") return null;
-    return run.combined.condition_status === "not_observable";
-  }
-  if (d === "uncertain" || d === "technical_failure") return null;
-  return d === run.expected;
-}
 
 /** Consumo somado das execuções registradas na sessão do laboratório. */
 export interface UsageSummary {
@@ -603,63 +581,58 @@ export function computeUsage(runs: LabRun[]): UsageSummary {
 }
 
 
-// ---------------- métricas da sessão ----------------
-
-export const MIN_LABELED_SAMPLE = 10;
+// ---------------- métricas operacionais da sessão ----------------
+// Somente o que a própria execução produz. Sem gabarito manual, não existe
+// acurácia, falsa aprovação nem falsa reprovação honestas.
 
 export interface SessionMetrics {
   total: number;
-  hits: number;
-  falseApprovals: number;
-  falseRejections: number;
+  approved: number;
+  retake: number;
   uncertain: number;
   technicalFailures: number;
-  agreement: number | null;
+  avgConfidence: number | null;
   avgLatencyMs: number | null;
   withReference: number;
   withoutReference: number;
-  accuracy: number | null;
-  enoughSample: boolean;
+  providers: string[];
+  models: string[];
 }
 
 export function computeMetrics(runs: LabRun[]): SessionMetrics {
   const total = runs.length;
-  let hits = 0, falseApprovals = 0, falseRejections = 0, uncertain = 0, failures = 0;
-  let agreeCount = 0, comparable = 0, latencySum = 0, withRef = 0;
+  let approved = 0, retake = 0, uncertain = 0, failures = 0;
+  let latencySum = 0, withRef = 0, confSum = 0, confCount = 0;
+  const providers = new Set<string>();
+  const models = new Set<string>();
 
   for (const r of runs) {
     const d = r.combined.decision;
-    const ok = matchesExpected(r);
-    if (d === "technical_failure") failures++;
-    else if (ok) hits++;
+    if (d === "approved") approved++;
+    else if (d === "retake") retake++;
     else if (d === "uncertain") uncertain++;
-    else if (d === "approved") falseApprovals++;
-    else falseRejections++;
+    else failures++;
 
-    if (r.judge && r.observer) {
-      comparable++;
-      const observerNegative = r.observer.blurry || r.observer.dark || !r.observer.targetVisible;
-      const judgeNegative = r.judge.decision !== "approved";
-      if (observerNegative === judgeNegative) agreeCount++;
-    }
+    const conf = r.combined.confidence ?? r.judge?.confidence ?? null;
+    if (typeof conf === "number") { confSum += conf; confCount++; }
     latencySum += r.totalLatencyMs;
     if (r.referenceMode !== "none") withRef++;
+    if (r.provider) providers.add(r.provider);
+    if (r.modelId) models.add(r.modelId);
   }
 
-  const labeled = hits + falseApprovals + falseRejections;
   return {
     total,
-    hits,
-    falseApprovals,
-    falseRejections,
+    approved,
+    retake,
     uncertain,
     technicalFailures: failures,
-    agreement: comparable ? agreeCount / comparable : null,
+    avgConfidence: confCount ? confSum / confCount : null,
     avgLatencyMs: total ? Math.round(latencySum / total) : null,
     withReference: withRef,
     withoutReference: total - withRef,
-    accuracy: labeled ? hits / labeled : null,
-    enoughSample: labeled >= MIN_LABELED_SAMPLE,
+    providers: [...providers],
+    models: [...models],
   };
 }
 
@@ -668,7 +641,7 @@ export function exportRows(runs: LabRun[]) {
   return runs.map((r) => ({
     at: r.at,
     question: r.question,
-    expected: r.expected,
+    confidence: r.combined.confidence ?? r.judge?.confidence ?? null,
     combined_decision: r.combined.decision,
     condition_status: r.combined.condition_status ?? null,
     reason_code: r.combined.reason_code,
@@ -677,7 +650,7 @@ export function exportRows(runs: LabRun[]) {
     observer_blurry: r.observer?.blurry ?? null,
     observer_dark: r.observer?.dark ?? null,
     reference_mode: r.referenceMode,
-    correct: r.correct,
+    source: r.source ?? "upload",
     provider: r.provider ?? null,
     model_id: r.modelId ?? null,
     suggested_decision: r.gemini?.suggestedDecision ?? null,
