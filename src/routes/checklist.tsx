@@ -1089,7 +1089,12 @@ function NovoChecklistPage() {
           if (data && !error) {
             setCurrentChecklistId(data.id);
             setTitle(data.title || "");
-            setBlocks((data.blocks as Block[]) || [{ id: newId(), type: "text", value: "" }]);
+            setBlocks(
+              ensureCameraBlockIds(
+                ((data.blocks as Block[]) || [{ id: newId(), type: "text", value: "" }]) as any[],
+              ).blocks as Block[],
+            );
+
             setIsStarted(true);
             setShortSlug(data.custom_slug || null);
             setCustomDomain(data.custom_domain || null);
