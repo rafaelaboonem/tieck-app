@@ -72,18 +72,20 @@ export function PerformanceTab({ runs }: { runs: LabRun[] }) {
         <CardContent className="space-y-2 text-sm">
           <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
             <Metric label="Chamadas de IA" value={String(usage.aiCalls)} />
-            <Metric label="Neurônios" value={usage.neurons.toFixed(2)} />
-            <Metric label="Custo estimado" value={`US$ ${usage.estimatedUsd.toFixed(5)}`} />
+            <Metric label="Custo estimado (tokens)" value={`US$ ${usage.tokenCostUsd.toFixed(5)}`} />
+            <Metric label="Neurônios (Cloudflare)" value={usage.neurons.toFixed(2)} />
             <Metric label="Checagens locais (sem IA)" value={String(usage.localChecks)} />
           </div>
           <p className="text-xs text-muted-foreground">
-            Tokens: {usage.inputTokens} de entrada · {usage.outputTokens} de saída.
-            {usage.avgNeuronsPerRun != null && ` Média por teste: ${usage.avgNeuronsPerRun.toFixed(2)} neurônios.`}
+            Tokens: {usage.inputTokens} de entrada · {usage.outputTokens} de saída
+            {usage.cachedTokens > 0 && ` · ${usage.cachedTokens} em cache`}.
+            {usage.neurons > 0 && ` Valor teórico dos neurônios: US$ ${usage.estimatedUsd.toFixed(5)}.`}
           </p>
           <p className="text-xs text-muted-foreground">
-            O trabalho local (luz, foco, estabilidade e enquadramento) não consome IA. A IA só é chamada quando a cena
-            fica estável, respeitando o intervalo mínimo e o limite por sessão.
+            Tokens e neurônios são contabilidades separadas: tokens vêm do avaliador Gemini e neurônios do
+            provedor anterior. O trabalho local (luz, foco, estabilidade e enquadramento) não consome IA.
           </p>
+
         </CardContent>
       </Card>
 

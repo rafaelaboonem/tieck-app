@@ -11,9 +11,12 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { sanitizeMessage, strList } from "./sanitize.ts";
 import {
+  buildGeminiUsageEntry,
   buildUsageEntry,
   failedUsageEntry,
   meterTotals,
+  GEMINI_DEFAULT_RATE,
+  type TokenRate,
   type UsageEntry,
 } from "./usage.ts";
 import {
@@ -23,6 +26,18 @@ import {
   technicalFailure,
   DEFAULT_CONFIDENCE_THRESHOLD,
 } from "./gate.ts";
+import {
+  decideGemini,
+  validateGeminiPayload,
+  GEMINI_APPROVAL_THRESHOLD,
+} from "./gemini-gate.ts";
+import { buildInstruction, callGemini, GeminiError } from "./providers/gemini.ts";
+import {
+  GEMINI_MODEL_ID,
+  normalizeProvider,
+  type VisionProvider,
+} from "./providers/vision-provider.ts";
+
 
 
 const CORS = {
@@ -103,14 +118,32 @@ function decodeImage(b64: unknown, minDim = 128): Decoded | null {
   return { bytes, ...meta };
 }
 
-function toDataUrl(img: Decoded): string {
+function toBase64(img: Decoded): string {
   let s = "";
   const chunk = 0x8000;
   for (let i = 0; i < img.bytes.length; i += chunk) {
     s += String.fromCharCode(...img.bytes.subarray(i, i + chunk));
   }
-  return `data:${img.mime};base64,${btoa(s)}`;
+  return btoa(s);
 }
+
+function toDataUrl(img: Decoded): string {
+  return `data:${img.mime};base64,${toBase64(img)}`;
+}
+
+/** Preço teórico do Gemini: configurável por secret, nunca pelo frontend. */
+function geminiRate(): TokenRate {
+  const n = (k: string, d: number) => {
+    const v = Number(Deno.env.get(k));
+    return Number.isFinite(v) && v >= 0 ? v : d;
+  };
+  return {
+    input: n("GEMINI_PRICE_INPUT_PER_M", GEMINI_DEFAULT_RATE.input),
+    output: n("GEMINI_PRICE_OUTPUT_PER_M", GEMINI_DEFAULT_RATE.output),
+    cached: n("GEMINI_PRICE_CACHED_PER_M", GEMINI_DEFAULT_RATE.cached),
+  };
+}
+
 
 const PING_IMAGE =
   "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
@@ -680,6 +713,7 @@ async function recordUsage(
     attemptId?: string | null;
     action: string;
     decision?: string | null;
+    confidence?: number | null;
   },
 ) {
   if (!args.meter.length) return;
@@ -691,18 +725,25 @@ async function recordUsage(
     attempt_id: args.attemptId ?? null,
     action: args.action,
     step: m.step,
+    // Provedor sempre explícito: neurônios do Cloudflare e tokens do Gemini
+    // nunca são somados na mesma métrica.
+    provider: m.provider,
     model_id: m.model,
     // usage ausente vira null + usage_missing: nunca zero silencioso.
     input_tokens: m.inputTokens,
     output_tokens: m.outputTokens,
+    cached_tokens: m.cachedTokens,
     estimated_neurons: m.neurons,
+    cost_usd: m.costUsd,
     usage_missing: m.usageMissing,
     inference_ms: m.inferenceMs,
     decision: args.decision ?? null,
+    confidence: args.confidence ?? null,
   }));
   const { error } = await svc.from("vision_usage_events").insert(rows);
   if (error) console.error(`[lab] usage_insert_failed code=${String(error.code ?? "unknown").slice(0, 30)}`);
 }
+
 
 /** Limpeza oportunista da retenção de 90 dias (best-effort, sem bloquear). */
 async function maybeRunRetention(svc: any) {
@@ -1002,15 +1043,19 @@ Deno.serve(async (req) => {
   const question = String(body?.question ?? "").trim();
   if (question.length < 5 || question.length > 300) return err(400, "invalid_question");
 
+  // Seletor de provedor: existe SOMENTE no laboratório. O padrão é Gemini.
+  const provider: VisionProvider = normalizeProvider(body?.provider);
+
   // O perfil e o limiar vêm SEMPRE do padrão salvo quando há standardId.
   let profile: any = null;
   let threshold = DEFAULT_CONFIDENCE_THRESHOLD;
   let verifiability = normalizeVerifiability(null);
+  let referencePath: string | null = null;
   const standardId = String(body?.standardId ?? "");
   if (standardId) {
     const { data: std } = await userClient
       .from("visual_standards")
-      .select("internal_profile, confidence_threshold, visual_verifiability")
+      .select("internal_profile, confidence_threshold, visual_verifiability, reference_path")
       .eq("id", standardId)
       .eq("workspace_id", workspaceId)
       .maybeSingle();
@@ -1018,20 +1063,39 @@ Deno.serve(async (req) => {
     if (stored && typeof stored === "object" && stored.target_phrase) profile = stored;
     threshold = normalizeThreshold((std as any)?.confidence_threshold);
     verifiability = normalizeVerifiability((std as any)?.visual_verifiability);
+    referencePath = (std as any)?.reference_path ?? null;
   } else if (body?.profile && typeof body.profile === "object") {
     // pergunta livre no laboratório: perfil efêmero, nunca persistido
     profile = body.profile;
   }
+  // Gemini usa o limiar próprio da Fase 3A quando o padrão não define outro.
+  if (provider === "google_gemini" && threshold < GEMINI_APPROVAL_THRESHOLD) {
+    threshold = GEMINI_APPROVAL_THRESHOLD;
+  }
 
   const image = decodeImage(body?.imageBase64);
   if (!image) return err(400, "invalid_image");
-  const reference = body?.referenceBase64 ? decodeImage(body.referenceBase64) : null;
+  let reference = body?.referenceBase64 ? decodeImage(body.referenceBase64) : null;
   if (body?.referenceBase64 && !reference) return err(400, "invalid_reference");
+  // No caminho Gemini a referência é sempre carregada no servidor a partir do
+  // bucket privado: o cliente não decide qual imagem é a referência.
+  if (provider === "google_gemini") {
+    reference = null;
+    if (referencePath && body?.useReference !== false) {
+      const { data: file } = await svc.storage.from("visual-standards").download(referencePath);
+      if (file) {
+        const bytes = new Uint8Array(await file.arrayBuffer());
+        const meta = sniff(bytes);
+        if (meta) reference = { bytes, ...meta };
+      }
+    }
+  }
 
   const sessionId = sessionIdOf(body);
   if (!sessionId) return err(400, "session_required");
   const attemptId = attemptIdOf(body);
   if (!attemptId) return err(400, "attempt_required");
+
 
   // Uma tentativa = uma decisão final. Reenvio devolve o resultado guardado.
   const { data: claimData, error: claimErr } = await svc.rpc("vision_lab_attempt_claim", {
@@ -1052,7 +1116,101 @@ Deno.serve(async (req) => {
   const t0 = Date.now();
   const meter: UsageEntry[] = [];
   try {
+    // ---- Provedor google_gemini: UMA única chamada multimodal. ----
+    if (provider === "google_gemini") {
+      const conditions = [
+        ...strList(profile?.conditions, 6),
+        ...verifiability.unverifiable_conditions,
+      ].filter((c, i, a) => a.indexOf(c) === i);
+
+      const call = await callGemini({
+        instruction: buildInstruction({
+          question,
+          profile,
+          conditions,
+          hasReference: !!reference,
+        }),
+        reference: reference ? { mime: reference.mime, base64: toBase64(reference) } : null,
+        candidate: { mime: image.mime, base64: toBase64(image) },
+        timeoutMs: 30_000,
+      });
+      meter.push(buildGeminiUsageEntry({
+        step: "gemini_evaluate",
+        model: call.model,
+        tokens: call.tokens,
+        inferenceMs: call.inferenceMs,
+        rate: geminiRate(),
+      }));
+
+      // Contrato inválido nunca vira decisão.
+      const parsed = validateGeminiPayload(call.raw);
+      if (!parsed) throw new Error("gemini_contract_invalid");
+
+      // O servidor decide. suggested_decision é apenas sinal.
+      const verdict = decideGemini(parsed, { hasReference: !!reference, threshold });
+      const usage = meterTotals(meter);
+      const payload = {
+        provider,
+        modelId: GEMINI_MODEL_ID,
+        observer: null,
+        judge: {
+          decision: parsed.suggested_decision,
+          targetVisible: parsed.target_visible,
+          conditionMet: verdict.condition_status === "verified",
+          conditionStatus: verdict.condition_status,
+          qualitySufficient: parsed.image_quality === "good",
+          reasonCode: verdict.reason_code,
+          observations: parsed.conditions.map((c) => `${c.condition}: ${c.visible_evidence}`).slice(0, 4),
+          confidence: parsed.overall_confidence,
+          latencyMs: call.inferenceMs,
+        },
+        gemini: {
+          imageQuality: parsed.image_quality,
+          targetConfidence: parsed.target_confidence,
+          referenceComparable: parsed.reference_comparable,
+          conditions: parsed.conditions,
+          boundingBoxes: parsed.bounding_boxes ?? [],
+          suggestedDecision: parsed.suggested_decision,
+          overridden: verdict.overridden,
+        },
+        combined: {
+          decision: verdict.decision,
+          reason_code: verdict.reason_code,
+          public_message: verdict.public_message,
+          condition_status: verdict.condition_status,
+          gate: verdict.gate,
+          confidence: verdict.confidence,
+          confidence_threshold: verdict.confidence_threshold,
+        },
+        referenceMode: reference ? "multi_image" : "none",
+        threshold,
+        verifiability: verifiability.visual_verifiability,
+        requiredEvidenceCount: verifiability.required_evidence_count,
+        attemptId,
+        totalLatencyMs: Date.now() - t0,
+        usage,
+      };
+
+      await svc.rpc("vision_lab_attempt_finish", {
+        p_attempt_id: attemptId,
+        p_user_id: actorId,
+        p_result: payload,
+        p_technical_failure: false,
+      });
+      await recordUsage(svc, {
+        meter, workspaceId, userId: actorId, sessionId, attemptId,
+        standardId: standardId || null, action: "benchmark-evaluate",
+        decision: verdict.decision, confidence: verdict.confidence,
+      });
+      console.log(
+        `[lab] evaluate ok provider=gemini user=${actorId.slice(0, 8)} ` +
+        `decision=${verdict.decision} overridden=${verdict.overridden} ms=${Date.now() - t0}`,
+      );
+      return json(200, payload);
+    }
+
     const observer = await runObserver(image, question, profile, meter);
+
 
     let referenceMode: "none" | "multi_image" | "derived" = "none";
     let referenceDescription: string | null = profile?.reference_summary ?? null;
@@ -1105,7 +1263,9 @@ Deno.serve(async (req) => {
         latencyMs: judge.latencyMs,
       },
       combined,
+      provider,
       referenceMode,
+
       threshold,
       verifiability: verifiability.visual_verifiability,
       requiredEvidenceCount: verifiability.required_evidence_count,
@@ -1128,8 +1288,13 @@ Deno.serve(async (req) => {
     return json(200, payload);
   } catch (e) {
     const code = String((e as Error).message ?? "unknown").slice(0, 60);
+    // Chamada Gemini que falhou antes de medir consumo ainda entra na telemetria.
+    if (provider === "google_gemini" && e instanceof GeminiError) {
+      meter.push(failedUsageEntry("gemini_evaluate", GEMINI_MODEL_ID, Date.now() - t0, "google_gemini"));
+    }
+    // Motivos internos (ex.: segredo ausente) ficam só no log do servidor.
+    const publicCode = code === "gemini_key_missing" ? "service_unavailable" : code;
     // Falha técnica NÃO consome a tentativa: ela volta para "pending".
-    // Falha técnica não consome a tentativa: ela volta a ficar disponível.
     await svc.rpc("vision_lab_attempt_finish", {
       p_attempt_id: attemptId,
       p_user_id: actorId,
@@ -1140,17 +1305,21 @@ Deno.serve(async (req) => {
       meter, workspaceId, userId: actorId, sessionId, attemptId,
       standardId: standardId || null, action: "benchmark-evaluate", decision: "technical_failure",
     });
-    console.error(`[lab] evaluate_failed user=${actorId.slice(0, 8)} code=${code} ms=${Date.now() - t0}`);
+    console.error(
+      `[lab] evaluate_failed provider=${provider} user=${actorId.slice(0, 8)} code=${code} ms=${Date.now() - t0}`,
+    );
     return json(200, {
+      provider,
       observer: null,
       judge: null,
-      combined: technicalFailure(code, threshold),
+      combined: technicalFailure(publicCode, threshold),
       referenceMode: "none",
       attemptId,
       attemptConsumed: false,
       totalLatencyMs: Date.now() - t0,
       usage: meterTotals(meter),
     });
+
   } finally {
     inFlight.delete(actorId);
   }

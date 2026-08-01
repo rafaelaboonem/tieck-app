@@ -211,23 +211,44 @@ export const LIVE_CHECKS_PER_SESSION = 3;
 export const FINAL_CHECKS_PER_SESSION = 5;
 export const LIVE_MIN_INTERVAL_MS = 5000;
 
+/** Provedor visual usado na avaliação. Seletor interno do laboratório. */
+export type LabProvider = "google_gemini" | "cloudflare";
+export const DEFAULT_LAB_PROVIDER: LabProvider = "google_gemini";
+export const LAB_PROVIDERS: { value: LabProvider; label: string; hint: string }[] = [
+  { value: "google_gemini", label: "Gemini 3.6 Flash", hint: "Uma única análise multimodal. Medido em tokens." },
+  { value: "cloudflare", label: "Cloudflare (Moondream + Llama)", hint: "Rollback. Medido em neurônios." },
+];
+
 export interface UsageStep {
   step: string;
+  provider?: LabProvider;
   model: string;
-  inputTokens: number;
-  outputTokens: number;
-  neurons: number;
+  inputTokens: number | null;
+  outputTokens: number | null;
+  cachedTokens?: number | null;
+  /** Somente Cloudflare. */
+  neurons: number | null;
+  /** Somente Gemini: custo teórico em USD. */
+  costUsd?: number | null;
   inferenceMs: number;
 }
 
 export interface UsageTotals {
   calls: number;
-  inputTokens: number;
-  outputTokens: number;
-  neurons: number;
-  estimatedUsd: number;
+  inputTokens: number | null;
+  outputTokens: number | null;
+  cachedTokens?: number | null;
+  /** Somente Cloudflare. */
+  neurons: number | null;
+  /** Somente Gemini: custo teórico em USD. */
+  costUsd?: number | null;
+  /** Valor teórico dos neurônios Cloudflare. */
+  estimatedUsd?: number | null;
+  theoreticalUsd?: number | null;
   steps: UsageStep[];
 }
+
+
 
 export interface BudgetInfo {
   spent: boolean;
@@ -310,6 +331,27 @@ export interface LabResponse {
     public_message: string;
     condition_status?: ConditionStatus | null;
     gate?: Record<string, boolean>;
+    confidence?: number | null;
+    confidence_threshold?: number | null;
+  };
+  /** Provedor que realmente decidiu esta execução. */
+  provider?: LabProvider;
+  modelId?: string;
+  /** Detalhe estruturado, presente somente no provedor Gemini. */
+  gemini?: {
+    imageQuality: "good" | "dark" | "blurry" | "cropped" | "unusable";
+    targetConfidence: number;
+    referenceComparable: boolean;
+    conditions: {
+      condition: string;
+      status: ConditionStatus;
+      confidence: number;
+      visible_evidence: string;
+    }[];
+    boundingBoxes: { x: number; y: number; w: number; h: number }[];
+    suggestedDecision: "approved" | "retake" | "uncertain";
+    /** Verdadeiro quando o servidor discordou da sugestão do modelo. */
+    overridden: boolean;
   };
   referenceMode: "none" | "multi_image" | "derived";
   totalLatencyMs: number;
@@ -317,29 +359,34 @@ export interface LabResponse {
   usage?: UsageTotals;
 }
 
+
 /** Casos obrigatórios antes de liberar a Camera V3 nos checklists públicos. */
 export type ReleaseCase =
   | "correct_photo"
   | "correct_other_angle"
   | "wrong_object"
   | "wrong_place"
+  | "missing_target"
   | "partial_framing"
   | "wrong_condition"
   | "dark_photo"
+  | "blurry_photo"
   | "not_observable_condition"
   | "reference_similar_place";
 
 export const RELEASE_CASES: { key: ReleaseCase; label: string; expected: ExpectedResult }[] = [
-  { key: "correct_photo", label: "Foto correta aprovada", expected: "approved" },
-  { key: "correct_other_angle", label: "Foto correta em outro ângulo aprovada", expected: "approved" },
-  { key: "wrong_object", label: "Objeto errado rejeitado", expected: "retake" },
-  { key: "wrong_place", label: "Ambiente errado rejeitado", expected: "retake" },
-  { key: "partial_framing", label: "Enquadramento parcial rejeitado", expected: "retake" },
+  { key: "correct_photo", label: "Objeto correto aprovado", expected: "approved" },
+  { key: "correct_other_angle", label: "Objeto correto em outro ângulo aprovado", expected: "approved" },
+  { key: "wrong_object", label: "Objeto incorreto rejeitado", expected: "retake" },
+  { key: "wrong_place", label: "Ambiente diferente rejeitado", expected: "retake" },
+  { key: "missing_target", label: "Objeto ausente rejeitado", expected: "retake" },
+  { key: "partial_framing", label: "Foto cortada rejeitada", expected: "retake" },
   { key: "wrong_condition", label: "Condição inadequada rejeitada", expected: "retake" },
   { key: "dark_photo", label: "Foto escura rejeitada", expected: "retake" },
+  { key: "blurry_photo", label: "Foto desfocada rejeitada", expected: "retake" },
   {
     key: "not_observable_condition",
-    label: "Condição não verificável por foto sinalizada como tal",
+    label: "Condição impossível de comprovar por foto sinalizada como tal",
     expected: "not_observable",
   },
   {
@@ -348,6 +395,7 @@ export const RELEASE_CASES: { key: ReleaseCase; label: string; expected: Expecte
     expected: "retake",
   },
 ];
+
 
 export interface LiveStats {
   /** ms entre abrir a câmera e a primeira detecção real do alvo. */
@@ -392,6 +440,8 @@ export async function runBenchmark(input: {
   profile?: StandardProfile | null;
   sessionId: string;
   attemptId: string;
+  /** Seletor interno do laboratório. O servidor valida e decide. */
+  provider?: LabProvider;
 }): Promise<LabResponse> {
   const { data, error } = await supabase.functions.invoke("vision-benchmark", {
     body: {
@@ -399,17 +449,23 @@ export async function runBenchmark(input: {
       workspaceId: input.workspaceId,
       question: input.question,
       imageBase64: input.imageBase64,
-      referenceBase64: input.referenceBase64 ?? undefined,
+      // No provedor Gemini a referência é carregada pelo servidor a partir do
+      // bucket privado — o cliente não envia imagem de referência.
+      referenceBase64: (input.provider ?? DEFAULT_LAB_PROVIDER) === "google_gemini"
+        ? undefined
+        : (input.referenceBase64 ?? undefined),
       standardId: input.standardId ?? undefined,
       profile: input.profile ?? undefined,
       sessionId: input.sessionId,
       attemptId: input.attemptId,
+      provider: input.provider ?? DEFAULT_LAB_PROVIDER,
     },
   });
 
   if (error) throw error;
   return data as LabResponse;
 }
+
 
 /** Gera/atualiza o perfil interno do padrão no servidor. Best-effort. */
 export async function ensureStandardProfile(
@@ -501,10 +557,15 @@ export function isCorrect(run: Pick<LabRun, "combined" | "expected">): boolean |
 /** Consumo somado das execuções registradas na sessão do laboratório. */
 export interface UsageSummary {
   aiCalls: number;
+  /** Somente Cloudflare. */
   neurons: number;
   inputTokens: number;
   outputTokens: number;
+  cachedTokens: number;
+  /** Valor teórico dos neurônios Cloudflare. */
   estimatedUsd: number;
+  /** Custo teórico das chamadas Gemini, medido em tokens. */
+  tokenCostUsd: number;
   runsWithUsage: number;
   avgNeuronsPerRun: number | null;
   localChecks: number;
@@ -513,7 +574,8 @@ export interface UsageSummary {
 export const USD_PER_1K_NEURONS = 0.011;
 
 export function computeUsage(runs: LabRun[]): UsageSummary {
-  let aiCalls = 0, neurons = 0, inputTokens = 0, outputTokens = 0, runsWithUsage = 0, localChecks = 0;
+  let aiCalls = 0, neurons = 0, inputTokens = 0, outputTokens = 0, cachedTokens = 0;
+  let tokenCostUsd = 0, runsWithUsage = 0, localChecks = 0;
   for (const r of runs) {
     if (r.usage) {
       runsWithUsage++;
@@ -521,6 +583,8 @@ export function computeUsage(runs: LabRun[]): UsageSummary {
       neurons += r.usage.neurons ?? 0;
       inputTokens += r.usage.inputTokens ?? 0;
       outputTokens += r.usage.outputTokens ?? 0;
+      cachedTokens += r.usage.cachedTokens ?? 0;
+      tokenCostUsd += r.usage.costUsd ?? 0;
     }
     localChecks += r.live?.localChecks ?? 0;
   }
@@ -529,12 +593,15 @@ export function computeUsage(runs: LabRun[]): UsageSummary {
     neurons: Math.round(neurons * 1000) / 1000,
     inputTokens,
     outputTokens,
+    cachedTokens,
     estimatedUsd: Math.round((neurons / 1000) * USD_PER_1K_NEURONS * 1e6) / 1e6,
+    tokenCostUsd: Math.round(tokenCostUsd * 1e8) / 1e8,
     runsWithUsage,
     avgNeuronsPerRun: runsWithUsage ? Math.round((neurons / runsWithUsage) * 1000) / 1000 : null,
     localChecks,
   };
 }
+
 
 // ---------------- métricas da sessão ----------------
 
@@ -611,11 +678,18 @@ export function exportRows(runs: LabRun[]) {
     observer_dark: r.observer?.dark ?? null,
     reference_mode: r.referenceMode,
     correct: r.correct,
+    provider: r.provider ?? null,
+    model_id: r.modelId ?? null,
+    suggested_decision: r.gemini?.suggestedDecision ?? null,
+    server_overrode_model: r.gemini?.overridden ?? null,
     ai_calls: r.usage?.calls ?? null,
     input_tokens: r.usage?.inputTokens ?? null,
     output_tokens: r.usage?.outputTokens ?? null,
+    cached_tokens: r.usage?.cachedTokens ?? null,
     neurons: r.usage?.neurons ?? null,
+    token_cost_usd: r.usage?.costUsd ?? null,
     estimated_usd: r.usage?.estimatedUsd ?? null,
+
     live_ai_checks: r.live?.liveChecks ?? null,
     local_checks: r.live?.localChecks ?? null,
     observer_latency_ms: r.observer?.latencyMs ?? null,

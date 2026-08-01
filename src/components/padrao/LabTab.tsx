@@ -20,12 +20,16 @@ import {
   createLabAttempt,
   CONDITION_STATUS_LABEL,
   RELEASE_CASES,
+  LAB_PROVIDERS,
+  DEFAULT_LAB_PROVIDER,
   type ExpectedResult,
   type LabDecision,
+  type LabProvider,
   type LabRun,
   type ReleaseCase,
   type VisualStandard,
 } from "@/lib/visual-standards";
+
 
 
 const emptyMarks = {
@@ -61,7 +65,9 @@ export function LabTab({ workspaceId, standards, selected, onSelect, runs, onRun
   const [expected, setExpected] = useState<ExpectedResult>("approved");
   const [useReference, setUseReference] = useState(true);
   const [running, setRunning] = useState(false);
+  const [provider, setProvider] = useState<LabProvider>(DEFAULT_LAB_PROVIDER);
   const [releaseCase, setReleaseCase] = useState<ReleaseCase | "">("");
+
   const [cameraOpen, setCameraOpen] = useState(false);
   const [profiling, setProfiling] = useState(false);
   const [attemptsUsed, setAttemptsUsed] = useState<number | null>(null);
@@ -130,7 +136,9 @@ export function LabTab({ workspaceId, standards, selected, onSelect, runs, onRun
         profile,
         sessionId: session.sessionId,
         attemptId: attempt.attemptId,
+        provider,
       });
+
 
       pushRun({
         ...res,
@@ -265,6 +273,24 @@ export function LabTab({ workspaceId, standards, selected, onSelect, runs, onRun
               ))}
             </select>
           </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="lab-provider">Avaliador visual (uso interno)</Label>
+            <select
+              id="lab-provider"
+              className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+              value={provider}
+              onChange={(e) => setProvider(e.target.value as LabProvider)}
+            >
+              {LAB_PROVIDERS.map((p) => (
+                <option key={p.value} value={p.value}>{p.label}</option>
+              ))}
+            </select>
+            <p className="text-xs text-muted-foreground">
+              {LAB_PROVIDERS.find((p) => p.value === provider)?.hint}
+            </p>
+          </div>
+
 
           <Button className="w-full bg-[#FF007F] hover:bg-[#e6006f]" disabled={!canRun} onClick={execute}>
             {running ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Play className="mr-2 h-4 w-4" />}
@@ -421,10 +447,18 @@ function RunDetail({ run, onMark }: { run: LabRun; onMark?: (patch: Partial<LabR
           <span>{run.correct === null ? "Sem classificação" : run.correct ? "Acerto" : "Erro"}</span>
           {run.usage && (
             <span>
-              Consumo: {run.usage.calls} chamada(s) · {run.usage.neurons.toFixed(2)} neurônios ·
-              {" "}US$ {run.usage.estimatedUsd.toFixed(5)}
+              Consumo: {run.usage.calls} chamada(s)
+              {run.usage.neurons != null && ` · ${run.usage.neurons.toFixed(2)} neurônios`}
+              {run.usage.costUsd != null
+                ? ` · US$ ${run.usage.costUsd.toFixed(5)}`
+                : run.usage.estimatedUsd != null
+                  ? ` · US$ ${run.usage.estimatedUsd.toFixed(5)}`
+                  : ""}
+              {run.usage.inputTokens != null &&
+                ` · ${run.usage.inputTokens}/${run.usage.outputTokens ?? 0} tokens`}
             </span>
           )}
+
           {run.live && (
             <>
               <span>

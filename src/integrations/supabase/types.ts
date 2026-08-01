@@ -1555,6 +1555,9 @@ export type Database = {
         Row: {
           action: string
           attempt_id: string | null
+          cached_tokens: number | null
+          confidence: number | null
+          cost_usd: number | null
           created_at: string
           decision: string | null
           estimated_neurons: number | null
@@ -1574,6 +1577,9 @@ export type Database = {
         Insert: {
           action: string
           attempt_id?: string | null
+          cached_tokens?: number | null
+          confidence?: number | null
+          cost_usd?: number | null
           created_at?: string
           decision?: string | null
           estimated_neurons?: number | null
@@ -1593,6 +1599,9 @@ export type Database = {
         Update: {
           action?: string
           attempt_id?: string | null
+          cached_tokens?: number | null
+          confidence?: number | null
+          cost_usd?: number | null
           created_at?: string
           decision?: string | null
           estimated_neurons?: number | null
