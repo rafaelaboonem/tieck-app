@@ -98,7 +98,7 @@ export function PublicCameraBlock({ block, checklistId, ensureResponseSession, o
     setAnalysisToken(null);
     setAnalysisEnabled(false);
     setRetrying(false);
-    setRetryCooldown(false);
+    setRetryAfter(null);
     lastEmittedRef.current = "";
     onAnswer(block.id, null);
   };
@@ -121,15 +121,17 @@ export function PublicCameraBlock({ block, checklistId, ensureResponseSession, o
 
   /** Nova verificação da MESMA evidência: não reenvia imagem, não cria evidência. */
   const retryVerification = async () => {
-    if (!analysisToken || retrying || retryCooldown) return;
+    if (!analysisToken || retrying || retryAfter !== null) return;
     setRetrying(true);
-    setRetryCooldown(true);
     try {
       const res = await supabase.functions.invoke("analyze-checklist-evidence", {
         body: { action: "retry-analysis", analysisToken },
       });
-      const data = res.data as { restarted?: boolean; error?: string } | null;
+      const data = res.data as { restarted?: boolean; error?: string; retryAfter?: number } | null;
       if (res.error || data?.error === "rate_limited") {
+        // Só promete tempo quando o servidor devolve um Retry-After confiável.
+        const wait = Number(data?.retryAfter);
+        if (Number.isFinite(wait) && wait > 0) startRetryCountdown(Math.min(300, Math.round(wait)));
         setPhase("provider_rate_limited");
         return;
       }
@@ -139,9 +141,20 @@ export function PublicCameraBlock({ block, checklistId, ensureResponseSession, o
       setPhase("technical_failure");
     } finally {
       setRetrying(false);
-      // Cooldown local: impede rajada de cliques mesmo com resposta rápida.
-      setTimeout(() => setRetryCooldown(false), 10_000);
     }
+  };
+
+  const startRetryCountdown = (seconds: number) => {
+    setRetryAfter(seconds);
+    const id = setInterval(() => {
+      setRetryAfter((current) => {
+        if (current === null || current <= 1) {
+          clearInterval(id);
+          return null;
+        }
+        return current - 1;
+      });
+    }, 1_000);
   };
 
   const runUpload = async (source: File) => {
