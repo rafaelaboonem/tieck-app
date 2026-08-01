@@ -1,19 +1,19 @@
 import { useRef, useState } from "react";
-import { Camera, X, RefreshCw, Loader2, CheckCircle2, AlertTriangle, XCircle, ClipboardCheck } from "lucide-react";
+import { Camera, RefreshCw, Loader2, CheckCircle2, XCircle, ScanLine } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { toast } from "sonner";
 import { compressImage } from "@/lib/compress-image";
 import { checkLocalPhotoQuality } from "@/lib/photo-quality";
-import { useChecklistEvidenceAnalysis, type EvidenceAnalysisResult, type EvidenceAnalysisStatus } from "@/hooks/useChecklistEvidenceAnalysis";
+import { TieckCamera } from "@/components/TieckCamera";
+import { useChecklistEvidenceAnalysis, type EvidenceAnalysisResult } from "@/hooks/useChecklistEvidenceAnalysis";
 
 type Phase =
   | "idle"
-  | "preview"
   | "checking"
   | "uploading"
   | "confirming"
   | "analyzing"
-  | "completed"
+  | "approved"
+  | "retake"
   | "error";
 
 export type PublicCameraAnswer = {
@@ -31,87 +31,53 @@ type Props = {
   accentColor?: string;
 };
 
-type CameraVision = {
-  enabled?: boolean;
-  criteria?: string[];
-  confidenceThreshold?: number | null;
-  minWidth?: number | null;
-  minHeight?: number | null;
-  onAnomaly?: string;
-  onAnalysisFailure?: string;
-};
-
-function statusMeta(status: EvidenceAnalysisStatus | undefined) {
-  switch (status) {
-    case "normal":
-      return { icon: CheckCircle2, tone: "bg-emerald-50 text-emerald-700 border-emerald-200" };
-    case "anomaly":
-      return { icon: AlertTriangle, tone: "bg-amber-50 text-amber-800 border-amber-200" };
-    case "manual_review":
-      return { icon: ClipboardCheck, tone: "bg-sky-50 text-sky-800 border-sky-200" };
-    case "failed":
-      return { icon: XCircle, tone: "bg-red-50 text-red-800 border-red-200" };
-    case "pending":
-    case "processing":
-    default:
-      return { icon: Loader2, tone: "bg-neutral-50 text-neutral-700 border-neutral-200" };
-  }
-}
-
+/**
+ * Camera AI V2 — experiência pública.
+ * Sem critérios visíveis, sem jargão técnico: tirar foto, verificar, aprovar
+ * ou pedir outra foto.
+ */
 export function PublicCameraBlock({ block, checklistId, ensureResponseSession, onAnswer, textColor, accentColor }: Props) {
-  const vision = (block?.vision ?? null) as CameraVision | null;
-  const visionEnabled = vision?.enabled === true;
-
   const title = String(block?.title || block?.subtitle || "").trim();
   const description = String(block?.description ?? "").trim();
   const required = block?.required === true;
   const captureGuidance = String(block?.captureGuidance ?? "").trim();
-  const criteria = Array.isArray(vision?.criteria)
-    ? vision.criteria
-        .filter((item): item is string => typeof item === "string")
-        .map((item) => item.trim())
-        .filter(Boolean)
-        .slice(0, 10)
-    : [];
+  const vision = (block?.vision ?? null) as { minWidth?: number | null; minHeight?: number | null } | null;
 
-  const inputRef = useRef<HTMLInputElement | null>(null);
+  const [cameraOpen, setCameraOpen] = useState(false);
   const [phase, setPhase] = useState<Phase>("idle");
-  const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [analysisToken, setAnalysisToken] = useState<string | null>(null);
   const [evidenceId, setEvidenceId] = useState<string | null>(null);
   const [analysisEnabled, setAnalysisEnabled] = useState(false);
+  const [session, setSession] = useState<{ responseId: string; responseToken: string } | null>(null);
 
   const { result: analysisResult, isPolling, timedOut } = useChecklistEvidenceAnalysis(analysisToken);
 
-  // Propaga o resultado da análise para o answer (usado no submit final).
+  // Resolve o estado final do polling em fase visual.
+  if (phase === "analyzing" && analysisResult && !isPolling) {
+    const next: Phase = analysisResult.status === "normal" ? "approved" : "retake";
+    queueMicrotask(() => setPhase(next));
+  }
+  if (phase === "analyzing" && !analysisResult && timedOut) {
+    queueMicrotask(() => setPhase("retake"));
+  }
+
   const lastEmittedRef = useRef<string>("");
   if (evidenceId) {
-    const payload: PublicCameraAnswer = {
-      evidenceId,
-      analysisEnabled,
-      analysis: analysisResult,
-    };
+    const payload: PublicCameraAnswer = { evidenceId, analysisEnabled, analysis: analysisResult };
     const key = JSON.stringify(payload);
     if (lastEmittedRef.current !== key) {
       lastEmittedRef.current = key;
-      // Emit after render to avoid state updates during parent render.
       queueMicrotask(() => onAnswer(block.id, payload));
     }
   }
 
-  const resetSelection = () => {
+  const resetAll = () => {
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     setPreviewUrl(null);
-    setPendingFile(null);
     setErrorMsg(null);
     setPhase("idle");
-    if (inputRef.current) inputRef.current.value = "";
-  };
-
-  const resetAll = () => {
-    resetSelection();
     setEvidenceId(null);
     setAnalysisToken(null);
     setAnalysisEnabled(false);
@@ -119,20 +85,24 @@ export function PublicCameraBlock({ block, checklistId, ensureResponseSession, o
     onAnswer(block.id, null);
   };
 
-  const onPick = (file: File | null) => {
-    if (!file) return;
+  const openCamera = async () => {
+    // Sessão antecipada habilita a assistência de enquadramento.
+    if (!session) {
+      const created = await ensureResponseSession();
+      if (created) setSession(created);
+    }
+    setCameraOpen(true);
+  };
+
+  const handleCapture = (file: File) => {
+    setCameraOpen(false);
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     setPreviewUrl(URL.createObjectURL(file));
     setErrorMsg(null);
-    setPendingFile(file);
-    // Auto-envia: o próprio app de câmera do dispositivo já confirma a foto antes.
-    void startUploadFlow(file);
+    void runUpload(file);
   };
 
-  const startUploadFlow = async (fileOverride?: File) => {
-    const source = fileOverride ?? pendingFile;
-    if (!source) return;
-    setErrorMsg(null);
+  const runUpload = async (source: File) => {
     setPhase("checking");
 
     const localQuality = await checkLocalPhotoQuality(source, {
@@ -140,37 +110,35 @@ export function PublicCameraBlock({ block, checklistId, ensureResponseSession, o
       minHeight: vision?.minHeight,
     });
     if (!localQuality.ok) {
-      const message =
+      setErrorMsg(
         localQuality.reason === "resolution_too_low"
-          ? "A foto tem resolução muito baixa. Aproxime-se e tire outra foto."
+          ? "A foto ficou com pouca definição. Aproxime-se e tire outra."
           : localQuality.reason === "too_dark"
             ? "A foto está muito escura. Melhore a iluminação e tente novamente."
-            : "A foto está clara demais. Ajuste o enquadramento ou a iluminação.";
-      setErrorMsg(message);
+            : "A foto está clara demais. Ajuste a iluminação e tente novamente.",
+      );
       setPhase("error");
       return;
     }
 
-    const session = await ensureResponseSession();
-    if (!session) {
+    const active = session ?? (await ensureResponseSession());
+    if (!active) {
       setErrorMsg("Não foi possível iniciar o envio. Tente novamente.");
       setPhase("error");
       return;
     }
+    setSession(active);
 
     setPhase("uploading");
 
-    // Comprime imagens grandes antes de subir.
     let file: File = source;
-    const looksImage = (file.type || "").startsWith("image/") || /\.(heic|heif|jpg|jpeg|png|webp)$/i.test(file.name);
-    if (looksImage && file.size > 400_000) {
+    if (file.size > 400_000) {
       try {
         const compressed = await compressImage(file);
         if (compressed) file = compressed;
       } catch { /* usa original */ }
     }
 
-    // 1) start-upload — o backend decide storagePath e attemptNumber.
     let startData: any = null;
     try {
       const res = await supabase.functions.invoke("analyze-checklist-evidence", {
@@ -178,59 +146,53 @@ export function PublicCameraBlock({ block, checklistId, ensureResponseSession, o
           action: "start-upload",
           checklistId,
           blockId: block.id,
-          responseToken: session.responseToken,
+          responseToken: active.responseToken,
           fileName: file.name,
-          mimeType: file.type || "application/octet-stream",
+          mimeType: file.type || "image/jpeg",
           fileSize: file.size,
         },
       });
       if (res.error || !res.data?.uploadUrl || !res.data?.uploadToken || !res.data?.storagePath || !res.data?.evidenceId) {
-        throw new Error(res.error?.message || "start_upload_failed");
+        throw new Error("start_upload_failed");
       }
       startData = res.data;
-    } catch (e: any) {
-      console.error("[camera] start-upload falhou", e);
+    } catch {
       setErrorMsg("Falha ao iniciar o envio. Tente novamente.");
       setPhase("error");
       return;
     }
 
-    // 2) upload direto pela signed URL (bucket privado checklist-evidences).
     try {
       const up = await supabase.storage
         .from("checklist-evidences")
         .uploadToSignedUrl(startData.storagePath, startData.uploadToken, file, {
-          contentType: file.type || undefined,
+          contentType: file.type || "image/jpeg",
           upsert: false,
         });
       if (up.error) throw up.error;
-    } catch (e: any) {
-      console.error("[camera] upload signed url falhou", e);
+    } catch {
       setErrorMsg("Falha ao enviar a foto. Verifique sua conexão.");
       setPhase("error");
       return;
     }
 
-    // 3) confirm-upload — backend valida binário e (se necessário) inicia análise.
     setPhase("confirming");
     try {
       const res = await supabase.functions.invoke("analyze-checklist-evidence", {
         body: {
           action: "confirm-upload",
-          responseToken: session.responseToken,
+          responseToken: active.responseToken,
           evidenceId: startData.evidenceId,
         },
       });
-      if (res.error || !res.data) throw new Error(res.error?.message || "confirm_failed");
+      if (res.error || !res.data) throw new Error("confirm_failed");
       const data = res.data as {
         analysisEnabled?: boolean;
-        analysisId?: string;
         analysisToken?: string;
-        alreadyStarted?: boolean;
         error?: string;
       };
-      if ((data as any).error) {
-        setErrorMsg(publicMessageForInvalid((data as any).error));
+      if (data.error) {
+        setErrorMsg(publicMessageForInvalid(data.error));
         setPhase("error");
         return;
       }
@@ -238,30 +200,20 @@ export function PublicCameraBlock({ block, checklistId, ensureResponseSession, o
       const analysisOn = data.analysisEnabled === true;
       setAnalysisEnabled(analysisOn);
       if (!analysisOn) {
-        setPhase("completed");
-        // preview permanece; answer é emitido via efeito no render.
+        setPhase("approved");
         return;
       }
-      if (data.analysisToken) {
-        setAnalysisToken(data.analysisToken);
-        setPhase("analyzing");
-      } else {
-        // alreadyStarted sem token — não temos como recuperar. Tratamos como
-        // revisão manual até o backend fornecer um caminho para reidratar.
-        setPhase("analyzing");
-      }
-    } catch (e: any) {
-      console.error("[camera] confirm-upload falhou", e);
+      if (data.analysisToken) setAnalysisToken(data.analysisToken);
+      setPhase("analyzing");
+    } catch {
       setErrorMsg("Não foi possível confirmar o envio. Tente novamente.");
       setPhase("error");
     }
   };
 
-  const publicResult: EvidenceAnalysisResult | null = analysisResult;
-  const finalStatus = publicResult?.status;
-  const showAnalysisBlock = analysisEnabled;
-
+  const busy = phase === "checking" || phase === "uploading" || phase === "confirming";
   const canPickPhoto = phase === "idle";
+  const retakeMessage = analysisResult?.publicMessage || "Não foi possível confirmar. Tire outra foto.";
 
   return (
     <div className="w-full">
@@ -269,11 +221,11 @@ export function PublicCameraBlock({ block, checklistId, ensureResponseSession, o
         role={canPickPhoto ? "button" : undefined}
         tabIndex={canPickPhoto ? 0 : undefined}
         aria-label={canPickPhoto ? `Responder com foto: ${title || "Câmera"}` : undefined}
-        onClick={canPickPhoto ? () => inputRef.current?.click() : undefined}
+        onClick={canPickPhoto ? () => void openCamera() : undefined}
         onKeyDown={canPickPhoto ? (e) => {
           if (e.key === "Enter" || e.key === " ") {
             e.preventDefault();
-            inputRef.current?.click();
+            void openCamera();
           }
         } : undefined}
         className={`flex items-center gap-3 w-full border border-neutral-200 rounded-xl px-4 py-4 bg-white transition-all relative shadow-sm mb-3 ${canPickPhoto ? "cursor-pointer hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-offset-2" : ""}`}
@@ -287,33 +239,17 @@ export function PublicCameraBlock({ block, checklistId, ensureResponseSession, o
         </div>
 
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <h3 className="flex-1 min-w-0 text-sm font-bold leading-snug break-words" style={{ color: textColor }}>
-              {title || "Câmera"}
-              {required && <span className="text-red-500 ml-1">*</span>}
-            </h3>
-          </div>
-          {description && (
-            <p className="text-xs text-neutral-500 mt-0.5 line-clamp-2">{description}</p>
+          <h3 className="text-sm font-bold leading-snug break-words" style={{ color: textColor }}>
+            {title || "Câmera"}
+            {required && <span className="text-red-500 ml-1">*</span>}
+          </h3>
+          {description && <p className="text-xs text-neutral-500 mt-0.5 line-clamp-2">{description}</p>}
+          {phase === "approved" && (
+            <span className="inline-block mt-1.5 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 uppercase tracking-wider">
+              Foto aprovada
+            </span>
           )}
-          <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
-            {(phase === "completed" || phase === "analyzing") && (
-              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 uppercase tracking-wider">
-                Foto enviada
-              </span>
-            )}
-          </div>
         </div>
-        {canPickPhoto && (
-          <input
-            ref={inputRef}
-            type="file"
-            accept="image/*"
-            capture="environment"
-            className="hidden"
-            onChange={(e) => onPick(e.target.files?.[0] ?? null)}
-          />
-        )}
       </div>
 
       {captureGuidance && phase === "idle" && (
@@ -322,81 +258,57 @@ export function PublicCameraBlock({ block, checklistId, ensureResponseSession, o
         </p>
       )}
 
-      {visionEnabled && criteria.length > 0 && phase === "idle" && (
-        <div className="bg-sky-50/70 border border-sky-100 rounded-lg px-3 py-2.5 mb-3">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-sky-800 mb-1.5">
-            A foto deve mostrar
-          </p>
-          <ul className="space-y-1">
-            {criteria.map((criterion, index) => (
-              <li key={`${criterion}-${index}`} className="flex items-start gap-2 text-xs text-sky-950">
-                <CheckCircle2 className="w-3.5 h-3.5 mt-0.5 shrink-0 text-sky-600" aria-hidden />
-                <span>{criterion}</span>
-              </li>
-            ))}
-          </ul>
+      {previewUrl && phase !== "idle" && (
+        <div className="relative mb-2 overflow-hidden rounded-lg border border-neutral-200 bg-black/5">
+          <img src={previewUrl} alt="Foto enviada" className="w-full max-h-80 object-contain" />
+          {(busy || phase === "analyzing") && (
+            <div className="pointer-events-none absolute inset-0 overflow-hidden">
+              <div className="absolute inset-x-0 h-1/3 bg-gradient-to-b from-transparent via-white/60 to-transparent animate-[tieck-scan_1.6s_ease-in-out_infinite]" />
+            </div>
+          )}
         </div>
       )}
 
-      {(phase === "checking" || phase === "uploading") && previewUrl && (
-        <img src={previewUrl} alt="Pré-visualização" className="w-full max-h-80 object-contain rounded-lg border border-neutral-200 bg-black/5 mb-2" />
-      )}
+      <style>{`@keyframes tieck-scan{0%{transform:translateY(-40%)}50%{transform:translateY(300%)}100%{transform:translateY(-40%)}}`}</style>
 
-      {(phase === "checking" || phase === "uploading" || phase === "confirming") && (
+      {busy && (
         <div className="flex items-center gap-2 text-sm text-neutral-600 py-2">
           <Loader2 className="w-4 h-4 animate-spin" aria-hidden />
-          {phase === "checking"
-            ? "Verificando qualidade da foto..."
-            : phase === "uploading"
-              ? "Enviando foto..."
-              : "Confirmando envio..."}
+          {phase === "checking" ? "Preparando a foto..." : phase === "uploading" ? "Enviando foto..." : "Confirmando envio..."}
         </div>
       )}
 
-      {(phase === "analyzing" || phase === "completed") && previewUrl && (
-        <img src={previewUrl} alt="Foto enviada" className="w-full max-h-80 object-contain rounded-lg border border-neutral-200 bg-black/5 mb-2" />
+      {phase === "analyzing" && (
+        <div className="flex items-center gap-2 text-sm text-neutral-600 py-2" aria-live="polite">
+          <ScanLine className="w-4 h-4 animate-pulse" aria-hidden />
+          Verificando a foto...
+        </div>
       )}
 
-      {phase === "analyzing" && showAnalysisBlock && (
-        <AnalysisStatusCard
-          result={publicResult}
-          isPolling={isPolling}
-          timedOut={timedOut}
-          onRetry={resetAll}
-        />
-      )}
-
-      {phase === "completed" && !showAnalysisBlock && (
+      {phase === "approved" && (
         <div className="flex items-center gap-2 text-sm text-emerald-700 py-1">
           <CheckCircle2 className="w-4 h-4" aria-hidden />
-          Foto recebida.
+          Foto aprovada.
           <button type="button" onClick={resetAll} className="ml-2 text-xs underline text-neutral-500 hover:text-neutral-700">
             Trocar foto
           </button>
         </div>
       )}
 
-      {/* Se a análise terminou, mostra o card final e permite trocar quando aplicável */}
-      {phase === "analyzing" && publicResult && !isPolling && (
-        <div className="mt-2">
-          {publicResult.requiresResubmit && (
-            <button
-              type="button"
-              onClick={resetAll}
-              className="text-xs underline text-neutral-600 hover:text-neutral-900"
-            >
-              Tirar outra foto
-            </button>
-          )}
-          {!publicResult.requiresResubmit && (
-            <button
-              type="button"
-              onClick={resetAll}
-              className="text-xs underline text-neutral-500 hover:text-neutral-700"
-            >
-              Trocar foto
-            </button>
-          )}
+      {phase === "retake" && (
+        <div className="space-y-2">
+          <div className="flex items-start gap-2 text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+            <RefreshCw className="w-4 h-4 mt-0.5" aria-hidden />
+            <span>{retakeMessage}</span>
+          </div>
+          <button
+            type="button"
+            onClick={resetAll}
+            className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-neutral-200 bg-white text-sm hover:bg-neutral-50"
+          >
+            <Camera className="w-4 h-4" aria-hidden />
+            Tirar outra foto
+          </button>
         </div>
       )}
 
@@ -408,7 +320,7 @@ export function PublicCameraBlock({ block, checklistId, ensureResponseSession, o
           </div>
           <button
             type="button"
-            onClick={resetSelection}
+            onClick={resetAll}
             className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-neutral-200 bg-white text-sm hover:bg-neutral-50"
           >
             <RefreshCw className="w-4 h-4" aria-hidden />
@@ -416,56 +328,15 @@ export function PublicCameraBlock({ block, checklistId, ensureResponseSession, o
           </button>
         </div>
       )}
-    </div>
-  );
-}
 
-function AnalysisStatusCard({
-  result,
-  isPolling,
-  timedOut,
-  onRetry,
-}: {
-  result: EvidenceAnalysisResult | null;
-  isPolling: boolean;
-  timedOut: boolean;
-  onRetry: () => void;
-}) {
-  if (!result && isPolling) {
-    return (
-      <div className="flex items-center gap-2 text-sm text-neutral-600 py-2">
-        <Loader2 className="w-4 h-4 animate-spin" aria-hidden />
-        Analisando sua evidência...
-      </div>
-    );
-  }
-  if (!result && timedOut) {
-    return (
-      <div className="flex items-start gap-2 text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-        <AlertTriangle className="w-4 h-4 mt-0.5" aria-hidden />
-        <span>Não recebemos o resultado da análise a tempo. Você pode continuar; a evidência será revisada.</span>
-      </div>
-    );
-  }
-  if (!result) return null;
-  const meta = statusMeta(result.status);
-  const Icon = meta.icon;
-  return (
-    <div className={`flex items-start gap-2 text-sm border rounded-lg px-3 py-2 ${meta.tone}`}>
-      <Icon className={`w-4 h-4 mt-0.5 ${isPolling ? "animate-spin" : ""}`} aria-hidden />
-      <div className="flex-1">
-        <div>{result.publicMessage}</div>
-        {result.requiresResubmit && (
-          <button
-            type="button"
-            onClick={onRetry}
-            className="mt-1 inline-flex items-center gap-1 text-xs font-medium underline"
-          >
-            <RefreshCw className="w-3 h-3" aria-hidden />
-            Tirar outra foto
-          </button>
-        )}
-      </div>
+      <TieckCamera
+        open={cameraOpen}
+        title={title || "Câmera"}
+        hint={captureGuidance || description}
+        live={session ? { checklistId, blockId: block.id, responseToken: session.responseToken } : null}
+        onClose={() => setCameraOpen(false)}
+        onCapture={handleCapture}
+      />
     </div>
   );
 }
@@ -473,16 +344,13 @@ function AnalysisStatusCard({
 function publicMessageForInvalid(code: string): string {
   if (code.startsWith("invalid_image_")) {
     const reason = code.replace("invalid_image_", "");
-    if (reason === "too_small" || reason === "resolution_too_low")
-      return "A foto está abaixo da resolução mínima exigida.";
-    if (reason === "unsupported_mime" || reason === "invalid_magic_bytes")
-      return "Formato de imagem não suportado. Envie JPEG, PNG ou WebP.";
+    if (reason === "too_small" || reason === "resolution_too_low") return "A foto ficou com pouca definição. Tire outra.";
+    if (reason === "unsupported_mime" || reason === "invalid_magic_bytes") return "Formato de imagem não suportado.";
     if (reason === "too_large") return "A foto excede o tamanho máximo.";
     return "A imagem enviada é inválida.";
   }
   if (code === "attempt_limit_reached") return "Limite de tentativas atingido para esta pergunta.";
   if (code === "file_too_large") return "A foto excede o tamanho máximo.";
-  if (code === "unsupported_mime") return "Formato não suportado. Envie JPEG, PNG ou WebP.";
-  if (code === "vision_not_configured") return "A análise visual deste item ainda não foi configurada.";
+  if (code === "unsupported_mime") return "Formato não suportado.";
   return "Não foi possível processar a foto. Tente novamente.";
 }
