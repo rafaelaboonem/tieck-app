@@ -312,34 +312,56 @@ function collectPoints(payload: any): { x: number; y: number }[] {
   return out;
 }
 
+type LiveState = "searching" | "adjust" | "ready" | "uncertain";
+type HintCode =
+  | "searching"
+  | "target_not_found"
+  | "move_closer"
+  | "show_full_object"
+  | "center_object"
+  | "ready"
+  | "uncertain";
+
+const HINTS: Record<HintCode, string> = {
+  searching: "Procurando o objeto.",
+  target_not_found: "Aponte a câmera para o item solicitado.",
+  move_closer: "Aproxime um pouco.",
+  show_full_object: "Mostre o item por completo.",
+  center_object: "Centralize o item.",
+  ready: "Enquadramento pronto.",
+  uncertain: "Não foi possível orientar agora.",
+};
+
+/**
+ * Localiza o alvo em um frame temporário. Nunca fabrica coordenadas: quando o
+ * modelo não devolve caixa válida, `boxes` volta vazio.
+ */
 async function locateTarget(frame: Decoded, target: string) {
   const started = Date.now();
   const image = toDataUrl(frame);
+  const done = (strategy: "detect" | "point" | "query", found: boolean, boxes: Box[]) => ({
+    strategy,
+    found,
+    boxes,
+    inferenceMs: Date.now() - started,
+  });
 
-  // 1) detect
+  // 1) detect — única estratégia que produz caixa real
   try {
     const p = await cfRun(fastModel(), { image, task: "detect", object: target, stream: false }, LIVE_TIMEOUT_MS);
-    const boxes = collectBoxes(p);
-    if (boxes.length) {
-      const best = boxes.sort((a, b) => b.w * b.h - a.w * a.h)[0];
-      return { strategy: "detect" as const, found: true, box: best, latencyMs: Date.now() - started };
-    }
-    return { strategy: "detect" as const, found: false, box: null, latencyMs: Date.now() - started };
+    const boxes = collectBoxes(p)
+      .sort((a, b) => b.w * b.h - a.w * a.h)
+      .slice(0, 3);
+    return done("detect", boxes.length > 0, boxes);
   } catch { /* segue para point */ }
 
-  // 2) point
+  // 2) point — confirma presença, sem caixa
   try {
     const p = await cfRun(fastModel(), { image, task: "point", object: target, stream: false }, LIVE_TIMEOUT_MS);
-    const points = collectPoints(p);
-    if (points.length) {
-      const pt = points[0];
-      const box = { x: Math.max(0, pt.x - 0.15), y: Math.max(0, pt.y - 0.15), w: 0.3, h: 0.3 };
-      return { strategy: "point" as const, found: true, box, latencyMs: Date.now() - started };
-    }
-    return { strategy: "point" as const, found: false, box: null, latencyMs: Date.now() - started };
+    return done("point", collectPoints(p).length > 0, []);
   } catch { /* segue para query */ }
 
-  // 3) query (sem coordenadas)
+  // 3) query — apenas presença
   const p = await cfRun(fastModel(), {
     image,
     task: "query",
@@ -348,13 +370,24 @@ async function locateTarget(frame: Decoded, target: string) {
     max_tokens: 8,
   }, LIVE_TIMEOUT_MS);
   const text = extractModelText(p).toLowerCase();
-  return {
-    strategy: "query" as const,
-    found: /\byes\b|\bsim\b/.test(text) && !/\bno\b/.test(text.slice(0, 6)),
-    box: null,
-    latencyMs: Date.now() - started,
-  };
+  const yes = /\byes\b|\bsim\b/.test(text) && !/^\s*no\b/.test(text);
+  return done("query", yes, []);
 }
+
+/** Estado e orientação derivados apenas de sinais reais do modelo. */
+function liveGuidance(found: boolean, boxes: Box[]): { state: LiveState; hintCode: HintCode } {
+  if (!found) return { state: "searching", hintCode: "target_not_found" };
+  const box = boxes[0];
+  if (!box) return { state: "adjust", hintCode: "center_object" };
+  const area = box.w * box.h;
+  const touching = box.x <= 0.02 || box.y <= 0.02 || box.x + box.w >= 0.98 || box.y + box.h >= 0.98;
+  const offCenter = Math.abs(box.x + box.w / 2 - 0.5) > 0.22 || Math.abs(box.y + box.h / 2 - 0.5) > 0.22;
+  if (area < 0.06) return { state: "adjust", hintCode: "move_closer" };
+  if (touching) return { state: "adjust", hintCode: "show_full_object" };
+  if (offCenter) return { state: "adjust", hintCode: "center_object" };
+  return { state: "ready", hintCode: "ready" };
+}
+
 
 // ---------------- etapa 1: Moondream (observador, evidência primeiro) ----------------
 async function runObserver(image: Decoded, question: string, profile: any) {
