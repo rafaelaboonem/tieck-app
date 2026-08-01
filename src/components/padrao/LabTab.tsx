@@ -8,6 +8,8 @@ import { toast } from "sonner";
 import { Loader2, Play, Eye, Scale, CheckCircle2, RefreshCcw, HelpCircle, AlertTriangle, Camera, ImageIcon } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { CameraV3Preview } from "@/components/padrao/CameraV3Preview";
+import { listChecklistProjects, type ChecklistProject } from "@/lib/camera-blocks";
+
 import {
   blobToBase64,
   referenceBase64,
