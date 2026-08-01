@@ -807,7 +807,9 @@ Deno.serve(async (req) => {
         const p = await cfRun(model, payload as unknown);
         out[key] = { model, ok: true, hasText: extractModelText(p).trim().length > 0, latencyMs: Date.now() - started };
       } catch (e) {
-        out[key] = { model, ok: false, code: String((e as Error).message).slice(0, 60), latencyMs: Date.now() - started };
+        console.error(`[lab] capability_failed key=${key} code=${String((e as Error).message).slice(0, 60)}`);
+        out[key] = { model, ok: false, code: "technical_failure", latencyMs: Date.now() - started };
+
       }
     }
     console.log(`[lab] capabilities user=${actorId.slice(0, 8)}`);
