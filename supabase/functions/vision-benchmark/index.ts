@@ -675,7 +675,10 @@ async function acquireLock(
     p_ttl_seconds: ttlSeconds,
   });
   // Falha de infraestrutura na trava não deve bloquear o usuário.
-  if (error) return { ok: true, key: null, busy: false };
+  if (error) {
+    console.error(`[lab] lock_error op=${operation} msg=${String((error as any)?.message ?? error).slice(0, 120)}`);
+    return { ok: true, key: null, busy: false };
+  }
   const row = Array.isArray(data) ? data[0] : data;
   if (row?.acquired) return { ok: true, key: String(row.lock_key), busy: false };
   return { ok: false, key: null, busy: true };
