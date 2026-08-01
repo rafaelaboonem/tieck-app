@@ -593,6 +593,29 @@ function combine(observer: Awaited<ReturnType<typeof runObserver>>, judge: any):
     };
   }
   if (judge.decision === "uncertain") {
+    // Quando a causa é determinada (alvo ausente, escuro, tremido, condição não atendida),
+    // o operador recebe uma ação clara em vez de um "não deu para confirmar".
+    const determinate = !gate.target_found
+      ? "target_not_found"
+      : !gate.lighting_sufficient
+        ? "too_dark"
+        : !gate.sharpness_sufficient
+          ? "blurry"
+          : !gate.framing_sufficient
+            ? "bad_framing"
+            : !gate.target_visible
+              ? "target_not_visible"
+              : !gate.condition_met
+                ? "condition_not_met"
+                : null;
+    if (determinate) {
+      return {
+        decision: "retake",
+        reason_code: determinate,
+        public_message: RETAKE_MESSAGES[determinate],
+        gate,
+      };
+    }
     return {
       decision: "uncertain",
       reason_code: "insufficient_evidence",
@@ -600,6 +623,7 @@ function combine(observer: Awaited<ReturnType<typeof runObserver>>, judge: any):
       gate,
     };
   }
+
 
   if (Object.values(gate).every(Boolean)) {
     return {
