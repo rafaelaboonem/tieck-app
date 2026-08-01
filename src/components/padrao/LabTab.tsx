@@ -72,7 +72,7 @@ export function LabTab({ workspaceId, standards, selected, onSelect, runs, onRun
   const lastRun = runs[0] ?? null;
   const canRun = useMemo(() => Boolean(file && question.trim() && !running), [file, question, running]);
 
-  const register = (res: Parameters<typeof isCorrect>[0] extends never ? never : LabRun) => res;
+
 
   const pushRun = (res: LabRun) => {
     res.correct = isCorrect(res);
