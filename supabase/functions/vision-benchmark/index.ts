@@ -929,8 +929,9 @@ Deno.serve(async (req) => {
   const reference = body?.referenceBase64 ? decodeImage(body.referenceBase64) : null;
   if (body?.referenceBase64 && !reference) return err(400, "invalid_reference");
 
-  if (inFlight.has(actorId)) return err(409, "already_running");
-  inFlight.add(actorId);
+  const labMode = body?.lab === true;
+  const evalLock = await acquireLock(svc, actorId, workspaceId, "benchmark-evaluate", 90);
+  if (evalLock.busy) return err(409, "already_running");
   const t0 = Date.now();
   try {
     const observer = await runObserver(image, question, profile);
@@ -957,11 +958,19 @@ Deno.serve(async (req) => {
     }
 
     const combined = combine(observer, judge.raw);
+    // Coerência: em aprovação o código do juiz acompanha o resultado final.
+    const judgeReason = combined.decision === "approved"
+      ? "condition_met"
+      : publicReason(judge.raw.reason_code, combined.reason_code);
     console.log(`[lab] evaluate ok user=${actorId.slice(0, 8)} decision=${combined.decision} ms=${Date.now() - t0}`);
     return json(200, {
       observer: {
-        observation: observer.observation,
+        // Texto bruto do modelo só no laboratório; nunca na câmera do operador.
+        ...(labMode ? { observation: observer.observation } : {}),
+        summary: sanitizeMessage(combined.public_message, "Análise concluída."),
         targetVisible: observer.targetVisible,
+        targetVisibleKnown: observer.targetVisibleKnown,
+        structured: observer.structured,
         blurry: observer.blurry,
         dark: observer.dark,
         latencyMs: observer.latencyMs,
@@ -971,7 +980,7 @@ Deno.serve(async (req) => {
         targetVisible: judge.raw.target_visible ?? null,
         conditionMet: judge.raw.condition_met ?? null,
         qualitySufficient: judge.raw.quality_sufficient ?? null,
-        reasonCode: judge.raw.reason_code ?? null,
+        reasonCode: judgeReason,
         observations: [
           ...strList(judge.raw.supporting_evidence, 2),
           ...strList(judge.raw.contrary_evidence, 2),
@@ -979,7 +988,7 @@ Deno.serve(async (req) => {
         confidence: typeof judge.raw.confidence === "number" ? judge.raw.confidence : null,
         latencyMs: judge.latencyMs,
       },
-      combined,
+      combined: { ...combined, reason_code: publicReason(combined.reason_code, "insufficient_evidence") },
       referenceMode,
       totalLatencyMs: Date.now() - t0,
     });
@@ -991,8 +1000,8 @@ Deno.serve(async (req) => {
       judge: null,
       combined: {
         decision: "technical_failure",
-        reason_code: /^[a-z0-9_]{1,40}$/.test(code) ? code : "service_unavailable",
-
+        // Nunca expõe códigos internos: apenas o código público genérico.
+        reason_code: "technical_failure",
         public_message: "Não foi possível verificar agora. Tente novamente.",
         gate: {},
       },
@@ -1000,6 +1009,7 @@ Deno.serve(async (req) => {
       totalLatencyMs: Date.now() - t0,
     });
   } finally {
-    inFlight.delete(actorId);
+    await releaseLock(svc, evalLock.key);
   }
+
 });
