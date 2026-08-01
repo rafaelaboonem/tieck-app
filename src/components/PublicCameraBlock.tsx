@@ -56,7 +56,7 @@ export function PublicCameraBlock({ block, checklistId, ensureResponseSession, o
   const [analysisToken, setAnalysisToken] = useState<string | null>(null);
   const [restartKey, setRestartKey] = useState(0);
   const [retrying, setRetrying] = useState(false);
-  const [retryCooldown, setRetryCooldown] = useState(false);
+  const [retryAfter, setRetryAfter] = useState<number | null>(null);
   const [evidenceId, setEvidenceId] = useState<string | null>(null);
   const [analysisEnabled, setAnalysisEnabled] = useState(false);
   const [session, setSession] = useState<{ responseId: string; responseToken: string } | null>(null);
