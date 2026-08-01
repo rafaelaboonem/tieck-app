@@ -11,6 +11,10 @@ import { PerformanceTab } from "@/components/padrao/PerformanceTab";
 import { listStandards, type LabRun, type VisualStandard } from "@/lib/visual-standards";
 
 export const Route = createFileRoute("/padrao/")({
+  validateSearch: (search: Record<string, unknown>) => ({
+    checklist: typeof search["checklist"] === "string" ? (search["checklist"] as string) : undefined,
+    block: typeof search["block"] === "string" ? (search["block"] as string) : undefined,
+  }),
   head: () => ({
     meta: [
       { title: "Central Visual · Tieck" },
@@ -20,6 +24,7 @@ export const Route = createFileRoute("/padrao/")({
   }),
   component: CentralVisualPage,
 });
+
 
 type TabKey = "padroes" | "laboratorio" | "desempenho";
 
