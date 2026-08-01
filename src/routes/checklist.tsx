@@ -2107,6 +2107,19 @@ function NovoChecklistPage() {
         // Store the ID of the newly created draft so future auto-saves update it instead of inserting again
         sessionChecklistIdRef.current = data.id;
       }
+
+      // Padrões visuais acompanham os blocos: pergunta alterada exige nova
+      // validação; bloco removido arquiva o padrão sem apagar histórico.
+      if (data?.id) {
+        void syncStandardsWithBlocks({
+          checklistId: data.id,
+          blocks: extractCameraQuestions(blocksWithIds as any[]).map((q) => ({
+            cameraBlockId: q.cameraBlockId,
+            question: q.question,
+          })),
+        });
+      }
+
     } catch (err: any) {
       console.error("Save error:", err);
       if (!silent) toast.error(err.message || "Erro ao publicar");
