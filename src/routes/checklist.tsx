@@ -4282,6 +4282,12 @@ function NovoChecklistPage() {
                                 />
                               </div>
 
+                              <CameraStandardStatus
+                                checklistId={currentChecklistId || sessionChecklistIdRef.current || checklistId || null}
+                                cameraBlockId={((block as any).cameraBlockId as string | undefined) ?? null}
+                              />
+
+
                               {/* Regras da captura */}
                               <div className="flex flex-wrap items-center gap-4">
                                 <label className="flex items-center gap-2 text-xs font-medium text-neutral-700 cursor-pointer select-none">
