@@ -1077,7 +1077,10 @@ Deno.serve(async (req) => {
 
     // Gate conservador: aprova só com confiança >= limiar, JSON completo e
     // padrão realmente verificável por foto.
-    const combined = combine(observer, judge.raw, { threshold, verifiability });
+    const combined = combine(observer, judge.raw, {
+      confidenceThreshold: threshold,
+      verifiability: verifiability.visual_verifiability,
+    });
     const usage = meterTotals(meter);
     const payload = {
       observer: {
@@ -1104,7 +1107,8 @@ Deno.serve(async (req) => {
       combined,
       referenceMode,
       threshold,
-      verifiability,
+      verifiability: verifiability.visual_verifiability,
+      requiredEvidenceCount: verifiability.required_evidence_count,
       attemptId,
       totalLatencyMs: Date.now() - t0,
       usage,
@@ -1137,7 +1141,10 @@ Deno.serve(async (req) => {
     });
     console.error(`[lab] evaluate_failed user=${actorId.slice(0, 8)} code=${code} ms=${Date.now() - t0}`);
     return json(200, {
-      ...technicalFailure(/^[a-z0-9_]{1,40}$/.test(code) ? code : "service_unavailable"),
+      observer: null,
+      judge: null,
+      combined: technicalFailure(code, threshold),
+      referenceMode: "none",
       attemptId,
       attemptConsumed: false,
       totalLatencyMs: Date.now() - t0,
