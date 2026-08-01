@@ -296,7 +296,7 @@ async function buildProfile(question: string, referenceSummary: string | null, m
   let parsed: any = null;
   for (const withSchema of [true, false]) {
     try {
-      const payload = await cfRun(finalModel(), {
+      const payload = await cfMetered(meter, "profile", finalModel(), {
         messages: [{ role: "user", content: prompt }],
         ...(withSchema ? { response_format: { type: "json_schema", json_schema: PROFILE_SCHEMA } } : {}),
         max_tokens: 600,
