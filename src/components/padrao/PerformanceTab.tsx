@@ -1,10 +1,8 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Download, TrendingUp, Check, X } from "lucide-react";
+import { Download, TrendingUp } from "lucide-react";
 import {
-  MIN_LABELED_SAMPLE,
   computeMetrics,
-  computeRelease,
   computeUsage,
   download,
   exportRows,
@@ -14,7 +12,6 @@ import {
 
 export function PerformanceTab({ runs }: { runs: LabRun[] }) {
   const m = computeMetrics(runs);
-  const release = computeRelease(runs);
   const usage = computeUsage(runs);
 
   if (!runs.length) {
@@ -23,7 +20,7 @@ export function PerformanceTab({ runs }: { runs: LabRun[] }) {
         <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
           <TrendingUp className="h-10 w-10 text-muted-foreground" />
           <p className="max-w-md text-sm text-muted-foreground">
-            Nenhum teste nesta sessão ainda. Os indicadores aparecem assim que você rodar testes no laboratório.
+            Nenhuma análise nesta sessão ainda. Os indicadores aparecem assim que você analisar uma foto no laboratório.
           </p>
         </CardContent>
       </Card>
@@ -33,34 +30,33 @@ export function PerformanceTab({ runs }: { runs: LabRun[] }) {
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <Metric label="Testes na sessão" value={String(m.total)} />
-        <Metric label="Acertos" value={String(m.hits)} />
-        <Metric label="Falsas aprovações" value={String(m.falseApprovals)} tone="text-rose-600" />
-        <Metric label="Falsas reprovações" value={String(m.falseRejections)} tone="text-amber-600" />
-        <Metric label="Incertos" value={String(m.uncertain)} />
-        <Metric label="Falhas técnicas" value={String(m.technicalFailures)} />
+        <Metric label="Análises na sessão" value={String(m.total)} />
+        <Metric label="Aprovadas" value={String(m.approved)} tone="text-emerald-700" />
+        <Metric label="Nova foto" value={String(m.retake)} tone="text-amber-700" />
+        <Metric label="Incertas" value={String(m.uncertain)} />
+        <Metric label="Falhas técnicas" value={String(m.technicalFailures)} tone="text-rose-600" />
         <Metric
-          label="Concordância entre etapas"
-          value={m.agreement == null ? "—" : `${Math.round(m.agreement * 100)}%`}
+          label="Confiança média"
+          value={m.avgConfidence == null ? "—" : `${Math.round(m.avgConfidence * 100)}%`}
         />
-        <Metric label="Tempo médio" value={m.avgLatencyMs == null ? "—" : `${m.avgLatencyMs} ms`} />
+        <Metric label="Latência média" value={m.avgLatencyMs == null ? "—" : `${m.avgLatencyMs} ms`} />
+        <Metric label="Com referência" value={`${m.withReference} de ${m.total}`} />
       </div>
 
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-base">Assertividade</CardTitle>
+          <CardTitle className="text-base">Avaliador utilizado</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-2 text-sm">
-          <p className="text-2xl font-semibold">
-            {m.accuracy == null ? "—" : `${Math.round(m.accuracy * 100)}%`}
+        <CardContent className="space-y-1 text-sm">
+          <p className="text-muted-foreground">
+            Provedor: {m.providers.length ? m.providers.join(", ") : "—"}
           </p>
-          {!m.enoughSample && (
-            <p className="text-xs text-amber-700">
-              Amostra pequena: com menos de {MIN_LABELED_SAMPLE} testes classificados, este número é apenas indicativo.
-            </p>
-          )}
+          <p className="text-muted-foreground">
+            Modelo: {m.models.length ? m.models.join(", ") : "—"}
+          </p>
           <p className="text-xs text-muted-foreground">
-            Com referência: {m.withReference} · Sem referência: {m.withoutReference}
+            Estas métricas são coletadas automaticamente pela própria execução. Assertividade não é exibida porque
+            não existe gabarito informado — sem ele o número não seria honesto.
           </p>
         </CardContent>
       </Card>
@@ -83,45 +79,12 @@ export function PerformanceTab({ runs }: { runs: LabRun[] }) {
           </p>
           <p className="text-xs text-muted-foreground">
             Tokens e neurônios são contabilidades separadas: tokens vêm do avaliador Gemini e neurônios do
-            provedor anterior. O trabalho local (luz, foco, estabilidade e enquadramento) não consome IA.
+            provedor de rollback. O trabalho local (luz, foco, estabilidade e enquadramento) não consome IA.
           </p>
-
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base">Trava de liberação da câmera</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2 text-sm">
-          <p className={release.ready ? "text-emerald-700" : "text-muted-foreground"}>
-            {release.ready
-              ? "Todos os casos obrigatórios passaram nesta sessão."
-              : "A câmera continua em prévia interna até todos os casos passarem."}
-          </p>
-          <ul className="space-y-1">
-            {release.cases.map((c) => (
-              <li key={c.key} className="flex items-center gap-2 text-xs">
-                {c.passed ? (
-                  <Check className="h-3.5 w-3.5 text-emerald-600" aria-hidden />
-                ) : (
-                  <X className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
-                )}
-                <span className={c.passed ? "" : "text-muted-foreground"}>{c.label}</span>
-                {c.falseApproval && <span className="text-rose-600">falsa aprovação</span>}
-              </li>
-            ))}
-          </ul>
-          {release.blockedByFalseApproval && (
-            <p className="text-xs text-rose-600">
-              Há falsa aprovação registrada: a liberação fica bloqueada até um novo teste correto.
-            </p>
-          )}
         </CardContent>
       </Card>
 
       <div className="flex flex-wrap gap-3">
-
         <Button
           variant="outline"
           onClick={() => download(`tieck-lab-${Date.now()}.csv`, toCsv(runs), "text/csv;charset=utf-8")}
