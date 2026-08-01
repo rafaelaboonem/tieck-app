@@ -167,26 +167,62 @@ export function LabTab({ workspaceId, standards, selected, onSelect, runs, onRun
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="lab-standard">Padrão</Label>
+            <Label htmlFor="lab-project">Selecione o projeto</Label>
             <select
-              id="lab-standard"
+              id="lab-project"
               className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-              value={selected?.id ?? ""}
-              onChange={(e) => onSelect(standards.find((s) => s.id === e.target.value) ?? null)}
+              value={projectId}
+              onChange={(e) => { setProjectId(e.target.value); onSelect(null); }}
+              disabled={projectsLoading}
             >
-              <option value="">Selecione um padrão</option>
-              {standards.map((s) => (
-                <option key={s.id} value={s.id}>{s.name}</option>
+              <option value="">{projectsLoading ? "Carregando…" : "Selecione o projeto"}</option>
+              {projects.map((p) => (
+                <option key={p.id} value={p.id}>{p.title}</option>
               ))}
             </select>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="lab-question">Selecione a pergunta</Label>
+            <select
+              id="lab-question"
+              className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+              value={selected?.camera_block_id ?? ""}
+              disabled={!project}
+              onChange={(e) => {
+                const std = standards.find(
+                  (s) => !s.archived_at && s.camera_block_id === e.target.value,
+                );
+                onSelect(std ?? null);
+              }}
+            >
+              <option value="">Selecione a pergunta</option>
+              {(project?.cameraBlocks ?? []).map((b) => {
+                const std = standards.find((s) => !s.archived_at && s.camera_block_id === b.cameraBlockId);
+                return (
+                  <option key={b.cameraBlockId} value={b.cameraBlockId} disabled={!std}>
+                    {b.question}{std ? "" : " — sem padrão configurado"}
+                  </option>
+                );
+              })}
+            </select>
+            {project && project.cameraBlocks.length === 0 && (
+              <p className="text-xs text-muted-foreground">
+                Este projeto ainda não possui perguntas com câmera.
+              </p>
+            )}
           </div>
 
           <div className="space-y-1 rounded-lg border p-3">
             <p className="text-sm font-medium">O que será verificado</p>
             <p className="text-sm text-muted-foreground">
-              {question ? `“${question}”` : "Selecione um padrão para ver a pergunta enviada à IA."}
+              {question ? `“${question}”` : "Selecione a pergunta para ver o que será enviado à IA."}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              A pergunta é definida no bloco de câmera do projeto e não pode ser editada aqui.
             </p>
           </div>
+
 
           <div className="space-y-2">
             <Label htmlFor="lab-file">Foto de teste</Label>
