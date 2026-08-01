@@ -373,16 +373,15 @@ async function locateTarget(frame: Decoded, target: string) {
     const boxes = collectBoxes(p)
       .sort((a, b) => b.w * b.h - a.w * a.h)
       .slice(0, 3);
-    if (!boxes.length) console.log(`[lab] detect_shape ${JSON.stringify(p).slice(0, 300)}`);
-
-    return done("detect", boxes.length > 0, boxes);
+    if (boxes.length) return done("detect", true, boxes);
   } catch { /* segue para point */ }
 
   // 2) point — confirma presença, sem caixa
   try {
     const p = await cfRun(fastModel(), { image, task: "point", object: target, stream: false }, LIVE_TIMEOUT_MS);
-    return done("point", collectPoints(p).length > 0, []);
+    if (collectPoints(p).length) return done("point", true, []);
   } catch { /* segue para query */ }
+
 
   // 3) query — apenas presença
   const p = await cfRun(fastModel(), {
