@@ -432,6 +432,10 @@ import { mapAuthError } from "@/utils/auth-errors";
 const InsightsTab = lazy(() => import("@/components/InsightsTab").then(m => ({ default: m.InsightsTab })));
 const SubmissionsTab = lazy(() => import("@/components/SubmissionsTab").then(m => ({ default: m.SubmissionsTab })));
 import { BlockRenderer, INTERACTIVE_BLOCK_TYPES } from "@/components/BlockRenderer";
+import { CameraStandardStatus } from "@/components/padrao/CameraStandardStatus";
+import { ensureCameraBlockIds, withNewCameraBlockId, extractCameraQuestions } from "@/lib/camera-blocks";
+import { syncStandardsWithBlocks } from "@/lib/visual-standards";
+
 
 const BTN_ICON_OPTIONS: { key: string; label: string; Icon: any }[] = [
   { key: "arrow-right", label: "Seta", Icon: ArrowRight },
