@@ -24,6 +24,14 @@ import {
   type VisualStandard,
 } from "@/lib/visual-standards";
 
+const emptyMarks = {
+  aiWasRight: null as boolean | null,
+  falseApproval: false,
+  falseRejection: false,
+  liveGuidanceHelped: null as boolean | null,
+  liveGuidanceWrong: false,
+};
+
 const DECISION_META: Record<LabDecision, { label: string; tone: string; icon: typeof CheckCircle2 }> = {
   approved: { label: "Aprovado", tone: "bg-emerald-500/15 text-emerald-700", icon: CheckCircle2 },
   retake: { label: "Refazer foto", tone: "bg-amber-500/15 text-amber-700", icon: RefreshCcw },
