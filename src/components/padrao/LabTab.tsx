@@ -275,6 +275,11 @@ export function LabTab({ workspaceId, standards, selected, onSelect, runs, onRun
             {profiling ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Camera className="mr-2 h-4 w-4" />}
             Testar com a câmera (prévia)
           </Button>
+          {attemptsUsed != null && attemptsLimit != null && (
+            <p className="text-xs text-muted-foreground">
+              Sessão atual: {attemptsUsed} de {attemptsLimit} análises finais usadas.
+            </p>
+          )}
           <p className="text-xs text-muted-foreground">
             A prévia da câmera é interna: as imagens são analisadas em memória e nada é salvo.
           </p>
