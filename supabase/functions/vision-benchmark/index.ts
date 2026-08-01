@@ -822,13 +822,17 @@ Deno.serve(async (req) => {
           if (meta) referenceSummary = await describeReference({ bytes, ...meta }, standard.question, meter);
         }
       }
-      const { profile, ambiguous } = await buildProfile(standard.question, referenceSummary, meter);
+      const { profile, ambiguous, verifiability } = await buildProfile(standard.question, referenceSummary, meter);
       const { error: upErr } = await userClient
         .from("visual_standards")
         .update({
           internal_profile: profile,
           profile_version: PROFILE_VERSION,
-          needs_validation: ambiguous,
+          needs_validation: ambiguous || verifiability.visual_verifiability !== "verifiable",
+          visual_verifiability: verifiability.visual_verifiability,
+          required_evidence_count: verifiability.required_evidence_count,
+          unverifiable_conditions: verifiability.unverifiable_conditions,
+          reformulation_suggestion: verifiability.suggested_photos,
         })
         .eq("id", standardId);
       if (upErr) throw new Error("profile_save_failed");
@@ -836,13 +840,21 @@ Deno.serve(async (req) => {
         meter, workspaceId, userId: actorId, sessionId,
         standardId, action: "profile-standard", decision: null,
       });
-      console.log(`[lab] profile ok user=${actorId.slice(0, 8)} ambiguous=${ambiguous}`);
+      console.log(
+        `[lab] profile ok user=${actorId.slice(0, 8)} ambiguous=${ambiguous} verifiability=${verifiability.visual_verifiability}`,
+      );
       return json(200, {
         ok: true,
-        needsValidation: ambiguous,
+        needsValidation: ambiguous || verifiability.visual_verifiability !== "verifiable",
         profileVersion: PROFILE_VERSION,
+        verifiability: verifiability.visual_verifiability,
+        requiredEvidenceCount: verifiability.required_evidence_count,
+        unverifiableConditions: verifiability.unverifiable_conditions,
+        suggestedPhotos: verifiability.suggested_photos,
+        canRelease: verifiability.visual_verifiability === "verifiable" && !ambiguous,
         usage: meterTotals(meter),
       });
+
     } catch (e) {
       const code = String((e as Error).message ?? "unknown").slice(0, 60);
       await recordUsage(svc, {
