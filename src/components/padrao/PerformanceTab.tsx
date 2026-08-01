@@ -5,6 +5,7 @@ import {
   MIN_LABELED_SAMPLE,
   computeMetrics,
   computeRelease,
+  computeUsage,
   download,
   exportRows,
   toCsv,
@@ -14,6 +15,7 @@ import {
 export function PerformanceTab({ runs }: { runs: LabRun[] }) {
   const m = computeMetrics(runs);
   const release = computeRelease(runs);
+  const usage = computeUsage(runs);
 
   if (!runs.length) {
     return (
