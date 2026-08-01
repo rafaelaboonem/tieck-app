@@ -1,41 +1,30 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { X, RefreshCw, Camera as CameraIcon, Loader2, CheckCircle2 } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
-
-type LiveState = "ready" | "adjust" | "uncertain";
+import { X, RefreshCw, Camera as CameraIcon } from "lucide-react";
 
 type Props = {
   open: boolean;
   title: string;
   hint?: string;
-  /** Dados necessários para a assistência de enquadramento (live-check). */
-  live?: {
-    checklistId: string;
-    blockId: string;
-    responseToken: string;
-  } | null;
   onClose: () => void;
   onCapture: (file: File) => void;
 };
 
-const LIVE_INTERVAL_MS = 3_000;
-const LIVE_FRAME_WIDTH = 512;
-
 /**
- * Câmera nativa do Tieck: fullscreen, mobile-first, com assistência opcional
- * de enquadramento. O frame de assistência nunca é armazenado.
+ * Câmera nativa do Tieck: fullscreen, mobile-first.
+ *
+ * Camera V2 — nenhuma inferência de IA acontece enquanto a câmera está aberta:
+ * nenhum frame é enviado a provedor algum, não há polling, badge de análise,
+ * bounding box ou orientação "inteligente". A única verificação é local, feita
+ * DEPOIS da captura.
  */
-export function TieckCamera({ open, title, hint, live, onClose, onCapture }: Props) {
+export function TieckCamera({ open, title, hint, onClose, onCapture }: Props) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const fallbackInputRef = useRef<HTMLInputElement | null>(null);
-  const liveBusyRef = useRef(false);
 
   const [ready, setReady] = useState(false);
   const [denied, setDenied] = useState(false);
   const [capturing, setCapturing] = useState(false);
-  const [liveState, setLiveState] = useState<LiveState>("uncertain");
-  const [liveHint, setLiveHint] = useState("");
 
   const stopStream = useCallback(() => {
     streamRef.current?.getTracks().forEach((track) => track.stop());
@@ -80,56 +69,6 @@ export function TieckCamera({ open, title, hint, live, onClose, onCapture }: Pro
     };
   }, [open, stopStream]);
 
-  const grabFrame = useCallback((maxWidth: number, quality: number): string | null => {
-    const video = videoRef.current;
-    if (!video || !video.videoWidth) return null;
-    const scale = Math.min(1, maxWidth / video.videoWidth);
-    const canvas = document.createElement("canvas");
-    canvas.width = Math.round(video.videoWidth * scale);
-    canvas.height = Math.round(video.videoHeight * scale);
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return null;
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    return canvas.toDataURL("image/jpeg", quality);
-  }, []);
-
-  // Assistência de enquadramento — frames temporários, nunca gravados.
-  useEffect(() => {
-    if (!open || !ready || !live?.responseToken) return;
-    let cancelled = false;
-    const tick = async () => {
-      if (cancelled || liveBusyRef.current) return;
-      const frame = grabFrame(LIVE_FRAME_WIDTH, 0.6);
-      if (!frame) return;
-      liveBusyRef.current = true;
-      try {
-        const { data } = await supabase.functions.invoke("analyze-checklist-evidence", {
-          body: {
-            action: "live-check",
-            checklistId: live.checklistId,
-            blockId: live.blockId,
-            responseToken: live.responseToken,
-            frame,
-          },
-        });
-        if (cancelled) return;
-        const state = (data as any)?.state;
-        setLiveState(state === "ready" || state === "adjust" ? state : "uncertain");
-        setLiveHint(typeof (data as any)?.hint === "string" ? (data as any).hint : "");
-      } catch {
-        /* assistência é best-effort */
-      } finally {
-        liveBusyRef.current = false;
-      }
-    };
-    const interval = setInterval(tick, LIVE_INTERVAL_MS);
-    void tick();
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-    };
-  }, [open, ready, live?.checklistId, live?.blockId, live?.responseToken, grabFrame]);
-
   const shoot = useCallback(async () => {
     const video = videoRef.current;
     if (!video || !video.videoWidth) return;
@@ -155,13 +94,6 @@ export function TieckCamera({ open, title, hint, live, onClose, onCapture }: Pro
   }, [onCapture, stopStream]);
 
   if (!open) return null;
-
-  const liveTone =
-    liveState === "ready"
-      ? "bg-emerald-500/90"
-      : liveState === "adjust"
-        ? "bg-amber-500/90"
-        : "bg-black/60";
 
   return (
     <div className="fixed inset-0 z-[100] bg-black flex flex-col" role="dialog" aria-modal="true" aria-label={title}>
@@ -189,29 +121,19 @@ export function TieckCamera({ open, title, hint, live, onClose, onCapture }: Pro
           className="absolute inset-0 w-full h-full object-cover"
         />
 
-        {/* Guias de enquadramento */}
+        {/* Guias estáticas de composição — não representam análise de IA. */}
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
           <div className="w-[82%] aspect-square max-h-[70%] border-2 border-white/40 rounded-3xl" />
         </div>
 
+        <p className="absolute top-3 left-1/2 -translate-x-1/2 max-w-[90%] text-center text-xs text-white/90 bg-black/50 rounded-full px-3 py-1.5">
+          Posicione o item solicitado e tire a foto.
+        </p>
+
         {hint && (
-          <p className="absolute top-3 left-1/2 -translate-x-1/2 max-w-[90%] text-center text-xs text-white/90 bg-black/50 rounded-full px-3 py-1.5">
+          <p className="absolute bottom-4 left-1/2 -translate-x-1/2 max-w-[90%] text-center text-xs text-white/80 bg-black/50 rounded-full px-3 py-1.5">
             {hint}
           </p>
-        )}
-
-        {live?.responseToken && ready && (
-          <div
-            className={`absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2 text-xs font-medium text-white rounded-full px-3 py-1.5 ${liveTone}`}
-            aria-live="polite"
-          >
-            {liveState === "ready" ? (
-              <CheckCircle2 className="w-4 h-4" aria-hidden />
-            ) : (
-              <Loader2 className="w-4 h-4 animate-spin" aria-hidden />
-            )}
-            {liveHint || (liveState === "ready" ? "Enquadramento pronto." : "Ajustando enquadramento...")}
-          </div>
         )}
 
         {denied && (
@@ -252,7 +174,6 @@ export function TieckCamera({ open, title, hint, live, onClose, onCapture }: Pro
             stopStream();
             setDenied(false);
             setReady(false);
-            // Força novo ciclo de permissão reabrindo o stream.
             setTimeout(() => videoRef.current?.play().catch(() => {}), 0);
           }}
           aria-label="Reiniciar câmera"
