@@ -115,7 +115,7 @@ export function canRelease(verifiability: Verifiability | null | undefined): boo
 export function combine(
   observer: ObserverFacts,
   judge: any,
-  options: { confidenceThreshold?: number } = {},
+  options: { confidenceThreshold?: number; verifiability?: Verifiability } = {},
 ): Combined {
   const threshold = normalizeThreshold(options.confidenceThreshold);
   const confidence = typeof judge?.confidence === "number" && Number.isFinite(judge.confidence)
@@ -133,6 +133,20 @@ export function combine(
       gate: {},
     };
   }
+
+  // Padrão que a foto não consegue comprovar por completo nunca aprova.
+  if (options.verifiability === "not_verifiable") {
+    return {
+      ...base,
+      decision: "uncertain",
+      reason_code: "standard_not_verifiable",
+      public_message: NOT_OBSERVABLE_MESSAGE,
+      condition_status: "not_observable",
+      gate: {},
+    };
+  }
+
+
 
   const bool = (v: unknown) => v === true;
   const status = conditionStatusOf(judge);
