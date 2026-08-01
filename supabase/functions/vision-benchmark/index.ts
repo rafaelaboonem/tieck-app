@@ -307,8 +307,6 @@ const PROFILE_SCHEMA = {
   ],
 };
 
-export type Verifiability = "verifiable" | "partially_verifiable" | "not_verifiable";
-
 /** Reduz o alvo em inglês a uma expressão curta que um detector entende. */
 function detectorPhrase(raw: unknown): string {
   let s = String(raw ?? "").toLowerCase();
@@ -319,43 +317,6 @@ function detectorPhrase(raw: unknown): string {
   return s.split(" ").slice(0, 3).join(" ").slice(0, 40);
 }
 
-/**
- * Normaliza a verificabilidade a partir da resposta do modelo, de forma
- * genérica: qualquer condição declarada como não observável rebaixa o padrão.
- * Não há regra codificada para nenhuma palavra específica.
- */
-export function normalizeVerifiability(parsed: any): {
-  visual_verifiability: Verifiability;
-  required_evidence_count: number;
-  unverifiable_conditions: string[];
-  suggested_photos: string[];
-} {
-  const unverifiable = strList(parsed?.unverifiable_conditions, 6);
-  const conditions = strList(parsed?.conditions, 6);
-  const suggested = strList(parsed?.suggested_photos, 4);
-  const raw = String(parsed?.visual_verifiability ?? "").trim();
-  let level: Verifiability =
-    raw === "verifiable" || raw === "partially_verifiable" || raw === "not_verifiable"
-      ? raw as Verifiability
-      : "partially_verifiable";
-
-  if (unverifiable.length > 0 && level === "verifiable") level = "partially_verifiable";
-  if (conditions.length > 0 && unverifiable.length >= conditions.length) level = "not_verifiable";
-
-  let count = Number(parsed?.required_evidence_count);
-  if (!Number.isFinite(count) || count < 1) count = 1;
-  count = Math.min(Math.round(count), 4);
-  // Condições que não coexistem em uma única foto exigem mais de uma evidência.
-  if (level !== "verifiable" && count < 2) count = 2;
-  if (level === "verifiable") count = Math.max(1, count);
-
-  return {
-    visual_verifiability: level,
-    required_evidence_count: count,
-    unverifiable_conditions: unverifiable,
-    suggested_photos: suggested.length ? suggested : (level === "verifiable" ? [] : conditions.slice(0, 2)),
-  };
-}
 
 async function buildProfile(question: string, referenceSummary: string | null, meter: UsageEntry[]) {
   const prompt =
