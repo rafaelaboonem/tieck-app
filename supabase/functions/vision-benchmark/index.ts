@@ -680,7 +680,7 @@ async function acquireLock(
     return { ok: true, key: null, busy: false };
   }
   const row = Array.isArray(data) ? data[0] : data;
-  if (row?.acquired) return { ok: true, key: String(row.lock_key), busy: false };
+  if (row?.acquired) return { ok: true, key: String(row.key ?? row.lock_key), busy: false };
   return { ok: false, key: null, busy: true };
 }
 
