@@ -3,42 +3,27 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
-import { Loader2, Play, Eye, Scale, CheckCircle2, RefreshCcw, HelpCircle, AlertTriangle, Camera } from "lucide-react";
+import { Loader2, Play, Eye, Scale, CheckCircle2, RefreshCcw, HelpCircle, AlertTriangle, Camera, ImageIcon } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 import { CameraV3Preview } from "@/components/padrao/CameraV3Preview";
 import {
   blobToBase64,
   referenceBase64,
   runBenchmark,
-  isCorrect,
   ensureStandardProfile,
   profileOf,
   startLabSession,
   createLabAttempt,
   CONDITION_STATUS_LABEL,
-  RELEASE_CASES,
   LAB_PROVIDERS,
   DEFAULT_LAB_PROVIDER,
-  type ExpectedResult,
   type LabDecision,
   type LabProvider,
   type LabRun,
-  type ReleaseCase,
   type VisualStandard,
 } from "@/lib/visual-standards";
-
-
-
-const emptyMarks = {
-  aiWasRight: null as boolean | null,
-  falseApproval: false,
-  falseRejection: false,
-  liveGuidanceHelped: null as boolean | null,
-  liveGuidanceWrong: false,
-};
 
 const DECISION_META: Record<LabDecision, { label: string; tone: string; icon: typeof CheckCircle2 }> = {
   approved: { label: "Aprovado", tone: "bg-emerald-500/15 text-emerald-700", icon: CheckCircle2 },
@@ -54,31 +39,33 @@ interface Props {
   onSelect: (s: VisualStandard | null) => void;
   runs: LabRun[];
   onRun: (run: LabRun) => void;
-  onUpdateRun?: (id: string, patch: Partial<LabRun>) => void;
 }
 
-
-export function LabTab({ workspaceId, standards, selected, onSelect, runs, onRun, onUpdateRun }: Props) {
-  const [question, setQuestion] = useState(selected?.question ?? "");
+export function LabTab({ workspaceId, standards, selected, onSelect, runs, onRun }: Props) {
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [expected, setExpected] = useState<ExpectedResult>("approved");
-  const [useReference, setUseReference] = useState(true);
   const [running, setRunning] = useState(false);
   const [provider, setProvider] = useState<LabProvider>(DEFAULT_LAB_PROVIDER);
-  const [releaseCase, setReleaseCase] = useState<ReleaseCase | "">("");
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
 
   const [cameraOpen, setCameraOpen] = useState(false);
   const [profiling, setProfiling] = useState(false);
   const [attemptsUsed, setAttemptsUsed] = useState<number | null>(null);
   const [attemptsLimit, setAttemptsLimit] = useState<number | null>(null);
 
-
   const profile = profileOf(selected);
+  const question = selected?.question ?? "";
+  const hasReference = Boolean(selected?.reference_path);
+  const isOwner = Boolean(userId && selected && selected.created_by === userId);
 
   useEffect(() => {
-    if (selected) setQuestion(selected.question);
-  }, [selected]);
+    let cancelled = false;
+    void supabase.auth.getUser().then(({ data }) => {
+      if (!cancelled) setUserId(data.user?.id ?? null);
+    });
+    return () => { cancelled = true; };
+  }, []);
 
   useEffect(() => {
     if (!file) {
@@ -91,23 +78,23 @@ export function LabTab({ workspaceId, standards, selected, onSelect, runs, onRun
   }, [file]);
 
   const lastRun = runs[0] ?? null;
-  const canRun = useMemo(() => Boolean(file && question.trim() && !running), [file, question, running]);
-
-
+  const canRun = useMemo(
+    () => Boolean(file && question.trim() && !running),
+    [file, question, running],
+  );
 
   const pushRun = (res: LabRun) => {
-    res.correct = isCorrect(res);
     onRun(res);
     if (res.combined.decision === "technical_failure") toast.error("Não foi possível verificar agora.");
   };
 
   const execute = async () => {
-    if (!file) return;
+    if (!file || !question.trim()) return;
     setRunning(true);
     try {
       const imageBase64 = await blobToBase64(file);
       let ref: string | null = null;
-      if (useReference && selected?.reference_path) {
+      if (hasReference && selected?.reference_path && provider !== "google_gemini") {
         ref = await referenceBase64(selected.reference_path);
       }
       // Sessão e tentativa são emitidas pelo servidor: o cliente não escolhe o orçamento.
@@ -139,19 +126,15 @@ export function LabTab({ workspaceId, standards, selected, onSelect, runs, onRun
         provider,
       });
 
-
       pushRun({
         ...res,
         id: crypto.randomUUID(),
         at: new Date().toISOString(),
         question,
-        expected,
-        correct: null,
         source: "upload",
-        releaseCase: releaseCase || null,
       });
     } catch (e) {
-      toast.error(`Não foi possível analisar agora. Tente novamente.`);
+      toast.error("Não foi possível analisar agora. Tente novamente.");
       console.error("[lab]", (e as Error).message);
     } finally {
       setRunning(false);
@@ -176,31 +159,33 @@ export function LabTab({ workspaceId, standards, selected, onSelect, runs, onRun
     setCameraOpen(true);
   };
 
-
   return (
     <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">Rodar um teste</CardTitle>
+          <CardTitle className="text-lg">Analisar uma foto</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
-            <Label>Padrão</Label>
+            <Label htmlFor="lab-standard">Padrão</Label>
             <select
+              id="lab-standard"
               className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
               value={selected?.id ?? ""}
               onChange={(e) => onSelect(standards.find((s) => s.id === e.target.value) ?? null)}
             >
-              <option value="">Sem padrão salvo (pergunta livre)</option>
+              <option value="">Selecione um padrão</option>
               {standards.map((s) => (
                 <option key={s.id} value={s.id}>{s.name}</option>
               ))}
             </select>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="lab-question">Pergunta enviada à IA</Label>
-            <Textarea id="lab-question" rows={2} value={question} onChange={(e) => setQuestion(e.target.value)} />
+          <div className="space-y-1 rounded-lg border p-3">
+            <p className="text-sm font-medium">O que será verificado</p>
+            <p className="text-sm text-muted-foreground">
+              {question ? `“${question}”` : "Selecione um padrão para ver a pergunta enviada à IA."}
+            </p>
           </div>
 
           <div className="space-y-2">
@@ -212,95 +197,34 @@ export function LabTab({ workspaceId, standards, selected, onSelect, runs, onRun
               onChange={(e) => setFile(e.target.files?.[0] ?? null)}
             />
             {previewUrl && (
-              <img src={previewUrl} alt="Pré-visualização da foto de teste" className="mt-2 max-h-48 rounded-lg object-contain" />
+              <img
+                src={previewUrl}
+                alt="Pré-visualização da foto de teste"
+                className="mt-2 max-h-48 rounded-lg object-contain"
+              />
             )}
             <p className="text-xs text-muted-foreground">
               Fotos do laboratório são analisadas em memória e não são armazenadas.
             </p>
           </div>
 
-          <div className="flex items-center justify-between rounded-lg border p-3">
-            <div>
-              <Label className="text-sm">Usar foto de referência do padrão</Label>
-              <p className="text-xs text-muted-foreground">
-                {selected?.reference_path ? "Referência disponível." : "Este padrão não tem referência."}
-              </p>
-            </div>
-            <Switch
-              checked={useReference && Boolean(selected?.reference_path)}
-              disabled={!selected?.reference_path}
-              onCheckedChange={setUseReference}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label>Resultado esperado</Label>
-            <div className="flex flex-wrap gap-2">
-              {(["approved", "retake", "not_observable"] as const).map((v) => (
-                <Button
-                  key={v}
-                  type="button"
-                  variant={expected === v ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setExpected(v)}
-                >
-                  {v === "approved"
-                    ? "Deveria aprovar"
-                    : v === "retake"
-                      ? "Deveria pedir nova foto"
-                      : "Não dá para verificar por foto"}
-                </Button>
-              ))}
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="lab-case">Caso da trava de liberação (opcional)</Label>
-            <select
-              id="lab-case"
-              className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-              value={releaseCase}
-              onChange={(e) => {
-                const v = e.target.value as ReleaseCase | "";
-                setReleaseCase(v);
-                const found = RELEASE_CASES.find((c) => c.key === v);
-                if (found) setExpected(found.expected);
-              }}
-            >
-              <option value="">Não classificar</option>
-              {RELEASE_CASES.map((c) => (
-                <option key={c.key} value={c.key}>{c.label}</option>
-              ))}
-            </select>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="lab-provider">Avaliador visual (uso interno)</Label>
-            <select
-              id="lab-provider"
-              className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-              value={provider}
-              onChange={(e) => setProvider(e.target.value as LabProvider)}
-            >
-              {LAB_PROVIDERS.map((p) => (
-                <option key={p.value} value={p.value}>{p.label}</option>
-              ))}
-            </select>
-            <p className="text-xs text-muted-foreground">
-              {LAB_PROVIDERS.find((p) => p.value === provider)?.hint}
+          {hasReference && (
+            <p className="flex items-center gap-2 rounded-lg border p-3 text-xs text-muted-foreground">
+              <ImageIcon className="h-4 w-4 shrink-0" aria-hidden />
+              Referência do padrão será usada automaticamente.
             </p>
-          </div>
-
+          )}
 
           <Button className="w-full bg-[#FF007F] hover:bg-[#e6006f]" disabled={!canRun} onClick={execute}>
             {running ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Play className="mr-2 h-4 w-4" />}
-            {running ? "Analisando…" : "Rodar teste"}
+            {running ? "Analisando…" : "Analisar foto"}
           </Button>
 
           <Button variant="outline" className="w-full" onClick={openCamera} disabled={profiling}>
             {profiling ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Camera className="mr-2 h-4 w-4" />}
-            Testar com a câmera (prévia)
+            Testar com a câmera
           </Button>
+
           {attemptsUsed != null && attemptsLimit != null && (
             <p className="text-xs text-muted-foreground">
               Sessão atual: {attemptsUsed} de {attemptsLimit} análises finais usadas.
@@ -309,17 +233,48 @@ export function LabTab({ workspaceId, standards, selected, onSelect, runs, onRun
           <p className="text-xs text-muted-foreground">
             A prévia da câmera é interna: as imagens são analisadas em memória e nada é salvo.
           </p>
+
+          {isOwner && (
+            <div className="rounded-lg border">
+              <button
+                type="button"
+                className="flex w-full items-center justify-between px-3 py-2 text-sm font-medium"
+                onClick={() => setAdvancedOpen((v) => !v)}
+                aria-expanded={advancedOpen}
+              >
+                Opções avançadas
+                <span className="text-xs text-muted-foreground">{advancedOpen ? "ocultar" : "mostrar"}</span>
+              </button>
+              {advancedOpen && (
+                <div className="space-y-2 border-t p-3">
+                  <Label htmlFor="lab-provider">Avaliador visual (uso interno)</Label>
+                  <select
+                    id="lab-provider"
+                    className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                    value={provider}
+                    onChange={(e) => setProvider(e.target.value as LabProvider)}
+                  >
+                    {LAB_PROVIDERS.map((p) => (
+                      <option key={p.value} value={p.value}>{p.label}</option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-muted-foreground">
+                    {LAB_PROVIDERS.find((p) => p.value === provider)?.hint}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
 
-
       <div className="space-y-4">
         {lastRun ? (
-          <RunDetail run={lastRun} onMark={(patch) => onUpdateRun?.(lastRun.id, patch)} />
+          <RunDetail run={lastRun} />
         ) : (
           <Card>
             <CardContent className="py-16 text-center text-sm text-muted-foreground">
-              Envie uma foto e rode o primeiro teste para ver as duas etapas da análise.
+              Escolha uma foto e clique em “Analisar foto” para ver o resultado real da IA.
             </CardContent>
           </Card>
         )}
@@ -327,7 +282,7 @@ export function LabTab({ workspaceId, standards, selected, onSelect, runs, onRun
         {runs.length > 1 && (
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-base">Testes anteriores</CardTitle>
+              <CardTitle className="text-base">Análises anteriores</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
               {runs.slice(1, 8).map((r) => {
@@ -338,9 +293,6 @@ export function LabTab({ workspaceId, standards, selected, onSelect, runs, onRun
                     <div className="flex shrink-0 items-center gap-2">
                       {r.source === "camera_v3" && <Badge variant="outline">câmera</Badge>}
                       <Badge variant="outline" className={meta.tone}>{meta.label}</Badge>
-                      <span className="text-muted-foreground">
-                        {r.correct === null ? "—" : r.correct ? "acerto" : "erro"}
-                      </span>
                     </div>
                   </div>
                 );
@@ -358,7 +310,7 @@ export function LabTab({ workspaceId, standards, selected, onSelect, runs, onRun
           profile={profile}
           standardId={selected.id}
           referencePath={selected.reference_path}
-          useReference={useReference && Boolean(selected.reference_path)}
+          useReference={hasReference}
           onClose={() => setCameraOpen(false)}
           onResult={({ response, live }) =>
             pushRun({
@@ -366,10 +318,7 @@ export function LabTab({ workspaceId, standards, selected, onSelect, runs, onRun
               id: crypto.randomUUID(),
               at: new Date().toISOString(),
               question,
-              expected,
-              correct: null,
               source: "camera_v3",
-              releaseCase: releaseCase || null,
               live,
             })
           }
@@ -379,10 +328,10 @@ export function LabTab({ workspaceId, standards, selected, onSelect, runs, onRun
   );
 }
 
-
-function RunDetail({ run, onMark }: { run: LabRun; onMark?: (patch: Partial<LabRun>) => void }) {
+function RunDetail({ run }: { run: LabRun }) {
   const meta = DECISION_META[run.combined.decision];
   const Icon = meta.icon;
+  const confidence = run.combined.confidence ?? run.judge?.confidence ?? null;
   return (
     <Card>
       <CardHeader className="pb-3">
@@ -436,15 +385,16 @@ function RunDetail({ run, onMark }: { run: LabRun; onMark?: (patch: Partial<LabR
         </Step>
 
         <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
-          <span>Referência: {run.referenceMode === "none" ? "não usada" : run.referenceMode === "multi_image" ? "comparada" : "descrita"}</span>
-          <span>Tempo total: {run.totalLatencyMs} ms</span>
           <span>
-            Esperado: {run.expected === "approved" ? "aprovar" : run.expected === "retake" ? "nova foto" : "não verificável"}
+            Referência: {run.referenceMode === "none" ? "não usada" : run.referenceMode === "multi_image" ? "comparada" : "descrita"}
           </span>
+          <span>Tempo total: {run.totalLatencyMs} ms</span>
+          {confidence != null && <span>Confiança: {Math.round(confidence * 100)}%</span>}
           {run.combined.condition_status && (
             <span>Condição: {CONDITION_STATUS_LABEL[run.combined.condition_status]}</span>
           )}
-          <span>{run.correct === null ? "Sem classificação" : run.correct ? "Acerto" : "Erro"}</span>
+          {run.provider && <span>Avaliador: {run.provider}</span>}
+          {run.modelId && <span>Modelo: {run.modelId}</span>}
           {run.usage && (
             <span>
               Consumo: {run.usage.calls} chamada(s)
@@ -474,61 +424,6 @@ function RunDetail({ run, onMark }: { run: LabRun; onMark?: (patch: Partial<LabR
             </>
           )}
         </div>
-
-        {onMark && (
-          <div className="space-y-2 rounded-lg border p-3">
-            <p className="text-sm font-medium">Sua avaliação</p>
-            <div className="flex flex-wrap gap-2">
-              <Button
-                size="sm"
-                variant={run.marks?.aiWasRight === true ? "default" : "outline"}
-                onClick={() => onMark({ marks: { ...emptyMarks, ...run.marks, aiWasRight: true } })}
-              >
-                A IA acertou
-              </Button>
-              <Button
-                size="sm"
-                variant={run.marks?.aiWasRight === false ? "default" : "outline"}
-                onClick={() => onMark({ marks: { ...emptyMarks, ...run.marks, aiWasRight: false } })}
-              >
-                A IA errou
-              </Button>
-              <Button
-                size="sm"
-                variant={run.marks?.falseApproval ? "default" : "outline"}
-                onClick={() => onMark({ marks: { ...emptyMarks, ...run.marks, falseApproval: !run.marks?.falseApproval } })}
-              >
-                Aprovou errado
-              </Button>
-              <Button
-                size="sm"
-                variant={run.marks?.falseRejection ? "default" : "outline"}
-                onClick={() => onMark({ marks: { ...emptyMarks, ...run.marks, falseRejection: !run.marks?.falseRejection } })}
-              >
-                Reprovou errado
-              </Button>
-              {run.source === "camera_v3" && (
-                <>
-                  <Button
-                    size="sm"
-                    variant={run.marks?.liveGuidanceHelped === true ? "default" : "outline"}
-                    onClick={() => onMark({ marks: { ...emptyMarks, ...run.marks, liveGuidanceHelped: true } })}
-                  >
-                    Orientação ajudou
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant={run.marks?.liveGuidanceWrong ? "default" : "outline"}
-                    onClick={() => onMark({ marks: { ...emptyMarks, ...run.marks, liveGuidanceWrong: !run.marks?.liveGuidanceWrong } })}
-                  >
-                    Orientação errada
-                  </Button>
-                </>
-              )}
-            </div>
-          </div>
-        )}
-
       </CardContent>
     </Card>
   );
