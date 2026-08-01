@@ -201,8 +201,13 @@ export type ExpectedResult = "approved" | "retake";
 
 export interface LabResponse {
   observer: {
-    observation: string;
+    /** Texto bruto do modelo: presente somente no laboratório. */
+    observation?: string;
+    /** Resumo público sanitizado, seguro para a câmera do operador. */
+    summary?: string;
     targetVisible: boolean;
+    targetVisibleKnown?: boolean;
+    structured?: boolean;
     blurry: boolean;
     dark: boolean;
     latencyMs: number;
