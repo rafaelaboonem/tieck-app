@@ -592,6 +592,8 @@ export interface LabRun extends LabResponse {
   id: string;
   at: string;
   question: string;
+  /** Pergunta /Camera de origem — usado para filtrar o Desempenho. */
+  cameraBlockId?: string | null;
   source?: "upload" | "camera_v3";
   live?: LiveStats | null;
 }

@@ -135,6 +135,7 @@ export function LabTab({ workspaceId, selected, runs, onRun }: Props) {
         id: crypto.randomUUID(),
         at: new Date().toISOString(),
         question,
+        cameraBlockId: selected?.camera_block_id ?? null,
         source: "upload",
       });
     } catch (e) {
@@ -319,6 +320,7 @@ export function LabTab({ workspaceId, selected, runs, onRun }: Props) {
               id: crypto.randomUUID(),
               at: new Date().toISOString(),
               question,
+              cameraBlockId: selected.camera_block_id ?? null,
               source: "camera_v3",
               live,
             })
