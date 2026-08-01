@@ -832,12 +832,26 @@ function parseV2Result(value: unknown): V2Result {
   };
 }
 
+// Higieniza a mensagem do modelo: descarta eco de instruções/regras internas,
+// jargão técnico e textos longos demais para o usuário final.
+function isLeakyMessage(message: string): boolean {
+  const m = message.toLowerCase();
+  if (m.length > 100) return true;
+  const banned = [
+    "não identifique", "nao identifique", "etnia", "regras", "instru",
+    "json", "decision", "checklist:", "modelo", "ia ", "confian", "prompt",
+    "analise somente", "ignore qualquer",
+  ];
+  return banned.some((term) => m.includes(term));
+}
+
 function publicMessageV2(result: V2Result, finalDecision: "approved" | "retake"): string {
   if (finalDecision === "approved") return "Foto aprovada";
-  if (result.message) return result.message;
+  if (result.message && !isLeakyMessage(result.message)) return result.message;
   if (!result.quality.usable) return "A foto não está nítida o suficiente. Tire outra foto.";
   return "Não foi possível confirmar. Tire outra foto com melhor enquadramento";
 }
+
 
 // Falha técnica (HTTP, timeout, resposta inválida) — nunca aprova em silêncio
 // e nunca promete revisão manual.
