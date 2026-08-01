@@ -211,23 +211,44 @@ export const LIVE_CHECKS_PER_SESSION = 3;
 export const FINAL_CHECKS_PER_SESSION = 5;
 export const LIVE_MIN_INTERVAL_MS = 5000;
 
+/** Provedor visual usado na avaliação. Seletor interno do laboratório. */
+export type LabProvider = "google_gemini" | "cloudflare";
+export const DEFAULT_LAB_PROVIDER: LabProvider = "google_gemini";
+export const LAB_PROVIDERS: { value: LabProvider; label: string; hint: string }[] = [
+  { value: "google_gemini", label: "Gemini 3.6 Flash", hint: "Uma única análise multimodal. Medido em tokens." },
+  { value: "cloudflare", label: "Cloudflare (Moondream + Llama)", hint: "Rollback. Medido em neurônios." },
+];
+
 export interface UsageStep {
   step: string;
+  provider?: LabProvider;
   model: string;
-  inputTokens: number;
-  outputTokens: number;
-  neurons: number;
+  inputTokens: number | null;
+  outputTokens: number | null;
+  cachedTokens?: number | null;
+  /** Somente Cloudflare. */
+  neurons: number | null;
+  /** Somente Gemini: custo teórico em USD. */
+  costUsd?: number | null;
   inferenceMs: number;
 }
 
 export interface UsageTotals {
   calls: number;
-  inputTokens: number;
-  outputTokens: number;
-  neurons: number;
-  estimatedUsd: number;
+  inputTokens: number | null;
+  outputTokens: number | null;
+  cachedTokens?: number | null;
+  /** Somente Cloudflare. */
+  neurons: number | null;
+  /** Somente Gemini: custo teórico em USD. */
+  costUsd?: number | null;
+  /** Valor teórico dos neurônios Cloudflare. */
+  estimatedUsd?: number | null;
+  theoreticalUsd?: number | null;
   steps: UsageStep[];
 }
+
+
 
 export interface BudgetInfo {
   spent: boolean;
@@ -310,12 +331,34 @@ export interface LabResponse {
     public_message: string;
     condition_status?: ConditionStatus | null;
     gate?: Record<string, boolean>;
+    confidence?: number | null;
+    confidence_threshold?: number | null;
+  };
+  /** Provedor que realmente decidiu esta execução. */
+  provider?: LabProvider;
+  modelId?: string;
+  /** Detalhe estruturado, presente somente no provedor Gemini. */
+  gemini?: {
+    imageQuality: "good" | "dark" | "blurry" | "cropped" | "unusable";
+    targetConfidence: number;
+    referenceComparable: boolean;
+    conditions: {
+      condition: string;
+      status: ConditionStatus;
+      confidence: number;
+      visible_evidence: string;
+    }[];
+    boundingBoxes: { x: number; y: number; w: number; h: number }[];
+    suggestedDecision: "approved" | "retake" | "uncertain";
+    /** Verdadeiro quando o servidor discordou da sugestão do modelo. */
+    overridden: boolean;
   };
   referenceMode: "none" | "multi_image" | "derived";
   totalLatencyMs: number;
   budget?: BudgetInfo;
   usage?: UsageTotals;
 }
+
 
 /** Casos obrigatórios antes de liberar a Camera V3 nos checklists públicos. */
 export type ReleaseCase =
@@ -501,10 +544,15 @@ export function isCorrect(run: Pick<LabRun, "combined" | "expected">): boolean |
 /** Consumo somado das execuções registradas na sessão do laboratório. */
 export interface UsageSummary {
   aiCalls: number;
+  /** Somente Cloudflare. */
   neurons: number;
   inputTokens: number;
   outputTokens: number;
+  cachedTokens: number;
+  /** Valor teórico dos neurônios Cloudflare. */
   estimatedUsd: number;
+  /** Custo teórico das chamadas Gemini, medido em tokens. */
+  tokenCostUsd: number;
   runsWithUsage: number;
   avgNeuronsPerRun: number | null;
   localChecks: number;
@@ -513,7 +561,8 @@ export interface UsageSummary {
 export const USD_PER_1K_NEURONS = 0.011;
 
 export function computeUsage(runs: LabRun[]): UsageSummary {
-  let aiCalls = 0, neurons = 0, inputTokens = 0, outputTokens = 0, runsWithUsage = 0, localChecks = 0;
+  let aiCalls = 0, neurons = 0, inputTokens = 0, outputTokens = 0, cachedTokens = 0;
+  let tokenCostUsd = 0, runsWithUsage = 0, localChecks = 0;
   for (const r of runs) {
     if (r.usage) {
       runsWithUsage++;
@@ -521,6 +570,8 @@ export function computeUsage(runs: LabRun[]): UsageSummary {
       neurons += r.usage.neurons ?? 0;
       inputTokens += r.usage.inputTokens ?? 0;
       outputTokens += r.usage.outputTokens ?? 0;
+      cachedTokens += r.usage.cachedTokens ?? 0;
+      tokenCostUsd += r.usage.costUsd ?? 0;
     }
     localChecks += r.live?.localChecks ?? 0;
   }
@@ -529,12 +580,15 @@ export function computeUsage(runs: LabRun[]): UsageSummary {
     neurons: Math.round(neurons * 1000) / 1000,
     inputTokens,
     outputTokens,
+    cachedTokens,
     estimatedUsd: Math.round((neurons / 1000) * USD_PER_1K_NEURONS * 1e6) / 1e6,
+    tokenCostUsd: Math.round(tokenCostUsd * 1e8) / 1e8,
     runsWithUsage,
     avgNeuronsPerRun: runsWithUsage ? Math.round((neurons / runsWithUsage) * 1000) / 1000 : null,
     localChecks,
   };
 }
+
 
 // ---------------- métricas da sessão ----------------
 

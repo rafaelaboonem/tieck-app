@@ -421,10 +421,18 @@ function RunDetail({ run, onMark }: { run: LabRun; onMark?: (patch: Partial<LabR
           <span>{run.correct === null ? "Sem classificação" : run.correct ? "Acerto" : "Erro"}</span>
           {run.usage && (
             <span>
-              Consumo: {run.usage.calls} chamada(s) · {run.usage.neurons.toFixed(2)} neurônios ·
-              {" "}US$ {run.usage.estimatedUsd.toFixed(5)}
+              Consumo: {run.usage.calls} chamada(s)
+              {run.usage.neurons != null && ` · ${run.usage.neurons.toFixed(2)} neurônios`}
+              {run.usage.costUsd != null
+                ? ` · US$ ${run.usage.costUsd.toFixed(5)}`
+                : run.usage.estimatedUsd != null
+                  ? ` · US$ ${run.usage.estimatedUsd.toFixed(5)}`
+                  : ""}
+              {run.usage.inputTokens != null &&
+                ` · ${run.usage.inputTokens}/${run.usage.outputTokens ?? 0} tokens`}
             </span>
           )}
+
           {run.live && (
             <>
               <span>
