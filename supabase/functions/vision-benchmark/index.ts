@@ -860,7 +860,7 @@ Deno.serve(async (req) => {
     } catch (e) {
       const code = String((e as Error).message ?? "unknown").slice(0, 60);
       console.error(`[lab] profile_failed user=${actorId.slice(0, 8)} code=${code}`);
-      return json(200, { ok: false, code });
+      return json(200, { ok: false, code: "technical_failure" });
     }
   }
 
