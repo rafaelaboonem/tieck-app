@@ -91,7 +91,6 @@ export function PerformanceTab({ runs }: { runs: LabRun[] }) {
         <CardHeader className="pb-2">
           <CardTitle className="text-base">Trava de liberação da câmera</CardTitle>
         </CardHeader>
-        </CardHeader>
         <CardContent className="space-y-2 text-sm">
           <p className={release.ready ? "text-emerald-700" : "text-muted-foreground"}>
             {release.ready
