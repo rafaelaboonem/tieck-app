@@ -16,7 +16,8 @@ import {
   isCorrect,
   ensureStandardProfile,
   profileOf,
-  newSessionId,
+  startLabSession,
+  createLabAttempt,
   CONDITION_STATUS_LABEL,
   RELEASE_CASES,
   type ExpectedResult,
@@ -25,6 +26,7 @@ import {
   type ReleaseCase,
   type VisualStandard,
 } from "@/lib/visual-standards";
+
 
 const emptyMarks = {
   aiWasRight: null as boolean | null,
