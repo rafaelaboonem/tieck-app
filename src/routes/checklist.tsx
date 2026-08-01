@@ -1378,18 +1378,15 @@ function NovoChecklistPage() {
         referenceImagePath: null,
         referenceImageAlt: null,
         vision: {
-          enabled: false,
-          modelId: null, // legado: mantido para abrir checklists antigos
-          modelVersion: null,
+          // Camera AI V2: todo bloco Camera é inteligente por padrão.
+          version: "camera_ai_v2",
+          enabled: true,
           provider: "cloudflare_workers_ai",
           criteria: [],
-          confidenceThreshold: 0.75,
-          model: null,
-          threshold: null,
           minWidth: 640,
           minHeight: 480,
           onAnomaly: "require_resubmit",
-          onAnalysisFailure: "manual_review",
+          onAnalysisFailure: "block_completion",
         },
       };
       default: return null;
@@ -1932,26 +1929,6 @@ function NovoChecklistPage() {
     }
 
     if (isSavingRef.current) return;
-    // Bloqueio de publicação: a IA precisa de pelo menos um critério objetivo.
-    if (isPublishedOverride === true) {
-      const invalid = (blocks as any[]).find((b) => {
-        if (b?.type !== "camera") return null;
-        const v = b.vision ?? {};
-        const criteria = Array.isArray(v.criteria)
-          ? v.criteria.filter((item: unknown) => typeof item === "string" && item.trim().length > 0)
-          : [];
-        return v.enabled === true && criteria.length === 0;
-      });
-      if (invalid) {
-        setPublishBlocker({
-          blockId: invalid.id,
-          label: (invalid.title && String(invalid.title).trim()) || "Bloco Câmera sem título",
-        });
-        if (!silent) setIsPublishing(false);
-        return;
-      }
-    }
-
     isSavingRef.current = true;
     
     if (!silent) setIsPublishing(true);
@@ -4171,11 +4148,7 @@ function NovoChecklistPage() {
                     );
                      // Selo simples com 3 estados: IA desativada / sem critérios / IA configurada.
                      const visionBadge: { label: string; tone: "off" | "warn" | "active" } =
-                       !visionEnabled
-                         ? { label: "IA desativada", tone: "off" }
-                         : validVisionCriteria.length > 0
-                           ? { label: "IA configurada", tone: "active" }
-                           : { label: "Defina o padrão", tone: "warn" };
+                       { label: "IA ativa", tone: "active" };
                    return (
                      <div
                        key={block.id}
@@ -4326,109 +4299,6 @@ function NovoChecklistPage() {
                                 </label>
                               </div>
 
-                              {/* Análise visual por IA */}
-                              <div className="pt-3 border-t border-neutral-200/70 space-y-2">
-                                <div className="flex items-center justify-between">
-                                  <div>
-                                    <p className="text-xs font-semibold text-neutral-800">Análise visual por IA</p>
-                                    <p className="text-[11px] text-neutral-500">
-                                      Confere a foto com os critérios definidos abaixo.
-                                    </p>
-                                  </div>
-                                  <Switch
-                                    checked={visionEnabled}
-                                    onCheckedChange={(checked) =>
-                                      updateBlock(block.id, {
-                                        vision: { ...(camVision ?? {}), enabled: checked },
-                                      } as any)
-                                    }
-                                  />
-                                </div>
-
-                                {visionEnabled && (
-                                  <div className="space-y-3">
-                                    <label className="block text-[11px] font-semibold text-neutral-500 uppercase tracking-wider">
-                                      O que a foto deve mostrar
-                                    </label>
-                                    <textarea
-                                      value={visionCriteria.join("\n")}
-                                      placeholder={"Um critério por linha. Ex.:\nO extintor está visível\nO acesso está desobstruído\nO lacre está intacto"}
-                                      onChange={(e) =>
-                                        updateBlock(block.id, {
-                                          vision: {
-                                            ...(camVision ?? {}),
-                                            provider: "cloudflare_workers_ai",
-                                            criteria: e.target.value.split("\n").slice(0, 10),
-                                          },
-                                        } as any)
-                                      }
-                                      rows={5}
-                                      maxLength={1200}
-                                      className="w-full px-2.5 py-2 text-sm border border-neutral-200 rounded-md bg-white outline-none focus:border-neutral-400 resize-y"
-                                    />
-                                    <div className="flex items-center justify-between gap-3 text-[11px] text-neutral-500">
-                                      <span>Um critério objetivo por linha, no máximo 10.</span>
-                                      <span>{validVisionCriteria.length}/10</span>
-                                    </div>
-                                    {validVisionCriteria.length === 0 && (
-                                      <p className="text-[11px] text-amber-700">
-                                        Você pode salvar o rascunho, mas precisa definir o padrão antes de publicar.
-                                      </p>
-                                    )}
-
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                                      <label className="space-y-1">
-                                        <span className="block text-[11px] font-semibold text-neutral-500 uppercase tracking-wider">
-                                          Se não corresponder
-                                        </span>
-                                        <select
-                                          value={camOnAnomaly}
-                                          onChange={(e) =>
-                                            updateBlock(block.id, {
-                                              vision: {
-                                                ...(camVision ?? {}),
-                                                onAnomaly: e.target.value as VisionOnAnomaly,
-                                              },
-                                            } as any)
-                                          }
-                                          className="w-full px-2.5 py-2 text-xs border border-neutral-200 rounded-md bg-white outline-none focus:border-neutral-400"
-                                        >
-                                          <option value="require_resubmit">Pedir outra foto</option>
-                                          <option value="manual_review">Enviar para revisão</option>
-                                          <option value="allow_continue">Avisar e permitir continuar</option>
-                                          <option value="block_completion">Bloquear conclusão</option>
-                                        </select>
-                                      </label>
-
-                                      <label className="space-y-1">
-                                        <span className="block text-[11px] font-semibold text-neutral-500 uppercase tracking-wider">
-                                          Confiança mínima
-                                        </span>
-                                        <select
-                                          value={String(confidenceThreshold)}
-                                          onChange={(e) =>
-                                            updateBlock(block.id, {
-                                              vision: {
-                                                ...(camVision ?? {}),
-                                                confidenceThreshold: Number(e.target.value),
-                                              },
-                                            } as any)
-                                          }
-                                          className="w-full px-2.5 py-2 text-xs border border-neutral-200 rounded-md bg-white outline-none focus:border-neutral-400"
-                                        >
-                                          <option value="0.65">Flexível</option>
-                                          <option value="0.75">Equilibrada</option>
-                                          <option value="0.85">Rigorosa</option>
-                                        </select>
-                                      </label>
-                                    </div>
-
-                                    <p className="text-[11px] text-neutral-500">
-                                      Resultados abaixo da confiança mínima são enviados para revisão humana, sem reprovação automática.
-                                    </p>
-                                  </div>
-                                )}
-                              </div>
                             </div>
                           </div>
                         )}
