@@ -190,35 +190,56 @@ const PROFILE_SCHEMA = {
   required: ["target_phrase", "target_phrase_en", "requested_condition", "observable_signals", "ambiguous"],
 };
 
+/** Reduz o alvo em inglês a uma expressão curta que um detector entende. */
+function detectorPhrase(raw: unknown): string {
+  let s = String(raw ?? "").toLowerCase();
+  s = s.replace(/\([^)]*\)?/g, " ");           // remove parênteses e alternativas
+  s = s.split(/\bor\b|\band\b|,|\/|;/)[0];      // fica só na primeira alternativa
+  s = s.replace(/\bwith\b.*$/, " ");            // corta complementos ("with lid")
+  s = s.replace(/[^a-z\s-]/g, " ").replace(/\s+/g, " ").trim();
+  return s.split(" ").slice(0, 3).join(" ").slice(0, 40);
+}
+
+
 async function buildProfile(question: string, referenceSummary: string | null) {
-  const payload = await cfRun(finalModel(), {
-    messages: [{
-      role: "user",
-      content:
-        `An inspection standard was written by a facility owner in Brazilian Portuguese:\n"${question}"\n\n` +
-        `Extract, WITHOUT inventing requirements that are not implied by the sentence:\n` +
-        `- target_phrase: the main object or place to be photographed (Portuguese, short).\n` +
-        `- target_phrase_en: same target in plain English, 1-3 words, suitable for an object detector.\n` +
-        `- requested_condition: the condition that must be true about it.\n` +
-        `- observable_signals: things a person could visually confirm to prove the condition.\n` +
-        `- contrary_signals: visible things that would prove the condition is NOT met.\n` +
-        `- insufficient_view_signals: situations where the photo would not be enough to decide.\n` +
-        `- ambiguous: true if the sentence does not clearly define an object AND a verifiable condition.\n` +
-        `Reply strictly as JSON matching the schema.` +
-        (referenceSummary ? `\nStructural summary of a reference photo of the expected result: ${referenceSummary}` : ""),
-    }],
-    response_format: { type: "json_schema", json_schema: PROFILE_SCHEMA },
-    max_tokens: 600,
-  });
-  const parsed = parseJsonLoose(extractModelText(payload));
+  const prompt =
+    `An inspection standard was written by a facility owner in Brazilian Portuguese:\n"${question}"\n\n` +
+    `Extract, WITHOUT inventing requirements that are not implied by the sentence:\n` +
+    `- target_phrase: the main object or place to be photographed (Portuguese, short).\n` +
+    `- target_phrase_en: same target in plain English, 1-3 words, suitable for an object detector.\n` +
+    `- requested_condition: the condition that must be true about it.\n` +
+    `- observable_signals: things a person could visually confirm to prove the condition.\n` +
+    `- contrary_signals: visible things that would prove the condition is NOT met.\n` +
+    `- insufficient_view_signals: situations where the photo would not be enough to decide.\n` +
+    `- ambiguous: true if the sentence does not clearly define an object AND a verifiable condition.\n` +
+    `Reply with a single JSON object and nothing else.` +
+    (referenceSummary ? `\nStructural summary of a reference photo of the expected result: ${referenceSummary}` : "");
+
+  let parsed: any = null;
+  for (const withSchema of [true, false]) {
+    try {
+      const payload = await cfRun(finalModel(), {
+        messages: [{ role: "user", content: prompt }],
+        ...(withSchema ? { response_format: { type: "json_schema", json_schema: PROFILE_SCHEMA } } : {}),
+        max_tokens: 600,
+      });
+      const text = extractModelText(payload);
+      parsed = parseJsonLoose(text);
+      if (parsed) break;
+      console.error(`[lab] profile_no_json schema=${withSchema} len=${text.length}`);
+    } catch (e) {
+      console.error(`[lab] profile_call_failed schema=${withSchema} code=${String((e as Error).message).slice(0, 60)}`);
+    }
+  }
   if (!parsed) throw new Error("profile_parse_failed");
+
   const target = String(parsed.target_phrase ?? "").trim().slice(0, 80);
   const condition = String(parsed.requested_condition ?? "").trim().slice(0, 160);
   const ambiguous = parsed.ambiguous === true || !target || !condition;
   return {
     profile: {
       target_phrase: target,
-      target_phrase_en: String(parsed.target_phrase_en ?? "").trim().slice(0, 60),
+      target_phrase_en: detectorPhrase(parsed.target_phrase_en),
       requested_condition: condition,
       observable_signals: strList(parsed.observable_signals),
       contrary_signals: strList(parsed.contrary_signals),
@@ -312,49 +333,84 @@ function collectPoints(payload: any): { x: number; y: number }[] {
   return out;
 }
 
+type LiveState = "searching" | "adjust" | "ready" | "uncertain";
+type HintCode =
+  | "searching"
+  | "target_not_found"
+  | "move_closer"
+  | "show_full_object"
+  | "center_object"
+  | "ready"
+  | "uncertain";
+
+const HINTS: Record<HintCode, string> = {
+  searching: "Procurando o objeto.",
+  target_not_found: "Aponte a câmera para o item solicitado.",
+  move_closer: "Aproxime um pouco.",
+  show_full_object: "Mostre o item por completo.",
+  center_object: "Centralize o item.",
+  ready: "Enquadramento pronto.",
+  uncertain: "Não foi possível orientar agora.",
+};
+
+/**
+ * Localiza o alvo em um frame temporário. Nunca fabrica coordenadas: quando o
+ * modelo não devolve caixa válida, `boxes` volta vazio.
+ */
 async function locateTarget(frame: Decoded, target: string) {
   const started = Date.now();
   const image = toDataUrl(frame);
+  const done = (strategy: "detect" | "point" | "query", found: boolean, boxes: Box[]) => ({
+    strategy,
+    found,
+    boxes,
+    inferenceMs: Date.now() - started,
+  });
 
-  // 1) detect
+  // 1) detect — única estratégia que produz caixa real
   try {
     const p = await cfRun(fastModel(), { image, task: "detect", object: target, stream: false }, LIVE_TIMEOUT_MS);
-    const boxes = collectBoxes(p);
-    if (boxes.length) {
-      const best = boxes.sort((a, b) => b.w * b.h - a.w * a.h)[0];
-      return { strategy: "detect" as const, found: true, box: best, latencyMs: Date.now() - started };
-    }
-    return { strategy: "detect" as const, found: false, box: null, latencyMs: Date.now() - started };
+    const boxes = collectBoxes(p)
+      .sort((a, b) => b.w * b.h - a.w * a.h)
+      .slice(0, 3);
+    if (boxes.length) return done("detect", true, boxes);
   } catch { /* segue para point */ }
 
-  // 2) point
+  // 2) point — confirma presença, sem caixa
   try {
     const p = await cfRun(fastModel(), { image, task: "point", object: target, stream: false }, LIVE_TIMEOUT_MS);
-    const points = collectPoints(p);
-    if (points.length) {
-      const pt = points[0];
-      const box = { x: Math.max(0, pt.x - 0.15), y: Math.max(0, pt.y - 0.15), w: 0.3, h: 0.3 };
-      return { strategy: "point" as const, found: true, box, latencyMs: Date.now() - started };
-    }
-    return { strategy: "point" as const, found: false, box: null, latencyMs: Date.now() - started };
+    if (collectPoints(p).length) return done("point", true, []);
   } catch { /* segue para query */ }
 
-  // 3) query (sem coordenadas)
+
+  // 3) query — apenas presença
   const p = await cfRun(fastModel(), {
     image,
     task: "query",
     stream: false,
     question: `Is a ${target} clearly visible in this photo? Answer only "yes" or "no".`,
-    max_tokens: 8,
+    max_tokens: 32,
   }, LIVE_TIMEOUT_MS);
   const text = extractModelText(p).toLowerCase();
-  return {
-    strategy: "query" as const,
-    found: /\byes\b|\bsim\b/.test(text) && !/\bno\b/.test(text.slice(0, 6)),
-    box: null,
-    latencyMs: Date.now() - started,
-  };
+  const yes = /\byes\b|\bsim\b|"?answer"?\s*:\s*"?yes/.test(text) && !/^\s*"?no\b/.test(text.trim());
+  return done("query", yes, []);
+
 }
+
+/** Estado e orientação derivados apenas de sinais reais do modelo. */
+function liveGuidance(found: boolean, boxes: Box[]): { state: LiveState; hintCode: HintCode } {
+  if (!found) return { state: "searching", hintCode: "target_not_found" };
+  const box = boxes[0];
+  if (!box) return { state: "adjust", hintCode: "center_object" };
+  const area = box.w * box.h;
+  const touching = box.x <= 0.02 || box.y <= 0.02 || box.x + box.w >= 0.98 || box.y + box.h >= 0.98;
+  const offCenter = Math.abs(box.x + box.w / 2 - 0.5) > 0.22 || Math.abs(box.y + box.h / 2 - 0.5) > 0.22;
+  if (area < 0.06) return { state: "adjust", hintCode: "move_closer" };
+  if (touching) return { state: "adjust", hintCode: "show_full_object" };
+  if (offCenter) return { state: "adjust", hintCode: "center_object" };
+  return { state: "ready", hintCode: "ready" };
+}
+
 
 // ---------------- etapa 1: Moondream (observador, evidência primeiro) ----------------
 async function runObserver(image: Decoded, question: string, profile: any) {
@@ -377,18 +433,41 @@ async function runObserver(image: Decoded, question: string, profile: any) {
   });
   const text = extractModelText(payload).trim();
   if (!text) throw new Error("observer_empty_response");
+  // O observador às vezes responde em JSON: nesse caso os campos valem mais que o texto.
+  const obj = parseJsonLoose(text);
   const lower = text.toLowerCase();
-  const absent = /\bnot (present|visible|shown|there)\b|\bno (visible|sign of)\b|cannot see|isn'?t visible|does not (show|contain)|nao (esta|há)/.test(lower);
+  const flag = (keys: string[], re: RegExp): boolean => {
+    if (obj) {
+      for (const k of keys) {
+        const v = obj[k];
+        if (typeof v === "boolean") return v;
+        if (typeof v === "string" && re.test(v.toLowerCase())) return true;
+        if (typeof v === "string") return false;
+      }
+    }
+    return re.test(lower);
+  };
+  const absentRe = /\bnot (present|visible|shown|there)\b|\bno (visible|sign of)\b|cannot see|isn'?t visible|does not (show|contain)|n(a|ã)o (est(a|á)|h(a|á))/;
+  let targetVisible = target ? !absentRe.test(lower) : !/not visible|cannot see/.test(lower);
+  if (obj) {
+    for (const k of ["present", "target_present", "visible", "target_visible"]) {
+      const v = obj[k];
+      if (typeof v === "boolean") { targetVisible = v; break; }
+    }
+  }
   return {
     latencyMs: Date.now() - started,
     observation: text.slice(0, 500),
-    blurry: /blurry|out of focus|unfocused|motion blur/.test(lower),
-    dark: /too dark|very dark|poorly lit|low light|underexposed/.test(lower),
-    overexposed: /overexposed|blown out|too bright/.test(lower),
-    cropped: /cut off|cropped|partially visible|only part/.test(lower),
-    targetVisible: target ? !absent : !/not visible|cannot see/.test(lower),
+    blurry: flag(["blurry", "blur", "is_blurry"], /blurry|out of focus|unfocused|motion blur/),
+    dark: flag(["dark", "too_dark"], /too dark|very dark|poorly lit|low light|underexposed/) ||
+      (typeof obj?.lighting === "string" && /dark|underexposed|low/.test(obj.lighting.toLowerCase())),
+    overexposed: flag(["overexposed"], /overexposed|blown out|too bright/) ||
+      (typeof obj?.lighting === "string" && /overexposed|too bright/.test(obj.lighting.toLowerCase())),
+    cropped: flag(["cropped", "cut_off"], /cut off|cropped|partially visible|only part/),
+    targetVisible,
   };
 }
+
 
 // ---------------- etapa 2: Llama 4 Scout (juiz) ----------------
 const DECISION_SCHEMA = {
@@ -525,6 +604,29 @@ function combine(observer: Awaited<ReturnType<typeof runObserver>>, judge: any):
     };
   }
   if (judge.decision === "uncertain") {
+    // Quando a causa é determinada (alvo ausente, escuro, tremido, condição não atendida),
+    // o operador recebe uma ação clara em vez de um "não deu para confirmar".
+    const determinate = !gate.target_found
+      ? "target_not_found"
+      : !gate.lighting_sufficient
+        ? "too_dark"
+        : !gate.sharpness_sufficient
+          ? "blurry"
+          : !gate.framing_sufficient
+            ? "bad_framing"
+            : !gate.target_visible
+              ? "target_not_visible"
+              : !gate.condition_met
+                ? "condition_not_met"
+                : null;
+    if (determinate) {
+      return {
+        decision: "retake",
+        reason_code: determinate,
+        public_message: RETAKE_MESSAGES[determinate],
+        gate,
+      };
+    }
     return {
       decision: "uncertain",
       reason_code: "insufficient_evidence",
@@ -532,6 +634,7 @@ function combine(observer: Awaited<ReturnType<typeof runObserver>>, judge: any):
       gate,
     };
   }
+
 
   if (Object.values(gate).every(Boolean)) {
     return {
@@ -676,19 +779,47 @@ Deno.serve(async (req) => {
 
   // ---------- localização ao vivo (frame só em memória) ----------
   if (action === "live-locate") {
-    const target = String(body?.target ?? "").trim().slice(0, 60);
-    if (!target) return err(400, "target_required");
+    const requestId = String(body?.requestId ?? "").slice(0, 40) || null;
+    const standardId = String(body?.standardId ?? "");
+    if (!standardId) return err(400, "standard_required");
+    const { data: std } = await userClient
+      .from("visual_standards")
+      .select("internal_profile")
+      .eq("id", standardId)
+      .eq("workspace_id", workspaceId)
+      .maybeSingle();
+    const stored = (std as any)?.internal_profile;
+    // Alvo vem sempre do padrão salvo — nunca do que o cliente enviar.
+    const target = String(stored?.target_phrase_en || stored?.target_phrase || "").trim().slice(0, 60);
+    if (!target) {
+      return json(200, {
+        requestId, strategy: "none", found: false, boxes: [], inferenceMs: 0,
+        state: "uncertain", hintCode: "no_target_configured",
+        hint: "Este padrão ainda não está pronto para orientação na câmera.",
+      });
+    }
     const frame = decodeImage(body?.frameBase64, MIN_DIM);
     if (!frame) return err(400, "invalid_image");
+
+    const liveKey = `live:${actorId}`;
+    if (inFlight.has(liveKey)) return err(409, "already_running");
+    inFlight.add(liveKey);
     try {
       const r = await locateTarget(frame, target);
-      return json(200, r);
+      const g = liveGuidance(r.found, r.boxes);
+      return json(200, { requestId, ...r, ...g, hint: HINTS[g.hintCode] });
     } catch (e) {
       const code = String((e as Error).message ?? "unknown").slice(0, 60);
       console.error(`[lab] locate_failed user=${actorId.slice(0, 8)} code=${code}`);
-      return json(200, { strategy: "none", found: false, box: null, latencyMs: 0, code });
+      return json(200, {
+        requestId, strategy: "none", found: false, boxes: [], inferenceMs: 0,
+        state: "uncertain", hintCode: "uncertain", hint: HINTS.uncertain,
+      });
+    } finally {
+      inFlight.delete(liveKey);
     }
   }
+
 
   if (action !== "benchmark-evaluate") return err(400, "unknown_action");
 
@@ -775,7 +906,8 @@ Deno.serve(async (req) => {
       judge: null,
       combined: {
         decision: "technical_failure",
-        reason_code: code,
+        reason_code: /^[a-z0-9_]{1,40}$/.test(code) ? code : "service_unavailable",
+
         public_message: "Não foi possível verificar agora. Tente novamente.",
         gate: {},
       },

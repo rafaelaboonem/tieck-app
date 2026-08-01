@@ -244,7 +244,7 @@ export function CameraV3Preview(props: Props) {
 
   // ---- localização remota adaptativa ----
   useEffect(() => {
-    if (!open || phase !== "live" || !target) return;
+    if (!open || phase !== "live" || !target || !standardId) return;
     let stopped = false;
     let timer: number | undefined;
 
@@ -262,8 +262,15 @@ export function CameraV3Preview(props: Props) {
       setChecking(true);
       const started = Date.now();
       try {
-        const res = await liveLocate({ workspaceId, target, frameBase64: frame });
+        const res = await liveLocate({
+          workspaceId,
+          standardId,
+          frameBase64: frame,
+          requestId: `${seq}`,
+        });
         if (stopped || closedRef.current || seq !== liveSeqRef.current) return;
+        // Descarta respostas fora de ordem.
+        if (res.requestId && res.requestId !== `${seq}`) return;
         statsRef.current.checks++;
         statsRef.current.latencySum += Date.now() - started;
         statsRef.current.strategy = res.strategy;
@@ -286,10 +293,10 @@ export function CameraV3Preview(props: Props) {
       liveSeqRef.current++;
       if (timer) window.clearTimeout(timer);
     };
-  }, [open, phase, target, workspaceId, grabDataUrl, quality.moving, quality.dark]);
+  }, [open, phase, target, standardId, workspaceId, grabDataUrl, quality.moving, quality.dark]);
 
-  // ---- estado + orientação ----
-  const box = locate?.box ?? null;
+  // ---- estado + orientação (decididos no servidor) ----
+  const box = locate?.boxes?.[0] ?? null;
   let status: CameraStatus = "searching";
   let guidance = `Aponte a câmera para ${targetPt}.`;
 
@@ -300,19 +307,11 @@ export function CameraV3Preview(props: Props) {
   else if (quality.blurry) { status = "adjust"; guidance = "Aguarde o foco da câmera."; }
   else if (!target) { status = "found"; guidance = "Enquadre o item e tire a foto."; }
   else if (!locate) { status = checking ? "checking" : "searching"; }
-  else if (!locate.found) { status = "searching"; guidance = `Aponte a câmera para ${targetPt}.`; }
-  else if (box) {
-    const area = box.w * box.h;
-    const touching = box.x <= 0.02 || box.y <= 0.02 || box.x + box.w >= 0.98 || box.y + box.h >= 0.98;
-    const offCenter = Math.abs(box.x + box.w / 2 - 0.5) > 0.22 || Math.abs(box.y + box.h / 2 - 0.5) > 0.22;
-    if (area < 0.06) { status = "adjust"; guidance = "Aproxime um pouco."; }
-    else if (touching) { status = "adjust"; guidance = "Mostre o objeto por completo."; }
-    else if (offCenter) { status = "adjust"; guidance = "Centralize melhor."; }
-    else { status = "ready"; guidance = "Enquadramento pronto."; }
-  } else {
-    status = "found";
-    guidance = "Objeto encontrado. Centralize e tire a foto.";
-  }
+  else if (locate.state === "ready") { status = "ready"; guidance = locate.hint; }
+  else if (locate.state === "adjust") { status = "adjust"; guidance = locate.hint; }
+  else if (locate.state === "uncertain") { status = "checking"; guidance = locate.hint; }
+  else { status = "searching"; guidance = locate.found ? locate.hint : `Aponte a câmera para ${targetPt}.`; }
+
 
   // ---- captura e decisão ----
   const capture = async () => {
