@@ -433,76 +433,14 @@ async function runObserver(image: Decoded, question: string, profile: any) {
   });
   const text = extractModelText(payload).trim();
   if (!text) throw new Error("observer_empty_response");
-  // Prioridade absoluta ao JSON estruturado; texto só quando não há JSON válido.
-  const obj = parseJsonLoose(text);
-  const lower = text.toLowerCase();
-
-  /** Lê um booleano de aliases. Retorna null quando ausente/indefinido. */
-  const boolField = (keys: string[], truthyRe?: RegExp): boolean | null => {
-    if (!obj || typeof obj !== "object") return null;
-    for (const k of keys) {
-      if (!(k in obj)) continue;
-      const v = (obj as any)[k];
-      if (typeof v === "boolean") return v;
-      if (typeof v === "number") return v !== 0;
-      if (typeof v === "string") {
-        const s = v.trim().toLowerCase();
-        if (s === "true" || s === "yes" || s === "sim") return true;
-        if (s === "false" || s === "no" || s === "não" || s === "nao" || s === "none") return false;
-        if (s === "unknown" || s === "n/a" || s === "") return null;
-        if (truthyRe) return truthyRe.test(s);
-        return null;
-      }
-      if (v === null) return null;
-    }
-    return null;
-  };
-
-  const blurryRe = /blurry|out of focus|unfocused|motion blur/;
-  const darkRe = /too dark|very dark|poorly lit|low light|underexposed/;
-  const brightRe = /overexposed|blown out|too bright/;
-  const croppedRe = /cut off|cropped|partially visible|only part/;
-
-  const lighting = typeof (obj as any)?.lighting === "string"
-    ? String((obj as any).lighting).toLowerCase()
-    : null;
-
-  // Fallback textual apenas quando a resposta não é JSON válido.
-  const fromText = (re: RegExp) => (obj ? false : re.test(lower));
-
-  const blurry = boolField(["photo_blurry", "is_blurry", "blurry", "blur", "image_blurry"], blurryRe)
-    ?? fromText(blurryRe);
-  const darkField = boolField(["too_dark", "is_dark", "dark", "photo_dark"], darkRe);
-  const dark = darkField ?? (lighting ? /dark|underexposed|low/.test(lighting) : fromText(darkRe));
-  const overField = boolField(["overexposed", "is_overexposed", "too_bright"], brightRe);
-  const overexposed = overField ?? (lighting ? /overexposed|too bright/.test(lighting) : fromText(brightRe));
-  const cropped = boolField(["cropped", "is_cropped", "cut_off", "partially_visible"], croppedRe)
-    ?? fromText(croppedRe);
-
-  const absentRe = /\bnot (present|visible|shown|there)\b|\bno (visible|sign of)\b|cannot see|isn'?t visible|does not (show|contain)|n(a|ã)o (est(a|á)|h(a|á))/;
-  const presentField = boolField(
-    ["object_present", "target_present", "present", "target_visible", "visible", "object_visible"],
-  );
-  // Campo ausente/indefinido ⇒ desconhecido: nunca presume presença, cai na
-  // leitura textual da própria observação (que exige evidência explícita).
-  const targetVisibleKnown = presentField !== null;
-  const targetVisible = presentField !== null
-    ? presentField
-    : (target ? !absentRe.test(lower) : !/not visible|cannot see/.test(lower));
-
-
+  const flags = parseObserver(text, target);
   return {
     latencyMs: Date.now() - started,
     observation: text.slice(0, 500),
-    structured: !!obj,
-    blurry,
-    dark,
-    overexposed,
-    cropped,
-    targetVisible,
-    targetVisibleKnown,
+    ...flags,
   };
 }
+
 
 
 
