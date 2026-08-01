@@ -1631,6 +1631,9 @@ export type Database = {
       visual_standards: {
         Row: {
           accuracy: number | null
+          archived_at: string | null
+          camera_block_id: string | null
+          checklist_id: string | null
           confidence_threshold: number
           created_at: string
           created_by: string
@@ -1649,11 +1652,15 @@ export type Database = {
           test_count: number
           unverifiable_conditions: Json
           updated_at: string
+          validated_question: string | null
           visual_verifiability: string | null
           workspace_id: string
         }
         Insert: {
           accuracy?: number | null
+          archived_at?: string | null
+          camera_block_id?: string | null
+          checklist_id?: string | null
           confidence_threshold?: number
           created_at?: string
           created_by: string
@@ -1672,11 +1679,15 @@ export type Database = {
           test_count?: number
           unverifiable_conditions?: Json
           updated_at?: string
+          validated_question?: string | null
           visual_verifiability?: string | null
           workspace_id: string
         }
         Update: {
           accuracy?: number | null
+          archived_at?: string | null
+          camera_block_id?: string | null
+          checklist_id?: string | null
           confidence_threshold?: number
           created_at?: string
           created_by?: string
@@ -1695,10 +1706,18 @@ export type Database = {
           test_count?: number
           unverifiable_conditions?: Json
           updated_at?: string
+          validated_question?: string | null
           visual_verifiability?: string | null
           workspace_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "visual_standards_checklist_id_fkey"
+            columns: ["checklist_id"]
+            isOneToOne: false
+            referencedRelation: "checklists"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "visual_standards_workspace_id_fkey"
             columns: ["workspace_id"]

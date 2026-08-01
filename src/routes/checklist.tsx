@@ -432,6 +432,10 @@ import { mapAuthError } from "@/utils/auth-errors";
 const InsightsTab = lazy(() => import("@/components/InsightsTab").then(m => ({ default: m.InsightsTab })));
 const SubmissionsTab = lazy(() => import("@/components/SubmissionsTab").then(m => ({ default: m.SubmissionsTab })));
 import { BlockRenderer, INTERACTIVE_BLOCK_TYPES } from "@/components/BlockRenderer";
+import { CameraStandardStatus } from "@/components/padrao/CameraStandardStatus";
+import { ensureCameraBlockIds, withNewCameraBlockId, extractCameraQuestions } from "@/lib/camera-blocks";
+import { syncStandardsWithBlocks } from "@/lib/visual-standards";
+
 
 const BTN_ICON_OPTIONS: { key: string; label: string; Icon: any }[] = [
   { key: "arrow-right", label: "Seta", Icon: ArrowRight },
@@ -971,7 +975,10 @@ function NovoChecklistPage() {
     | { id: string; type: "ranking"; options: { id: string; value: string }[]; selectedIds: string[] }
     | {
         id: string;
+        /** Identificador estável do bloco, usado para vincular o padrão visual. */
+        cameraBlockId?: string;
         type: "camera";
+
         dataUrls?: string[];
         allowMultiple?: boolean;
         maxPhotos?: number;
@@ -1085,7 +1092,12 @@ function NovoChecklistPage() {
           if (data && !error) {
             setCurrentChecklistId(data.id);
             setTitle(data.title || "");
-            setBlocks((data.blocks as Block[]) || [{ id: newId(), type: "text", value: "" }]);
+            setBlocks(
+              ensureCameraBlockIds(
+                ((data.blocks as Block[]) || [{ id: newId(), type: "text", value: "" }]) as any[],
+              ).blocks as Block[],
+            );
+
             setIsStarted(true);
             setShortSlug(data.custom_slug || null);
             setCustomDomain(data.custom_domain || null);
@@ -1363,7 +1375,9 @@ function NovoChecklistPage() {
       case "Código QR": return { id: newId(), type: "qr-code", value: "" };
       case "Câmera": return {
         id: newId(),
+        cameraBlockId: crypto.randomUUID(),
         type: "camera",
+
         dataUrls: [],
         allowMultiple: false,
         maxPhotos: 5,
@@ -1949,10 +1963,15 @@ function NovoChecklistPage() {
         setRetentionDays(5);
       }
 
+      // IDs estáveis dos blocos /Camera: criados uma única vez e preservados
+      // em edição, reordenação e movimentação.
+      const { blocks: blocksWithIds } = ensureCameraBlockIds(blocks as any[]);
+
       const checklistData: any = {
         user_id: authUser.id,
         title: (title && title.trim()) ? title.trim() : "Sem título",
-        blocks: blocks as any,
+        blocks: blocksWithIds as any,
+
         custom_email_domain_id: customEmailDomainId,
         custom_domain: customDomain,
         settings: {
@@ -2093,6 +2112,19 @@ function NovoChecklistPage() {
         // Store the ID of the newly created draft so future auto-saves update it instead of inserting again
         sessionChecklistIdRef.current = data.id;
       }
+
+      // Padrões visuais acompanham os blocos: pergunta alterada exige nova
+      // validação; bloco removido arquiva o padrão sem apagar histórico.
+      if (data?.id) {
+        void syncStandardsWithBlocks({
+          checklistId: data.id,
+          blocks: extractCameraQuestions(blocksWithIds as any[]).map((q) => ({
+            cameraBlockId: q.cameraBlockId,
+            question: q.question,
+          })),
+        });
+      }
+
     } catch (err: any) {
       console.error("Save error:", err);
       if (!silent) toast.error(err.message || "Erro ao publicar");
@@ -2280,8 +2312,9 @@ function NovoChecklistPage() {
       const idx = prev.findIndex((b) => b.id === id);
       if (idx === -1) return prev;
       const block = prev[idx];
-      const newBlock = JSON.parse(JSON.stringify(block));
+      const newBlock = withNewCameraBlockId(JSON.parse(JSON.stringify(block)));
       newBlock.id = newId();
+
       const newBlocks = [...prev];
       newBlocks.splice(idx + 1, 0, newBlock);
       setHistory((old) => [JSON.parse(JSON.stringify(prev)), ...old].slice(0, 5));
@@ -4281,6 +4314,12 @@ function NovoChecklistPage() {
                                   className="w-full px-2.5 py-1.5 text-sm border border-neutral-200 rounded-md bg-white outline-none focus:border-neutral-400 resize-y"
                                 />
                               </div>
+
+                              <CameraStandardStatus
+                                checklistId={currentChecklistId || sessionChecklistIdRef.current || checklistId || null}
+                                cameraBlockId={((block as any).cameraBlockId as string | undefined) ?? null}
+                              />
+
 
                               {/* Regras da captura */}
                               <div className="flex flex-wrap items-center gap-4">
