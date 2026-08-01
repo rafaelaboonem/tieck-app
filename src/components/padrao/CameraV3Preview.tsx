@@ -576,6 +576,14 @@ export function CameraV3Preview(props: Props) {
       {phase === "live" && (
         <div className="space-y-3 px-5 pb-6 pt-3">
           <p className="text-center text-sm font-medium text-white">{guidance}</p>
+          <p className="text-center text-[11px] text-white/55">
+            {liveExhausted
+              ? "Orientação por IA pausada nesta sessão. A checagem de luz, foco e estabilidade continua no aparelho."
+              : checking
+                ? "Verificação por IA em andamento."
+                : "Checagem de luz, foco e estabilidade feita no aparelho, sem IA."}
+            {liveBudget && !liveExhausted ? ` · ${liveBudget.remaining} verificação(ões) de IA restante(s)` : ""}
+          </p>
           <div className="flex items-center justify-between">
             <div className="flex w-11 justify-start">
               <span className="text-[10px] leading-tight text-white/60">
