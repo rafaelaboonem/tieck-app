@@ -1016,89 +1016,6 @@ async function handleLiveCheck(payload: any, db: ReturnType<typeof admin>) {
   }
 }
 
-// ---------------- self-test (diagnóstico controlado, temporário) ----------------
-// Ativo somente quando o secret DIAG_VISION_TOKEN existe e o header confere.
-// Usa uma imagem pública; não toca em respostas, storage ou banco.
-// Registra apenas metadados do envelope — nunca conteúdo, imagem ou secret.
-function describeText(value: unknown) {
-  return { type: typeof value, length: typeof value === "string" ? value.length : null };
-}
-
-async function probeMoondream(image: Uint8Array, question: string) {
-  const accountId = String(Deno.env.get("CLOUDFLARE_ACCOUNT_ID") ?? "").trim();
-  const apiToken = String(Deno.env.get("CLOUDFLARE_API_TOKEN") ?? "").trim();
-  if (!accountId || !apiToken) return { code: "cloudflare_credentials_missing" };
-  const model = cloudflareModel();
-  const dataUri = `data:image/jpeg;base64,${bytesToBase64(image)}`;
-  const response = await fetch(
-    `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(accountId)}/ai/run/${model}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiToken}` },
-      body: JSON.stringify({
-        task: "query",
-        image: dataUri,
-        question,
-        reasoning: false,
-        stream: false,
-        max_tokens: 512,
-      }),
-    },
-  );
-  const bodyText = await response.text();
-  const meta: Record<string, unknown> = {
-    http_status: response.status,
-    content_type: response.headers.get("content-type"),
-    body_bytes: new TextEncoder().encode(bodyText).length,
-  };
-  let body: any = null;
-  try { body = JSON.parse(bodyText); } catch { meta["json"] = false; return meta; }
-  meta["json"] = true;
-  meta["root_keys"] = body && typeof body === "object" ? Object.keys(body).slice(0, 20) : typeof body;
-  meta["success"] = typeof body?.success === "boolean" ? body.success : null;
-  const result = body?.result;
-  meta["result_type"] = Array.isArray(result) ? "array" : typeof result;
-  if (result && typeof result === "object") meta["result_keys"] = Object.keys(result).slice(0, 20);
-  if (typeof result === "string") meta["result_string_length"] = result.length;
-  const nested = result?.result;
-  meta["nested_result_type"] = Array.isArray(nested) ? "array" : typeof nested;
-  if (nested && typeof nested === "object") meta["nested_result_keys"] = Object.keys(nested).slice(0, 20);
-  if (typeof nested === "string") meta["nested_result_length"] = nested.length;
-  meta["result_answer"] = describeText(result?.answer);
-  meta["result_caption"] = describeText(result?.caption);
-  meta["result_response"] = describeText(result?.response);
-  meta["root_answer"] = describeText(body?.answer);
-  meta["root_caption"] = describeText(body?.caption);
-  if (Array.isArray(body?.errors)) {
-    meta["errors"] = body.errors.slice(0, 5).map((e: any) => ({ code: e?.code ?? null }));
-  }
-  return meta;
-}
-
-async function handleSelfTest(req: Request) {
-  // TEMPORÁRIO: removido logo após o diagnóstico.
-  const expected = "tieck-diag-2026-08-01";
-  if (req.headers.get("x-diag-token") !== expected) return err(403, "forbidden");
-  const imgRes = await fetch("https://picsum.photos/seed/tieck-sink/640/480.jpg", { headers: { "User-Agent": "tieck-selftest" } });
-  if (!imgRes.ok) return json(200, { step: "image_fetch", status: imgRes.status });
-  const bytes = new Uint8Array(await imgRes.arrayBuffer());
-  const question = buildFinalQuestion("A pia da cozinha está limpa e sem louça?", "", []);
-  const envelope = await probeMoondream(bytes, question).catch((e) => ({ code: String((e as Error).message ?? "probe_failed") }));
-  try {
-    const { text, model, inferenceMs } = await runMoondream({
-      image: bytes,
-      mimeType: "image/jpeg",
-      question,
-      maxTokens: 512,
-    });
-    const parsed = parseV2Result(parseJsonLoose(text));
-    return json(200, { ok: true, model, inferenceMs, decision: parsed.decision, text_length: text.length, envelope });
-  } catch (e) {
-    return json(200, { ok: false, code: String((e as Error).message ?? "unknown"), envelope });
-  }
-}
-
-
 // ---------------- dispatcher ----------------
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
@@ -1116,7 +1033,6 @@ Deno.serve(async (req) => {
       case "confirm-upload": return await handleConfirmUpload(body, db);
       case "status":         return await handleStatus(body, db);
       case "live-check":     return await handleLiveCheck(body, db);
-      case "self-test":      return await handleSelfTest(req);
       default:               return err(400, "unknown_action");
     }
   } catch (e) {
