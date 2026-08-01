@@ -987,6 +987,7 @@ function NovoChecklistPage() {
         referenceImagePath?: string | null;
         referenceImageAlt?: string | null;
         vision?: {
+          version?: string;
           enabled?: boolean;
           modelId?: string | null;
           modelVersion?: string | null;
