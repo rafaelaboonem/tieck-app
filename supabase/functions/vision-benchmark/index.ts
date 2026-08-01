@@ -710,6 +710,7 @@ function combine(observer: Awaited<ReturnType<typeof runObserver>>, judge: any):
       decision: "uncertain",
       reason_code: "models_disagree",
       public_message: "Não deu para confirmar. Tire outra foto com melhor enquadramento.",
+      condition_status: status,
       gate,
     };
   }
@@ -734,6 +735,7 @@ function combine(observer: Awaited<ReturnType<typeof runObserver>>, judge: any):
         decision: "retake",
         reason_code: determinate,
         public_message: RETAKE_MESSAGES[determinate],
+        condition_status: status,
         gate,
       };
     }
@@ -741,6 +743,7 @@ function combine(observer: Awaited<ReturnType<typeof runObserver>>, judge: any):
       decision: "uncertain",
       reason_code: "insufficient_evidence",
       public_message: "Não deu para confirmar. Tire outra foto com melhor enquadramento.",
+      condition_status: status,
       gate,
     };
   }
@@ -751,6 +754,7 @@ function combine(observer: Awaited<ReturnType<typeof runObserver>>, judge: any):
       decision: "approved",
       reason_code: "condition_met",
       public_message: sanitizeMessage(judge.public_message, "Foto aprovada."),
+      condition_status: "verified",
       gate,
     };
   }
@@ -773,6 +777,7 @@ function combine(observer: Awaited<ReturnType<typeof runObserver>>, judge: any):
     decision: "retake",
     reason_code: code,
     public_message: RETAKE_MESSAGES[code] ?? sanitizeMessage(judge.public_message, "Tire outra foto."),
+    condition_status: status,
     gate,
   };
 }
