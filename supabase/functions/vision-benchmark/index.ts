@@ -1,9 +1,9 @@
-// Laboratório privado de padrões visuais (Camera AI V3 — Fase 1).
+// Laboratório privado de padrões visuais (Camera AI V3 — Fase 2, prévia).
 // Regras:
 //   * verify_jwt = true — nunca aceita responseToken público.
 //   * Autorização por workspace (owner) verificada com o JWT do chamador.
-//   * Imagens candidatas ficam SOMENTE em memória: não vão para Storage,
-//     não vão para o banco, não entram em logs nem em analytics.
+//   * Imagens candidatas e frames de câmera ficam SOMENTE em memória: não vão
+//     para Storage, não vão para o banco, não entram em logs nem em analytics.
 //   * Logs apenas com códigos sanitizados, modelo, duração e status.
 
 // deno-lint-ignore-file no-explicit-any
@@ -16,9 +16,11 @@ const CORS = {
 };
 
 const MAX_BYTES = 8 * 1024 * 1024;
-const MIN_DIM = 128;
+const MIN_DIM = 64;
 const MAX_DIM = 8000;
 const CALL_TIMEOUT_MS = 45_000;
+const LIVE_TIMEOUT_MS = 12_000;
+const PROFILE_VERSION = 1;
 
 function json(status: number, body: unknown) {
   return new Response(JSON.stringify(body), {
@@ -50,11 +52,9 @@ function b64ToBytes(b64: string): Uint8Array {
 
 function sniff(bytes: Uint8Array): { mime: string; width: number; height: number } | null {
   const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  // PNG
   if (bytes.length > 24 && bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) {
     return { mime: "image/png", width: dv.getUint32(16), height: dv.getUint32(20) };
   }
-  // JPEG
   if (bytes.length > 4 && bytes[0] === 0xff && bytes[1] === 0xd8) {
     let off = 2;
     while (off + 9 < bytes.length) {
@@ -68,7 +68,6 @@ function sniff(bytes: Uint8Array): { mime: string; width: number; height: number
     }
     return { mime: "image/jpeg", width: MIN_DIM, height: MIN_DIM };
   }
-  // WEBP
   if (bytes.length > 30 && String.fromCharCode(...bytes.slice(0, 4)) === "RIFF" &&
       String.fromCharCode(...bytes.slice(8, 12)) === "WEBP") {
     return { mime: "image/webp", width: MIN_DIM, height: MIN_DIM };
@@ -76,14 +75,14 @@ function sniff(bytes: Uint8Array): { mime: string; width: number; height: number
   return null;
 }
 
-function decodeImage(b64: unknown): Decoded | null {
+function decodeImage(b64: unknown, minDim = 128): Decoded | null {
   if (typeof b64 !== "string" || b64.length < 32) return null;
   let bytes: Uint8Array;
   try { bytes = b64ToBytes(b64); } catch { return null; }
   if (bytes.length > MAX_BYTES) return null;
   const meta = sniff(bytes);
   if (!meta) return null;
-  if (meta.width < MIN_DIM || meta.height < MIN_DIM) return null;
+  if (meta.width < minDim || meta.height < minDim) return null;
   if (meta.width > MAX_DIM || meta.height > MAX_DIM) return null;
   return { bytes, ...meta };
 }
@@ -97,17 +96,16 @@ function toDataUrl(img: Decoded): string {
   return `data:${img.mime};base64,${btoa(s)}`;
 }
 
-// PNG 1x1 usado só para confirmar acesso ao modelo rápido (sem dados de usuário).
 const PING_IMAGE =
   "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
 
 // ---------------- Cloudflare ----------------
-async function cfRun(model: string, body: unknown): Promise<any> {
+async function cfRun(model: string, body: unknown, timeoutMs = CALL_TIMEOUT_MS): Promise<any> {
   const accountId = String(Deno.env.get("CLOUDFLARE_ACCOUNT_ID") ?? "").trim();
   const apiToken = String(Deno.env.get("CLOUDFLARE_API_TOKEN") ?? "").trim();
   if (!accountId || !apiToken) throw new Error("cloudflare_credentials_missing");
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), CALL_TIMEOUT_MS);
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const res = await fetch(
       `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(accountId)}/ai/run/${model}`,
@@ -168,31 +166,227 @@ function sanitizeMessage(raw: unknown, fallback: string): string {
   return s;
 }
 
-// ---------------- etapa 1: Moondream (observador) ----------------
-const OBSERVER_QUESTION =
-  "Describe briefly: the main object or place visible, whether it is fully visible, " +
-  "the framing, the lighting, and whether the photo is blurry.";
+function strList(value: unknown, max = 6): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((v) => typeof v === "string")
+    .map((v) => (v as string).trim().slice(0, 120))
+    .filter(Boolean)
+    .slice(0, max);
+}
 
-async function runObserver(image: Decoded, question: string) {
+// ---------------- perfil interno do padrão ----------------
+const PROFILE_SCHEMA = {
+  type: "object",
+  properties: {
+    target_phrase: { type: "string" },
+    target_phrase_en: { type: "string" },
+    requested_condition: { type: "string" },
+    observable_signals: { type: "array", items: { type: "string" } },
+    contrary_signals: { type: "array", items: { type: "string" } },
+    insufficient_view_signals: { type: "array", items: { type: "string" } },
+    ambiguous: { type: "boolean" },
+  },
+  required: ["target_phrase", "target_phrase_en", "requested_condition", "observable_signals", "ambiguous"],
+};
+
+async function buildProfile(question: string, referenceSummary: string | null) {
+  const payload = await cfRun(finalModel(), {
+    messages: [{
+      role: "user",
+      content:
+        `An inspection standard was written by a facility owner in Brazilian Portuguese:\n"${question}"\n\n` +
+        `Extract, WITHOUT inventing requirements that are not implied by the sentence:\n` +
+        `- target_phrase: the main object or place to be photographed (Portuguese, short).\n` +
+        `- target_phrase_en: same target in plain English, 1-3 words, suitable for an object detector.\n` +
+        `- requested_condition: the condition that must be true about it.\n` +
+        `- observable_signals: things a person could visually confirm to prove the condition.\n` +
+        `- contrary_signals: visible things that would prove the condition is NOT met.\n` +
+        `- insufficient_view_signals: situations where the photo would not be enough to decide.\n` +
+        `- ambiguous: true if the sentence does not clearly define an object AND a verifiable condition.\n` +
+        `Reply strictly as JSON matching the schema.` +
+        (referenceSummary ? `\nStructural summary of a reference photo of the expected result: ${referenceSummary}` : ""),
+    }],
+    response_format: { type: "json_schema", json_schema: PROFILE_SCHEMA },
+    max_tokens: 600,
+  });
+  const parsed = parseJsonLoose(extractModelText(payload));
+  if (!parsed) throw new Error("profile_parse_failed");
+  const target = String(parsed.target_phrase ?? "").trim().slice(0, 80);
+  const condition = String(parsed.requested_condition ?? "").trim().slice(0, 160);
+  const ambiguous = parsed.ambiguous === true || !target || !condition;
+  return {
+    profile: {
+      target_phrase: target,
+      target_phrase_en: String(parsed.target_phrase_en ?? "").trim().slice(0, 60),
+      requested_condition: condition,
+      observable_signals: strList(parsed.observable_signals),
+      contrary_signals: strList(parsed.contrary_signals),
+      insufficient_view_signals: strList(parsed.insufficient_view_signals),
+      reference_summary: referenceSummary,
+      version: PROFILE_VERSION,
+      generated_at: new Date().toISOString(),
+    },
+    ambiguous,
+  };
+}
+
+async function describeReference(reference: Decoded, question: string): Promise<string | null> {
+  try {
+    const payload = await cfRun(fastModel(), {
+      image: toDataUrl(reference),
+      task: "query",
+      stream: false,
+      question:
+        `Describe only what is visible in this reference photo: main object or place, its state, ` +
+        `organisation and relevant elements. Context: ${question}`,
+      max_tokens: 200,
+    });
+    const text = extractModelText(payload).trim();
+    return text ? text.slice(0, 400) : null;
+  } catch {
+    return null;
+  }
+}
+
+// ---------------- localização visual (detect / point / query) ----------------
+type Box = { x: number; y: number; w: number; h: number };
+
+function normBox(raw: any): Box | null {
+  if (!raw || typeof raw !== "object") return null;
+  const num = (...keys: string[]) => {
+    for (const k of keys) {
+      const v = raw[k];
+      if (typeof v === "number" && Number.isFinite(v)) return v;
+    }
+    return null;
+  };
+  let x0 = num("x_min", "xmin", "x1", "left", "x");
+  let y0 = num("y_min", "ymin", "y1", "top", "y");
+  let x1 = num("x_max", "xmax", "x2", "right");
+  let y1 = num("y_max", "ymax", "y2", "bottom");
+  const w = num("width", "w");
+  const h = num("height", "h");
+  if (x0 === null || y0 === null) return null;
+  if (x1 === null && w !== null) x1 = x0 + w;
+  if (y1 === null && h !== null) y1 = y0 + h;
+  if (x1 === null || y1 === null) return null;
+  // Normaliza escala 0-1 se vier em pixels ou 0-1000.
+  const scale = Math.max(x1, y1) > 1.5 ? (Math.max(x1, y1) > 100 ? null : 100) : 1;
+  if (scale === null) return null; // pixels: sem dimensões confiáveis, descarta
+  const clamp = (v: number) => Math.min(1, Math.max(0, v / scale));
+  const bx = clamp(Math.min(x0, x1));
+  const by = clamp(Math.min(y0, y1));
+  const bw = clamp(Math.max(x0, x1)) - bx;
+  const bh = clamp(Math.max(y0, y1)) - by;
+  if (bw <= 0.01 || bh <= 0.01) return null;
+  return { x: bx, y: by, w: bw, h: bh };
+}
+
+function collectBoxes(payload: any): Box[] {
+  const out: Box[] = [];
+  const visit = (node: any, depth = 0) => {
+    if (!node || depth > 5) return;
+    if (Array.isArray(node)) { node.forEach((n) => visit(n, depth + 1)); return; }
+    if (typeof node !== "object") return;
+    const b = normBox(node);
+    if (b) out.push(b);
+    for (const v of Object.values(node)) visit(v, depth + 1);
+  };
+  visit(payload?.result ?? payload);
+  return out;
+}
+
+function collectPoints(payload: any): { x: number; y: number }[] {
+  const out: { x: number; y: number }[] = [];
+  const visit = (node: any, depth = 0) => {
+    if (!node || depth > 5) return;
+    if (Array.isArray(node)) { node.forEach((n) => visit(n, depth + 1)); return; }
+    if (typeof node !== "object") return;
+    if (typeof node.x === "number" && typeof node.y === "number" && node.x <= 1.5 && node.y <= 1.5) {
+      out.push({ x: Math.min(1, Math.max(0, node.x)), y: Math.min(1, Math.max(0, node.y)) });
+    }
+    for (const v of Object.values(node)) visit(v, depth + 1);
+  };
+  visit(payload?.result ?? payload);
+  return out;
+}
+
+async function locateTarget(frame: Decoded, target: string) {
   const started = Date.now();
+  const image = toDataUrl(frame);
+
+  // 1) detect
+  try {
+    const p = await cfRun(fastModel(), { image, task: "detect", object: target, stream: false }, LIVE_TIMEOUT_MS);
+    const boxes = collectBoxes(p);
+    if (boxes.length) {
+      const best = boxes.sort((a, b) => b.w * b.h - a.w * a.h)[0];
+      return { strategy: "detect" as const, found: true, box: best, latencyMs: Date.now() - started };
+    }
+    return { strategy: "detect" as const, found: false, box: null, latencyMs: Date.now() - started };
+  } catch { /* segue para point */ }
+
+  // 2) point
+  try {
+    const p = await cfRun(fastModel(), { image, task: "point", object: target, stream: false }, LIVE_TIMEOUT_MS);
+    const points = collectPoints(p);
+    if (points.length) {
+      const pt = points[0];
+      const box = { x: Math.max(0, pt.x - 0.15), y: Math.max(0, pt.y - 0.15), w: 0.3, h: 0.3 };
+      return { strategy: "point" as const, found: true, box, latencyMs: Date.now() - started };
+    }
+    return { strategy: "point" as const, found: false, box: null, latencyMs: Date.now() - started };
+  } catch { /* segue para query */ }
+
+  // 3) query (sem coordenadas)
+  const p = await cfRun(fastModel(), {
+    image,
+    task: "query",
+    stream: false,
+    question: `Is a ${target} clearly visible in this photo? Answer only "yes" or "no".`,
+    max_tokens: 8,
+  }, LIVE_TIMEOUT_MS);
+  const text = extractModelText(p).toLowerCase();
+  return {
+    strategy: "query" as const,
+    found: /\byes\b|\bsim\b/.test(text) && !/\bno\b/.test(text.slice(0, 6)),
+    box: null,
+    latencyMs: Date.now() - started,
+  };
+}
+
+// ---------------- etapa 1: Moondream (observador, evidência primeiro) ----------------
+async function runObserver(image: Decoded, question: string, profile: any) {
+  const started = Date.now();
+  const target = String(profile?.target_phrase_en || profile?.target_phrase || "").trim();
+  const askedTarget = target ? `The inspector asked for: "${target}".` : "";
   const payload = await cfRun(fastModel(), {
     image: toDataUrl(image),
     task: "query",
     reasoning: false,
     stream: false,
-    temperature: 0.2,
-    question: `${OBSERVER_QUESTION} Context: ${question}`,
-    max_tokens: 200,
+    temperature: 0.1,
+    question:
+      `Report only what you actually see, do not guess. ${askedTarget} ` +
+      `1) Name the main object or place actually shown. ` +
+      `2) State whether that requested object is present, and whether it is fully inside the frame or cut off. ` +
+      `3) State the lighting (dark / normal / overexposed) and whether the photo is blurry. ` +
+      `4) List any visible detail that contradicts this expectation: ${question}`,
+    max_tokens: 220,
   });
   const text = extractModelText(payload).trim();
   if (!text) throw new Error("observer_empty_response");
   const lower = text.toLowerCase();
+  const absent = /\bnot (present|visible|shown|there)\b|\bno (visible|sign of)\b|cannot see|isn'?t visible|does not (show|contain)|nao (esta|há)/.test(lower);
   return {
     latencyMs: Date.now() - started,
-    observation: text.slice(0, 400),
-    blurry: /blur|out of focus|unfocused/.test(lower),
-    dark: /dark|too dim|poorly lit|low light|underexposed/.test(lower),
-    targetVisible: !/not visible|cannot see|no visible|unclear|obscured/.test(lower),
+    observation: text.slice(0, 500),
+    blurry: /blurry|out of focus|unfocused|motion blur/.test(lower),
+    dark: /too dark|very dark|poorly lit|low light|underexposed/.test(lower),
+    overexposed: /overexposed|blown out|too bright/.test(lower),
+    cropped: /cut off|cropped|partially visible|only part/.test(lower),
+    targetVisible: target ? !absent : !/not visible|cannot see/.test(lower),
   };
 }
 
@@ -200,15 +394,27 @@ async function runObserver(image: Decoded, question: string) {
 const DECISION_SCHEMA = {
   type: "object",
   properties: {
-    decision: { type: "string", enum: ["approved", "retake", "uncertain"] },
+    visible_description: { type: "string" },
+    target_found: { type: "boolean" },
     target_visible: { type: "boolean" },
-    condition_met: { type: "boolean" },
+    framing_sufficient: { type: "boolean" },
+    lighting_sufficient: { type: "boolean" },
+    sharpness_sufficient: { type: "boolean" },
     quality_sufficient: { type: "boolean" },
+    condition_met: { type: "boolean" },
+    supporting_evidence: { type: "array", items: { type: "string" } },
+    contrary_evidence: { type: "array", items: { type: "string" } },
+    same_place_as_reference: { type: "boolean" },
+    same_condition_as_reference: { type: "boolean" },
+    decision: { type: "string", enum: ["approved", "retake", "uncertain"] },
     reason_code: {
       type: "string",
       enum: [
         "condition_met",
         "condition_not_met",
+        "target_not_found",
+        "wrong_object",
+        "wrong_place",
         "target_not_visible",
         "too_dark",
         "blurry",
@@ -217,12 +423,12 @@ const DECISION_SCHEMA = {
       ],
     },
     public_message: { type: "string" },
-    observations: { type: "array", items: { type: "string" } },
     confidence: { type: "number" },
   },
   required: [
-    "decision", "target_visible", "condition_met", "quality_sufficient",
-    "reason_code", "public_message", "confidence",
+    "visible_description", "target_found", "target_visible", "framing_sufficient",
+    "lighting_sufficient", "sharpness_sufficient", "quality_sufficient", "condition_met",
+    "decision", "reason_code", "public_message", "confidence",
   ],
 };
 
@@ -230,22 +436,33 @@ async function runJudge(args: {
   image: Decoded;
   question: string;
   facts: string;
+  profile: any;
   referenceDescription?: string | null;
   multiImage?: { reference: Decoded } | null;
 }) {
   const started = Date.now();
-  const content: any[] = [
-    {
-      type: "text",
-      text:
-        `Task question: ${args.question}\n` +
-        `Fast-observer facts: ${args.facts}\n` +
-        (args.referenceDescription ? `Reference (derived description of the expected result): ${args.referenceDescription}\n` : "") +
-        `Judge the candidate photo. Answer strictly as JSON matching the schema. ` +
-        `public_message must be a short sentence in Brazilian Portuguese for an operator, ` +
-        `with no technical terms. If evidence is insufficient, never approve.`,
-    },
-  ];
+  const p = args.profile ?? {};
+  const instructions =
+    `You are a strict visual inspector. Work in this order and never skip a step:\n` +
+    `1. Describe only what is visible in the candidate photo.\n` +
+    `2. Look for the requested target: "${p.target_phrase ?? args.question}".\n` +
+    `3. Judge whether enough of it is visible to decide.\n` +
+    `4. List supporting evidence and contrary evidence.\n` +
+    `5. Only then decide.\n\n` +
+    `Requested condition: ${p.requested_condition ?? args.question}\n` +
+    (p.observable_signals?.length ? `Signals that would prove it: ${p.observable_signals.join("; ")}\n` : "") +
+    (p.contrary_signals?.length ? `Signals that would disprove it: ${p.contrary_signals.join("; ")}\n` : "") +
+    (p.insufficient_view_signals?.length ? `Situations where the photo is not enough: ${p.insufficient_view_signals.join("; ")}\n` : "") +
+    `Original standard (Portuguese): ${args.question}\n` +
+    `Fast-observer notes about the candidate photo: ${args.facts}\n` +
+    (args.referenceDescription ? `Description of a reference photo of the expected result: ${args.referenceDescription}\n` : "") +
+    (args.multiImage ? `The FIRST image is the reference of the expected result; the SECOND image is the candidate. Compare condition, organisation and relevant elements. Angle, colour balance and lighting do NOT need to match. Distinguish "same kind of place" from "same condition".\n` : "") +
+    `Rules: if the requested target is absent, a different object, a different place, cut off, too dark or unverifiable, you must NOT approve. ` +
+    `Never treat high confidence alone as proof. If you are not sure, use "uncertain".\n` +
+    `public_message must be one short sentence in Brazilian Portuguese for an operator, with no technical terms. ` +
+    `Answer strictly as JSON matching the schema.`;
+
+  const content: any[] = [{ type: "text", text: instructions }];
   if (args.multiImage?.reference) {
     content.push({ type: "image_url", image_url: { url: toDataUrl(args.multiImage.reference) } });
   }
@@ -254,66 +471,96 @@ async function runJudge(args: {
   const payload = await cfRun(finalModel(), {
     messages: [{ role: "user", content }],
     response_format: { type: "json_schema", json_schema: DECISION_SCHEMA },
-    max_tokens: 500,
+    max_tokens: 700,
   });
   const text = extractModelText(payload);
-  const parsed = parseJsonLoose(text);
-  if (!parsed || typeof parsed.decision !== "string") throw new Error("judge_invalid_json");
-  return { latencyMs: Date.now() - started, raw: parsed };
+  const raw = parseJsonLoose(text);
+  if (!raw || typeof raw.decision !== "string") throw new Error("judge_parse_failed");
+  return { raw, latencyMs: Date.now() - started };
 }
 
-async function describeReference(reference: Decoded, question: string): Promise<string> {
-  const payload = await cfRun(fastModel(), {
-    image: toDataUrl(reference),
-    task: "query",
-    reasoning: false,
-    stream: false,
-    temperature: 0.2,
-    question: `Describe the expected correct state shown in this reference photo, related to: ${question}`,
-    max_tokens: 160,
-  });
-  return extractModelText(payload).trim().slice(0, 400);
-}
-
-// ---------------- decisão combinada ----------------
+// ---------------- gate conservador ----------------
 type Combined = {
   decision: "approved" | "retake" | "uncertain" | "technical_failure";
   reason_code: string;
   public_message: string;
+  gate: Record<string, boolean>;
+};
+
+const RETAKE_MESSAGES: Record<string, string> = {
+  target_not_found: "Não encontramos o que foi pedido na foto. Tire outra mostrando o local certo.",
+  wrong_object: "A foto mostra outra coisa. Fotografe o item solicitado.",
+  wrong_place: "A foto parece ser de outro lugar. Fotografe o local solicitado.",
+  target_not_visible: "Mostre o item por completo na foto.",
+  too_dark: "A foto está escura. Melhore a iluminação e tente de novo.",
+  blurry: "A foto saiu tremida. Segure firme e tire outra.",
+  bad_framing: "Aproxime e centralize o item na foto.",
+  condition_not_met: "A condição pedida não foi atendida. Ajuste e fotografe de novo.",
+  insufficient_evidence: "A foto não mostra o suficiente para confirmar. Tire outra mais próxima.",
 };
 
 function combine(observer: Awaited<ReturnType<typeof runObserver>>, judge: any): Combined {
-  const decision = judge.decision;
-  const insufficient = observer.blurry || observer.dark || !observer.targetVisible ||
-    judge.quality_sufficient === false || judge.target_visible === false;
+  const bool = (v: unknown) => v === true;
+  const gate = {
+    target_found: bool(judge.target_found) && observer.targetVisible,
+    target_visible: bool(judge.target_visible),
+    framing_sufficient: bool(judge.framing_sufficient) && !observer.cropped,
+    lighting_sufficient: bool(judge.lighting_sufficient) && !observer.dark && !observer.overexposed,
+    sharpness_sufficient: bool(judge.sharpness_sufficient) && !observer.blurry,
+    quality_sufficient: bool(judge.quality_sufficient),
+    condition_met: bool(judge.condition_met),
+    no_contrary_evidence: !(Array.isArray(judge.contrary_evidence) && judge.contrary_evidence.length > 0),
+    judge_approved: judge.decision === "approved",
+  };
 
-  if (insufficient) {
+  // Discordância explícita entre etapas → incerto, nunca aprovação.
+  const observerNegative = !observer.targetVisible || observer.dark || observer.blurry ||
+    observer.overexposed || observer.cropped;
+  if (judge.decision === "approved" && observerNegative) {
     return {
-      decision: "retake",
-      reason_code: !observer.targetVisible || judge.target_visible === false
-        ? "target_not_visible"
-        : observer.dark ? "too_dark" : observer.blurry ? "blurry" : String(judge.reason_code ?? "insufficient_evidence"),
-      public_message: sanitizeMessage(judge.public_message, "Tire outra foto, mais próxima e bem iluminada."),
+      decision: "uncertain",
+      reason_code: "models_disagree",
+      public_message: "Não deu para confirmar. Tire outra foto com melhor enquadramento.",
+      gate,
     };
   }
-  if (decision === "approved" && judge.condition_met === true) {
+  if (judge.decision === "uncertain") {
+    return {
+      decision: "uncertain",
+      reason_code: "insufficient_evidence",
+      public_message: "Não deu para confirmar. Tire outra foto com melhor enquadramento.",
+      gate,
+    };
+  }
+
+  if (Object.values(gate).every(Boolean)) {
     return {
       decision: "approved",
       reason_code: "condition_met",
       public_message: sanitizeMessage(judge.public_message, "Foto aprovada."),
+      gate,
     };
   }
-  if (decision === "retake") {
-    return {
-      decision: "retake",
-      reason_code: String(judge.reason_code ?? "condition_not_met"),
-      public_message: sanitizeMessage(judge.public_message, "Tire outra foto."),
-    };
-  }
+
+  const failed = Object.entries(gate).find(([, v]) => !v)?.[0] ?? "insufficient_evidence";
+  const code = !gate.target_found
+    ? "target_not_found"
+    : !gate.target_visible
+      ? "target_not_visible"
+      : !gate.lighting_sufficient
+        ? "too_dark"
+        : !gate.sharpness_sufficient
+          ? "blurry"
+          : !gate.framing_sufficient
+            ? "bad_framing"
+            : !gate.condition_met
+              ? "condition_not_met"
+              : String(judge.reason_code ?? failed);
   return {
-    decision: "uncertain",
-    reason_code: "insufficient_evidence",
-    public_message: "Não foi possível concluir com segurança.",
+    decision: "retake",
+    reason_code: code,
+    public_message: RETAKE_MESSAGES[code] ?? sanitizeMessage(judge.public_message, "Tire outra foto."),
+    gate,
   };
 }
 
@@ -343,19 +590,23 @@ Deno.serve(async (req) => {
   try { body = await req.json(); } catch { return err(400, "invalid_body"); }
   const action = String(body?.action ?? "");
 
-  // rate limit por usuário
   const svc = createClient(url, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
+  const limits: Record<string, number> = {
+    capabilities: 10,
+    "profile-standard": 20,
+    "live-locate": 120,
+    "benchmark-evaluate": 20,
+  };
   const { data: rl } = await svc.rpc("hit_public_rate_limit", {
     p_key_hash: `lab:${actorId}`,
     p_action: action || "unknown",
     p_window_seconds: 60,
-    p_limit: action === "capabilities" ? 10 : 20,
+    p_limit: limits[action] ?? 20,
   });
   const allowed = Array.isArray(rl) ? rl[0]?.allowed : (rl as any)?.allowed;
   if (allowed === false) return err(429, "rate_limited");
-
 
   if (action === "capabilities") {
     const out: Record<string, unknown> = { fast: null, final: null };
@@ -375,17 +626,87 @@ Deno.serve(async (req) => {
     return json(200, out);
   }
 
-  if (action !== "benchmark-evaluate") return err(400, "unknown_action");
-
-  // autorização por workspace
+  // autorização por workspace (todas as demais ações)
   const workspaceId = String(body?.workspaceId ?? "");
   if (!workspaceId) return err(400, "workspace_required");
   const { data: ws } = await userClient
     .from("workspaces").select("id").eq("id", workspaceId).maybeSingle();
   if (!ws) return err(403, "forbidden");
 
+  // ---------- perfil interno do padrão ----------
+  if (action === "profile-standard") {
+    const standardId = String(body?.standardId ?? "");
+    if (!standardId) return err(400, "standard_required");
+    const { data: standard } = await userClient
+      .from("visual_standards")
+      .select("id, question, reference_path, workspace_id")
+      .eq("id", standardId)
+      .eq("workspace_id", workspaceId)
+      .maybeSingle();
+    if (!standard) return err(403, "forbidden");
+
+    try {
+      let referenceSummary: string | null = null;
+      if (standard.reference_path) {
+        const { data: file } = await svc.storage.from("visual-standards").download(standard.reference_path);
+        if (file) {
+          const bytes = new Uint8Array(await file.arrayBuffer());
+          const meta = sniff(bytes);
+          if (meta) referenceSummary = await describeReference({ bytes, ...meta }, standard.question);
+        }
+      }
+      const { profile, ambiguous } = await buildProfile(standard.question, referenceSummary);
+      const { error: upErr } = await userClient
+        .from("visual_standards")
+        .update({
+          internal_profile: profile,
+          profile_version: PROFILE_VERSION,
+          needs_validation: ambiguous,
+        })
+        .eq("id", standardId);
+      if (upErr) throw new Error("profile_save_failed");
+      console.log(`[lab] profile ok user=${actorId.slice(0, 8)} ambiguous=${ambiguous}`);
+      return json(200, { ok: true, needsValidation: ambiguous, profileVersion: PROFILE_VERSION });
+    } catch (e) {
+      const code = String((e as Error).message ?? "unknown").slice(0, 60);
+      console.error(`[lab] profile_failed user=${actorId.slice(0, 8)} code=${code}`);
+      return json(200, { ok: false, code });
+    }
+  }
+
+  // ---------- localização ao vivo (frame só em memória) ----------
+  if (action === "live-locate") {
+    const target = String(body?.target ?? "").trim().slice(0, 60);
+    if (!target) return err(400, "target_required");
+    const frame = decodeImage(body?.frameBase64, MIN_DIM);
+    if (!frame) return err(400, "invalid_image");
+    try {
+      const r = await locateTarget(frame, target);
+      return json(200, r);
+    } catch (e) {
+      const code = String((e as Error).message ?? "unknown").slice(0, 60);
+      console.error(`[lab] locate_failed user=${actorId.slice(0, 8)} code=${code}`);
+      return json(200, { strategy: "none", found: false, box: null, latencyMs: 0, code });
+    }
+  }
+
+  if (action !== "benchmark-evaluate") return err(400, "unknown_action");
+
   const question = String(body?.question ?? "").trim();
   if (question.length < 5 || question.length > 300) return err(400, "invalid_question");
+
+  let profile: any = body?.profile && typeof body.profile === "object" ? body.profile : null;
+  const standardId = String(body?.standardId ?? "");
+  if (!profile && standardId) {
+    const { data: std } = await userClient
+      .from("visual_standards")
+      .select("internal_profile")
+      .eq("id", standardId)
+      .eq("workspace_id", workspaceId)
+      .maybeSingle();
+    const stored = (std as any)?.internal_profile;
+    if (stored && typeof stored === "object" && stored.target_phrase) profile = stored;
+  }
 
   const image = decodeImage(body?.imageBase64);
   if (!image) return err(400, "invalid_image");
@@ -396,26 +717,27 @@ Deno.serve(async (req) => {
   inFlight.add(actorId);
   const t0 = Date.now();
   try {
-    const observer = await runObserver(image, question);
+    const observer = await runObserver(image, question, profile);
 
     let referenceMode: "none" | "multi_image" | "derived" = "none";
-    let referenceDescription: string | null = null;
+    let referenceDescription: string | null = profile?.reference_summary ?? null;
     let judge;
     if (reference) {
       try {
         judge = await runJudge({
-          image, question,
+          image, question, profile,
           facts: observer.observation,
           multiImage: { reference },
         });
         referenceMode = "multi_image";
       } catch {
-        referenceDescription = await describeReference(reference, question);
-        judge = await runJudge({ image, question, facts: observer.observation, referenceDescription });
+        referenceDescription = referenceDescription ?? await describeReference(reference, question);
+        judge = await runJudge({ image, question, profile, facts: observer.observation, referenceDescription });
         referenceMode = "derived";
       }
     } else {
-      judge = await runJudge({ image, question, facts: observer.observation });
+      judge = await runJudge({ image, question, profile, facts: observer.observation, referenceDescription });
+      if (referenceDescription) referenceMode = "derived";
     }
 
     const combined = combine(observer, judge.raw);
@@ -434,9 +756,10 @@ Deno.serve(async (req) => {
         conditionMet: judge.raw.condition_met ?? null,
         qualitySufficient: judge.raw.quality_sufficient ?? null,
         reasonCode: judge.raw.reason_code ?? null,
-        observations: Array.isArray(judge.raw.observations)
-          ? judge.raw.observations.slice(0, 4).map((o: unknown) => sanitizeMessage(o, "")).filter(Boolean)
-          : [],
+        observations: [
+          ...strList(judge.raw.supporting_evidence, 2),
+          ...strList(judge.raw.contrary_evidence, 2),
+        ],
         confidence: typeof judge.raw.confidence === "number" ? judge.raw.confidence : null,
         latencyMs: judge.latencyMs,
       },
@@ -453,7 +776,8 @@ Deno.serve(async (req) => {
       combined: {
         decision: "technical_failure",
         reason_code: code,
-        public_message: "Não foi possível analisar agora. Tente novamente.",
+        public_message: "Não foi possível verificar agora. Tente novamente.",
+        gate: {},
       },
       referenceMode: "none",
       totalLatencyMs: Date.now() - t0,
