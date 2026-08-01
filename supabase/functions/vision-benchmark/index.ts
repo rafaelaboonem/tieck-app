@@ -603,19 +603,38 @@ async function runJudge(args: {
 // ---------------- concorrência por usuário ----------------
 const inFlight = new Set<string>();
 
-// ---------------- orçamento por sessão de câmera ----------------
+// ---------------- orçamento por sessão (decidido 100% no servidor) ----------------
 export const LIVE_CHECKS_PER_SESSION = 3;
-export const FINAL_CHECKS_PER_SESSION = 5;
+export const FINAL_ATTEMPTS_PER_SESSION = 5;
 const LIVE_MIN_INTERVAL_MS = 5000;
+const SESSION_TTL_SECONDS = 900;      // 15 minutos
+const SESSIONS_PER_HOUR = 12;         // impede criação repetida de sessões
 
 type Consume = { allowed: boolean; used: number; remaining: number; reason: string };
+
+/** Inicia OU recupera a sessão ativa do usuário para este padrão. */
+async function startSession(
+  svc: any,
+  args: { workspaceId: string; userId: string; standardId: string | null },
+) {
+  const { data, error } = await svc.rpc("vision_lab_session_start", {
+    p_user_id: args.userId,
+    p_workspace_id: args.workspaceId,
+    p_standard_id: args.standardId,
+    p_ttl_seconds: SESSION_TTL_SECONDS,
+    p_hourly_limit: SESSIONS_PER_HOUR,
+  });
+  if (error) return null;
+  const row = Array.isArray(data) ? data[0] : data;
+  return row ?? null;
+}
 
 async function consumeSession(
   svc: any,
   args: { sessionId: string; workspaceId: string; userId: string; kind: "live" | "final" },
 ): Promise<Consume> {
-  const limit = args.kind === "live" ? LIVE_CHECKS_PER_SESSION : FINAL_CHECKS_PER_SESSION;
-  const { data, error } = await svc.rpc("vision_session_consume", {
+  const limit = args.kind === "live" ? LIVE_CHECKS_PER_SESSION : FINAL_ATTEMPTS_PER_SESSION;
+  const { data, error } = await svc.rpc("vision_lab_session_consume", {
     p_session_id: args.sessionId,
     p_workspace_id: args.workspaceId,
     p_user_id: args.userId,
@@ -642,6 +661,7 @@ async function recordUsage(
     userId: string;
     sessionId: string;
     standardId: string | null;
+    attemptId?: string | null;
     action: string;
     decision?: string | null;
   },
@@ -652,12 +672,15 @@ async function recordUsage(
     user_id: args.userId,
     session_id: args.sessionId,
     standard_id: args.standardId,
+    attempt_id: args.attemptId ?? null,
     action: args.action,
     step: m.step,
     model_id: m.model,
+    // usage ausente vira null + usage_missing: nunca zero silencioso.
     input_tokens: m.inputTokens,
     output_tokens: m.outputTokens,
     estimated_neurons: m.neurons,
+    usage_missing: m.usageMissing,
     inference_ms: m.inferenceMs,
     decision: args.decision ?? null,
   }));
@@ -665,10 +688,28 @@ async function recordUsage(
   if (error) console.error(`[lab] usage_insert_failed code=${String(error.code ?? "unknown").slice(0, 30)}`);
 }
 
+/** Limpeza oportunista da retenção de 90 dias (best-effort, sem bloquear). */
+async function maybeRunRetention(svc: any) {
+  if (Math.random() > 0.02) return;
+  const { error } = await svc.rpc("vision_telemetry_retention", { p_days: 90 });
+  if (error) console.error(`[lab] retention_failed code=${String(error.code ?? "unknown").slice(0, 30)}`);
+}
+
+/**
+ * O identificador de sessão NUNCA é escolhido pelo cliente: ele só pode
+ * devolver um identificador emitido antes pelo servidor, que é revalidado
+ * contra usuário + workspace + validade em cada chamada.
+ */
 function sessionIdOf(body: any): string {
   const s = String(body?.sessionId ?? "").trim();
-  return /^[A-Za-z0-9_-]{8,64}$/.test(s) ? s : "";
+  return /^[a-f0-9]{32}$/.test(s) ? s : "";
 }
+
+function attemptIdOf(body: any): string {
+  const s = String(body?.attemptId ?? "").trim();
+  return /^[0-9a-f-]{36}$/.test(s) ? s : "";
+}
+
 
 
 // ---------------- handler ----------------
