@@ -515,9 +515,10 @@ export function computeMetrics(runs: LabRun[]): SessionMetrics {
 
   for (const r of runs) {
     const d = r.combined.decision;
+    const ok = matchesExpected(r);
     if (d === "technical_failure") failures++;
+    else if (ok) hits++;
     else if (d === "uncertain") uncertain++;
-    else if (d === r.expected) hits++;
     else if (d === "approved") falseApprovals++;
     else falseRejections++;
 
