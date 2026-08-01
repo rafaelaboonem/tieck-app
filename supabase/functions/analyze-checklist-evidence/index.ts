@@ -29,8 +29,9 @@ const LIMITS = {
   "confirm-upload": { window: 60, limit: 20 },
   "status":         { window: 60, limit: 120 },
   "submit-response":{ window: 60, limit: 10 },
-  "live-check":     { window: 60, limit: 40 },
+  "retry-analysis": { window: 60, limit: 5 },
 } as const;
+
 type ActionKey = keyof typeof LIMITS;
 
 function json(status: number, body: unknown) {
