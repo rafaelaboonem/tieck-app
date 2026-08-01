@@ -176,14 +176,16 @@ function sum(entries: UsageEntry[], key: "inputTokens" | "outputTokens" | "cache
 
 function providerTotals(provider: VisionProvider, entries: UsageEntry[]): ProviderTotals {
   const known = entries.filter((m) => !m.usageMissing);
+  const cf = known.filter((m) => m.provider === "cloudflare");
+  const gm = known.filter((m) => m.provider === "google_gemini");
   return {
     provider,
     calls: entries.filter((m) => !m.step.endsWith("_failed")).length,
     inputTokens: known.length ? sum(known, "inputTokens") : null,
     outputTokens: known.length ? sum(known, "outputTokens") : null,
     cachedTokens: known.length ? sum(known, "cachedTokens") : null,
-    neurons: known.length ? Math.round(sum(known, "neurons") * 1000) / 1000 : null,
-    costUsd: known.length ? Math.round(sum(known, "costUsd") * 1e8) / 1e8 : null,
+    neurons: cf.length ? Math.round(sum(cf, "neurons") * 1000) / 1000 : null,
+    costUsd: gm.length ? Math.round(sum(gm, "costUsd") * 1e8) / 1e8 : null,
     inferenceMs: entries.reduce((a, m) => a + m.inferenceMs, 0),
   };
 }
@@ -191,8 +193,11 @@ function providerTotals(provider: VisionProvider, entries: UsageEntry[]): Provid
 export function meterTotals(meter: UsageEntry[]): UsageTotals {
   const known = meter.filter((m) => !m.usageMissing);
   const usageMissing = meter.some((m) => m.usageMissing && !m.step.endsWith("_failed"));
-  const neurons = Math.round(sum(known, "neurons") * 1000) / 1000;
-  const costUsd = Math.round(sum(known, "costUsd") * 1e8) / 1e8;
+  // Contabilidades separadas: neurônios só do Cloudflare, custo só do Gemini.
+  const cf = known.filter((m) => m.provider === "cloudflare");
+  const gm = known.filter((m) => m.provider === "google_gemini");
+  const neurons = Math.round(sum(cf, "neurons") * 1000) / 1000;
+  const costUsd = Math.round(sum(gm, "costUsd") * 1e8) / 1e8;
   const providers = [...new Set(meter.map((m) => m.provider))]
     .map((p) => providerTotals(p, meter.filter((m) => m.provider === p)));
   return {
@@ -200,14 +205,15 @@ export function meterTotals(meter: UsageEntry[]): UsageTotals {
     inputTokens: known.length ? sum(known, "inputTokens") : null,
     outputTokens: known.length ? sum(known, "outputTokens") : null,
     cachedTokens: known.length ? sum(known, "cachedTokens") : null,
-    neurons: known.length ? neurons : null,
-    costUsd: known.length ? costUsd : null,
+    neurons: cf.length ? neurons : null,
+    costUsd: gm.length ? costUsd : null,
     usageMissing,
     // Valor computacional teórico do Cloudflare — o faturamento real depende do
     // consumo diário total da conta e da franquia gratuita.
-    theoreticalUsd: known.length ? Math.round((neurons / 1000) * USD_PER_1K_NEURONS * 1e6) / 1e6 : null,
+    theoreticalUsd: cf.length ? Math.round((neurons / 1000) * USD_PER_1K_NEURONS * 1e6) / 1e6 : null,
     freeDailyNeurons: FREE_DAILY_NEURONS,
     steps: meter,
     providers,
   };
 }
+
