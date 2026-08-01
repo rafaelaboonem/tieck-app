@@ -886,9 +886,8 @@ Deno.serve(async (req) => {
     const frame = decodeImage(body?.frameBase64, MIN_DIM);
     if (!frame) return err(400, "invalid_image");
 
-    const liveKey = `live:${actorId}`;
-    if (inFlight.has(liveKey)) return err(409, "already_running");
-    inFlight.add(liveKey);
+    const live = await acquireLock(svc, actorId, workspaceId, "live-locate", 20);
+    if (live.busy) return err(409, "already_running");
     try {
       const r = await locateTarget(frame, target);
       const g = liveGuidance(r.found, r.boxes);
@@ -901,8 +900,9 @@ Deno.serve(async (req) => {
         state: "uncertain", hintCode: "uncertain", hint: HINTS.uncertain,
       });
     } finally {
-      inFlight.delete(liveKey);
+      await releaseLock(svc, live.key);
     }
+
   }
 
 
