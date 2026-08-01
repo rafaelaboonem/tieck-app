@@ -692,6 +692,32 @@ function parseJsonLoose(text: string): unknown {
 }
 
 /**
+ * A REST API envelopa a saída como { success, result, errors, messages } e o
+ * modelo pode devolver o texto em result.result, result.answer, result.caption,
+ * result.response, na raiz, ou result como string. Extraímos com tolerância,
+ * sem nunca aceitar campo vazio como sucesso.
+ */
+function extractModelText(payload: any): string {
+  const candidates: unknown[] = [];
+  const push = (node: any) => {
+    if (!node) return;
+    if (typeof node === "string") { candidates.push(node); return; }
+    if (typeof node !== "object") return;
+    for (const key of ["answer", "caption", "response", "text", "output_text", "description", "result"]) {
+      const value = node[key];
+      if (typeof value === "string") candidates.push(value);
+      else if (value && typeof value === "object") push(value);
+    }
+  };
+  push(payload?.result);
+  push(payload);
+  for (const candidate of candidates) {
+    if (typeof candidate === "string" && candidate.trim()) return candidate;
+  }
+  return "";
+}
+
+/**
  * Cliente Cloudflare Workers AI conforme o schema oficial do Moondream 3.1:
  * task=query usa o campo `question` (NÃO `prompt`), `image` aceita data URI,
  * `stream` precisa ser false para resposta JSON única e `reasoning` false
@@ -742,15 +768,10 @@ async function runMoondream(input: {
     }
     const payload = await response.json().catch(() => null) as any;
     if (!payload || payload.success === false) throw new Error("cloudflare_invalid_response");
-    const raw = payload?.result;
-    const text = typeof raw === "string"
-      ? raw
-      : typeof raw?.answer === "string" ? raw.answer
-      : typeof raw?.caption === "string" ? raw.caption
-      : typeof raw?.response === "string" ? raw.response
-      : "";
+    const text = extractModelText(payload);
     if (!text.trim()) {
       // Log apenas as CHAVES do envelope — nunca conteúdo, imagem ou secret.
+      const raw = (payload as any)?.result;
       const keys = raw && typeof raw === "object" ? Object.keys(raw).slice(0, 12).join(",") : typeof raw;
       console.error(`[cloudflare] empty_answer result_keys=${keys}`);
       throw new Error("cloudflare_empty_response");
@@ -995,30 +1016,6 @@ async function handleLiveCheck(payload: any, db: ReturnType<typeof admin>) {
   }
 }
 
-// ---------------- self-test (diagnóstico controlado) ----------------
-// Ativo somente quando o secret DIAG_VISION_TOKEN existe e o header confere.
-// Usa uma imagem pública; não toca em respostas, storage ou banco.
-async function handleSelfTest(req: Request) {
-  const expected = String(Deno.env.get("DIAG_VISION_TOKEN") ?? "").trim();
-  if (!expected) return err(404, "unknown_action");
-  if (req.headers.get("x-diag-token") !== expected) return err(403, "forbidden");
-  const imgRes = await fetch("https://picsum.photos/seed/tieck-sink/640/480.jpg", { headers: { "User-Agent": "tieck-selftest" } });
-  if (!imgRes.ok) return json(200, { step: "image_fetch", status: imgRes.status });
-  const bytes = new Uint8Array(await imgRes.arrayBuffer());
-  try {
-    const { text, model, inferenceMs } = await runMoondream({
-      image: bytes,
-      mimeType: "image/jpeg",
-      question: buildFinalQuestion("A pia da cozinha está limpa e sem louça?", "", []),
-      maxTokens: 512,
-    });
-    const parsed = parseV2Result(parseJsonLoose(text));
-    return json(200, { ok: true, model, inferenceMs, parsed });
-  } catch (e) {
-    return json(200, { ok: false, code: String((e as Error).message ?? "unknown") });
-  }
-}
-
 // ---------------- dispatcher ----------------
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
@@ -1036,7 +1033,6 @@ Deno.serve(async (req) => {
       case "confirm-upload": return await handleConfirmUpload(body, db);
       case "status":         return await handleStatus(body, db);
       case "live-check":     return await handleLiveCheck(body, db);
-      case "self-test":      return await handleSelfTest(req);
       default:               return err(400, "unknown_action");
     }
   } catch (e) {
