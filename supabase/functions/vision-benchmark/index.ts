@@ -279,7 +279,7 @@ function detectorPhrase(raw: unknown): string {
 }
 
 
-async function buildProfile(question: string, referenceSummary: string | null) {
+async function buildProfile(question: string, referenceSummary: string | null, meter: UsageEntry[]) {
   const prompt =
     `An inspection standard was written by a facility owner in Brazilian Portuguese:\n"${question}"\n\n` +
     `Extract, WITHOUT inventing requirements that are not implied by the sentence:\n` +
