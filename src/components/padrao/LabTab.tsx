@@ -207,12 +207,41 @@ export function LabTab({ workspaceId, standards, selected, onSelect, runs, onRun
             </div>
           </div>
 
+          <div className="space-y-2">
+            <Label htmlFor="lab-case">Caso da trava de liberação (opcional)</Label>
+            <select
+              id="lab-case"
+              className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+              value={releaseCase}
+              onChange={(e) => {
+                const v = e.target.value as ReleaseCase | "";
+                setReleaseCase(v);
+                const found = RELEASE_CASES.find((c) => c.key === v);
+                if (found) setExpected(found.expected);
+              }}
+            >
+              <option value="">Não classificar</option>
+              {RELEASE_CASES.map((c) => (
+                <option key={c.key} value={c.key}>{c.label}</option>
+              ))}
+            </select>
+          </div>
+
           <Button className="w-full bg-[#FF007F] hover:bg-[#e6006f]" disabled={!canRun} onClick={execute}>
             {running ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Play className="mr-2 h-4 w-4" />}
             {running ? "Analisando…" : "Rodar teste"}
           </Button>
+
+          <Button variant="outline" className="w-full" onClick={openCamera} disabled={profiling}>
+            {profiling ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Camera className="mr-2 h-4 w-4" />}
+            Testar com a câmera (prévia)
+          </Button>
+          <p className="text-xs text-muted-foreground">
+            A prévia da câmera é interna: as imagens são analisadas em memória e nada é salvo.
+          </p>
         </CardContent>
       </Card>
+
 
       <div className="space-y-4">
         {lastRun ? <RunDetail run={lastRun} /> : (
