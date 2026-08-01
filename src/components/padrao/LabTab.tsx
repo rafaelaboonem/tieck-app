@@ -383,17 +383,31 @@ function RunDetail({ run, onMark }: { run: LabRun; onMark?: (patch: Partial<LabR
         <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
           <span>Referência: {run.referenceMode === "none" ? "não usada" : run.referenceMode === "multi_image" ? "comparada" : "descrita"}</span>
           <span>Tempo total: {run.totalLatencyMs} ms</span>
-          <span>Esperado: {run.expected === "approved" ? "aprovar" : "nova foto"}</span>
+          <span>
+            Esperado: {run.expected === "approved" ? "aprovar" : run.expected === "retake" ? "nova foto" : "não verificável"}
+          </span>
+          {run.combined.condition_status && (
+            <span>Condição: {CONDITION_STATUS_LABEL[run.combined.condition_status]}</span>
+          )}
           <span>{run.correct === null ? "Sem classificação" : run.correct ? "Acerto" : "Erro"}</span>
+          {run.usage && (
+            <span>
+              Consumo: {run.usage.calls} chamada(s) · {run.usage.neurons.toFixed(2)} neurônios ·
+              {" "}US$ {run.usage.estimatedUsd.toFixed(5)}
+            </span>
+          )}
           {run.live && (
             <>
               <span>
                 Tempo até encontrar: {run.live.timeToTargetMs == null ? "—" : `${(run.live.timeToTargetMs / 1000).toFixed(1)} s`}
               </span>
               <span>
-                Verificações ao vivo: {run.live.liveChecks}
+                Verificações de IA ao vivo: {run.live.liveChecks}
                 {run.live.avgLiveLatencyMs != null ? ` (${run.live.avgLiveLatencyMs} ms)` : ""}
               </span>
+              {run.live.localChecks != null && (
+                <span>Checagens locais (sem IA): {run.live.localChecks}</span>
+              )}
             </>
           )}
         </div>
