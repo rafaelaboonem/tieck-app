@@ -1334,6 +1334,62 @@ export type Database = {
         }
         Relationships: []
       }
+      visual_standards: {
+        Row: {
+          accuracy: number | null
+          created_at: string
+          created_by: string
+          id: string
+          internal_notes: string | null
+          last_validated_at: string | null
+          name: string
+          question: string
+          reference_path: string | null
+          status: string
+          test_count: number
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          accuracy?: number | null
+          created_at?: string
+          created_by: string
+          id?: string
+          internal_notes?: string | null
+          last_validated_at?: string | null
+          name: string
+          question: string
+          reference_path?: string | null
+          status?: string
+          test_count?: number
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          accuracy?: number | null
+          created_at?: string
+          created_by?: string
+          id?: string
+          internal_notes?: string | null
+          last_validated_at?: string | null
+          name?: string
+          question?: string
+          reference_path?: string | null
+          status?: string
+          test_count?: number
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "visual_standards_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       workspace_card_meta: {
         Row: {
           assignee: string | null
