@@ -785,6 +785,74 @@ function combine(observer: Awaited<ReturnType<typeof runObserver>>, judge: any):
 // ---------------- concorrência por usuário ----------------
 const inFlight = new Set<string>();
 
+// ---------------- orçamento por sessão de câmera ----------------
+export const LIVE_CHECKS_PER_SESSION = 3;
+export const FINAL_CHECKS_PER_SESSION = 5;
+const LIVE_MIN_INTERVAL_MS = 5000;
+
+type Consume = { allowed: boolean; used: number; remaining: number; reason: string };
+
+async function consumeSession(
+  svc: any,
+  args: { sessionId: string; workspaceId: string; userId: string; kind: "live" | "final" },
+): Promise<Consume> {
+  const limit = args.kind === "live" ? LIVE_CHECKS_PER_SESSION : FINAL_CHECKS_PER_SESSION;
+  const { data, error } = await svc.rpc("vision_session_consume", {
+    p_session_id: args.sessionId,
+    p_workspace_id: args.workspaceId,
+    p_user_id: args.userId,
+    p_kind: args.kind,
+    p_limit: limit,
+    p_min_interval_ms: args.kind === "live" ? LIVE_MIN_INTERVAL_MS : 0,
+  });
+  if (error) return { allowed: false, used: 0, remaining: 0, reason: "budget_unavailable" };
+  const row = Array.isArray(data) ? data[0] : data;
+  return {
+    allowed: row?.allowed === true,
+    used: Number(row?.used ?? 0),
+    remaining: Number(row?.remaining ?? 0),
+    reason: String(row?.reason ?? "unknown"),
+  };
+}
+
+/** Telemetria de consumo: números, nunca imagens ou conteúdo do modelo. */
+async function recordUsage(
+  svc: any,
+  args: {
+    meter: UsageEntry[];
+    workspaceId: string;
+    userId: string;
+    sessionId: string;
+    standardId: string | null;
+    action: string;
+    decision?: string | null;
+  },
+) {
+  if (!args.meter.length) return;
+  const rows = args.meter.map((m) => ({
+    workspace_id: args.workspaceId,
+    user_id: args.userId,
+    session_id: args.sessionId,
+    standard_id: args.standardId,
+    action: args.action,
+    step: m.step,
+    model_id: m.model,
+    input_tokens: m.inputTokens,
+    output_tokens: m.outputTokens,
+    estimated_neurons: m.neurons,
+    inference_ms: m.inferenceMs,
+    decision: args.decision ?? null,
+  }));
+  const { error } = await svc.from("vision_usage_events").insert(rows);
+  if (error) console.error(`[lab] usage_insert_failed code=${String(error.code ?? "unknown").slice(0, 30)}`);
+}
+
+function sessionIdOf(body: any): string {
+  const s = String(body?.sessionId ?? "").trim();
+  return /^[A-Za-z0-9_-]{8,64}$/.test(s) ? s : "";
+}
+
+
 // ---------------- handler ----------------
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
