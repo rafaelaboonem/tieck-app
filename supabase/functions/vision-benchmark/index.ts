@@ -1002,17 +1002,25 @@ Deno.serve(async (req) => {
   const question = String(body?.question ?? "").trim();
   if (question.length < 5 || question.length > 300) return err(400, "invalid_question");
 
-  let profile: any = body?.profile && typeof body.profile === "object" ? body.profile : null;
+  // O perfil e o limiar vêm SEMPRE do padrão salvo quando há standardId.
+  let profile: any = null;
+  let threshold = DEFAULT_CONFIDENCE_THRESHOLD;
+  let verifiability = normalizeVerifiability(null);
   const standardId = String(body?.standardId ?? "");
-  if (!profile && standardId) {
+  if (standardId) {
     const { data: std } = await userClient
       .from("visual_standards")
-      .select("internal_profile")
+      .select("internal_profile, confidence_threshold, visual_verifiability")
       .eq("id", standardId)
       .eq("workspace_id", workspaceId)
       .maybeSingle();
     const stored = (std as any)?.internal_profile;
     if (stored && typeof stored === "object" && stored.target_phrase) profile = stored;
+    threshold = normalizeThreshold((std as any)?.confidence_threshold);
+    verifiability = normalizeVerifiability((std as any)?.visual_verifiability);
+  } else if (body?.profile && typeof body.profile === "object") {
+    // pergunta livre no laboratório: perfil efêmero, nunca persistido
+    profile = body.profile;
   }
 
   const image = decodeImage(body?.imageBase64);
@@ -1022,31 +1030,28 @@ Deno.serve(async (req) => {
 
   const sessionId = sessionIdOf(body);
   if (!sessionId) return err(400, "session_required");
+  const attemptId = attemptIdOf(body);
+  if (!attemptId) return err(400, "attempt_required");
+
+  // Uma tentativa = uma decisão final. Reenvio devolve o resultado guardado.
+  const { data: claimData, error: claimErr } = await svc.rpc("vision_lab_attempt_claim", {
+    p_attempt_id: attemptId,
+    p_session_id: sessionId,
+    p_user_id: actorId,
+  });
+  if (claimErr) return err(503, "attempt_unavailable");
+  const claim = Array.isArray(claimData) ? claimData[0] : claimData;
+  if (claim?.reason === "completed") {
+    return json(200, { ...(claim.result ?? {}), replayed: true });
+  }
+  if (claim?.reason === "running") return err(409, "already_running");
+  if (claim?.reason !== "ok") return err(400, String(claim?.reason ?? "attempt_invalid"));
 
   if (inFlight.has(actorId)) return err(409, "already_running");
   inFlight.add(actorId);
   const t0 = Date.now();
   const meter: UsageEntry[] = [];
   try {
-    const budget = await consumeSession(svc, { sessionId, workspaceId, userId: actorId, kind: "final" });
-    if (!budget.allowed) {
-      return json(200, {
-        observer: null,
-        judge: null,
-        combined: {
-          decision: "technical_failure",
-          reason_code: "session_limit_reached",
-          public_message: "Esta sessão atingiu o limite de análises. Abra a câmera novamente para continuar.",
-          condition_status: null,
-          gate: {},
-        },
-        referenceMode: "none",
-        totalLatencyMs: Date.now() - t0,
-        budget: { spent: false, used: budget.used, remaining: budget.remaining, reason: budget.reason },
-        usage: meterTotals(meter),
-      });
-    }
-
     const observer = await runObserver(image, question, profile, meter);
 
     let referenceMode: "none" | "multi_image" | "derived" = "none";
@@ -1070,13 +1075,11 @@ Deno.serve(async (req) => {
       if (referenceDescription) referenceMode = "derived";
     }
 
-    const combined = combine(observer, judge.raw);
-    await recordUsage(svc, {
-      meter, workspaceId, userId: actorId, sessionId,
-      standardId: standardId || null, action: "benchmark-evaluate", decision: combined.decision,
-    });
-    console.log(`[lab] evaluate ok user=${actorId.slice(0, 8)} decision=${combined.decision} ms=${Date.now() - t0}`);
-    return json(200, {
+    // Gate conservador: aprova só com confiança >= limiar, JSON completo e
+    // padrão realmente verificável por foto.
+    const combined = combine(observer, judge.raw, { threshold, verifiability });
+    const usage = meterTotals(meter);
+    const payload = {
       observer: {
         observation: observer.observation,
         targetVisible: observer.targetVisible,
@@ -1100,28 +1103,43 @@ Deno.serve(async (req) => {
       },
       combined,
       referenceMode,
+      threshold,
+      verifiability,
+      attemptId,
       totalLatencyMs: Date.now() - t0,
-      budget: { spent: true, used: budget.used, remaining: budget.remaining, reason: "ok" },
-      usage: meterTotals(meter),
+      usage,
+    };
+
+    await svc.rpc("vision_lab_attempt_finish", {
+      p_attempt_id: attemptId,
+      p_status: "completed",
+      p_decision: combined.decision,
+      p_result: payload,
     });
+    await recordUsage(svc, {
+      meter, workspaceId, userId: actorId, sessionId, attemptId,
+      standardId: standardId || null, action: "benchmark-evaluate", decision: combined.decision,
+    });
+    console.log(`[lab] evaluate ok user=${actorId.slice(0, 8)} decision=${combined.decision} ms=${Date.now() - t0}`);
+    return json(200, payload);
   } catch (e) {
     const code = String((e as Error).message ?? "unknown").slice(0, 60);
+    // Falha técnica NÃO consome a tentativa: ela volta para "pending".
+    await svc.rpc("vision_lab_attempt_finish", {
+      p_attempt_id: attemptId,
+      p_status: "technical_failure",
+      p_decision: "technical_failure",
+      p_result: null,
+    });
     await recordUsage(svc, {
-      meter, workspaceId, userId: actorId, sessionId,
+      meter, workspaceId, userId: actorId, sessionId, attemptId,
       standardId: standardId || null, action: "benchmark-evaluate", decision: "technical_failure",
     });
     console.error(`[lab] evaluate_failed user=${actorId.slice(0, 8)} code=${code} ms=${Date.now() - t0}`);
     return json(200, {
-      observer: null,
-      judge: null,
-      combined: {
-        decision: "technical_failure",
-        reason_code: /^[a-z0-9_]{1,40}$/.test(code) ? code : "service_unavailable",
-        public_message: "Não foi possível verificar agora. Tente novamente.",
-        condition_status: null,
-        gate: {},
-      },
-      referenceMode: "none",
+      ...technicalFailure(/^[a-z0-9_]{1,40}$/.test(code) ? code : "service_unavailable"),
+      attemptId,
+      attemptConsumed: false,
       totalLatencyMs: Date.now() - t0,
       usage: meterTotals(meter),
     });
@@ -1129,3 +1147,4 @@ Deno.serve(async (req) => {
     inFlight.delete(actorId);
   }
 });
+
