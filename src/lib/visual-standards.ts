@@ -32,6 +32,27 @@ export interface VisualStandard {
   last_validated_at: string | null;
   created_at: string;
   updated_at: string;
+  /** Perfil interno gerado no servidor — nunca exibido ao usuário final. */
+  internal_profile?: StandardProfile | Record<string, never> | null;
+  profile_version?: number;
+  needs_validation?: boolean;
+}
+
+export interface StandardProfile {
+  target_phrase: string;
+  target_phrase_en: string;
+  requested_condition: string;
+  observable_signals: string[];
+  contrary_signals: string[];
+  insufficient_view_signals: string[];
+  reference_summary: string | null;
+  version: number;
+  generated_at: string;
+}
+
+export function profileOf(standard: VisualStandard | null): StandardProfile | null {
+  const p = standard?.internal_profile as StandardProfile | undefined;
+  return p && typeof p === "object" && p.target_phrase ? p : null;
 }
 
 /**
