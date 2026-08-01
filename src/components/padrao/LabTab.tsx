@@ -54,10 +54,31 @@ export function LabTab({ workspaceId, standards, selected, onSelect, runs, onRun
   const [attemptsUsed, setAttemptsUsed] = useState<number | null>(null);
   const [attemptsLimit, setAttemptsLimit] = useState<number | null>(null);
 
+  const [projects, setProjects] = useState<ChecklistProject[]>([]);
+  const [projectsLoading, setProjectsLoading] = useState(true);
+  const [projectId, setProjectId] = useState<string>(selected?.checklist_id ?? "");
+
   const profile = profileOf(selected);
   const question = selected?.question ?? "";
   const hasReference = Boolean(selected?.reference_path);
   const isOwner = Boolean(userId && selected && selected.created_by === userId);
+  const project = projects.find((p) => p.id === projectId) ?? null;
+
+  useEffect(() => {
+    let cancelled = false;
+    setProjectsLoading(true);
+    listChecklistProjects(workspaceId)
+      .then((p) => { if (!cancelled) setProjects(p); })
+      .catch(() => { /* silencioso: a lista continua vazia */ })
+      .finally(() => { if (!cancelled) setProjectsLoading(false); });
+    return () => { cancelled = true; };
+  }, [workspaceId]);
+
+  // Padrão escolhido em outra aba: sincroniza o projeto exibido.
+  useEffect(() => {
+    if (selected?.checklist_id) setProjectId(selected.checklist_id);
+  }, [selected?.checklist_id]);
+
 
   useEffect(() => {
     let cancelled = false;
