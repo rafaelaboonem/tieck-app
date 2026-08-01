@@ -35,7 +35,9 @@ const TABS: [TabKey, string][] = [
 ];
 
 function CentralVisualPage() {
+  const search = Route.useSearch();
   const navigate = useNavigate();
+
   const { currentWorkspace, isLoading: wsLoading } = useWorkspace();
   const [authChecked, setAuthChecked] = useState(false);
   const [tab, setTab] = useState<TabKey>("padroes");
