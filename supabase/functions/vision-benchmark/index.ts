@@ -389,7 +389,7 @@ async function locateTarget(frame: Decoded, target: string) {
     task: "query",
     stream: false,
     question: `Is a ${target} clearly visible in this photo? Answer only "yes" or "no".`,
-    max_tokens: 8,
+    max_tokens: 32,
   }, LIVE_TIMEOUT_MS);
   const text = extractModelText(p).toLowerCase();
   console.log(`[lab] locate_query_answer ${JSON.stringify(text.slice(0, 80))}`);
