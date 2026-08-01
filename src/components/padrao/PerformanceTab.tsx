@@ -67,8 +67,6 @@ export function PerformanceTab({ runs }: { runs: LabRun[] }) {
 
       <Card>
         <CardHeader className="pb-2">
-      <Card>
-        <CardHeader className="pb-2">
           <CardTitle className="text-base">Consumo de IA nesta sessão</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2 text-sm">
