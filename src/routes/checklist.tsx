@@ -1949,10 +1949,15 @@ function NovoChecklistPage() {
         setRetentionDays(5);
       }
 
+      // IDs estáveis dos blocos /Camera: criados uma única vez e preservados
+      // em edição, reordenação e movimentação.
+      const { blocks: blocksWithIds } = ensureCameraBlockIds(blocks as any[]);
+
       const checklistData: any = {
         user_id: authUser.id,
         title: (title && title.trim()) ? title.trim() : "Sem título",
-        blocks: blocks as any,
+        blocks: blocksWithIds as any,
+
         custom_email_domain_id: customEmailDomainId,
         custom_domain: customDomain,
         settings: {
