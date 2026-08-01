@@ -7,15 +7,20 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
-import { Loader2, Play, Eye, Scale, CheckCircle2, RefreshCcw, HelpCircle, AlertTriangle } from "lucide-react";
+import { Loader2, Play, Eye, Scale, CheckCircle2, RefreshCcw, HelpCircle, AlertTriangle, Camera, Sparkles } from "lucide-react";
+import { CameraV3Preview } from "@/components/padrao/CameraV3Preview";
 import {
   blobToBase64,
   referenceBase64,
   runBenchmark,
   isCorrect,
+  ensureStandardProfile,
+  profileOf,
+  RELEASE_CASES,
   type ExpectedResult,
   type LabDecision,
   type LabRun,
+  type ReleaseCase,
   type VisualStandard,
 } from "@/lib/visual-standards";
 
@@ -33,7 +38,9 @@ interface Props {
   onSelect: (s: VisualStandard | null) => void;
   runs: LabRun[];
   onRun: (run: LabRun) => void;
+  onUpdateRun?: (id: string, patch: Partial<LabRun>) => void;
 }
+
 
 export function LabTab({ workspaceId, standards, selected, onSelect, runs, onRun }: Props) {
   const [question, setQuestion] = useState(selected?.question ?? "");
