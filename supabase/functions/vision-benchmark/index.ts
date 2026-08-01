@@ -190,6 +190,17 @@ const PROFILE_SCHEMA = {
   required: ["target_phrase", "target_phrase_en", "requested_condition", "observable_signals", "ambiguous"],
 };
 
+/** Reduz o alvo em inglês a uma expressão curta que um detector entende. */
+function detectorPhrase(raw: unknown): string {
+  let s = String(raw ?? "").toLowerCase();
+  s = s.replace(/\([^)]*\)?/g, " ");           // remove parênteses e alternativas
+  s = s.split(/\bor\b|\band\b|,|\/|;/)[0];      // fica só na primeira alternativa
+  s = s.replace(/\bwith\b.*$/, " ");            // corta complementos ("with lid")
+  s = s.replace(/[^a-z\s-]/g, " ").replace(/\s+/g, " ").trim();
+  return s.split(" ").slice(0, 3).join(" ").slice(0, 40);
+}
+
+
 async function buildProfile(question: string, referenceSummary: string | null) {
   const prompt =
     `An inspection standard was written by a facility owner in Brazilian Portuguese:\n"${question}"\n\n` +
