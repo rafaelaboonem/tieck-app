@@ -68,9 +68,16 @@ export function StandardsTab({ workspaceId, standards, loading, onCreated, onTes
               <CardHeader className="pb-3">
                 <div className="flex items-start justify-between gap-3">
                   <CardTitle className="truncate text-lg">{s.name}</CardTitle>
-                  <Badge variant="outline" className={STATUS_TONE[s.status]}>
-                    {STATUS_LABEL[s.status]}
-                  </Badge>
+                  <div className="flex shrink-0 flex-wrap justify-end gap-1">
+                    {s.needs_validation && (
+                      <Badge variant="outline" className="bg-amber-500/15 text-amber-700">
+                        Precisa de validação
+                      </Badge>
+                    )}
+                    <Badge variant="outline" className={STATUS_TONE[s.status]}>
+                      {STATUS_LABEL[s.status]}
+                    </Badge>
+                  </div>
                 </div>
               </CardHeader>
               <CardContent className="flex flex-1 flex-col justify-between gap-4">
