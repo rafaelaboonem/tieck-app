@@ -371,12 +371,14 @@ Deno.serve(async (req) => {
 
   if (action !== "benchmark-evaluate") return err(400, "unknown_action");
 
-  // autorização por workspace
-  const workspaceId = String(body?.workspaceId ?? "");
-  if (!workspaceId) return err(400, "workspace_required");
-  const { data: ws } = await userClient
-    .from("workspaces").select("id").eq("id", workspaceId).maybeSingle();
-  if (!ws) return err(403, "forbidden");
+  // autorização por workspace (o modo diagnóstico interno não toca em dados de workspace)
+  if (!diagMode) {
+    const workspaceId = String(body?.workspaceId ?? "");
+    if (!workspaceId) return err(400, "workspace_required");
+    const { data: ws } = await userClient
+      .from("workspaces").select("id").eq("id", workspaceId).maybeSingle();
+    if (!ws) return err(403, "forbidden");
+  }
 
   const question = String(body?.question ?? "").trim();
   if (question.length < 5 || question.length > 300) return err(400, "invalid_question");
