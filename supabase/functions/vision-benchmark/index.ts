@@ -483,13 +483,13 @@ async function runObserver(image: Decoded, question: string, profile: any) {
   const presentField = boolField(
     ["object_present", "target_present", "present", "target_visible", "visible", "object_visible"],
   );
-  // Campo ausente/indefinido ⇒ desconhecido: nunca presume presença.
-  const targetVisibleKnown = presentField !== null || !obj;
+  // Campo ausente/indefinido ⇒ desconhecido: nunca presume presença, cai na
+  // leitura textual da própria observação (que exige evidência explícita).
+  const targetVisibleKnown = presentField !== null;
   const targetVisible = presentField !== null
     ? presentField
-    : obj
-      ? false // JSON válido sem o campo: desconhecido → tratado como não confirmado
-      : (target ? !absentRe.test(lower) : !/not visible|cannot see/.test(lower));
+    : (target ? !absentRe.test(lower) : !/not visible|cannot see/.test(lower));
+
 
   return {
     latencyMs: Date.now() - started,
