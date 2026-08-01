@@ -203,8 +203,8 @@ export function LabTab({ workspaceId, standards, selected, onSelect, runs, onRun
 
           <div className="space-y-2">
             <Label>Resultado esperado</Label>
-            <div className="flex gap-2">
-              {(["approved", "retake"] as const).map((v) => (
+            <div className="flex flex-wrap gap-2">
+              {(["approved", "retake", "not_observable"] as const).map((v) => (
                 <Button
                   key={v}
                   type="button"
@@ -212,7 +212,11 @@ export function LabTab({ workspaceId, standards, selected, onSelect, runs, onRun
                   size="sm"
                   onClick={() => setExpected(v)}
                 >
-                  {v === "approved" ? "Deveria aprovar" : "Deveria pedir nova foto"}
+                  {v === "approved"
+                    ? "Deveria aprovar"
+                    : v === "retake"
+                      ? "Deveria pedir nova foto"
+                      : "Não dá para verificar por foto"}
                 </Button>
               ))}
             </div>
