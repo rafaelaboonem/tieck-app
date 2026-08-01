@@ -1,13 +1,29 @@
-// Laboratório privado de padrões visuais (Camera AI V3 — Fase 2, prévia).
+// Laboratório privado de padrões visuais (Camera AI V3 — Fase 2.2, prévia).
 // Regras:
 //   * verify_jwt = true — nunca aceita responseToken público.
 //   * Autorização por workspace (owner) verificada com o JWT do chamador.
+//   * Sessões e tentativas são criadas e contadas SOMENTE no servidor.
 //   * Imagens candidatas e frames de câmera ficam SOMENTE em memória: não vão
 //     para Storage, não vão para o banco, não entram em logs nem em analytics.
 //   * Logs apenas com códigos sanitizados, modelo, duração e status.
 
 // deno-lint-ignore-file no-explicit-any
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { sanitizeMessage, strList } from "./sanitize.ts";
+import {
+  buildUsageEntry,
+  failedUsageEntry,
+  meterTotals,
+  type UsageEntry,
+} from "./usage.ts";
+import {
+  combine,
+  normalizeThreshold,
+  normalizeVerifiability,
+  technicalFailure,
+  DEFAULT_CONFIDENCE_THRESHOLD,
+} from "./gate.ts";
+
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
