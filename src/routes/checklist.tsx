@@ -4140,14 +4140,7 @@ function NovoChecklistPage() {
                       camVision.onAnalysisFailure === "manual_review"
                         ? camVision.onAnalysisFailure
                         : "manual_review";
-                    const visionEnabled = camVision.enabled === true;
-                    const visionCriteria = Array.isArray(camVision.criteria) ? camVision.criteria : [];
-                    const validVisionCriteria = visionCriteria.filter((item) => item.trim().length > 0);
-                    const confidenceThreshold = Math.max(
-                      0.5,
-                      Math.min(0.95, Number(camVision.confidenceThreshold ?? 0.75)),
-                    );
-                     // Selo simples com 3 estados: IA desativada / sem critérios / IA configurada.
+                     // Camera AI V2: análise semântica sempre ativa.
                      const visionBadge: { label: string; tone: "off" | "warn" | "active" } =
                        { label: "IA ativa", tone: "active" };
                    return (
