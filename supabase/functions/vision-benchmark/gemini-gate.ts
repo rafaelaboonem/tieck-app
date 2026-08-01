@@ -4,7 +4,7 @@
 // Princípio: o servidor NUNCA aceita `suggested_decision` do modelo.
 // Aprovação só existe quando todas as travas passam. Na dúvida, nunca aprova.
 
-import { RETAKE_MESSAGES, type ConditionStatus, type Decision } from "../gate.ts";
+import { RETAKE_MESSAGES, type ConditionStatus, type Decision } from "./gate.ts";
 
 /** Limiar de aprovação da Fase 3A — conservador por decisão do proprietário. */
 export const GEMINI_APPROVAL_THRESHOLD = 0.9;
