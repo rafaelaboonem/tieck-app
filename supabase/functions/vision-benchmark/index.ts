@@ -798,6 +798,62 @@ Deno.serve(async (req) => {
     .from("workspaces").select("id").eq("id", workspaceId).maybeSingle();
   if (!ws) return err(403, "forbidden");
 
+  await maybeRunRetention(svc);
+
+  // ---------- sessão do laboratório criada pelo servidor ----------
+  if (action === "lab-session-start") {
+    const standardId = String(body?.standardId ?? "") || null;
+    if (standardId) {
+      const { data: std } = await userClient
+        .from("visual_standards").select("id")
+        .eq("id", standardId).eq("workspace_id", workspaceId).maybeSingle();
+      if (!std) return err(403, "forbidden");
+    }
+    const row = await startSession(svc, { workspaceId, userId: actorId, standardId });
+    if (!row) return err(503, "session_unavailable");
+    if (row.reason !== "ok") {
+      return json(200, {
+        ok: false,
+        reason: row.reason,
+        message: "Muitas sessões iniciadas nesta hora. Aguarde antes de abrir outra.",
+      });
+    }
+    return json(200, {
+      ok: true,
+      sessionId: row.session_id,
+      expiresAt: row.expires_at,
+      reused: row.reused === true,
+      liveUsed: Number(row.live_used ?? 0),
+      liveLimit: LIVE_CHECKS_PER_SESSION,
+      attemptsUsed: Number(row.attempts_used ?? 0),
+      attemptsLimit: FINAL_ATTEMPTS_PER_SESSION,
+    });
+  }
+
+  // ---------- nova tentativa (uma decisão final por foto capturada) ----------
+  if (action === "lab-attempt-create") {
+    const sessionId = sessionIdOf(body);
+    if (!sessionId) return err(400, "session_required");
+    const { data, error } = await svc.rpc("vision_lab_attempt_create", {
+      p_session_id: sessionId,
+      p_user_id: actorId,
+      p_max_attempts: FINAL_ATTEMPTS_PER_SESSION,
+    });
+    if (error) return err(503, "attempt_unavailable");
+    const row = Array.isArray(data) ? data[0] : data;
+    if (row?.reason !== "ok") {
+      return json(200, { ok: false, reason: String(row?.reason ?? "unknown"), attemptsUsed: Number(row?.attempts_used ?? 0) });
+    }
+    return json(200, {
+      ok: true,
+      attemptId: row.attempt_id,
+      attemptsUsed: Number(row.attempts_used ?? 0),
+      attemptsLimit: FINAL_ATTEMPTS_PER_SESSION,
+    });
+  }
+
+
+
   // ---------- perfil interno do padrão ----------
   if (action === "profile-standard") {
     const standardId = String(body?.standardId ?? "");
