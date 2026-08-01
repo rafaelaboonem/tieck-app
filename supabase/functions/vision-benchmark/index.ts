@@ -598,6 +598,7 @@ async function runJudge(args: {
   profile: any;
   referenceDescription?: string | null;
   multiImage?: { reference: Decoded } | null;
+  meter: UsageEntry[];
 }) {
   const started = Date.now();
   const p = args.profile ?? {};
@@ -616,6 +617,10 @@ async function runJudge(args: {
     `Fast-observer notes about the candidate photo: ${args.facts}\n` +
     (args.referenceDescription ? `Description of a reference photo of the expected result: ${args.referenceDescription}\n` : "") +
     (args.multiImage ? `The FIRST image is the reference of the expected result; the SECOND image is the candidate. Compare condition, organisation and relevant elements. Angle, colour balance and lighting do NOT need to match. Distinguish "same kind of place" from "same condition".\n` : "") +
+    `condition_status must be exactly one of: "verified" (the photo itself shows the condition is true), ` +
+    `"not_met" (the photo shows it is false), "not_observable" (this photo cannot show it — the fact is hidden, ` +
+    `internal, in the past, requires touching, smelling, opening or measuring, or needs another viewpoint). ` +
+    `Never claim to have verified something that a single photo cannot show; use "not_observable" instead.\n` +
     `Rules: if the requested target is absent, a different object, a different place, cut off, too dark or unverifiable, you must NOT approve. ` +
     `Never treat high confidence alone as proof. If you are not sure, use "uncertain".\n` +
     `public_message must be one short sentence in Brazilian Portuguese for an operator, with no technical terms. ` +
@@ -627,7 +632,7 @@ async function runJudge(args: {
   }
   content.push({ type: "image_url", image_url: { url: toDataUrl(args.image) } });
 
-  const payload = await cfRun(finalModel(), {
+  const payload = await cfMetered(args.meter, "judge", finalModel(), {
     messages: [{ role: "user", content }],
     response_format: { type: "json_schema", json_schema: DECISION_SCHEMA },
     max_tokens: 700,
