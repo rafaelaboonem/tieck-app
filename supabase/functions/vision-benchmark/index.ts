@@ -8,6 +8,7 @@
 
 // deno-lint-ignore-file no-explicit-any
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { parseObserver, parseJsonLoose } from "../_shared/observer-parse.ts";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -147,12 +148,6 @@ function extractModelText(payload: any): string {
   return "";
 }
 
-function parseJsonLoose(text: string): any | null {
-  const first = text.indexOf("{");
-  const last = text.lastIndexOf("}");
-  if (first === -1 || last <= first) return null;
-  try { return JSON.parse(text.slice(first, last + 1)); } catch { return null; }
-}
 
 // ---------------- sanitização ----------------
 const LEAK_PATTERNS = [
@@ -433,40 +428,15 @@ async function runObserver(image: Decoded, question: string, profile: any) {
   });
   const text = extractModelText(payload).trim();
   if (!text) throw new Error("observer_empty_response");
-  // O observador às vezes responde em JSON: nesse caso os campos valem mais que o texto.
-  const obj = parseJsonLoose(text);
-  const lower = text.toLowerCase();
-  const flag = (keys: string[], re: RegExp): boolean => {
-    if (obj) {
-      for (const k of keys) {
-        const v = obj[k];
-        if (typeof v === "boolean") return v;
-        if (typeof v === "string" && re.test(v.toLowerCase())) return true;
-        if (typeof v === "string") return false;
-      }
-    }
-    return re.test(lower);
-  };
-  const absentRe = /\bnot (present|visible|shown|there)\b|\bno (visible|sign of)\b|cannot see|isn'?t visible|does not (show|contain)|n(a|ã)o (est(a|á)|h(a|á))/;
-  let targetVisible = target ? !absentRe.test(lower) : !/not visible|cannot see/.test(lower);
-  if (obj) {
-    for (const k of ["present", "target_present", "visible", "target_visible"]) {
-      const v = obj[k];
-      if (typeof v === "boolean") { targetVisible = v; break; }
-    }
-  }
+  const flags = parseObserver(text, target);
   return {
     latencyMs: Date.now() - started,
     observation: text.slice(0, 500),
-    blurry: flag(["blurry", "blur", "is_blurry"], /blurry|out of focus|unfocused|motion blur/),
-    dark: flag(["dark", "too_dark"], /too dark|very dark|poorly lit|low light|underexposed/) ||
-      (typeof obj?.lighting === "string" && /dark|underexposed|low/.test(obj.lighting.toLowerCase())),
-    overexposed: flag(["overexposed"], /overexposed|blown out|too bright/) ||
-      (typeof obj?.lighting === "string" && /overexposed|too bright/.test(obj.lighting.toLowerCase())),
-    cropped: flag(["cropped", "cut_off"], /cut off|cropped|partially visible|only part/),
-    targetVisible,
+    ...flags,
   };
 }
+
+
 
 
 // ---------------- etapa 2: Llama 4 Scout (juiz) ----------------
@@ -578,6 +548,28 @@ const RETAKE_MESSAGES: Record<string, string> = {
   insufficient_evidence: "A foto não mostra o suficiente para confirmar. Tire outra mais próxima.",
 };
 
+// Allowlist fechada de códigos públicos. Nada fora desta lista sai da função.
+const PUBLIC_REASON_CODES = new Set([
+  "condition_met",
+  "condition_not_met",
+  "target_not_found",
+  "wrong_object",
+  "wrong_place",
+  "target_not_visible",
+  "too_dark",
+  "blurry",
+  "bad_framing",
+  "insufficient_evidence",
+  "models_disagree",
+  "manual_review",
+  "technical_failure",
+]);
+const publicReason = (code: unknown, fallback = "technical_failure"): string => {
+  const s = typeof code === "string" ? code.trim() : "";
+  return PUBLIC_REASON_CODES.has(s) ? s : fallback;
+};
+
+
 function combine(observer: Awaited<ReturnType<typeof runObserver>>, judge: any): Combined {
   const bool = (v: unknown) => v === true;
   const gate = {
@@ -645,7 +637,6 @@ function combine(observer: Awaited<ReturnType<typeof runObserver>>, judge: any):
     };
   }
 
-  const failed = Object.entries(gate).find(([, v]) => !v)?.[0] ?? "insufficient_evidence";
   const code = !gate.target_found
     ? "target_not_found"
     : !gate.target_visible
@@ -658,17 +649,47 @@ function combine(observer: Awaited<ReturnType<typeof runObserver>>, judge: any):
             ? "bad_framing"
             : !gate.condition_met
               ? "condition_not_met"
-              : String(judge.reason_code ?? failed);
+              : publicReason(judge.reason_code, "insufficient_evidence");
   return {
     decision: "retake",
     reason_code: code,
     public_message: RETAKE_MESSAGES[code] ?? sanitizeMessage(judge.public_message, "Tire outra foto."),
     gate,
   };
+
 }
 
-// ---------------- concorrência por usuário ----------------
-const inFlight = new Set<string>();
+// ---------------- concorrência persistente (entre isolates) ----------------
+/** Trava atômica no banco por usuário + workspace + operação, com TTL. */
+async function acquireLock(
+  svc: any,
+  userId: string,
+  workspaceId: string | null,
+  operation: string,
+  ttlSeconds: number,
+): Promise<{ ok: boolean; key: string | null; busy: boolean }> {
+  const { data, error } = await svc.rpc("acquire_vision_lock", {
+    p_user_id: userId,
+    p_workspace_id: workspaceId,
+    p_operation: operation,
+    p_ttl_seconds: ttlSeconds,
+  });
+  // Falha de infraestrutura na trava não deve bloquear o usuário.
+  if (error) {
+    console.error(`[lab] lock_error op=${operation} msg=${String((error as any)?.message ?? error).slice(0, 120)}`);
+    return { ok: true, key: null, busy: false };
+  }
+  const row = Array.isArray(data) ? data[0] : data;
+  if (row?.acquired) return { ok: true, key: String(row.key ?? row.lock_key), busy: false };
+  return { ok: false, key: null, busy: true };
+}
+
+
+async function releaseLock(svc: any, lockKey: string | null) {
+  if (!lockKey) return;
+  try { await svc.rpc("release_vision_lock", { p_lock_key: lockKey }); } catch { /* TTL cobre */ }
+}
+
 
 // ---------------- handler ----------------
 Deno.serve(async (req) => {
@@ -722,7 +743,9 @@ Deno.serve(async (req) => {
         const p = await cfRun(model, payload as unknown);
         out[key] = { model, ok: true, hasText: extractModelText(p).trim().length > 0, latencyMs: Date.now() - started };
       } catch (e) {
-        out[key] = { model, ok: false, code: String((e as Error).message).slice(0, 60), latencyMs: Date.now() - started };
+        console.error(`[lab] capability_failed key=${key} code=${String((e as Error).message).slice(0, 60)}`);
+        out[key] = { model, ok: false, code: "technical_failure", latencyMs: Date.now() - started };
+
       }
     }
     console.log(`[lab] capabilities user=${actorId.slice(0, 8)}`);
@@ -773,7 +796,7 @@ Deno.serve(async (req) => {
     } catch (e) {
       const code = String((e as Error).message ?? "unknown").slice(0, 60);
       console.error(`[lab] profile_failed user=${actorId.slice(0, 8)} code=${code}`);
-      return json(200, { ok: false, code });
+      return json(200, { ok: false, code: "technical_failure" });
     }
   }
 
@@ -801,9 +824,8 @@ Deno.serve(async (req) => {
     const frame = decodeImage(body?.frameBase64, MIN_DIM);
     if (!frame) return err(400, "invalid_image");
 
-    const liveKey = `live:${actorId}`;
-    if (inFlight.has(liveKey)) return err(409, "already_running");
-    inFlight.add(liveKey);
+    const live = await acquireLock(svc, actorId, workspaceId, "live-locate", 20);
+    if (live.busy) return err(409, "already_running");
     try {
       const r = await locateTarget(frame, target);
       const g = liveGuidance(r.found, r.boxes);
@@ -816,8 +838,9 @@ Deno.serve(async (req) => {
         state: "uncertain", hintCode: "uncertain", hint: HINTS.uncertain,
       });
     } finally {
-      inFlight.delete(liveKey);
+      await releaseLock(svc, live.key);
     }
+
   }
 
 
@@ -844,8 +867,9 @@ Deno.serve(async (req) => {
   const reference = body?.referenceBase64 ? decodeImage(body.referenceBase64) : null;
   if (body?.referenceBase64 && !reference) return err(400, "invalid_reference");
 
-  if (inFlight.has(actorId)) return err(409, "already_running");
-  inFlight.add(actorId);
+  const labMode = body?.lab === true;
+  const evalLock = await acquireLock(svc, actorId, workspaceId, "benchmark-evaluate", 90);
+  if (evalLock.busy) return err(409, "already_running");
   const t0 = Date.now();
   try {
     const observer = await runObserver(image, question, profile);
@@ -872,11 +896,19 @@ Deno.serve(async (req) => {
     }
 
     const combined = combine(observer, judge.raw);
+    // Coerência: em aprovação o código do juiz acompanha o resultado final.
+    const judgeReason = combined.decision === "approved"
+      ? "condition_met"
+      : publicReason(judge.raw.reason_code, combined.reason_code);
     console.log(`[lab] evaluate ok user=${actorId.slice(0, 8)} decision=${combined.decision} ms=${Date.now() - t0}`);
     return json(200, {
       observer: {
-        observation: observer.observation,
+        // Texto bruto do modelo só no laboratório; nunca na câmera do operador.
+        ...(labMode ? { observation: observer.observation } : {}),
+        summary: sanitizeMessage(combined.public_message, "Análise concluída."),
         targetVisible: observer.targetVisible,
+        targetVisibleKnown: observer.targetVisibleKnown,
+        structured: observer.structured,
         blurry: observer.blurry,
         dark: observer.dark,
         latencyMs: observer.latencyMs,
@@ -886,7 +918,7 @@ Deno.serve(async (req) => {
         targetVisible: judge.raw.target_visible ?? null,
         conditionMet: judge.raw.condition_met ?? null,
         qualitySufficient: judge.raw.quality_sufficient ?? null,
-        reasonCode: judge.raw.reason_code ?? null,
+        reasonCode: judgeReason,
         observations: [
           ...strList(judge.raw.supporting_evidence, 2),
           ...strList(judge.raw.contrary_evidence, 2),
@@ -894,7 +926,7 @@ Deno.serve(async (req) => {
         confidence: typeof judge.raw.confidence === "number" ? judge.raw.confidence : null,
         latencyMs: judge.latencyMs,
       },
-      combined,
+      combined: { ...combined, reason_code: publicReason(combined.reason_code, "insufficient_evidence") },
       referenceMode,
       totalLatencyMs: Date.now() - t0,
     });
@@ -906,8 +938,8 @@ Deno.serve(async (req) => {
       judge: null,
       combined: {
         decision: "technical_failure",
-        reason_code: /^[a-z0-9_]{1,40}$/.test(code) ? code : "service_unavailable",
-
+        // Nunca expõe códigos internos: apenas o código público genérico.
+        reason_code: "technical_failure",
         public_message: "Não foi possível verificar agora. Tente novamente.",
         gate: {},
       },
@@ -915,6 +947,7 @@ Deno.serve(async (req) => {
       totalLatencyMs: Date.now() - t0,
     });
   } finally {
-    inFlight.delete(actorId);
+    await releaseLock(svc, evalLock.key);
   }
+
 });

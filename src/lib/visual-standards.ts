@@ -201,8 +201,13 @@ export type ExpectedResult = "approved" | "retake";
 
 export interface LabResponse {
   observer: {
-    observation: string;
+    /** Texto bruto do modelo: presente somente no laboratório. */
+    observation?: string;
+    /** Resumo público sanitizado, seguro para a câmera do operador. */
+    summary?: string;
     targetVisible: boolean;
+    targetVisibleKnown?: boolean;
+    structured?: boolean;
     blurry: boolean;
     dark: boolean;
     latencyMs: number;
@@ -286,6 +291,7 @@ export async function runBenchmark(input: {
   const { data, error } = await supabase.functions.invoke("vision-benchmark", {
     body: {
       action: "benchmark-evaluate",
+      lab: true,
       workspaceId: input.workspaceId,
       question: input.question,
       imageBase64: input.imageBase64,
