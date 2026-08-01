@@ -2289,8 +2289,9 @@ function NovoChecklistPage() {
       const idx = prev.findIndex((b) => b.id === id);
       if (idx === -1) return prev;
       const block = prev[idx];
-      const newBlock = JSON.parse(JSON.stringify(block));
+      const newBlock = withNewCameraBlockId(JSON.parse(JSON.stringify(block)));
       newBlock.id = newId();
+
       const newBlocks = [...prev];
       newBlocks.splice(idx + 1, 0, newBlock);
       setHistory((old) => [JSON.parse(JSON.stringify(prev)), ...old].slice(0, 5));
