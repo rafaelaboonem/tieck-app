@@ -24,6 +24,7 @@ export function CameraStandardStatus({
   const [status, setStatus] = useState<BlockStandardStatus>("none");
   const [loading, setLoading] = useState(false);
   const [questionChanged, setQuestionChanged] = useState(false);
+  const [snapshotOutdated, setSnapshotOutdated] = useState(false);
 
   const load = useCallback(async () => {
     if (!checklistId || !cameraBlockId) return;
@@ -38,8 +39,21 @@ export function CameraStandardStatus({
     const s = (data as VisualStandard | null) ?? null;
     setStatus(blockStandardStatus(s));
     setQuestionChanged(Boolean(s?.validated_question && s.validated_question !== s.question));
+
+    // Somente leitura: detecta snapshot publicado antes do padrão visual.
+    // Nunca republica nem injeta cameraBlockId silenciosamente.
+    const { data: cl } = await supabase
+      .from("checklists")
+      .select("is_published, published_content")
+      .eq("id", checklistId)
+      .maybeSingle();
+    const published = (cl as any)?.published_content ?? null;
+    setSnapshotOutdated(
+      Boolean((cl as any)?.is_published && published && !JSON.stringify(published).includes(cameraBlockId)),
+    );
     setLoading(false);
   }, [checklistId, cameraBlockId]);
+
 
   useEffect(() => { void load(); }, [load]);
 
@@ -86,6 +100,12 @@ export function CameraStandardStatus({
           A pergunta foi alterada. Revise o padrão visual antes de ativá-lo novamente.
         </p>
       )}
+      {snapshotOutdated && (
+        <p className="rounded-md border border-amber-200 bg-amber-50 p-2 text-[11px] text-amber-800">
+          Este checklist foi publicado antes da configuração do padrão visual. Publique novamente para aplicar o padrão.
+        </p>
+      )}
+
       {!checklistId && (
         <p className="text-[11px] text-neutral-500">Salve o checklist para configurar o padrão visual.</p>
       )}

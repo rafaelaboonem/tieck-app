@@ -9,12 +9,16 @@ export type EvidenceAnalysisStatus =
   | "manual_review"
   | "failed";
 
+export type EvidenceFailureKind = "technical_failure" | "provider_rate_limited" | null;
+
 export type EvidenceAnalysisResult = {
   status: EvidenceAnalysisStatus;
   publicMessage: string;
   canContinue: boolean;
   requiresResubmit: boolean;
   finishedAt: string | null;
+  failureKind?: EvidenceFailureKind;
+  retryable?: boolean;
 };
 
 const FINAL_STATUSES = new Set<EvidenceAnalysisStatus>([
@@ -38,8 +42,11 @@ const TIMEOUT_MS = 2 * 60 * 1000;
  * - impede dois loops para o mesmo token;
  * - timeout total (2min) com uma última consulta ao final;
  * - usa somente a ação pública `status`.
+ *
+ * `restartKey` permite reiniciar o polling do MESMO token após um
+ * `retry-analysis` (sem reenviar imagem nem criar nova evidência).
  */
-export function useChecklistEvidenceAnalysis(analysisToken: string | null) {
+export function useChecklistEvidenceAnalysis(analysisToken: string | null, restartKey = 0) {
   const [result, setResult] = useState<EvidenceAnalysisResult | null>(null);
   const [isPolling, setIsPolling] = useState(false);
   const [timedOut, setTimedOut] = useState(false);
@@ -53,9 +60,10 @@ export function useChecklistEvidenceAnalysis(analysisToken: string | null) {
       setTimedOut(false);
       return;
     }
+    const loopKey = `${analysisToken}#${restartKey}`;
     // guarda contra dois loops para o mesmo token
-    if (activeTokenRef.current === analysisToken) return;
-    activeTokenRef.current = analysisToken;
+    if (activeTokenRef.current === loopKey) return;
+    activeTokenRef.current = loopKey;
 
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | null = null;
@@ -114,10 +122,10 @@ export function useChecklistEvidenceAnalysis(analysisToken: string | null) {
     return () => {
       cancelled = true;
       if (timer) clearTimeout(timer);
-      if (activeTokenRef.current === analysisToken) activeTokenRef.current = null;
+      if (activeTokenRef.current === loopKey) activeTokenRef.current = null;
       setIsPolling(false);
     };
-  }, [analysisToken]);
+  }, [analysisToken, restartKey]);
 
   return { result, isPolling, timedOut };
 }

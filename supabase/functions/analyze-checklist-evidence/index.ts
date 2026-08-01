@@ -29,8 +29,9 @@ const LIMITS = {
   "confirm-upload": { window: 60, limit: 20 },
   "status":         { window: 60, limit: 120 },
   "submit-response":{ window: 60, limit: 10 },
-  "live-check":     { window: 60, limit: 40 },
+  "retry-analysis": { window: 60, limit: 5 },
 } as const;
+
 type ActionKey = keyof typeof LIMITS;
 
 function json(status: number, body: unknown) {
@@ -639,13 +640,23 @@ async function handleStatus(payload: any, db: ReturnType<typeof admin>) {
     typeof (data.raw_response as any)?.publicMessage === "string"
       ? String((data.raw_response as any).publicMessage).trim().slice(0, 280)
       : "";
+  // Estado técnico explícito para o cliente distinguir falha recuperável de
+  // decisão real. Nunca expõe detalhes internos do provedor.
+  const errorCode = (data.error_code as string | null) ?? null;
+  const rateLimited = !!errorCode && /rate|429|limit/i.test(errorCode);
+  const technicalFailure = view.publicStatus === "failed" && !!errorCode;
   return json(200, {
     status: view.publicStatus,
-    publicMessage: generatedMessage || view.publicMessage,
+    publicMessage: technicalFailure
+      ? "Não foi possível verificar esta foto agora."
+      : (generatedMessage || view.publicMessage),
     canContinue: view.canContinue,
     requiresResubmit: view.requiresResubmit,
     finishedAt: data.processing_finished_at ?? null,
+    failureKind: technicalFailure ? (rateLimited ? "provider_rate_limited" : "technical_failure") : null,
+    retryable: technicalFailure,
   });
+
 }
 
 // ---------------- processamento interno ----------------
@@ -955,79 +966,51 @@ async function processAnalysis(analysisId: string) {
   }
 }
 
-// ---------------- live-check (assistência de enquadramento) ----------------
-// Frame temporário: nunca é gravado em Storage nem no banco, nunca é logado.
-const LIVE_MAX_BYTES = 400 * 1024;
+// ---------------- retry-analysis ----------------
+// Camera AI V2: falha técnica não descarta a evidência. O usuário pode pedir
+// nova verificação da MESMA análise, sem reenviar a imagem e sem criar nova
+// evidência. Idempotente: reusa o mesmo analysis_id/analysis_token.
+async function handleRetryAnalysis(payload: any, db: ReturnType<typeof admin>) {
+  const rawToken = String(payload?.analysisToken ?? "");
+  if (!rawToken) return err(400, "missing_fields");
 
-function decodeDataUri(raw: string): { bytes: Uint8Array; mime: string } | null {
-  const match = /^data:(image\/(?:jpeg|jpg|png|webp));base64,([A-Za-z0-9+/=]+)$/.exec(raw.trim());
-  if (!match) return null;
-  try {
-    const binary = atob(match[2]);
-    if (binary.length > LIVE_MAX_BYTES) return null;
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-    return { bytes, mime: match[1] === "image/jpg" ? "image/jpeg" : match[1] };
-  } catch {
-    return null;
-  }
-}
-
-async function handleLiveCheck(payload: any, db: ReturnType<typeof admin>) {
-  const responseToken = String(payload?.responseToken ?? "");
-  const blockId = String(payload?.blockId ?? "");
-  const checklistId = String(payload?.checklistId ?? "");
-  const frame = String(payload?.frame ?? "");
-  if (!responseToken || !blockId || !checklistId || !frame) return err(400, "missing_fields");
-
-  const rtHash = await sha256Hex(responseToken);
-  if (!(await enforceRateLimit(db, "live-check", await sha256Hex(`${rtHash}:${blockId}`)))) {
-    return json(200, { state: "uncertain", hint: "" });
+  const tokenHash = await sha256Hex(rawToken);
+  if (!(await enforceRateLimit(db, "retry-analysis", tokenHash))) {
+    return json(429, { error: "rate_limited", retryAfter: 60 });
   }
 
-  const resp = await loadResponseByToken(db, responseToken);
-  if (!resp) return err(401, "invalid_response_token");
-  if (resp.checklist_id !== checklistId) return err(403, "checklist_mismatch");
+  const { data } = await db
+    .from("checklist_evidence_analyses")
+    .select("id, status, error_code")
+    .eq("analysis_token_hash", tokenHash)
+    .maybeSingle();
+  if (!data) return err(404, "analysis_not_found");
 
-  const decoded = decodeDataUri(frame);
-  if (!decoded) return err(422, "invalid_frame");
-
-  // A instrução verdadeira vem do snapshot publicado — nunca do cliente.
-  const found = findCameraBlock(resp.checklists?.published_content, blockId);
-  if (!found) return err(409, "block_not_found");
-  const instruction = String(found.block?.title || found.block?.subtitle || "").slice(0, 240);
-
-  const question = [
-    "Você orienta o enquadramento de uma foto de checklist, em tempo real.",
-    ...SAFETY_RULES,
-    "",
-    `Objetivo da foto: ${instruction || "registrar o item solicitado"}`,
-    "",
-    'Responda EXCLUSIVAMENTE em JSON: {"state":"ready|adjust|uncertain","hint":""}',
-    "hint: no máximo 6 palavras, em português do Brasil, como",
-    '"Aproxime um pouco.", "Centralize o item.", "Melhore a iluminação.",',
-    '"Mantenha o celular firme." ou "Enquadramento pronto.".',
-  ].join("\n");
-
-  try {
-    const { text } = await runMoondream({
-      image: decoded.bytes,
-      mimeType: decoded.mime,
-      question,
-      maxTokens: 96,
-      timeoutMs: 8_000,
-    });
-    const parsed = parseJsonLoose(text) as any;
-    const state = parsed?.state === "ready" ? "ready" : parsed?.state === "adjust" ? "adjust" : "uncertain";
-    const hint = typeof parsed?.hint === "string"
-      ? parsed.hint.trim().replace(/\s+/g, " ").slice(0, 60)
-      : "";
-    return json(200, { state, hint });
-  } catch (e) {
-    const code = String((e as Error).message ?? "live_check_failed");
-    console.error(`[live-check] ${/^[a-z0-9_-]{1,60}$/i.test(code) ? code : "live_check_failed"}`);
-    return json(200, { state: "uncertain", hint: "" });
+  // Só falha técnica é reprocessável. Decisões reais (normal/anomalous) e
+  // análises em andamento nunca são reiniciadas.
+  if (data.status !== "failed") {
+    return json(200, { restarted: false, status: data.status });
   }
+
+  const { error: resetErr } = await db
+    .from("checklist_evidence_analyses")
+    .update({
+      status: "pending",
+      error_code: null,
+      error_message: null,
+      processing_started_at: null,
+      processing_finished_at: null,
+    })
+    .eq("id", data.id)
+    .eq("status", "failed"); // guarda contra corrida: só reinicia quem ainda está falho
+  if (resetErr) return err(500, "retry_failed");
+
+  const rt = (globalThis as any).EdgeRuntime;
+  const task = processAnalysis(data.id);
+  if (rt?.waitUntil) rt.waitUntil(task);
+  else void task;
+
+  return json(200, { restarted: true, status: "pending" });
 }
 
 // ---------------- dispatcher ----------------
@@ -1046,7 +1029,7 @@ Deno.serve(async (req) => {
       case "start-upload":   return await handleStartUpload(body, db);
       case "confirm-upload": return await handleConfirmUpload(body, db);
       case "status":         return await handleStatus(body, db);
-      case "live-check":     return await handleLiveCheck(body, db);
+      case "retry-analysis": return await handleRetryAnalysis(body, db);
       default:               return err(400, "unknown_action");
     }
   } catch (e) {
@@ -1054,3 +1037,4 @@ Deno.serve(async (req) => {
     return err(500, "internal_error");
   }
 });
+
