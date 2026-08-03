@@ -6101,8 +6101,8 @@ function NovoChecklistPage() {
               <span className="font-semibold text-neutral-800">
                 “{publishBlocker?.label}”
               </span>{" "}
-              está com a análise visual ativada, mas nenhum critério de aprovação foi
-              definido.
+              está com a verificação por IA ativada. Vincule e ative um padrão visual antes
+              de publicar este checklist.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="flex-col sm:flex-row sm:justify-between gap-2">
