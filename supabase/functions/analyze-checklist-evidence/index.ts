@@ -969,43 +969,6 @@ async function processAnalysis(analysisId: string) {
       return;
     }
 
-    // ---- Rollback legado (sem padrão visual vinculado): Cloudflare ----
-    const { text, model, inferenceMs } = await runMoondream({
-      image,
-      mimeType,
-      question: buildFinalQuestion(instruction, context, extra),
-      maxTokens: 512,
-    });
-    const result = parseV2Result(parseJsonLoose(text));
-
-    // Confiança insuficiente NÃO vira revisão manual: vira pedido de nova foto.
-    let finalDecision: "approved" | "retake" = result.decision;
-    if (!result.quality.usable) finalDecision = "retake";
-    else if (finalDecision === "approved" && result.confidence < 0.55) finalDecision = "retake";
-    const finalStatus: "normal" | "anomalous" = finalDecision === "approved" ? "normal" : "anomalous";
-
-    const storedResult = {
-      ...result,
-      decision: finalDecision,
-      version: "camera_ai_v2",
-      publicMessage: publicMessageV2(result, finalDecision),
-    };
-
-    const { error: updateError } = await db.from("checklist_evidence_analyses").update({
-      provider: PROVIDER,
-      model_id: model,
-      status: finalStatus,
-      confidence: result.confidence,
-      anomaly_score: finalStatus === "anomalous" ? result.confidence : Math.max(0, 1 - result.confidence),
-      regions: { quality: result.quality, observed: result.observed },
-      inference_ms: inferenceMs,
-      raw_response: storedResult,
-      error_code: null,
-      error_message: null,
-      processing_finished_at: new Date().toISOString(),
-    }).eq("id", analysisId);
-    if (updateError) throw new Error("analysis_update_failed");
-    console.log(`[analysis:${logId}] completed status=${finalStatus} ms=${inferenceMs}`);
   } catch (e) {
     const rawCode = e instanceof DOMException && e.name === "AbortError"
       ? "cloudflare_timeout"
