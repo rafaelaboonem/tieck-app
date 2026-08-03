@@ -315,8 +315,28 @@ export function PublicCameraBlock({ block, checklistId, ensureResponseSession, o
       )}
 
       {previewUrl && phase !== "idle" && (
-        <div className="relative mb-2 overflow-hidden rounded-lg border border-neutral-200 bg-black/5">
+        <div
+          className={`relative mb-2 overflow-hidden rounded-xl border-2 bg-black/5 transition-colors ${
+            phase === "approved"
+              ? "border-emerald-500"
+              : phase === "retake"
+                ? "border-amber-400"
+                : "border-neutral-200"
+          }`}
+        >
           <img src={previewUrl} alt="Foto enviada" className="w-full max-h-80 object-contain" />
+          {phase === "processing" && (
+            <>
+              <div className="absolute inset-0 bg-black/25" />
+              <div className="absolute inset-x-0 h-16 bg-gradient-to-b from-transparent via-white/40 to-transparent animate-[tieck-scan_1.6s_ease-in-out_infinite]" />
+            </>
+          )}
+          {phase === "approved" && (
+            <div className="absolute top-2 right-2 inline-flex items-center gap-1 rounded-full bg-emerald-600 px-2 py-1 text-[11px] font-semibold text-white">
+              <CheckCircle2 className="w-3.5 h-3.5" aria-hidden />
+              Foto verificada
+            </div>
+          )}
         </div>
       )}
 
@@ -411,7 +431,6 @@ export function PublicCameraBlock({ block, checklistId, ensureResponseSession, o
       <TieckCamera
         open={cameraOpen}
         title={title || "Câmera"}
-        hint={captureGuidance || description}
         onClose={() => setCameraOpen(false)}
         onCapture={handleCapture}
       />

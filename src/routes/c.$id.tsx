@@ -7,6 +7,7 @@ import tieckLogo from "@/assets/tieck-logo.png";
 import { toast } from "sonner";
 import { BlockRenderer } from "@/components/BlockRenderer";
 import { PublicCameraBlock } from "@/components/PublicCameraBlock";
+import { CameraSessionProvider } from "@/contexts/CameraSessionContext";
 import { getChecklistSeo } from "@/lib/checklist_seo.functions";
 import { t } from "@/lib/checklist-i18n";
 
@@ -800,6 +801,7 @@ function PublicChecklistPage() {
   }
 
   return (
+    <CameraSessionProvider>
     <div
       className="min-h-screen overflow-y-auto relative"
       style={{
@@ -1005,5 +1007,6 @@ function PublicChecklistPage() {
         </>
       )}
     </div>
+    </CameraSessionProvider>
   );
 }
