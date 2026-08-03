@@ -1006,5 +1006,6 @@ function PublicChecklistPage() {
         </>
       )}
     </div>
+    </CameraSessionProvider>
   );
 }
