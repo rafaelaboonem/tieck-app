@@ -31,7 +31,7 @@ export type StandardVerdict = {
   reasonCode: string;
   model: string;
   inferenceMs: number;
-  conditionStatus: string;
+  conditionStatus: string | null;
 };
 
 function strList(value: unknown, max = 8): string[] {
@@ -138,7 +138,7 @@ export async function analyzeWithStandard(args: {
     decision,
     publicMessage: verdict.public_message,
     confidence: verdict.confidence,
-    reasonCode: verdict.reason_code,
+    reasonCode: verdict.reason_code ?? "unspecified",
     model: call.model,
     inferenceMs: call.inferenceMs,
     conditionStatus: verdict.condition_status,
