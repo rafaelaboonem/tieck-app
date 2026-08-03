@@ -13,6 +13,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { publishedContentHash } from "./hash.ts";
 import { validateImage } from "./image-validate.ts";
 import { analyzeWithStandard, loadStandardForBlock } from "./standard-analysis.ts";
+import { GEMINI_MODEL_ID } from "./providers/gemini.ts";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -487,8 +488,10 @@ async function handleConfirmUpload(payload: any, db: ReturnType<typeof admin>) {
 
   // Camera AI V2: a pergunta do bloco é suficiente. Critérios manuais são
   // apenas contexto extra de blocos antigos — nunca um requisito.
-  const provider = PROVIDER;
-  const modelId = cloudflareModel();
+  // Camera AI V3: o fluxo público usa exclusivamente Gemini. Nenhuma chamada
+  // ao Cloudflare Workers AI existe nesta rota.
+  const provider = "google_gemini";
+  const modelId = GEMINI_MODEL_ID;
   const modelVersion = typeof vision.modelVersion === "string" ? vision.modelVersion : null;
   const threshold = clampConfidence(vision.confidenceThreshold);
 
