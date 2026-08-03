@@ -13,7 +13,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { publishedContentHash } from "./hash.ts";
 import { validateImage } from "./image-validate.ts";
 import { analyzeWithStandard, loadStandardForBlock } from "./standard-analysis.ts";
-import { GEMINI_MODEL_ID } from "./providers/gemini.ts";
+import { GEMINI_MODEL_ID } from "./providers/vision-provider.ts";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -155,14 +155,6 @@ function clampConfidence(value: unknown, fallback = 0.75): number {
   return Math.max(0.5, Math.min(0.95, parsed));
 }
 
-const DEFAULT_CF_MODEL = "@cf/moondream/moondream3.1-9B-A2B";
-const PROVIDER = "cloudflare_workers_ai";
-
-// Modelo é configuração de servidor (secret CLOUDFLARE_AI_MODEL); nunca vem do cliente.
-function cloudflareModel(): string {
-  const configured = String(Deno.env.get("CLOUDFLARE_AI_MODEL") ?? "").trim();
-  return configured || DEFAULT_CF_MODEL;
-}
 
 async function loadResponseByToken(db: ReturnType<typeof admin>, token: string) {
   const tokenHash = await sha256Hex(token);
@@ -732,70 +724,6 @@ function extractModelText(payload: any): string {
   return "";
 }
 
-/**
- * Cliente Cloudflare Workers AI conforme o schema oficial do Moondream 3.1:
- * task=query usa o campo `question` (NÃO `prompt`), `image` aceita data URI,
- * `stream` precisa ser false para resposta JSON única e `reasoning` false
- * evita trace desnecessário. A saída fica em `result.answer`.
- */
-async function runMoondream(input: {
-  image: Uint8Array;
-  mimeType: string;
-  question: string;
-  maxTokens?: number;
-  timeoutMs?: number;
-}): Promise<{ text: string; model: string; inferenceMs: number }> {
-  const accountId = String(Deno.env.get("CLOUDFLARE_ACCOUNT_ID") ?? "").trim();
-  const apiToken = String(Deno.env.get("CLOUDFLARE_API_TOKEN") ?? "").trim();
-  if (!accountId || !apiToken) throw new Error("cloudflare_credentials_missing");
-
-  const model = cloudflareModel();
-  const dataUri = `data:${input.mimeType};base64,${bytesToBase64(input.image)}`;
-
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), input.timeoutMs ?? 45_000);
-  const started = Date.now();
-  try {
-    const response = await fetch(
-      `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(accountId)}/ai/run/${model}`,
-      {
-        method: "POST",
-        signal: controller.signal,
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${apiToken}`,
-        },
-        body: JSON.stringify({
-          task: "query",
-          image: dataUri,
-          question: input.question,
-          reasoning: false,
-          stream: false,
-          temperature: 0.2,
-          top_p: 0.9,
-          max_tokens: input.maxTokens ?? 512,
-        }),
-      },
-    );
-    if (!response.ok) {
-      console.error(`[cloudflare] provider_http_${response.status}`);
-      throw new Error(`cloudflare_http_${response.status}`);
-    }
-    const payload = await response.json().catch(() => null) as any;
-    if (!payload || payload.success === false) throw new Error("cloudflare_invalid_response");
-    const text = extractModelText(payload);
-    if (!text.trim()) {
-      // Log apenas as CHAVES do envelope — nunca conteúdo, imagem ou secret.
-      const raw = (payload as any)?.result;
-      const keys = raw && typeof raw === "object" ? Object.keys(raw).slice(0, 12).join(",") : typeof raw;
-      console.error(`[cloudflare] empty_answer result_keys=${keys}`);
-      throw new Error("cloudflare_empty_response");
-    }
-    return { text, model, inferenceMs: Date.now() - started };
-  } finally {
-    clearTimeout(timeout);
-  }
-}
 
 const SAFETY_RULES = [
   "Analise somente fatos diretamente visíveis na imagem.",
