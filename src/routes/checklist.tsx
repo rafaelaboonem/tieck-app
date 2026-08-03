@@ -2067,7 +2067,23 @@ function NovoChecklistPage() {
         const { error: pubErr } = await supabase.rpc("publish_checklist", {
           p_checklist_id: data.id,
         });
-        if (pubErr) throw pubErr;
+        if (pubErr) {
+          // O servidor recusa publicar bloco Camera com IA sem padrão visual
+          // vinculado e ativo. Mensagem única e clara para o proprietário.
+          const code = String((pubErr as any)?.message ?? "");
+          if (code.includes("standard_not_configured") || code.includes("standard_not_active")) {
+            const cam = (blocksWithIds as any[]).find(
+              (b) => b?.type === "camera" && b?.vision?.enabled === true,
+            );
+            setPublishBlocker({
+              blockId: String(cam?.id ?? ""),
+              label: String(cam?.title || cam?.subtitle || "Câmera"),
+            });
+            throw new Error("Vincule e ative um padrão visual antes de publicar este checklist.");
+          }
+          throw pubErr;
+        }
+
 
         // Releitura obrigatória: só liberamos o link público se o servidor
         // confirmar is_published = true.
@@ -6085,8 +6101,8 @@ function NovoChecklistPage() {
               <span className="font-semibold text-neutral-800">
                 “{publishBlocker?.label}”
               </span>{" "}
-              está com a análise visual ativada, mas nenhum critério de aprovação foi
-              definido.
+              está com a verificação por IA ativada. Vincule e ative um padrão visual antes
+              de publicar este checklist.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="flex-col sm:flex-row sm:justify-between gap-2">
