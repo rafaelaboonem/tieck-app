@@ -12,6 +12,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { publishedContentHash } from "./hash.ts";
 import { validateImage } from "./image-validate.ts";
+import { analyzeWithStandard, loadStandardForBlock } from "./standard-analysis.ts";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
