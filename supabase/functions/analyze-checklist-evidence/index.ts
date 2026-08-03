@@ -925,9 +925,12 @@ async function processAnalysis(analysisId: string) {
     const cameraBlockId = typeof (found.block as any)?.cameraBlockId === "string"
       ? String((found.block as any).cameraBlockId)
       : null;
+    if (!cameraBlockId) throw new Error("standard_not_configured");
     const standard = await loadStandardForBlock(db, analysis.checklist_id, cameraBlockId);
+    if (!standard) throw new Error("standard_not_configured");
+    if (String(standard.status ?? "") !== "validated") throw new Error("standard_not_active");
 
-    if (standard) {
+    {
       // Provedor primário: Gemini. Cloudflare NÃO é chamado nesta rota.
       const verdict = await analyzeWithStandard({
         db,
