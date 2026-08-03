@@ -920,6 +920,52 @@ async function processAnalysis(analysisId: string) {
     const image = new Uint8Array(await imageBlob.arrayBuffer());
     const mimeType = String(evidence.mime_type || imageBlob.type || "image/jpeg");
 
+    // ---- Camera AI V3: padrão visual vinculado ao cameraBlockId publicado ----
+    const cameraBlockId = typeof (found.block as any)?.cameraBlockId === "string"
+      ? String((found.block as any).cameraBlockId)
+      : null;
+    const standard = await loadStandardForBlock(db, analysis.checklist_id, cameraBlockId);
+
+    if (standard) {
+      // Provedor primário: Gemini. Cloudflare NÃO é chamado nesta rota.
+      const verdict = await analyzeWithStandard({
+        db,
+        standard,
+        question: instruction,
+        candidate: image,
+        candidateMime: mimeType,
+      });
+
+      const status = verdict.decision === "approved"
+        ? "normal"
+        : verdict.decision === "retake"
+          ? "anomalous"
+          : "manual_review";
+
+      const { error: stdErr } = await db.from("checklist_evidence_analyses").update({
+        provider: "google_gemini",
+        model_id: verdict.model,
+        status,
+        confidence: verdict.confidence,
+        anomaly_score: status === "anomalous" ? verdict.confidence : Math.max(0, 1 - verdict.confidence),
+        regions: { reason_code: verdict.reasonCode, condition_status: verdict.conditionStatus },
+        inference_ms: verdict.inferenceMs,
+        raw_response: {
+          version: "camera_ai_v3",
+          decision: verdict.decision,
+          publicMessage: verdict.publicMessage,
+          standardId: standard.id,
+        },
+        error_code: null,
+        error_message: null,
+        processing_finished_at: new Date().toISOString(),
+      }).eq("id", analysisId);
+      if (stdErr) throw new Error("analysis_update_failed");
+      console.log(`[analysis:${logId}] completed v3 status=${status} ms=${verdict.inferenceMs}`);
+      return;
+    }
+
+    // ---- Rollback legado (sem padrão visual vinculado): Cloudflare ----
     const { text, model, inferenceMs } = await runMoondream({
       image,
       mimeType,
