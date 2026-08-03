@@ -800,6 +800,7 @@ function PublicChecklistPage() {
   }
 
   return (
+    <CameraSessionProvider>
     <div
       className="min-h-screen overflow-y-auto relative"
       style={{
