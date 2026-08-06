@@ -312,8 +312,8 @@ export function LabTab({ workspaceId, selected, runs, onRun }: Props) {
           question={question}
           profile={profile}
           standardId={selected.id}
-          referencePath={selected.reference_path}
-          useReference={hasReference}
+          referencePath={selected.references?.[0]?.storage_path ?? null}
+          useReference={hasReferences}
           onClose={() => setCameraOpen(false)}
           onResult={({ response, live }) =>
             pushRun({
