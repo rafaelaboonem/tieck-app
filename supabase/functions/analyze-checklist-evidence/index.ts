@@ -125,8 +125,19 @@ function findBlockPolicy(published: any, blockId: string): BlockPolicy {
 // Compatibilidade com snapshots antigos: `warn` / `block` migram em memória
 // para o vocabulário atual, sem regravar `published_content`.
 function normalizeBlockPolicy(v: any): BlockPolicy {
+  // Se o snapshot não tem IDs da V3, força require_resubmit como falha de integridade
+  const isV3 = typeof v?.cameraBlockId === "string" && typeof v?.visualStandardId === "string";
   const rawA = typeof v?.onAnomaly === "string" ? v.onAnomaly : undefined;
   const rawF = typeof v?.onAnalysisFailure === "string" ? v.onAnalysisFailure : undefined;
+  
+  if (!isV3) {
+    return { 
+      onAnomaly: "require_resubmit", 
+      onAnalysisFailure: "block_completion",
+      isLegacy: true 
+    };
+  }
+
   const onAnomaly: OnAnomalyPolicy | undefined =
     rawA === "warn" ? "allow_continue" :
     rawA === "block" ? "block_completion" :
@@ -478,10 +489,12 @@ async function handleConfirmUpload(payload: any, db: ReturnType<typeof admin>) {
     return json(200, { analysisEnabled: false });
   }
 
-  // Camera AI V2: a pergunta do bloco é suficiente. Critérios manuais são
-  // apenas contexto extra de blocos antigos — nunca um requisito.
-  // Camera AI V3: o fluxo público usa exclusivamente Gemini. Nenhuma chamada
-  // ao Cloudflare Workers AI existe nesta rota.
+  // Camera AI V3: o fluxo público usa exclusivamente Gemini.
+  // Snapshots antigos sem os metadados da V3 retornam erro de atualização.
+  if (typeof vision?.cameraBlockId !== "string" || typeof vision?.visualStandardId !== "string") {
+    return err(409, "checklist_update_required");
+  }
+
   const provider = "google_gemini";
   const modelId = GEMINI_MODEL_ID;
   const modelVersion = typeof vision.modelVersion === "string" ? vision.modelVersion : null;
@@ -542,10 +555,10 @@ async function handleConfirmUpload(payload: any, db: ReturnType<typeof admin>) {
 // ---------------- status ----------------
 type OnAnomalyPolicy = "allow_continue" | "require_resubmit" | "block_completion" | "manual_review";
 type OnFailurePolicy = "allow_continue" | "manual_review" | "block_completion";
-type BlockPolicy = { onAnomaly?: OnAnomalyPolicy; onAnalysisFailure?: OnFailurePolicy };
+type BlockPolicy = { onAnomaly?: OnAnomalyPolicy; onAnalysisFailure?: OnFailurePolicy; isLegacy?: boolean };
 
 function decisionMessage(status: string, errorCode: string | null, policy: BlockPolicy = {}): {
-  publicStatus: "pending" | "processing" | "normal" | "anomaly" | "manual_review" | "failed";
+  publicStatus: "pending" | "processing" | "normal" | "anomaly" | "manual_review" | "failed" | "checklist_update_required";
   publicMessage: string;
   canContinue: boolean;
   requiresResubmit: boolean;
@@ -560,6 +573,15 @@ function decisionMessage(status: string, errorCode: string | null, policy: Block
   //   require_resubmit → canContinue=false, requiresResubmit=true
   //   block_completion → canContinue=false, requiresResubmit=false
   //   manual_review    → canContinue=true,  requiresResubmit=false
+  if (policy.isLegacy) {
+    return { 
+      publicStatus: "checklist_update_required", 
+      publicMessage: "Este checklist precisa ser atualizado pelo responsável.", 
+      canContinue: false, 
+      requiresResubmit: true 
+    };
+  }
+
   switch (status) {
     case "pending":     return { publicStatus: "pending",       publicMessage: "Analisando sua evidência.", canContinue: false, requiresResubmit: false };
     case "processing":  return { publicStatus: "processing",    publicMessage: "Analisando sua evidência.", canContinue: false, requiresResubmit: false };
@@ -618,7 +640,7 @@ async function handleStatus(payload: any, db: ReturnType<typeof admin>) {
 
   const { data } = await db
     .from("checklist_evidence_analyses")
-    .select("status, error_code, raw_response, processing_finished_at, block_id, checklists(published_content)")
+    .select("status, error_code, raw_response, processing_finished_at, block_id, provider, model_id, checklists(published_content)")
     .eq("analysis_token_hash", tokenHash)
     .maybeSingle();
   if (!data) return err(404, "analysis_not_found");
@@ -630,9 +652,18 @@ async function handleStatus(payload: any, db: ReturnType<typeof admin>) {
     (data.error_code as string | null) ?? null,
     block,
   );
+
+  // Prova de verificação: somente aprova se for Gemini V3 e tiver todos os campos.
+  // Referências são verificadas na Edge Function V3 que só salva run_number=1 se references.length=2.
+  const isV3 = data.provider === "google_gemini" && data.model_id === GEMINI_MODEL_ID;
+  const verified = 
+    data.status === "normal" && 
+    isV3 && 
+    !block.isLegacy &&
+    (data.raw_response as any)?.verified_at != null;
+
   const generatedMessage =
-    (data.status === "normal" || data.status === "anomalous") &&
-    view.publicStatus !== "manual_review" &&
+    verified &&
     typeof (data.raw_response as any)?.publicMessage === "string"
       ? String((data.raw_response as any).publicMessage).trim().slice(0, 280)
       : "";

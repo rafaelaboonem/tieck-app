@@ -36,6 +36,7 @@ const dict = {
     submitEvidencePending: "Aguarde a confirmação do upload da foto.",
     submitRateLimited: "Muitas tentativas. Aguarde alguns instantes e tente novamente.",
     submitChecklistUnavailable: "Este checklist não está disponível no momento.",
+    submitUpdateRequired: "Este checklist precisa ser atualizado pelo responsável.",
   },
   en: {
     submit: "Submit",
