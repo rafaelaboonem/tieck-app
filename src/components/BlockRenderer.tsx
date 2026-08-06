@@ -161,11 +161,13 @@ function CameraFieldMulti({
   onChange,
   textColor,
   max,
+  onCameraToggle,
 }: {
   value: any;
   onChange: (files: File[]) => void;
   textColor?: string;
   max: number;
+  onCameraToggle?: (open: boolean) => void;
 }) {
   const files: File[] = Array.isArray(value) ? value.filter((f: any) => f instanceof File) : [];
   const [previews, setPreviews] = useState<string[]>([]);
