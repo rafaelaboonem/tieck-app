@@ -425,7 +425,7 @@ import {
     CheckCheck,
     Ban,
   } from "lucide-react";
-import logoUrl from "../assets/local/logo-tieck.webp";
+import logoUrl from "../assets/local/logo-k.webp";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { mapAuthError } from "@/utils/auth-errors";
