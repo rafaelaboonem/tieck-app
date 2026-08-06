@@ -434,7 +434,10 @@ export function PublicCameraBlock({ block, checklistId, ensureResponseSession, o
       <TieckCamera
         open={cameraOpen}
         title={title || "Câmera"}
-        onClose={() => setCameraOpen(false)}
+        onClose={() => {
+          setCameraOpen(false);
+          onCameraToggle?.(false);
+        }}
         onCapture={handleCapture}
       />
     </div>
