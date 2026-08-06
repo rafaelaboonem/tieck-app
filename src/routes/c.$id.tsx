@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Star, Camera, ArrowRight, ArrowUpRight, ArrowRightCircle, ArrowBigRight, MoveRight, Send, SendHorizontal, Check, CheckCircle, CheckCheck } from "lucide-react";
-import logoUrl from "../assets/local/logo-tieck.webp";
+import logoUrl from "../assets/local/logo-k.webp";
 const tieckLogo = logoUrl;
 import { toast } from "sonner";
 import { BlockRenderer } from "@/components/BlockRenderer";
