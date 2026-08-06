@@ -2,7 +2,7 @@ import { supabase } from "@/integrations/supabase/client";
 
 export const STANDARDS_BUCKET = "visual-standards";
 
-export type StandardStatus = "draft" | "testing" | "validated" | "needs_improvement";
+export type StandardStatus = "draft" | "preparing" | "ready" | "validated" | "archived";
 
 export const STATUS_LABEL: Record<StandardStatus, string> = {
   draft: "Rascunho",
