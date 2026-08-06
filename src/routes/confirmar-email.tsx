@@ -5,7 +5,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { Loader2, MailCheck, ArrowRight, LogOut } from "lucide-react";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
-import logoUrl from "../assets/tieck-logo.png?url";
+import logoAsset from "@/assets/logo-tieck.webp.asset.json";
+const logoUrl = logoAsset.url;
 
 export const Route = createFileRoute("/confirmar-email")({
   head: () => ({

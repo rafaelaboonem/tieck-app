@@ -17,7 +17,8 @@ import { useEffect } from "react";
 
 import appCss from "../styles.css?url";
 import faviconUrl from "../assets/tieck-favicon.png?url";
-import ogImageUrl from "../assets/tieck-logo.png?url";
+import ogImageUrlAsset from "@/assets/logo-tieck.webp.asset.json";
+const ogImageUrl = ogImageUrlAsset.url;
 
 function isRecoverableLoadingError(reason: unknown) {
   const text = String((reason as any)?.message || reason || "");
