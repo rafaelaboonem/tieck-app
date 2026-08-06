@@ -36,6 +36,7 @@ const dict = {
     submitEvidencePending: "Aguarde a confirmação do upload da foto.",
     submitRateLimited: "Muitas tentativas. Aguarde alguns instantes e tente novamente.",
     submitChecklistUnavailable: "Este checklist não está disponível no momento.",
+    submitUpdateRequired: "Este checklist precisa ser atualizado pelo responsável.",
   },
   en: {
     submit: "Submit",
@@ -64,6 +65,7 @@ const dict = {
     submitEvidencePending: "Please wait for the photo upload to be confirmed.",
     submitRateLimited: "Too many attempts. Please wait a moment and try again.",
     submitChecklistUnavailable: "This checklist isn't available right now.",
+    submitUpdateRequired: "This checklist needs to be updated by the owner.",
   },
   es: {
     submit: "Enviar",
@@ -84,7 +86,7 @@ const dict = {
     thankYouDesc: "Hecho con Tieck, la forma más sencilla de crear checklists gratis.",
     createOwn: "Crea tu propio checklist",
     submitAnalysisInProgress: "La foto aún se está analizando.",
-    submitResubmitRequired: "Envía una nueva foto antes de continuar.",
+    submitResubmitRequired: "Envía una nova foto antes de continuar.",
     submitBlockedByAnalysis: "El análisis de la foto bloqueó el envío.",
     submitModelNotReady: "El modelo de IA aún no está disponible.",
     submitAnalysisFailed: "No se pudo validar la foto. Inténtalo de nuevo.",
@@ -92,6 +94,7 @@ const dict = {
     submitEvidencePending: "Espera la confirmación de la subida de la foto.",
     submitRateLimited: "Demasiados intentos. Espera un momento e inténtalo de nuevo.",
     submitChecklistUnavailable: "Este checklist no está disponible ahora.",
+    submitUpdateRequired: "Este checklist debe ser actualizado por el responsable.",
   },
   fr: {
     submit: "Envoyer",
@@ -120,6 +123,7 @@ const dict = {
     submitEvidencePending: "Veuillez attendre la confirmation de l'envoi de la photo.",
     submitRateLimited: "Trop de tentatives. Patientez un instant et réessayez.",
     submitChecklistUnavailable: "Cette checklist n'est pas disponible pour le moment.",
+    submitUpdateRequired: "Cette checklist doit être mise à jour par le responsable.",
   },
 } as const;
 

@@ -17,10 +17,12 @@ type Phase =
   | "uploading"
   | "processing"
   | "approved"
+  | "received" // Upload concluído sem verificação ainda
   | "retake"
   | "not_observable"
   | "technical_failure"
-  | "provider_rate_limited";
+  | "provider_rate_limited"
+  | "update_required";
 
 export type PublicCameraAnswer = {
   evidenceId: string;
@@ -73,7 +75,9 @@ export function PublicCameraBlock({ block, checklistId, ensureResponseSession, o
           ? (analysisResult.failureKind === "provider_rate_limited" ? "provider_rate_limited" : "technical_failure")
           : analysisResult.status === "manual_review"
             ? "not_observable"
-            : "retake";
+            : (analysisResult.status as string) === "checklist_update_required"
+              ? "update_required"
+              : "retake";
     queueMicrotask(() => setPhase(next));
   }
   if (phase === "processing" && !analysisResult && timedOut) {
@@ -250,6 +254,10 @@ export function PublicCameraBlock({ block, checklistId, ensureResponseSession, o
         error?: string;
       };
       if (data.error) {
+        if (data.error === "checklist_update_required") {
+          setPhase("update_required");
+          return;
+        }
         setErrorMsg(publicMessageForInvalid(data.error));
         setPhase("retake");
         return;
@@ -258,7 +266,7 @@ export function PublicCameraBlock({ block, checklistId, ensureResponseSession, o
       const analysisOn = data.analysisEnabled === true;
       setAnalysisEnabled(analysisOn);
       if (!analysisOn) {
-        setPhase("approved");
+        setPhase("received");
         return;
       }
       if (data.analysisToken) setAnalysisToken(data.analysisToken);
@@ -305,7 +313,12 @@ export function PublicCameraBlock({ block, checklistId, ensureResponseSession, o
           {description && <p className="text-xs text-neutral-500 mt-0.5 line-clamp-2">{description}</p>}
           {phase === "approved" && (
             <span className="inline-block mt-1.5 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 uppercase tracking-wider">
-              Foto aprovada
+              Foto verificada
+            </span>
+          )}
+          {phase === "received" && (
+            <span className="inline-block mt-1.5 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 uppercase tracking-wider">
+              Foto recebida
             </span>
           )}
         </div>
@@ -322,9 +335,11 @@ export function PublicCameraBlock({ block, checklistId, ensureResponseSession, o
           className={`relative mb-2 overflow-hidden rounded-xl border-2 bg-black/5 transition-colors ${
             phase === "approved"
               ? "border-emerald-500"
-              : phase === "retake"
-                ? "border-amber-400"
-                : "border-neutral-200"
+              : phase === "received"
+                ? "border-blue-400"
+                : phase === "retake"
+                  ? "border-amber-400"
+                  : "border-neutral-200"
           }`}
         >
           <img src={previewUrl} alt="Foto enviada" className="w-full max-h-80 object-contain" />
@@ -357,10 +372,10 @@ export function PublicCameraBlock({ block, checklistId, ensureResponseSession, o
         </div>
       )}
 
-      {phase === "approved" && (
+      {(phase === "approved" || phase === "received") && (
         <div className="flex items-center gap-2 text-sm text-emerald-700 py-1">
-          <CheckCircle2 className="w-4 h-4" aria-hidden />
-          Foto aprovada.
+          <CheckCircle2 className={`w-4 h-4 ${phase === "received" ? "text-blue-500" : ""}`} aria-hidden />
+          {phase === "received" ? "Foto recebida." : "Foto verificada."}
           <button type="button" onClick={resetAll} className="ml-2 text-xs underline text-neutral-500 hover:text-neutral-700">
             Trocar foto
           </button>
@@ -427,6 +442,15 @@ export function PublicCameraBlock({ block, checklistId, ensureResponseSession, o
               <Camera className="w-4 h-4" aria-hidden />
               Trocar foto
             </button>
+          </div>
+        </div>
+      )}
+
+      {phase === "update_required" && (
+        <div className="space-y-2">
+          <div className="flex items-start gap-2 text-sm text-neutral-700 bg-neutral-50 border border-neutral-200 rounded-lg px-3 py-2">
+            <XCircle className="w-4 h-4 mt-0.5" aria-hidden />
+            <span>Este checklist precisa ser atualizado pelo responsável.</span>
           </div>
         </div>
       )}

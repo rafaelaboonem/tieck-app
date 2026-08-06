@@ -27,6 +27,7 @@ const SUBMIT_ERROR_KEY: Record<
   checklist_mismatch: "submitSessionExpired",
   checklist_not_published: "submitChecklistUnavailable",
   rate_limited: "submitRateLimited",
+  checklist_update_required: "submitUpdateRequired",
 };
 
 /** Extrai o `error` do corpo JSON de uma FunctionsHttpError; retorna null se
