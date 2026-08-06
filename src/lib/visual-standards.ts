@@ -592,8 +592,9 @@ export interface ActivationCheck {
 
 export function activationChecks(s: VisualStandard): ActivationCheck[] {
   const profile = profileOf(s);
-  const unverifiable = Array.isArray(s.unverifiable_conditions) ? s.unverifiable_conditions : [];
-  const hasReference = Boolean(s.reference_path);
+  const refs = s.references || [];
+  const hasRef1 = refs.some(r => r.position === 1);
+  const hasRef2 = refs.some(r => r.position === 2);
   
   return [
     { 
@@ -602,14 +603,19 @@ export function activationChecks(s: VisualStandard): ActivationCheck[] {
       ok: Boolean(s.question?.trim()) 
     },
     {
-      key: "reference",
-      label: "Pelo menos uma referência válida",
-      ok: hasReference,
+      key: "reference_1",
+      label: "Referência principal válida",
+      ok: hasRef1,
+    },
+    {
+      key: "reference_2",
+      label: "Ângulo complementar válido",
+      ok: hasRef2,
     },
     {
       key: "accessible",
-      label: "Referência acessível pelo servidor",
-      ok: hasReference, // Simplificado para o check visual, a RPC validará o acesso
+      label: "Referências acessíveis pelo servidor",
+      ok: hasRef1 && hasRef2,
     },
     { 
       key: "profile", 
