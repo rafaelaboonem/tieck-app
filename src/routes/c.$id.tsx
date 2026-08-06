@@ -1000,7 +1000,7 @@ function PublicChecklistPage() {
               <img 
                 src={tieckLogo} 
                 alt="Tieck" 
-                className="h-10 w-auto object-contain" 
+                className="h-20 w-auto object-contain" 
               />
             </Link>
           </div>
