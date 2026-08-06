@@ -490,7 +490,7 @@ function NovoChecklistPage() {
   const [isPublishing, setIsPublishing] = useState(false);
   // Bloqueio de publicação por bloco Câmera com IA ativa e sem critérios.
   const [publishBlocker, setPublishBlocker] = useState<
-    | { blockId: string; label: string }
+    | { blockId: string; label: string; code?: string }
     | null
   >(null);
   const [isTitleAreaHovered, setIsTitleAreaHovered] = useState(false);
