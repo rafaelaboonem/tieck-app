@@ -657,7 +657,7 @@ export async function prepareStandard(
   standardId: string,
 ): Promise<{ ok: boolean; status?: string; message?: string }> {
   const { data, error } = await supabase.functions.invoke("vision-benchmark", {
-    body: { action: "prepare-standard", workspaceId, standardId },
+    body: { action: "profile-standard", workspaceId, standardId },
   });
   if (error) return { ok: false, message: error.message };
   return data as { ok: boolean; status?: string; message?: string };
