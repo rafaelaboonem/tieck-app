@@ -324,6 +324,7 @@ export function PublicCameraBlock({ block, checklistId, ensureResponseSession, o
         </div>
       </div>
 
+
       {captureGuidance && phase === "idle" && (
         <p className="text-xs text-neutral-600 bg-neutral-50 border border-neutral-200 rounded-lg px-3 py-2 mb-2">
           {captureGuidance}
