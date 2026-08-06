@@ -20,6 +20,15 @@ export const STATUS_TONE: Record<StandardStatus, string> = {
   archived: "bg-neutral-500/15 text-neutral-700",
 };
 
+export interface VisualStandardReference {
+  id: string;
+  visual_standard_id: string;
+  workspace_id: string;
+  storage_path: string;
+  position: 1 | 2;
+  created_at: string;
+}
+
 export interface VisualStandard {
   id: string;
   workspace_id: string;
@@ -27,7 +36,9 @@ export interface VisualStandard {
   name: string;
   question: string;
   internal_notes: string | null;
+  /** @deprecated Use references instead */
   reference_path: string | null;
+  references?: VisualStandardReference[];
   status: StandardStatus;
   test_count: number;
   accuracy: number | null;
@@ -50,7 +61,6 @@ export interface VisualStandard {
   required_evidence_count?: number | null;
   confidence_threshold?: number | null;
 }
-
 
 export interface StandardProfile {
   target_phrase: string;
