@@ -45,8 +45,8 @@ export const getChecklistSeo = createServerFn({ method: "GET" })
         showBranding: true,
         title: DEFAULT_TITLE,
         description: DEFAULT_DESCRIPTION,
-        ogImage: null,
-        favicon: null,
+        ogImage: "/og-image.webp",
+        favicon: "/favicon.png",
       };
     }
 
