@@ -35,6 +35,7 @@ type Props = {
   onAnswer: (blockId: string, value: PublicCameraAnswer | null) => void;
   textColor?: string;
   accentColor?: string;
+  onCameraToggle?: (open: boolean) => void;
 };
 
 /**
