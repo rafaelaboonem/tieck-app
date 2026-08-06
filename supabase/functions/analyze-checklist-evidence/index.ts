@@ -683,7 +683,11 @@ async function handleStatus(payload: any, db: ReturnType<typeof admin>) {
     finishedAt: data.processing_finished_at ?? null,
     failureKind: technicalFailure ? (rateLimited ? "provider_rate_limited" : "technical_failure") : null,
     retryable: technicalFailure,
+    verifiedAt: (data as any).verified_at ?? null,
+    provider: data.provider,
+    modelId: data.model_id,
   });
+
 
 }
 
