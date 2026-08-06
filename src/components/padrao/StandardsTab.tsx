@@ -14,7 +14,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Loader2, Plus, ImageIcon, FlaskConical, Check, X, Archive } from "lucide-react";
+import { Loader2, Plus, ImageIcon, FlaskConical, Check, X, Archive, PlayCircle } from "lucide-react";
 import {
   STATUS_LABEL,
   STATUS_TONE,
@@ -24,6 +24,7 @@ import {
   activationChecks,
   canActivate,
   activateStandard,
+  prepareStandard,
   type VisualStandard,
 } from "@/lib/visual-standards";
 import type { CameraQuestion, ChecklistProject } from "@/lib/camera-blocks";
