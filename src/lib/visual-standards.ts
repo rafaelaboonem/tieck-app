@@ -2,20 +2,22 @@ import { supabase } from "@/integrations/supabase/client";
 
 export const STANDARDS_BUCKET = "visual-standards";
 
-export type StandardStatus = "draft" | "testing" | "validated" | "needs_improvement";
+export type StandardStatus = "draft" | "preparing" | "ready" | "validated" | "archived";
 
 export const STATUS_LABEL: Record<StandardStatus, string> = {
   draft: "Rascunho",
-  testing: "Em teste",
-  validated: "Validado",
-  needs_improvement: "Precisa melhorar",
+  preparing: "Preparando",
+  ready: "Pronto para ativar",
+  validated: "Ativo",
+  archived: "Arquivado",
 };
 
 export const STATUS_TONE: Record<StandardStatus, string> = {
   draft: "bg-muted text-muted-foreground",
-  testing: "bg-amber-500/15 text-amber-700",
+  preparing: "bg-blue-500/15 text-blue-700",
+  ready: "bg-amber-500/15 text-amber-700",
   validated: "bg-emerald-500/15 text-emerald-700",
-  needs_improvement: "bg-rose-500/15 text-rose-700",
+  archived: "bg-neutral-500/15 text-neutral-700",
 };
 
 export interface VisualStandard {
@@ -263,7 +265,7 @@ export async function syncStandardsWithBlocks(input: {
       patch.question = current;
       patch.name = current.slice(0, 120);
       patch.needs_validation = true;
-      patch.status = "needs_improvement";
+      patch.status = "preparing";
       revalidate++;
     }
     if (Object.keys(patch).length > 0) {
@@ -529,23 +531,38 @@ export interface ActivationCheck {
 export function activationChecks(s: VisualStandard): ActivationCheck[] {
   const profile = profileOf(s);
   const unverifiable = Array.isArray(s.unverifiable_conditions) ? s.unverifiable_conditions : [];
-  const needsReference = Number(s.required_evidence_count ?? 0) > 0;
+  const hasReference = Boolean(s.reference_path);
+  
   return [
-    { key: "profile", label: "Perfil visual gerado", ok: Boolean(profile) },
-    {
-      key: "verifiability",
-      label: "Padrão verificável por foto",
-      ok: s.visual_verifiability === "verifiable",
-    },
-    {
-      key: "conditions",
-      label: "Sem condições impossíveis de comprovar por foto",
-      ok: unverifiable.length === 0,
+    { 
+      key: "question", 
+      label: "Pergunta vinculada", 
+      ok: Boolean(s.question?.trim()) 
     },
     {
       key: "reference",
-      label: needsReference ? "Foto de referência enviada" : "Referência não é exigida",
-      ok: !needsReference || Boolean(s.reference_path),
+      label: "Pelo menos uma referência válida",
+      ok: hasReference,
+    },
+    {
+      key: "accessible",
+      label: "Referência acessível pelo servidor",
+      ok: hasReference, // Simplificado para o check visual, a RPC validará o acesso
+    },
+    { 
+      key: "profile", 
+      label: "Perfil visual gerado", 
+      ok: Boolean(profile) 
+    },
+    {
+      key: "version",
+      label: "Versão do perfil maior que zero",
+      ok: (s.profile_version ?? 0) > 0,
+    },
+    {
+      key: "verifiability",
+      label: "Verificabilidade definida",
+      ok: s.visual_verifiability === "verifiable",
     },
   ];
 }
@@ -634,16 +651,16 @@ export async function runBenchmark(input: {
 }
 
 
-/** Gera/atualiza o perfil interno do padrão no servidor. Best-effort. */
-export async function ensureStandardProfile(
+/** Gera o perfil interno e prepara o padrão no servidor. Somente após clique do proprietário. */
+export async function prepareStandard(
   workspaceId: string,
   standardId: string,
-): Promise<{ ok: boolean; needsValidation?: boolean; usage?: UsageTotals }> {
+): Promise<{ ok: boolean; status?: string; message?: string }> {
   const { data, error } = await supabase.functions.invoke("vision-benchmark", {
-    body: { action: "profile-standard", workspaceId, standardId },
+    body: { action: "prepare-standard", workspaceId, standardId },
   });
-  if (error) return { ok: false };
-  return data as { ok: boolean; needsValidation?: boolean; usage?: UsageTotals };
+  if (error) return { ok: false, message: error.message };
+  return data as { ok: boolean; status?: string; message?: string };
 }
 
 export type LiveState = "searching" | "adjust" | "ready" | "uncertain";

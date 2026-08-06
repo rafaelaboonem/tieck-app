@@ -14,7 +14,7 @@ import {
   blobToBase64,
   referenceBase64,
   runBenchmark,
-  ensureStandardProfile,
+  prepareStandard,
   profileOf,
   startLabSession,
   createLabAttempt,
@@ -153,7 +153,7 @@ export function LabTab({ workspaceId, selected, runs, onRun }: Props) {
     }
     if (!profile) {
       setProfiling(true);
-      const out = await ensureStandardProfile(workspaceId, selected.id);
+      const out = await prepareStandard(workspaceId, selected.id);
       setProfiling(false);
       if (!out.ok) {
         toast.error("Não foi possível preparar este padrão agora.");

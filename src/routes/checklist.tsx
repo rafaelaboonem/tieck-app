@@ -490,7 +490,7 @@ function NovoChecklistPage() {
   const [isPublishing, setIsPublishing] = useState(false);
   // Bloqueio de publicação por bloco Câmera com IA ativa e sem critérios.
   const [publishBlocker, setPublishBlocker] = useState<
-    | { blockId: string; label: string }
+    | { blockId: string; label: string; code?: string }
     | null
   >(null);
   const [isTitleAreaHovered, setIsTitleAreaHovered] = useState(false);
@@ -2078,6 +2078,7 @@ function NovoChecklistPage() {
             setPublishBlocker({
               blockId: String(cam?.id ?? ""),
               label: String(cam?.title || cam?.subtitle || "Câmera"),
+              code: code.includes("standard_not_configured") ? "standard_not_configured" : "standard_not_active",
             });
             throw new Error("Vincule e ative um padrão visual antes de publicar este checklist.");
           }
@@ -6097,11 +6098,12 @@ function NovoChecklistPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Não é possível publicar</AlertDialogTitle>
             <AlertDialogDescription>
-              O bloco{" "}
-              <span className="font-semibold text-neutral-800">
-                “{publishBlocker?.label}”
-              </span>{" "}
-              está com a verificação por IA ativada. Vincule e ative um padrão visual antes
+              {publishBlocker?.code === "standard_not_configured" ? (
+                <>Este bloco ainda não possui um padrão visual.</>
+              ) : (
+                <>O padrão visual ainda precisa ser preparado e ativado.</>
+              )}
+              {" "}Vincule e ative um padrão visual antes
               de publicar este checklist.
             </AlertDialogDescription>
           </AlertDialogHeader>
