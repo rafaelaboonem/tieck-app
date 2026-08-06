@@ -2078,6 +2078,7 @@ function NovoChecklistPage() {
             setPublishBlocker({
               blockId: String(cam?.id ?? ""),
               label: String(cam?.title || cam?.subtitle || "Câmera"),
+              code: code.includes("standard_not_configured") ? "standard_not_configured" : "standard_not_active",
             });
             throw new Error("Vincule e ative um padrão visual antes de publicar este checklist.");
           }
