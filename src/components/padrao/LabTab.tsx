@@ -100,7 +100,7 @@ export function LabTab({ workspaceId, selected, runs, onRun }: Props) {
       const imageBase64 = await blobToBase64(file);
       let ref: string | null = null;
       if (hasReferences && selected?.references && selected.references.length > 0 && provider !== "google_gemini") {
-        ref = await referenceBase64(selected.reference_path);
+        ref = await referenceBase64(selected.references[0].storage_path);
       }
       // Sessão e tentativa são emitidas pelo servidor: o cliente não escolhe o orçamento.
       const session = await startLabSession(workspaceId, selected?.id ?? null);
