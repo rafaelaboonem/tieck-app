@@ -115,6 +115,7 @@ export function PublicCameraBlock({ block, checklistId, ensureResponseSession, o
 
   const handleCapture = (file: File) => {
     setCameraOpen(false);
+    onCameraToggle?.(false);
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     setPreviewUrl(URL.createObjectURL(file));
     setErrorMsg(null);
