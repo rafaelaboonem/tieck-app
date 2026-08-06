@@ -68,8 +68,13 @@ export function PublicCameraBlock({ block, checklistId, ensureResponseSession, o
 
   // Resolve o estado final do polling em fase visual.
   if (phase === "processing" && analysisResult && !isPolling) {
+    const isV3 = analysisResult.provider === "google_gemini" && analysisResult.modelId === "gemini-3.6-flash";
+    
+    // Foto verificada exige status normal E verificação V3 real E verifiedAt na coluna
+    const isTrulyVerified = analysisResult.status === "normal" && isV3 && !!analysisResult.verifiedAt;
+
     const next: Phase =
-      analysisResult.status === "normal"
+      isTrulyVerified
         ? "approved"
         : analysisResult.status === "failed"
           ? (analysisResult.failureKind === "provider_rate_limited" ? "provider_rate_limited" : "technical_failure")
@@ -80,6 +85,7 @@ export function PublicCameraBlock({ block, checklistId, ensureResponseSession, o
               : "retake";
     queueMicrotask(() => setPhase(next));
   }
+
   if (phase === "processing" && !analysisResult && timedOut) {
     queueMicrotask(() => setPhase("technical_failure"));
   }
