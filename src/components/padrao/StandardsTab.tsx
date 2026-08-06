@@ -477,7 +477,8 @@ function ActivationPanel({ standard, onChanged }: { standard: VisualStandard; on
                 {!c.ok && (
                   <span className="text-[10px] text-amber-600">
                     {c.key === "question" && "Defina a pergunta no editor."}
-                    {c.key === "reference" && "Envie uma foto de referência."}
+                    {c.key === "reference_1" && "Envie a foto principal."}
+                    {c.key === "reference_2" && "Envie o ângulo complementar."}
                     {c.key === "accessible" && "Verificando acesso..."}
                     {c.key === "profile" && "Clique em 'Preparar padrão'."}
                     {c.key === "version" && "Aguarde a geração do perfil."}
