@@ -115,7 +115,7 @@ export function buildInstruction(args: {
  */
 export async function callGemini(args: {
   instruction: string;
-  reference: GeminiImage | null;
+  references?: GeminiImage[];
   candidate: GeminiImage;
   timeoutMs: number;
 }): Promise<GeminiCall> {
