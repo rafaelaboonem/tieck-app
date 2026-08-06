@@ -1,0 +1,192 @@
+// Contrato estruturado e decisão do servidor para o provedor google_gemini.
+// Módulo PURO: sem Deno, sem rede, sem imagens — importável pelos testes.
+//
+// Princípio: o servidor NUNCA aceita `suggested_decision` do modelo.
+// Aprovação só existe quando todas as travas passam. Na dúvida, nunca aprova.
+import { RETAKE_MESSAGES } from "./gate.ts";
+/** Limiar de aprovação da Fase 3A — conservador por decisão do proprietário. */
+export const GEMINI_APPROVAL_THRESHOLD = 0.9;
+const QUALITIES = ["good", "dark", "blurry", "cropped", "unusable"];
+const STATUSES = ["verified", "not_met", "not_observable"];
+const LOW_CONFIDENCE_MESSAGE = "Não foi possível confirmar pela foto. Tire outra mostrando melhor o item solicitado.";
+const NOT_OBSERVABLE_MESSAGE = "Essa condição não pode ser confirmada claramente por esta foto.";
+const REFERENCE_MESSAGE = "Não deu para comparar com o resultado esperado. Fotografe o mesmo local por inteiro.";
+/**
+ * Linguagem especulativa: evidência que apenas supõe nunca comprova.
+ * Cobre português e inglês, pois o modelo pode responder em qualquer um.
+ */
+const SPECULATIVE = new RegExp([
+    "provavelmente", "possivelmente", "presumivelmente", "aparentemente", "supostamente",
+    "parece", "aparenta", "deve estar", "deveria estar", "talvez", "imagino", "acredito",
+    "n[aã]o d[aá] para ver", "n[aã]o [eé] poss[ií]vel ver", "assumindo", "presumo",
+    "likely", "probably", "seems", "appears", "assume", "assuming", "might be",
+    "may be", "should be", "possibly", "presumably", "cannot see", "can'?t see",
+    "not visible", "unclear",
+].join("|"), "i");
+export function isSpeculative(text) {
+    return SPECULATIVE.test(text);
+}
+function isProbability(v) {
+    return typeof v === "number" && Number.isFinite(v) && v >= 0 && v <= 1;
+}
+/**
+ * Valida o JSON estruturado. Campo obrigatório ausente ou inválido é
+ * falha técnica — jamais preenchemos valores inventados.
+ */
+export function validateGeminiPayload(raw) {
+    if (!raw || typeof raw !== "object")
+        return null;
+    const o = raw;
+    if (typeof o.target_visible !== "boolean")
+        return null;
+    if (!isProbability(o.target_confidence))
+        return null;
+    if (typeof o.image_quality !== "string" || !QUALITIES.includes(o.image_quality))
+        return null;
+    if (typeof o.reference_comparable !== "boolean")
+        return null;
+    if (!isProbability(o.overall_confidence))
+        return null;
+    if (typeof o.suggested_decision !== "string" ||
+        !["approved", "retake", "uncertain"].includes(o.suggested_decision))
+        return null;
+    if (typeof o.public_message !== "string" || !o.public_message.trim())
+        return null;
+    if (!Array.isArray(o.conditions) || o.conditions.length === 0)
+        return null;
+    const conditions = [];
+    for (const c of o.conditions) {
+        if (!c || typeof c !== "object")
+            return null;
+        const k = c;
+        if (typeof k.condition !== "string" || !k.condition.trim())
+            return null;
+        if (typeof k.status !== "string" || !STATUSES.includes(k.status))
+            return null;
+        if (!isProbability(k.confidence))
+            return null;
+        if (typeof k.visible_evidence !== "string")
+            return null;
+        conditions.push({
+            condition: k.condition.trim().slice(0, 200),
+            status: k.status,
+            confidence: k.confidence,
+            visible_evidence: k.visible_evidence.trim().slice(0, 300),
+        });
+    }
+    const boxes = Array.isArray(o.bounding_boxes)
+        ? o.bounding_boxes
+            .map((b) => {
+            if (!b || typeof b !== "object")
+                return null;
+            const r = b;
+            const n = (v) => (typeof v === "number" && Number.isFinite(v) ? v : null);
+            const x = n(r.x), y = n(r.y), w = n(r.w ?? r.width), h = n(r.h ?? r.height);
+            if (x === null || y === null || w === null || h === null)
+                return null;
+            if (w <= 0 || h <= 0 || x < 0 || y < 0 || x > 1 || y > 1 || w > 1 || h > 1)
+                return null;
+            return { x, y, w, h };
+        })
+            .filter((b) => b !== null)
+            .slice(0, 4)
+        : [];
+    return {
+        target_visible: o.target_visible,
+        target_confidence: o.target_confidence,
+        image_quality: o.image_quality,
+        reference_comparable: o.reference_comparable,
+        conditions,
+        overall_confidence: o.overall_confidence,
+        suggested_decision: o.suggested_decision,
+        public_message: o.public_message.trim().slice(0, 200),
+        ...(boxes.length ? { bounding_boxes: boxes } : {}),
+    };
+}
+/** Estado agregado das condições: o pior caso sempre prevalece. */
+export function overallConditionStatus(conditions) {
+    if (conditions.some((c) => c.status === "not_observable"))
+        return "not_observable";
+    if (conditions.some((c) => c.status === "not_met"))
+        return "not_met";
+    return "verified";
+}
+/**
+ * Decisão calculada pelo servidor. `suggested_decision` entra apenas como
+ * sinal — nunca como autorização.
+ */
+export function decideGemini(payload, options) {
+    const threshold = typeof options.threshold === "number" &&
+        options.threshold > 0 && options.threshold <= 1
+        ? options.threshold
+        : GEMINI_APPROVAL_THRESHOLD;
+    const status = overallConditionStatus(payload.conditions);
+    const verified = payload.conditions.filter((c) => c.status === "verified");
+    const evidenceOk = verified.every((c) => typeof c.visible_evidence === "string" && c.visible_evidence.trim().length > 0);
+    const evidenceNotSpeculative = verified.every((c) => !isSpeculative(c.visible_evidence));
+    // Trava conservadora real: ALL must be true
+    const gate = {
+        observable: status !== "not_observable",
+        target_present: payload.target_visible === true,
+        reference_match: payload.reference_comparable === true,
+        condition_met: status === "verified",
+        image_quality_usable: payload.image_quality === "good",
+        overall_confidence_sufficient: payload.overall_confidence >= threshold,
+        visible_evidence_present: evidenceOk && evidenceNotSpeculative,
+        references_valid: (options.referenceCount ?? 0) === 2,
+        provider_valid: true, // Chamador garante
+        model_valid: true, // Chamador garante
+        version_match: options.standardVersion === options.snapshotVersion,
+    };
+    const base = {
+        condition_status: status,
+        confidence: payload.overall_confidence,
+        confidence_threshold: threshold,
+        gate,
+    };
+    const verdict = (decision, reason_code, public_message) => ({
+        ...base,
+        decision,
+        reason_code,
+        public_message,
+        overridden: payload.suggested_decision !== decision,
+    });
+    // 1) Versão ou configuração inválida
+    if (!gate.references_valid)
+        return verdict("uncertain", "standard_not_configured", "Padrão visual mal configurado.");
+    if (!gate.version_match)
+        return verdict("uncertain", "standard_version_mismatch", "O checklist precisa ser republicado.");
+    // 2) Imagem inutilizável ou com defeito conhecido
+    if (!gate.image_quality_usable) {
+        const code = payload.image_quality === "dark" ? "too_dark" :
+            payload.image_quality === "blurry" ? "blurry" :
+                payload.image_quality === "cropped" ? "bad_framing" : "image_quality";
+        return verdict("retake", code, RETAKE_MESSAGES[code] || "Qualidade da imagem insuficiente.");
+    }
+    // 3) Alvo ausente ou reconhecido com pouca certeza
+    if (!gate.target_present)
+        return verdict("retake", "target_not_found", RETAKE_MESSAGES.target_not_found);
+    // 4) Referência existente mas incomparável
+    if (!gate.reference_match)
+        return verdict("retake", "wrong_subject", REFERENCE_MESSAGE);
+    // 5) Condição impossível de observar
+    if (!gate.observable)
+        return verdict("uncertain", "not_observable", NOT_OBSERVABLE_MESSAGE);
+    // 6) Condição comprovadamente não atendida
+    if (!gate.condition_met)
+        return verdict("retake", "condition_not_met", RETAKE_MESSAGES.condition_not_met);
+    // 7) Evidência ausente ou especulativa
+    if (!gate.visible_evidence_present)
+        return verdict("uncertain", "insufficient_evidence", NOT_OBSERVABLE_MESSAGE);
+    // 8) Confiança insuficiente
+    if (!gate.overall_confidence_sufficient)
+        return verdict("retake", "low_confidence", LOW_CONFIDENCE_MESSAGE);
+    // Decisão final: somente aprovado se TODOS os portões estiverem abertos
+    if (Object.values(gate).every(Boolean)) {
+        const msg = payload.public_message && !isSpeculative(payload.public_message)
+            ? payload.public_message
+            : "Foto aprovada.";
+        return verdict("approved", "condition_met", msg);
+    }
+    return verdict("uncertain", "insufficient_evidence", LOW_CONFIDENCE_MESSAGE);
+}
