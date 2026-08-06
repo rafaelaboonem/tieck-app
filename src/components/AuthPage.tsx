@@ -7,8 +7,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Eye, EyeOff, Loader2, ArrowRight, Mail, KeyRound, CheckCircle2, ArrowLeft } from "lucide-react";
 import { lovable } from "@/integrations/lovable";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
-import logoAsset from "@/assets/logo-tieck.webp.asset.json";
-const logoUrl = logoAsset.url;
+import logoUrl from "../assets/local/logo-tieck.webp";
 
 type Props = {
   mode: "login" | "signup";

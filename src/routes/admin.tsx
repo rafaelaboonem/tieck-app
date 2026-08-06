@@ -26,8 +26,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { useSidebar } from "@/contexts/SidebarContext";
-import logoAsset from "@/assets/logo-tieck.webp.asset.json";
-const logoUrl = logoAsset.url;
+import logoUrl from "../assets/local/logo-tieck.webp";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Table,

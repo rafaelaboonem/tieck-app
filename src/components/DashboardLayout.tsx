@@ -42,8 +42,7 @@ import {
    DropdownMenuTrigger,
  } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
-import logoAsset from "@/assets/logo-tieck.webp.asset.json";
-const logoIcon = logoAsset.url;
+import logoIcon from "../assets/local/logo-tieck.webp";
  
  type NavItem = { icon: React.ElementType; label: string; to?: string; accent?: string };
  
