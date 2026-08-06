@@ -211,7 +211,7 @@ export function LabTab({ workspaceId, selected, runs, onRun }: Props) {
             </p>
           </div>
 
-          {hasReference && (
+          {hasReferences && (
             <p className="flex items-center gap-2 rounded-lg border p-3 text-xs text-muted-foreground">
               <ImageIcon className="h-4 w-4 shrink-0" aria-hidden />
               Referência do padrão será usada automaticamente.
