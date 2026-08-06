@@ -146,7 +146,10 @@ function CameraField({ value, onChange, textColor, onCameraToggle }: { value: an
         )}
         <input
           ref={inputRef} type="file" accept="image/*" capture="environment" className="hidden"
-          onChange={(e) => onChange(e.target.files?.[0] ?? null)}
+          onChange={(e) => {
+            onCameraToggle?.(false);
+            onChange(e.target.files?.[0] ?? null);
+          }}
         />
       </div>
     </div>
