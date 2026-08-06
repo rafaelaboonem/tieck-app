@@ -18,7 +18,9 @@ export type StandardRecord = {
   id: string;
   question: string;
   internal_profile: any;
+  version: number | null;
   confidence_threshold: number | null;
+
   status: string | null;
   unverifiable_conditions: any;
   references?: { storage_path: string }[];
