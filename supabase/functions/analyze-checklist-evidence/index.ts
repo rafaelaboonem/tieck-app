@@ -640,9 +640,10 @@ async function handleStatus(payload: any, db: ReturnType<typeof admin>) {
 
   const { data } = await db
     .from("checklist_evidence_analyses")
-    .select("status, error_code, raw_response, processing_finished_at, block_id, provider, model_id, checklists(published_content)")
+    .select("status, error_code, raw_response, processing_finished_at, block_id, provider, model_id, verified_at, checklists(published_content)")
     .eq("analysis_token_hash", tokenHash)
     .maybeSingle();
+
   if (!data) return err(404, "analysis_not_found");
 
   const published = (data as any).checklists?.published_content ?? null;
