@@ -70,16 +70,16 @@ export function buildInstruction(args: {
   question: string;
   profile: any;
   conditions: string[];
-  hasReference: boolean;
+  referenceCount: number;
 }): string {
   const p = args.profile ?? {};
   return [
     "You are a strict visual inspector for a facility checklist. Judge ONLY what is visible.",
-    args.hasReference
-      ? 'Two images are provided. The image labelled "REFERENCE" shows the expected state. ' +
+    args.referenceCount > 0
+      ? `${args.referenceCount} image(s) labelled "REFERENCE" show the expected state (from different angles). ` +
         'The image labelled "CANDIDATE" is the photo under inspection. ' +
-        "The reference does NOT require identical angle, lighting, framing or composition; " +
-        "use it only to understand the expected state. Every verdict must be based on the CANDIDATE image."
+        "The references do NOT require identical angle, lighting, framing or composition; " +
+        "use them only to understand the expected state. Every verdict must be based on the CANDIDATE image."
       : "One image is provided, labelled CANDIDATE. It is the photo under inspection.",
     `Inspection standard, written in Brazilian Portuguese: "${args.question}"`,
     p.target_phrase ? `Main target to find: ${p.target_phrase}` : "",
