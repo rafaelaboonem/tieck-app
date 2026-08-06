@@ -6,16 +6,18 @@ export type StandardStatus = "draft" | "preparing" | "ready" | "validated" | "ar
 
 export const STATUS_LABEL: Record<StandardStatus, string> = {
   draft: "Rascunho",
-  testing: "Em teste",
-  validated: "Validado",
-  needs_improvement: "Precisa melhorar",
+  preparing: "Preparando",
+  ready: "Pronto para ativar",
+  validated: "Ativo",
+  archived: "Arquivado",
 };
 
 export const STATUS_TONE: Record<StandardStatus, string> = {
   draft: "bg-muted text-muted-foreground",
-  testing: "bg-amber-500/15 text-amber-700",
+  preparing: "bg-blue-500/15 text-blue-700",
+  ready: "bg-amber-500/15 text-amber-700",
   validated: "bg-emerald-500/15 text-emerald-700",
-  needs_improvement: "bg-rose-500/15 text-rose-700",
+  archived: "bg-neutral-500/15 text-neutral-700",
 };
 
 export interface VisualStandard {
