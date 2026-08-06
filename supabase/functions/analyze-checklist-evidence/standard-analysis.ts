@@ -112,7 +112,7 @@ export async function analyzeWithStandard(args: {
   try {
     call = await callGemini({
       instruction,
-      reference,
+      references,
       candidate: { mime: args.candidateMime, base64: bytesToBase64(args.candidate) },
       timeoutMs: 45_000,
     });
