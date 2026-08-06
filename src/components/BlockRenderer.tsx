@@ -327,7 +327,7 @@ export interface BlockRendererProps {
  *
  * Adding a new block type? Add ONE case here and both surfaces update.
  */
-export function BlockRenderer({ block, settings, mode, answers = {}, setAnswer, isDark }: BlockRendererProps) {
+export function BlockRenderer({ block, settings, mode, answers = {}, setAnswer, isDark, onCameraToggle }: BlockRendererProps) {
   if (block.type === "image" && (block.variant === "profile" || block.variant === "cover")) return null;
 
   const accent = settings.accentColor || "#FF007F";
