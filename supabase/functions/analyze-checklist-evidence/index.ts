@@ -563,16 +563,6 @@ function decisionMessage(status: string, errorCode: string | null, policy: Block
   canContinue: boolean;
   requiresResubmit: boolean;
 } {
-  // Status público (contrato do polling): pending | processing | normal |
-  // anomaly | manual_review | failed. `block_completion` NÃO é um status
-  // técnico — é uma política de continuidade aplicada sobre `anomaly`/`failed`
-  // que só altera (canContinue, requiresResubmit).
-  //
-  // Semântica final por política:
-  //   allow_continue   → canContinue=true,  requiresResubmit=false
-  //   require_resubmit → canContinue=false, requiresResubmit=true
-  //   block_completion → canContinue=false, requiresResubmit=false
-  //   manual_review    → canContinue=true,  requiresResubmit=false
   if (policy.isLegacy) {
     return { 
       publicStatus: "checklist_update_required", 
@@ -582,45 +572,35 @@ function decisionMessage(status: string, errorCode: string | null, policy: Block
     };
   }
 
+  const onAnomaly: OnAnomalyPolicy = policy.onAnomaly ?? "require_resubmit";
+
   switch (status) {
     case "pending":     return { publicStatus: "pending",       publicMessage: "Analisando sua evidência.", canContinue: false, requiresResubmit: false };
     case "processing":  return { publicStatus: "processing",    publicMessage: "Analisando sua evidência.", canContinue: false, requiresResubmit: false };
     case "normal":      return { publicStatus: "normal",        publicMessage: "Evidência dentro do padrão.", canContinue: true,  requiresResubmit: false };
     case "anomalous": {
-      const onAnomaly: OnAnomalyPolicy = policy.onAnomaly ?? "require_resubmit";
       switch (onAnomaly) {
         case "allow_continue":
           return { publicStatus: "anomaly", publicMessage: "Divergência detectada, mas você pode continuar.", canContinue: true, requiresResubmit: false };
         case "block_completion":
           return { publicStatus: "anomaly", publicMessage: "Esta evidência impede a conclusão do checklist.", canContinue: false, requiresResubmit: false };
         case "manual_review":
-          return { publicStatus: "manual_review", publicMessage: "Envio encaminhado para revisão manual.", canContinue: true, requiresResubmit: false };
+          // No checklist público, manual_review não deve ser usado; cai no fluxo de anomalia padrão
+          return { publicStatus: "anomaly", publicMessage: "Possível divergência detectada. Reenvie a foto.", canContinue: false, requiresResubmit: true };
         case "require_resubmit":
         default:
           return { publicStatus: "anomaly", publicMessage: "Possível divergência detectada. Reenvie a foto.", canContinue: false, requiresResubmit: true };
       }
     }
     case "manual_review": {
-      // Falha técnica persistida como manual_review (MODEL_NOT_READY,
-      // processing_exception, timeouts, etc.) segue a política
-      // `onAnalysisFailure`. Sem `error_code`, é decisão real da análise.
-      if (errorCode) {
-        const onFail: OnFailurePolicy = policy.onAnalysisFailure ?? "manual_review";
-        switch (onFail) {
-          case "allow_continue":
-            return { publicStatus: "failed", publicMessage: "Não foi possível analisar a foto, mas você pode continuar.", canContinue: true, requiresResubmit: false };
-          case "block_completion":
-            return { publicStatus: "failed", publicMessage: "Falha na análise impede a conclusão do checklist.", canContinue: false, requiresResubmit: false };
-          case "manual_review":
-          default:
-            return { publicStatus: "manual_review", publicMessage: "Envio recebido; será revisado manualmente.", canContinue: true, requiresResubmit: false };
-        }
+      // manual_review aqui representa 'uncertain' ou 'not_observable' vindo do Gemini-V3
+      // ou falha técnica mitigada. Segue a política onAnomaly se for require_resubmit.
+      if (onAnomaly === "require_resubmit") {
+        return { publicStatus: "anomaly", publicMessage: "Não foi possível confirmar pela foto. Tire outra.", canContinue: false, requiresResubmit: true };
       }
-      return { publicStatus: "manual_review", publicMessage: "Envio encaminhado para revisão manual.", canContinue: true, requiresResubmit: false };
+      return { publicStatus: "manual_review", publicMessage: "Envio recebido; será revisado manualmente.", canContinue: true, requiresResubmit: false };
     }
     case "failed": {
-      // Camera AI V2: falha técnica é um estado próprio. Nunca aprova em
-      // silêncio e nunca promete revisão manual inexistente.
       const onFail: OnFailurePolicy | undefined = policy.onAnalysisFailure;
       if (onFail === "allow_continue") {
         return { publicStatus: "failed", publicMessage: "Não foi possível verificar agora; envio permitido.", canContinue: true, requiresResubmit: false };
@@ -925,7 +905,7 @@ async function processAnalysis(analysisId: string) {
         regions: { 
           reason_code: verdict.reasonCode, 
           condition_status: verdict.conditionStatus,
-          gate: (verdict as any).gate 
+          gate: verdict.gate 
         },
         inference_ms: verdict.inferenceMs,
         verified_at: isApproved ? new Date().toISOString() : null,
