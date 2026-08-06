@@ -256,14 +256,17 @@ function CameraFieldMulti({
           </div>
         )}
       </div>
-      <input
-        ref={inputRef}
-        type="file"
-        accept="image/*"
-        capture="environment"
-        className="hidden"
-        onChange={handleAdd}
-      />
+        <input
+          ref={inputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          className="hidden"
+          onChange={(e) => {
+            onCameraToggle?.(false);
+            handleAdd(e);
+          }}
+        />
     </div>
   );
 }
