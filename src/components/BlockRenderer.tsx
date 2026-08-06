@@ -98,7 +98,7 @@ function FileInputWithThumbnails({
   );
 }
 
-function CameraField({ value, onChange, textColor }: { value: any; onChange: (file: File | null) => void; textColor?: string }) {
+function CameraField({ value, onChange, textColor, onCameraToggle }: { value: any; onChange: (file: File | null) => void; textColor?: string; onCameraToggle?: (open: boolean) => void }) {
   const [preview, setPreview] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
