@@ -13,8 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import logoAsset from "@/assets/logo-tieck.webp.asset.json";
-const logo = logoAsset.url;
+import logo from "../assets/local/logo-tieck.webp";
 
 export const Route = createFileRoute("/configuracoes")({
   head: () => ({ meta: [{ title: "Configurações — ChecklistApp" }] }),
