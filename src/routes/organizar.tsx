@@ -337,9 +337,9 @@ export const Route = createFileRoute("/organizar")({
   head: () => ({
     meta: [{ title: "Workspace" }],
   }),
-  validateSearch: (search: Record<string, unknown>) => {
+  validateSearch: (search: Record<string, unknown>): { id?: string } => {
     return {
-      id: search.id as string | undefined,
+      id: typeof search.id === "string" ? search.id : undefined,
     };
   },
   component: WorkspacePage,
