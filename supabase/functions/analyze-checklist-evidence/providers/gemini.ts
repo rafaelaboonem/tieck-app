@@ -123,9 +123,11 @@ export async function callGemini(args: {
   if (!key) throw new GeminiError("gemini_key_missing");
 
   const parts: any[] = [{ text: args.instruction }];
-  if (args.reference) {
-    parts.push({ text: "REFERENCE image (expected state):" });
-    parts.push({ inlineData: { mimeType: args.reference.mime, data: args.reference.base64 } });
+  if (args.references && args.references.length > 0) {
+    args.references.forEach((ref, i) => {
+      parts.push({ text: `REFERENCE image ${i + 1} (expected state):` });
+      parts.push({ inlineData: { mimeType: ref.mime, data: ref.base64 } });
+    });
   }
   parts.push({ text: "CANDIDATE image (photo under inspection):" });
   parts.push({ inlineData: { mimeType: args.candidate.mime, data: args.candidate.base64 } });
