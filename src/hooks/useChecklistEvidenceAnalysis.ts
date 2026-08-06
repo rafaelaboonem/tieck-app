@@ -19,7 +19,11 @@ export type EvidenceAnalysisResult = {
   finishedAt: string | null;
   failureKind?: EvidenceFailureKind;
   retryable?: boolean;
+  verifiedAt?: string | null;
+  provider?: string;
+  modelId?: string;
 };
+
 
 const FINAL_STATUSES = new Set<EvidenceAnalysisStatus>([
   "normal",
