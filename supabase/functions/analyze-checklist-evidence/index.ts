@@ -905,7 +905,9 @@ async function processAnalysis(analysisId: string) {
         question: instruction,
         candidate: image,
         candidateMime: mimeType,
+        snapshotVersion: String(found.vision?.visualStandardVersion || "0"),
       });
+
 
       const isApproved = verdict.decision === "approved";
       const status = isApproved
