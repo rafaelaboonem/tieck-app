@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { z } from "zod";
 import logoUrl from "../assets/local/logo-tieck.webp";
 
 const sanitizeRedirect = (value?: string) => {
@@ -11,10 +12,12 @@ const sanitizeRedirect = (value?: string) => {
   return "/inicio";
 };
 
+const searchSchema = z.object({
+  redirect: z.string().optional(),
+});
+
 export const Route = createFileRoute("/auth/callback")({
-  validateSearch: (search: Record<string, unknown>) => ({
-    redirect: typeof search.redirect === "string" ? search.redirect : undefined,
-  }),
+  validateSearch: (search) => searchSchema.parse(search),
   component: AuthCallbackRoute,
 });
 
