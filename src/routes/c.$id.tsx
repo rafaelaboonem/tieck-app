@@ -926,6 +926,7 @@ function PublicChecklistPage() {
                             onAnswer={setAnswer}
                             textColor={settings.textColor}
                             accentColor={settings.accentColor || settings.btnBgColor || "#111827"}
+                            onCameraToggle={setCameraOpen}
                           />
                         </div>
                       );
