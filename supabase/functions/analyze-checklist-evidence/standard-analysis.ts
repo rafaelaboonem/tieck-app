@@ -17,11 +17,11 @@ export type PublicDecision = "approved" | "retake" | "not_observable";
 export type StandardRecord = {
   id: string;
   question: string;
-  reference_path: string | null;
   internal_profile: any;
   confidence_threshold: number | null;
   status: string | null;
   unverifiable_conditions: any;
+  references?: { storage_path: string }[];
 };
 
 export type StandardVerdict = {
