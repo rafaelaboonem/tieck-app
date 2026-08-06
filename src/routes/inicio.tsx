@@ -189,7 +189,7 @@ function Dashboard() {
      <DashboardLayout>
         <header className="flex items-center justify-between px-6 py-4">
           <div className={`flex items-center gap-2 transition-all duration-300 ${sidebarOpen ? "pl-0" : "pl-14"}`}>
-            <img src={logoUrl} alt="Logo" className="w-10 h-10 object-contain grayscale hover:grayscale-0 active:grayscale-0 transition-all cursor-pointer" />
+            <img src={logoUrl} alt="Logo" className="w-14 h-14 object-contain grayscale hover:grayscale-0 active:grayscale-0 transition-all cursor-pointer" />
             <span className="text-neutral-400">›</span>
             <span className="text-neutral-600 font-medium">{currentWorkspace?.name || "Meu workspace"}</span>
           </div>
