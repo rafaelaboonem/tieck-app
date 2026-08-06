@@ -984,7 +984,7 @@ function PublicChecklistPage() {
             <img 
               src={tieckLogo} 
               alt="Tieck" 
-              className="h-14 w-auto object-contain grayscale opacity-60 group-hover:grayscale-0 group-hover:opacity-100 transition-all duration-300" 
+              className="h-20 w-auto object-contain grayscale opacity-60 group-hover:grayscale-0 group-hover:opacity-100 transition-all duration-300" 
             />
           </Link>
 
