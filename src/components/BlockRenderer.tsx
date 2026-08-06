@@ -637,9 +637,10 @@ export function BlockRenderer({ block, settings, mode, answers = {}, setAnswer, 
               onChange={(files) => set(block.id, files)}
               textColor={textColor}
               max={Math.max(1, Math.min(20, block.maxPhotos ?? 5))}
+              onCameraToggle={onCameraToggle}
             />
           ) : (
-            <CameraField value={get(block.id)} onChange={(f) => set(block.id, f)} textColor={textColor} />
+            <CameraField value={get(block.id)} onChange={(f) => set(block.id, f)} textColor={textColor} onCameraToggle={onCameraToggle} />
           )
         ) : (
           <FileInputWithThumbnails id={block.id} accept="image/*" capture="environment" multiple accentColor={accent} />
