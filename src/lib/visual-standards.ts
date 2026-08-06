@@ -191,8 +191,13 @@ export async function createStandard(input: {
   // 2) Envia a referência e 3) atualiza o registro com o caminho.
   if (input.referenceFile) {
     try {
-      const updated = await uploadReference(standard, input.referenceFile);
-      return updated;
+      await uploadReference(standard, input.referenceFile, 1);
+      const { data: updated } = await supabase
+        .from("visual_standards")
+        .select("*, references:visual_standard_references(*)")
+        .eq("id", standard.id)
+        .single();
+      return updated as VisualStandard;
     } catch (e) {
       throw new Error(
         `Padrão criado, mas a foto de referência não pôde ser enviada: ${(e as Error).message}`,
