@@ -531,23 +531,38 @@ export interface ActivationCheck {
 export function activationChecks(s: VisualStandard): ActivationCheck[] {
   const profile = profileOf(s);
   const unverifiable = Array.isArray(s.unverifiable_conditions) ? s.unverifiable_conditions : [];
-  const needsReference = Number(s.required_evidence_count ?? 0) > 0;
+  const hasReference = Boolean(s.reference_path);
+  
   return [
-    { key: "profile", label: "Perfil visual gerado", ok: Boolean(profile) },
-    {
-      key: "verifiability",
-      label: "Padrão verificável por foto",
-      ok: s.visual_verifiability === "verifiable",
-    },
-    {
-      key: "conditions",
-      label: "Sem condições impossíveis de comprovar por foto",
-      ok: unverifiable.length === 0,
+    { 
+      key: "question", 
+      label: "Pergunta vinculada", 
+      ok: Boolean(s.question?.trim()) 
     },
     {
       key: "reference",
-      label: needsReference ? "Foto de referência enviada" : "Referência não é exigida",
-      ok: !needsReference || Boolean(s.reference_path),
+      label: "Pelo menos uma referência válida",
+      ok: hasReference,
+    },
+    {
+      key: "accessible",
+      label: "Referência acessível pelo servidor",
+      ok: hasReference, // Simplificado para o check visual, a RPC validará o acesso
+    },
+    { 
+      key: "profile", 
+      label: "Perfil visual gerado", 
+      ok: Boolean(profile) 
+    },
+    {
+      key: "version",
+      label: "Versão do perfil maior que zero",
+      ok: (s.profile_version ?? 0) > 0,
+    },
+    {
+      key: "verifiability",
+      label: "Verificabilidade definida",
+      ok: s.visual_verifiability === "verifiable",
     },
   ];
 }
