@@ -126,7 +126,7 @@ export async function analyzeWithStandard(args: {
 
   const threshold = Number(args.standard.confidence_threshold);
   const verdict = decideGemini(payload, {
-    hasReference: Boolean(reference),
+    hasReference: references.length > 0,
     threshold: Number.isFinite(threshold) && threshold > 0 ? threshold : undefined,
   });
 
