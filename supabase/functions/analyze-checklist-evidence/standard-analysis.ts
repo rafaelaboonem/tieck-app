@@ -84,7 +84,9 @@ export async function analyzeWithStandard(args: {
   question: string;
   candidate: Uint8Array;
   candidateMime: string;
+  snapshotVersion?: string;
 }): Promise<StandardVerdict> {
+
   const profile = args.standard.internal_profile ?? {};
   const conditions = [
     ...strList(profile?.conditions, 6),
