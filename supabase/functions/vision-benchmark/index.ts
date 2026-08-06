@@ -901,7 +901,7 @@ Deno.serve(async (req) => {
     if (!standardId) return err(400, "standard_required");
     const { data: standard } = await userClient
       .from("visual_standards")
-      .select("id, question, reference_path, workspace_id")
+      .select("id, question, workspace_id, references:visual_standard_references(*)")
       .eq("id", standardId)
       .eq("workspace_id", workspaceId)
       .maybeSingle();
@@ -910,15 +910,23 @@ Deno.serve(async (req) => {
     const meter: UsageEntry[] = [];
     const sessionId = sessionIdOf(body) || `profile-${standardId}`;
     try {
-      let referenceSummary: string | null = null;
-      if (standard.reference_path) {
-        const { data: file } = await svc.storage.from("visual-standards").download(standard.reference_path);
+      const references = (standard.references || []) as any[];
+      if (references.length < 2) return err(400, "two_references_required");
+
+      const images: (ImageInput & { position: number })[] = [];
+      for (const ref of references) {
+        const { data: file } = await svc.storage.from("visual-standards").download(ref.storage_path);
         if (file) {
           const bytes = new Uint8Array(await file.arrayBuffer());
           const meta = sniff(bytes);
-          if (meta) referenceSummary = await describeReference({ bytes, ...meta }, standard.question, meter);
+          if (meta) images.push({ bytes, ...meta, position: ref.position });
         }
       }
+
+      if (images.length < 2) return err(400, "reference_download_failed");
+
+      // Describe references using multimodal single call if possible, or sequential
+      const referenceSummary = await describeReferences(images, standard.question, meter);
       const { profile, ambiguous, verifiability } = await buildProfile(standard.question, referenceSummary, meter);
       const { error: upErr } = await userClient
         .from("visual_standards")
