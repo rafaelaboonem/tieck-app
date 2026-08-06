@@ -65,7 +65,7 @@ export async function loadStandardForBlock(
   const { data } = await db
     .from("visual_standards")
     .select(
-      "id, question, reference_path, internal_profile, confidence_threshold, status, unverifiable_conditions",
+      "id, question, internal_profile, confidence_threshold, status, unverifiable_conditions, references:visual_standard_references(storage_path)",
     )
     .eq("checklist_id", checklistId)
     .eq("camera_block_id", cameraBlockId)
