@@ -446,6 +446,15 @@ export function PublicCameraBlock({ block, checklistId, ensureResponseSession, o
         </div>
       )}
 
+      {phase === "update_required" && (
+        <div className="space-y-2">
+          <div className="flex items-start gap-2 text-sm text-neutral-700 bg-neutral-50 border border-neutral-200 rounded-lg px-3 py-2">
+            <XCircle className="w-4 h-4 mt-0.5" aria-hidden />
+            <span>Este checklist precisa ser atualizado pelo responsável.</span>
+          </div>
+        </div>
+      )}
+
       <TieckCamera
         open={cameraOpen}
         title={title || "Câmera"}
