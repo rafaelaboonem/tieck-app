@@ -19,7 +19,7 @@ export const Header = () => {
             alt="Tieck"
             fetchPriority="high"
             decoding="async"
-            className="h-16 w-auto object-contain"
+            className="h-20 w-auto object-contain"
           />
         </Link>
         <nav className="flex items-center gap-6">
