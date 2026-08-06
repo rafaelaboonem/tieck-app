@@ -57,7 +57,8 @@ export function LabTab({ workspaceId, selected, runs, onRun }: Props) {
 
   const profile = profileOf(selected);
   const question = selected?.question ?? "";
-  const hasReference = Boolean(selected?.reference_path);
+  const refs = selected?.references || [];
+  const hasReferences = refs.length >= 2;
   const isOwner = Boolean(userId && selected && selected.created_by === userId);
 
 
