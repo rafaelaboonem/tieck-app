@@ -181,7 +181,7 @@ function ChecklistPreview({
       <div className="sticky top-0 z-[110] flex items-center justify-between px-6 py-3 bg-white/80 backdrop-blur-md border-b border-neutral-100 dark:bg-neutral-900/80 dark:border-neutral-800">
         <div className={`flex items-center gap-2 transition-all duration-300 ${sidebarOpen ? "pl-0" : "pl-14"}`}>
           <Link to="/organizar">
-            <img src={logoUrl} alt="Logo" className="w-10 h-10 object-contain grayscale hover:grayscale-0 active:grayscale-0 transition-all cursor-pointer" />
+            <img src={logoUrl} alt="Logo" className="w-14 h-14 object-contain grayscale hover:grayscale-0 active:grayscale-0 transition-all cursor-pointer" />
           </Link>
           <span className="text-neutral-400">›</span>
           <span className="text-xs font-semibold px-2 py-0.5 bg-blue-100 text-blue-600 rounded-full">Modo de Visualização</span>
