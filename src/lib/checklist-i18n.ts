@@ -86,7 +86,7 @@ const dict = {
     thankYouDesc: "Hecho con Tieck, la forma más sencilla de crear checklists gratis.",
     createOwn: "Crea tu propio checklist",
     submitAnalysisInProgress: "La foto aún se está analizando.",
-    submitResubmitRequired: "Envía una nueva foto antes de continuar.",
+    submitResubmitRequired: "Envía una nova foto antes de continuar.",
     submitBlockedByAnalysis: "El análisis de la foto bloqueó el envío.",
     submitModelNotReady: "El modelo de IA aún no está disponible.",
     submitAnalysisFailed: "No se pudo validar la foto. Inténtalo de nuevo.",
@@ -94,6 +94,7 @@ const dict = {
     submitEvidencePending: "Espera la confirmación de la subida de la foto.",
     submitRateLimited: "Demasiados intentos. Espera un momento e inténtalo de nuevo.",
     submitChecklistUnavailable: "Este checklist no está disponible ahora.",
+    submitUpdateRequired: "Este checklist debe ser actualizado por el responsable.",
   },
   fr: {
     submit: "Envoyer",
