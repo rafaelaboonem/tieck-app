@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,7 +14,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Loader2, Plus, ImageIcon, FlaskConical, Check, X, Archive, PlayCircle } from "lucide-react";
+import { Loader2, Plus, ImageIcon, FlaskConical, Check, X, Archive, PlayCircle, Upload, Trash2, Maximize2 } from "lucide-react";
 import {
   STATUS_LABEL,
   STATUS_TONE,
@@ -25,8 +25,12 @@ import {
   canActivate,
   activateStandard,
   prepareStandard,
+  uploadReference,
+  deleteReference,
   type VisualStandard,
+  type VisualStandardReference,
 } from "@/lib/visual-standards";
+import { supabase } from "@/integrations/supabase/client";
 import type { CameraQuestion, ChecklistProject } from "@/lib/camera-blocks";
 
 interface Props {
