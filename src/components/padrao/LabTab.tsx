@@ -14,7 +14,7 @@ import {
   blobToBase64,
   referenceBase64,
   runBenchmark,
-  ensureStandardProfile,
+  prepareStandard,
   profileOf,
   startLabSession,
   createLabAttempt,
