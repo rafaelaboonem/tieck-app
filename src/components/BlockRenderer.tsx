@@ -113,7 +113,10 @@ function CameraField({ value, onChange, textColor, onCameraToggle }: { value: an
   return (
     <div className="w-full">
       <div
-        onClick={() => inputRef.current?.click()}
+        onClick={() => {
+          onCameraToggle?.(true);
+          inputRef.current?.click();
+        }}
         className={`relative w-full ${preview ? "h-20" : "h-16"} border rounded-lg bg-neutral-50/50 dark:bg-neutral-800/50 cursor-pointer transition-all flex items-center px-4 overflow-hidden group ${preview ? "" : "border-neutral-200 dark:border-neutral-700"}`}
         style={preview ? { borderColor: color } : undefined}
       >
