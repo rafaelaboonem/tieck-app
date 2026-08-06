@@ -332,23 +332,39 @@ async function buildProfile(question: string, referenceSummary: string | null, m
 }
 
 
-async function describeReference(reference: Decoded, question: string, meter: UsageEntry[]): Promise<string | null> {
+async function describeReferences(references: (Decoded & { position: number })[], question: string, meter: UsageEntry[]): Promise<string | null> {
   try {
-    const payload = await cfMetered(meter, "reference_summary", fastModel(), {
-      image: toDataUrl(reference),
-      task: "query",
-      stream: false,
-      question:
-        `Describe only what is visible in this reference photo: main object or place, its state, ` +
-        `organisation and relevant elements. Context: ${question}`,
-      max_tokens: 200,
+    const images = references
+      .sort((a, b) => a.position - b.position)
+      .map((r, i) => ({
+        url: toDataUrl(r),
+        label: i === 0 ? "Principal Reference" : "Complementary Reference"
+      }));
+
+    // For multimodal with Gemini, we can send multiple images
+    const payload = await cfMetered(meter, "reference_summary", "google_gemini", {
+      action: "describe-multimodal",
+      images: images.map(img => img.url),
+      prompt: `Analyze these two reference photos for a quality checklist standard.
+      Photo 1 (Primary): The main view.
+      Photo 2 (Complementary): An alternative angle or close-up.
+      
+      Summarize the visual standard defined by these photos combined.
+      Question context: "${question}"
+      
+      Focus on permanent visual features, correct state, and what specifically must be checked.
+      Be concise.`
     });
+    
     const text = extractModelText(payload).trim();
-    return text ? text.slice(0, 400) : null;
-  } catch {
+    return text ? text.slice(0, 600) : null;
+  } catch (err) {
+    console.error(`[lab] describeReferences failed:`, err);
     return null;
   }
 }
+
+async function describeReference(reference: Decoded, question: string, meter: UsageEntry[]): Promise<string | null> {
 
 // ---------------- localização visual (detect / point / query) ----------------
 type Box = { x: number; y: number; w: number; h: number };
