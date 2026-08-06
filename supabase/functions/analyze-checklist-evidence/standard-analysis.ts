@@ -88,14 +88,16 @@ export async function analyzeWithStandard(args: {
     ...strList(args.standard.unverifiable_conditions, 4),
   ];
 
-  let reference: { mime: string; base64: string } | null = null;
-  if (args.standard.reference_path) {
+  const references: { mime: string; base64: string }[] = [];
+  const refPaths = (args.standard.references || []).map(r => r.storage_path);
+  
+  for (const path of refPaths) {
     const { data: file } = await args.db.storage
       .from("visual-standards")
-      .download(args.standard.reference_path);
+      .download(path);
     if (file) {
       const buf = new Uint8Array(await file.arrayBuffer());
-      reference = { mime: file.type || "image/jpeg", base64: bytesToBase64(buf) };
+      references.push({ mime: file.type || "image/jpeg", base64: bytesToBase64(buf) });
     }
   }
 
@@ -103,7 +105,7 @@ export async function analyzeWithStandard(args: {
     question: args.standard.question || args.question,
     profile,
     conditions,
-    hasReference: Boolean(reference),
+    referenceCount: references.length,
   });
 
   let call;
