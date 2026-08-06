@@ -178,6 +178,9 @@ function StandardCard({
   onTest: (s: VisualStandard) => void;
 }) {
   const questionChanged = Boolean(s.validated_question && s.validated_question !== s.question);
+  const refs = s.references || [];
+  const ref1 = refs.find(r => r.position === 1);
+  const ref2 = refs.find(r => r.position === 2);
 
   return (
     <Card>
@@ -196,17 +199,43 @@ function StandardCard({
           </div>
         </div>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-6">
         <p className="text-sm text-foreground">“{s.question}”</p>
         {questionChanged && (
           <p className="rounded-md border border-amber-500/30 bg-amber-500/10 p-2 text-xs text-amber-800">
             A pergunta foi alterada. Revise o padrão visual antes de ativá-lo novamente.
           </p>
         )}
+        
+        <div className="space-y-3">
+          <Label className="text-xs uppercase tracking-wider text-muted-foreground">Fotos de referência</Label>
+          <div className="grid grid-cols-2 gap-4">
+            <ReferenceSlot 
+              standard={s} 
+              position={1} 
+              reference={ref1} 
+              label="Principal" 
+              onChanged={onChanged} 
+            />
+            <ReferenceSlot 
+              standard={s} 
+              position={2} 
+              reference={ref2} 
+              label="Complementar" 
+              onChanged={onChanged} 
+            />
+          </div>
+          <div className="flex items-center justify-between px-1">
+            <p className="text-[10px] text-muted-foreground italic">
+              * Exatamente duas fotos são necessárias para ativação.
+            </p>
+            <Badge variant="secondary" className="text-[10px] py-0 px-1.5 h-4">
+              {refs.length} de 2
+            </Badge>
+          </div>
+        </div>
+
         {s.internal_notes && <p className="text-xs text-muted-foreground">{s.internal_notes}</p>}
-        <p className="text-xs text-muted-foreground">
-          {s.reference_path ? "Com foto de referência" : "Sem foto de referência"}
-        </p>
 
         <ActivationPanel standard={s} onChanged={onChanged} />
 
@@ -215,6 +244,130 @@ function StandardCard({
         </Button>
       </CardContent>
     </Card>
+  );
+}
+
+function ReferenceSlot({ 
+  standard, 
+  position, 
+  reference, 
+  label, 
+  onChanged 
+}: { 
+  standard: VisualStandard;
+  position: 1 | 2;
+  reference?: VisualStandardReference;
+  label: string;
+  onChanged: () => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const onFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setBusy(true);
+    try {
+      await uploadReference(standard, file, position);
+      toast.success(`${label} enviada.`);
+      onChanged();
+    } catch (err) {
+      toast.error(`Falha no envio: ${(err as Error).message}`);
+    } finally {
+      setBusy(false);
+      if (inputRef.current) inputRef.current.value = "";
+    }
+  };
+
+  const onRemove = async () => {
+    if (!confirm(`Remover a referência ${label.toLowerCase()}?`)) return;
+    setBusy(true);
+    try {
+      await deleteReference(standard, position);
+      toast.success(`${label} removida.`);
+      onChanged();
+    } catch (err) {
+      toast.error(`Falha ao remover: ${(err as Error).message}`);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const publicUrl = reference 
+    ? supabase.storage.from("visual-standards").getPublicUrl(reference.storage_path).data.publicUrl
+    : null;
+
+  return (
+    <div className="relative group">
+      <div 
+        className={`aspect-[4/3] rounded-lg border-2 border-dashed flex flex-col items-center justify-center gap-2 transition-colors relative overflow-hidden ${
+          publicUrl ? "border-solid border-muted" : "border-muted-foreground/20 hover:border-[#FF007F]/50 bg-muted/5"
+        }`}
+      >
+        {busy && (
+          <div className="absolute inset-0 z-20 flex items-center justify-center bg-white/60 backdrop-blur-[1px]">
+            <Loader2 className="h-5 w-5 animate-spin text-[#FF007F]" />
+          </div>
+        )}
+
+        {publicUrl ? (
+          <>
+            <img 
+              src={publicUrl} 
+              alt={label} 
+              className="absolute inset-0 w-full h-full object-cover" 
+            />
+            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 z-10">
+              <Button size="icon" variant="secondary" className="h-8 w-8 rounded-full" onClick={() => setPreviewOpen(true)}>
+                <Maximize2 className="h-4 w-4" />
+              </Button>
+              <Button size="icon" variant="destructive" className="h-8 w-8 rounded-full" onClick={onRemove} disabled={busy}>
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </div>
+          </>
+        ) : (
+          <>
+            <ImageIcon className="h-6 w-6 text-muted-foreground/40" />
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              className="text-[10px] h-7 px-2 text-muted-foreground hover:text-[#FF007F]"
+              onClick={() => inputRef.current?.click()}
+              disabled={busy}
+            >
+              <Upload className="mr-1.5 h-3 w-3" /> Adicionar
+            </Button>
+          </>
+        )}
+      </div>
+      
+      <div className="absolute -top-2 left-2 px-1.5 py-0.5 bg-background border rounded text-[9px] font-bold uppercase tracking-tighter z-10">
+        {label}
+      </div>
+
+      <input 
+        ref={inputRef}
+        type="file" 
+        accept="image/jpeg,image/png,image/webp" 
+        className="hidden" 
+        onChange={onFileChange} 
+      />
+
+      <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
+        <DialogContent className="max-w-3xl p-0 overflow-hidden border-none bg-black/90">
+          {publicUrl && (
+            <img 
+              src={publicUrl} 
+              alt={label} 
+              className="w-full h-auto max-h-[85vh] object-contain" 
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+    </div>
   );
 }
 
