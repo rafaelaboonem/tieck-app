@@ -653,14 +653,14 @@ async function handleStatus(payload: any, db: ReturnType<typeof admin>) {
     block,
   );
 
-  // Prova de verificação: somente aprova se for Gemini V3 e tiver todos os campos.
-  // Referências são verificadas na Edge Function V3 que só salva run_number=1 se references.length=2.
+  // Prova de verificação: somente aprova se for Gemini V3 e tiver verified_at na coluna.
   const isV3 = data.provider === "google_gemini" && data.model_id === GEMINI_MODEL_ID;
   const verified = 
     data.status === "normal" && 
     isV3 && 
     !block.isLegacy &&
-    (data.raw_response as any)?.verified_at != null;
+    (data as any).verified_at != null;
+
 
   const generatedMessage =
     verified &&
