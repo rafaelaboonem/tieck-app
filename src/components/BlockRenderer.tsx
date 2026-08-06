@@ -200,7 +200,12 @@ function CameraFieldMulti({
   return (
     <div className="w-full">
       <div
-        onClick={() => canAdd && inputRef.current?.click()}
+        onClick={() => {
+          if (canAdd) {
+            onCameraToggle?.(true);
+            inputRef.current?.click();
+          }
+        }}
         className={`relative w-full ${files.length > 0 ? "h-20" : "h-16"} border rounded-lg transition-all flex items-center px-4 gap-3 overflow-hidden ${canAdd ? "cursor-pointer bg-neutral-50/50 dark:bg-neutral-800/50" : "cursor-not-allowed"} ${files.length > 0 ? "" : "border-neutral-200 dark:border-neutral-700"}`}
         style={
           !canAdd
