@@ -154,7 +154,7 @@ export function overallConditionStatus(conditions: GeminiCondition[]): Condition
  */
 export function decideGemini(
   payload: GeminiPayload,
-  options: { hasReference: boolean; threshold?: number },
+  options: { hasReference: boolean; threshold?: number; referenceCount?: number; standardVersion?: string; snapshotVersion?: string },
 ): GeminiVerdict {
   const threshold = typeof options.threshold === "number" &&
       options.threshold > 0 && options.threshold <= 1
@@ -164,19 +164,22 @@ export function decideGemini(
   const status = overallConditionStatus(payload.conditions);
   const verified = payload.conditions.filter((c) => c.status === "verified");
 
-  const evidenceOk = verified.every((c) => c.visible_evidence.length > 0);
+  const evidenceOk = verified.every((c) => typeof c.visible_evidence === "string" && c.visible_evidence.trim().length > 0);
   const evidenceNotSpeculative = verified.every((c) => !isSpeculative(c.visible_evidence));
 
+  // Trava conservadora real: ALL must be true
   const gate: Record<string, boolean> = {
-    image_usable: payload.image_quality === "good",
-    target_visible: payload.target_visible,
-    target_confidence_sufficient: payload.target_confidence >= threshold,
-    reference_comparable: options.hasReference ? payload.reference_comparable : true,
-    all_conditions_verified: status === "verified",
-    condition_confidence_sufficient: payload.conditions.every((c) => c.confidence >= threshold),
+    observable: status !== "not_observable",
+    target_present: payload.target_visible === true,
+    reference_match: payload.reference_comparable === true,
+    condition_met: status === "verified",
+    image_quality_usable: payload.image_quality === "good",
     overall_confidence_sufficient: payload.overall_confidence >= threshold,
-    evidence_present: evidenceOk,
-    evidence_not_speculative: evidenceNotSpeculative,
+    visible_evidence_present: evidenceOk && evidenceNotSpeculative,
+    references_valid: (options.referenceCount ?? 0) === 2,
+    provider_valid: true, // Chamador garante
+    model_valid: true, // Chamador garante
+    version_match: options.standardVersion === options.snapshotVersion,
   };
 
   const base = {
@@ -194,54 +197,37 @@ export function decideGemini(
     overridden: payload.suggested_decision !== decision,
   });
 
-  // 1) Imagem inutilizável ou com defeito conhecido → sempre nova foto.
-  if (payload.image_quality !== "good") {
-    const code = payload.image_quality === "dark"
-      ? "too_dark"
-      : payload.image_quality === "blurry"
-        ? "blurry"
-        : payload.image_quality === "cropped"
-          ? "bad_framing"
-          : "insufficient_evidence";
-    return verdict("retake", code, RETAKE_MESSAGES[code]);
+  // 1) Versão ou configuração inválida
+  if (!gate.references_valid) return verdict("uncertain", "standard_not_configured", "Padrão visual mal configurado.");
+  if (!gate.version_match) return verdict("uncertain", "standard_version_mismatch", "O checklist precisa ser republicado.");
+
+  // 2) Imagem inutilizável ou com defeito conhecido
+  if (!gate.image_quality_usable) {
+    const code = payload.image_quality === "dark" ? "too_dark" :
+                 payload.image_quality === "blurry" ? "blurry" :
+                 payload.image_quality === "cropped" ? "bad_framing" : "image_quality";
+    return verdict("retake", code, RETAKE_MESSAGES[code] || "Qualidade da imagem insuficiente.");
   }
 
-  // 2) Alvo ausente ou reconhecido com pouca certeza.
-  if (!payload.target_visible) {
-    return verdict("retake", "target_not_found", RETAKE_MESSAGES.target_not_found);
-  }
-  if (!gate.target_confidence_sufficient) {
-    return verdict("uncertain", "target_confidence_below_threshold", LOW_CONFIDENCE_MESSAGE);
-  }
+  // 3) Alvo ausente ou reconhecido com pouca certeza
+  if (!gate.target_present) return verdict("retake", "target_not_found", RETAKE_MESSAGES.target_not_found);
 
-  // 3) Condição impossível de observar nunca vira aprovação nem reprovação.
-  if (status === "not_observable") {
-    return verdict("uncertain", "not_observable", NOT_OBSERVABLE_MESSAGE);
-  }
+  // 4) Referência existente mas incomparável
+  if (!gate.reference_match) return verdict("retake", "wrong_subject", REFERENCE_MESSAGE);
 
-  // 4) Condição comprovadamente não atendida → nova foto.
-  if (status === "not_met") {
-    return verdict("retake", "condition_not_met", RETAKE_MESSAGES.condition_not_met);
-  }
+  // 5) Condição impossível de observar
+  if (!gate.observable) return verdict("uncertain", "not_observable", NOT_OBSERVABLE_MESSAGE);
 
-  // 5) Referência existente mas incomparável.
-  if (!gate.reference_comparable) {
-    return verdict("uncertain", "reference_not_comparable", REFERENCE_MESSAGE);
-  }
+  // 6) Condição comprovadamente não atendida
+  if (!gate.condition_met) return verdict("retake", "condition_not_met", RETAKE_MESSAGES.condition_not_met);
 
-  // 6) Evidência ausente ou especulativa nunca comprova.
-  if (!gate.evidence_present) {
-    return verdict("uncertain", "evidence_missing", NOT_OBSERVABLE_MESSAGE);
-  }
-  if (!gate.evidence_not_speculative) {
-    return verdict("uncertain", "evidence_speculative", NOT_OBSERVABLE_MESSAGE);
-  }
+  // 7) Evidência ausente ou especulativa
+  if (!gate.visible_evidence_present) return verdict("uncertain", "insufficient_evidence", NOT_OBSERVABLE_MESSAGE);
 
-  // 7) Confiança insuficiente em qualquer nível.
-  if (!gate.condition_confidence_sufficient || !gate.overall_confidence_sufficient) {
-    return verdict("uncertain", "confidence_below_threshold", LOW_CONFIDENCE_MESSAGE);
-  }
+  // 8) Confiança insuficiente
+  if (!gate.overall_confidence_sufficient) return verdict("retake", "low_confidence", LOW_CONFIDENCE_MESSAGE);
 
+  // Decisão final: somente aprovado se TODOS os portões estiverem abertos
   if (Object.values(gate).every(Boolean)) {
     const msg = payload.public_message && !isSpeculative(payload.public_message)
       ? payload.public_message
@@ -251,3 +237,4 @@ export function decideGemini(
 
   return verdict("uncertain", "insufficient_evidence", LOW_CONFIDENCE_MESSAGE);
 }
+

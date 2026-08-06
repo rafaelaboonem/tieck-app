@@ -640,9 +640,10 @@ async function handleStatus(payload: any, db: ReturnType<typeof admin>) {
 
   const { data } = await db
     .from("checklist_evidence_analyses")
-    .select("status, error_code, raw_response, processing_finished_at, block_id, provider, model_id, checklists(published_content)")
+    .select("status, error_code, raw_response, processing_finished_at, block_id, provider, model_id, verified_at, checklists(published_content)")
     .eq("analysis_token_hash", tokenHash)
     .maybeSingle();
+
   if (!data) return err(404, "analysis_not_found");
 
   const published = (data as any).checklists?.published_content ?? null;
@@ -653,14 +654,14 @@ async function handleStatus(payload: any, db: ReturnType<typeof admin>) {
     block,
   );
 
-  // Prova de verificação: somente aprova se for Gemini V3 e tiver todos os campos.
-  // Referências são verificadas na Edge Function V3 que só salva run_number=1 se references.length=2.
+  // Prova de verificação: somente aprova se for Gemini V3 e tiver verified_at na coluna.
   const isV3 = data.provider === "google_gemini" && data.model_id === GEMINI_MODEL_ID;
   const verified = 
     data.status === "normal" && 
     isV3 && 
     !block.isLegacy &&
-    (data.raw_response as any)?.verified_at != null;
+    (data as any).verified_at != null;
+
 
   const generatedMessage =
     verified &&
@@ -682,7 +683,11 @@ async function handleStatus(payload: any, db: ReturnType<typeof admin>) {
     finishedAt: data.processing_finished_at ?? null,
     failureKind: technicalFailure ? (rateLimited ? "provider_rate_limited" : "technical_failure") : null,
     retryable: technicalFailure,
+    verifiedAt: (data as any).verified_at ?? null,
+    provider: data.provider,
+    modelId: data.model_id,
   });
+
 
 }
 
@@ -900,9 +905,12 @@ async function processAnalysis(analysisId: string) {
         question: instruction,
         candidate: image,
         candidateMime: mimeType,
+        snapshotVersion: String(found.vision?.visualStandardVersion || "0"),
       });
 
-      const status = verdict.decision === "approved"
+
+      const isApproved = verdict.decision === "approved";
+      const status = isApproved
         ? "normal"
         : verdict.decision === "retake"
           ? "anomalous"
@@ -914,8 +922,13 @@ async function processAnalysis(analysisId: string) {
         status,
         confidence: verdict.confidence,
         anomaly_score: status === "anomalous" ? verdict.confidence : Math.max(0, 1 - verdict.confidence),
-        regions: { reason_code: verdict.reasonCode, condition_status: verdict.conditionStatus },
+        regions: { 
+          reason_code: verdict.reasonCode, 
+          condition_status: verdict.conditionStatus,
+          gate: (verdict as any).gate 
+        },
         inference_ms: verdict.inferenceMs,
+        verified_at: isApproved ? new Date().toISOString() : null,
         raw_response: {
           version: "camera_ai_v3",
           decision: verdict.decision,
@@ -927,8 +940,9 @@ async function processAnalysis(analysisId: string) {
         processing_finished_at: new Date().toISOString(),
       }).eq("id", analysisId);
       if (stdErr) throw new Error("analysis_update_failed");
-      console.log(`[analysis:${logId}] completed v3 status=${status} ms=${verdict.inferenceMs}`);
+      console.log(`[analysis:${logId}] completed v3 status=${status} ms=${verdict.inferenceMs} verified=${isApproved}`);
       return;
+
     }
 
   } catch (e) {

@@ -18,7 +18,9 @@ export type StandardRecord = {
   id: string;
   question: string;
   internal_profile: any;
+  version: number | null;
   confidence_threshold: number | null;
+
   status: string | null;
   unverifiable_conditions: any;
   references?: { storage_path: string }[];
@@ -65,8 +67,9 @@ export async function loadStandardForBlock(
   const { data } = await db
     .from("visual_standards")
     .select(
-      "id, question, internal_profile, confidence_threshold, status, unverifiable_conditions, references:visual_standard_references(storage_path)",
+      "id, question, internal_profile, version, confidence_threshold, status, unverifiable_conditions, references:visual_standard_references(storage_path)",
     )
+
     .eq("checklist_id", checklistId)
     .eq("camera_block_id", cameraBlockId)
     .is("archived_at", null)
@@ -81,7 +84,9 @@ export async function analyzeWithStandard(args: {
   question: string;
   candidate: Uint8Array;
   candidateMime: string;
+  snapshotVersion?: string;
 }): Promise<StandardVerdict> {
+
   const profile = args.standard.internal_profile ?? {};
   const conditions = [
     ...strList(profile?.conditions, 6),
@@ -126,9 +131,12 @@ export async function analyzeWithStandard(args: {
 
   const threshold = Number(args.standard.confidence_threshold);
   const verdict = decideGemini(payload, {
-    hasReference: references.length > 0,
+    referenceCount: references.length,
     threshold: Number.isFinite(threshold) && threshold > 0 ? threshold : undefined,
+    standardVersion: String((args.standard as any).version || "0"),
+    snapshotVersion: String((args as any).snapshotVersion || "0"),
   });
+
 
   const decision: PublicDecision = verdict.decision === "approved"
     ? "approved"
