@@ -78,8 +78,8 @@ export function PublicCameraBlock({ block, checklistId, ensureResponseSession, o
         ? "approved"
         : analysisResult.status === "failed"
           ? (analysisResult.failureKind === "provider_rate_limited" ? "provider_rate_limited" : "technical_failure")
-          : analysisResult.status === "manual_review"
-            ? "not_observable"
+          : (analysisResult.status === "manual_review" || (analysisResult as any).requiresResubmit)
+            ? (analysisResult.status === "manual_review" ? "not_observable" : "retake")
             : (analysisResult.status as string) === "checklist_update_required"
               ? "update_required"
               : "retake";

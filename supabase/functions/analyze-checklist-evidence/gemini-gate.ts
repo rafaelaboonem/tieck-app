@@ -47,9 +47,9 @@ const QUALITIES: ImageQuality[] = ["good", "dark", "blurry", "cropped", "unusabl
 const STATUSES: ConditionStatus[] = ["verified", "not_met", "not_observable"];
 
 const LOW_CONFIDENCE_MESSAGE =
-  "Não deu para confirmar com segurança. Tire outra foto mais próxima e bem iluminada.";
+  "Não foi possível confirmar pela foto. Tire outra mostrando melhor o item solicitado.";
 const NOT_OBSERVABLE_MESSAGE =
-  "Esta foto não é capaz de comprovar o que foi pedido. É necessária uma conferência de outra forma.";
+  "Essa condição não pode ser confirmada claramente por esta foto.";
 const REFERENCE_MESSAGE =
   "Não deu para comparar com o resultado esperado. Fotografe o mesmo local por inteiro.";
 

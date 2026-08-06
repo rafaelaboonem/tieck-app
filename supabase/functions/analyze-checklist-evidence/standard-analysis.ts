@@ -149,6 +149,7 @@ export async function analyzeWithStandard(args: {
     publicMessage: verdict.public_message,
     confidence: Number(verdict.confidence ?? 0),
     reasonCode: verdict.reason_code ?? "unspecified",
+    gate: (verdict as any).gate,
     model: call.model,
     inferenceMs: call.inferenceMs,
     conditionStatus: verdict.condition_status,
