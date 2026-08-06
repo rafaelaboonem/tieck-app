@@ -18,7 +18,8 @@ import {
   Repeat,
   CalendarClock,
 } from "lucide-react";
-import logoUrl from "@/assets/tieck-logo.png";
+import logoAsset from "@/assets/logo-tieck.webp.asset.json";
+const logoUrl = logoAsset.url;
 
 export const Route = createFileRoute("/insights")({
   head: () => ({

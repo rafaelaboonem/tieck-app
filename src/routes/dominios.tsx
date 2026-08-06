@@ -3,7 +3,8 @@ import { Globe, Search, Copy, Edit2, Check, X, ExternalLink } from "lucide-react
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { useSidebar } from "@/contexts/SidebarContext";
 import { useAuth } from "@/contexts/AuthContext";
-import logo from "@/assets/tieck-logo.png";
+import logoAsset from "@/assets/logo-tieck.webp.asset.json";
+const logo = logoAsset.url;
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";

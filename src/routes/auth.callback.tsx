@@ -2,7 +2,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import logoUrl from "../assets/tieck-logo.png?url";
+import logoAsset from "@/assets/logo-tieck.webp.asset.json";
+const logoUrl = logoAsset.url;
 
 const sanitizeRedirect = (value?: string) => {
   if (typeof value === "string" && value.startsWith("/") && !value.startsWith("//")) {

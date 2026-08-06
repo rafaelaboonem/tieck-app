@@ -17,7 +17,8 @@ import {
   Hourglass,
   CalendarClock,
 } from "lucide-react";
-import logoUrl from "@/assets/tieck-logo.png";
+import logoAsset from "@/assets/logo-tieck.webp.asset.json";
+const logoUrl = logoAsset.url;
 import {
   OperationalDashboardFilters,
   sanitizeFilters,

@@ -8,7 +8,8 @@ import { useNavigate } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { FileText, Clock, ChevronRight } from "lucide-react";
-import logoUrl from "@/assets/tieck-logo.png";
+import logoAsset from "@/assets/logo-tieck.webp.asset.json";
+const logoUrl = logoAsset.url;
 import { toast } from "sonner";
 import {
   DropdownMenu,

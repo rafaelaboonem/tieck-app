@@ -4,7 +4,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { MotionProvider, m } from "@/lib/motion";
 import { ArrowRight } from "lucide-react";
 
-import logoUrl from "../assets/tieck-logo.png?url";
+import logoAsset from "@/assets/logo-tieck.webp.asset.json";
+const logoUrl = logoAsset.url;
 import { Header } from "@/components/landing/Header";
 import { Hero } from "@/components/landing/Hero";
 import { Features } from "@/components/landing/Features";

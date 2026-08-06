@@ -425,7 +425,8 @@ import {
     CheckCheck,
     Ban,
   } from "lucide-react";
-import logoUrl from "@/assets/tieck-logo.png";
+import logoAsset from "@/assets/logo-tieck.webp.asset.json";
+const logoUrl = logoAsset.url;
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { mapAuthError } from "@/utils/auth-errors";

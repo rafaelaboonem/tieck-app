@@ -1,7 +1,8 @@
 import { Link } from "@tanstack/react-router";
 import { m } from "@/lib/motion";
 import { useAuth } from "@/contexts/AuthContext";
-import logoUrl from "@/assets/tieck-logo.png?url";
+import logoAsset from "@/assets/logo-tieck.webp.asset.json";
+const logoUrl = logoAsset.url;
 
 export const Header = () => {
   const { user } = useAuth();
