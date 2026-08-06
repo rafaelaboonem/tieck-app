@@ -651,16 +651,16 @@ export async function runBenchmark(input: {
 }
 
 
-/** Gera/atualiza o perfil interno do padrão no servidor. Best-effort. */
-export async function ensureStandardProfile(
+/** Gera o perfil interno e prepara o padrão no servidor. Somente após clique do proprietário. */
+export async function prepareStandard(
   workspaceId: string,
   standardId: string,
-): Promise<{ ok: boolean; needsValidation?: boolean; usage?: UsageTotals }> {
+): Promise<{ ok: boolean; status?: string; message?: string }> {
   const { data, error } = await supabase.functions.invoke("vision-benchmark", {
-    body: { action: "profile-standard", workspaceId, standardId },
+    body: { action: "prepare-standard", workspaceId, standardId },
   });
-  if (error) return { ok: false };
-  return data as { ok: boolean; needsValidation?: boolean; usage?: UsageTotals };
+  if (error) return { ok: false, message: error.message };
+  return data as { ok: boolean; status?: string; message?: string };
 }
 
 export type LiveState = "searching" | "adjust" | "ready" | "uncertain";
