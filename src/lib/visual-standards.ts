@@ -93,7 +93,7 @@ export interface CameraBlockStandardBinding {
 export async function listStandards(workspaceId: string): Promise<VisualStandard[]> {
   const { data, error } = await supabase
     .from("visual_standards")
-    .select("*")
+    .select("*, references:visual_standard_references(*)")
     .eq("workspace_id", workspaceId)
     .order("created_at", { ascending: false });
   if (error) throw error;
