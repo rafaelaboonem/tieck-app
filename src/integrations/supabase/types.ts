@@ -1628,6 +1628,48 @@ export type Database = {
           },
         ]
       }
+      visual_standard_references: {
+        Row: {
+          created_at: string
+          id: string
+          position: number
+          storage_path: string
+          visual_standard_id: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          position: number
+          storage_path: string
+          visual_standard_id: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          position?: number
+          storage_path?: string
+          visual_standard_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "visual_standard_references_visual_standard_id_fkey"
+            columns: ["visual_standard_id"]
+            isOneToOne: false
+            referencedRelation: "visual_standards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "visual_standard_references_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       visual_standards: {
         Row: {
           accuracy: number | null
