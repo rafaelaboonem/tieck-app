@@ -265,7 +265,7 @@ export async function syncStandardsWithBlocks(input: {
       patch.question = current;
       patch.name = current.slice(0, 120);
       patch.needs_validation = true;
-      patch.status = "needs_improvement";
+      patch.status = "preparing";
       revalidate++;
     }
     if (Object.keys(patch).length > 0) {
