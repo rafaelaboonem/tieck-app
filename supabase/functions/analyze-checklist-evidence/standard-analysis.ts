@@ -126,9 +126,12 @@ export async function analyzeWithStandard(args: {
 
   const threshold = Number(args.standard.confidence_threshold);
   const verdict = decideGemini(payload, {
-    hasReference: references.length > 0,
+    referenceCount: references.length,
     threshold: Number.isFinite(threshold) && threshold > 0 ? threshold : undefined,
+    standardVersion: String((args.standard as any).version || "0"),
+    snapshotVersion: String((args as any).snapshotVersion || "0"),
   });
+
 
   const decision: PublicDecision = verdict.decision === "approved"
     ? "approved"
