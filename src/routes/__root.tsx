@@ -16,8 +16,8 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import { useEffect } from "react";
 
 import appCss from "../styles.css?url";
-import faviconUrl from "../assets/tieck-favicon.png?url";
-import ogImageUrl from "../assets/local/logo-tieck.webp";
+import faviconUrl from "/favicon.png?url";
+import ogImageUrl from "/og-image.webp?url";
 
 function isRecoverableLoadingError(reason: unknown) {
   const text = String((reason as any)?.message || reason || "");
