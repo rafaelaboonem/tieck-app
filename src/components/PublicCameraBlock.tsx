@@ -110,6 +110,7 @@ export function PublicCameraBlock({ block, checklistId, ensureResponseSession, o
       if (created) setSession(created);
     }
     setCameraOpen(true);
+    onCameraToggle?.(true);
   };
 
   const handleCapture = (file: File) => {
