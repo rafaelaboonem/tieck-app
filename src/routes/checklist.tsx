@@ -6098,11 +6098,12 @@ function NovoChecklistPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Não é possível publicar</AlertDialogTitle>
             <AlertDialogDescription>
-              O bloco{" "}
-              <span className="font-semibold text-neutral-800">
-                “{publishBlocker?.label}”
-              </span>{" "}
-              está com a verificação por IA ativada. Vincule e ative um padrão visual antes
+              {publishBlocker?.code === "standard_not_configured" ? (
+                <>Este bloco ainda não possui um padrão visual.</>
+              ) : (
+                <>O padrão visual ainda precisa ser preparado e ativado.</>
+              )}
+              {" "}Vincule e ative um padrão visual antes
               de publicar este checklist.
             </AlertDialogDescription>
           </AlertDialogHeader>
