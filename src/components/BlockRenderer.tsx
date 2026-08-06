@@ -316,6 +316,8 @@ export interface BlockRendererProps {
   setAnswer?: (id: string, v: any) => void;
   /** public mode only — affects radio button style */
   isDark?: boolean;
+  /** public mode only — used to hide branding when camera is open */
+  onCameraToggle?: (open: boolean) => void;
 }
 
 /**
