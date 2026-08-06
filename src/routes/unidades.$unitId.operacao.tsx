@@ -45,7 +45,10 @@ export const Route = createFileRoute("/unidades/$unitId/operacao")({
       startDate: typeof raw.startDate === "string" ? raw.startDate : undefined,
       endDate: typeof raw.endDate === "string" ? raw.endDate : undefined,
     });
-    return { startDate: s.startDate, endDate: s.endDate };
+    return { 
+      startDate: s.startDate || undefined, 
+      endDate: s.endDate || undefined 
+    };
   },
   head: () => ({
     meta: [

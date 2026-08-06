@@ -465,12 +465,12 @@ export const Route = createFileRoute("/checklist")({
   head: () => ({
     meta: [{ title: "Editor — Tieck" }],
   }),
-  validateSearch: (search: Record<string, unknown>) => {
+  validateSearch: (search: Record<string, unknown>): { id?: string; workspace?: string; category?: string; settings?: boolean } => {
     return {
-      id: search.id as string | undefined,
-      workspace: search.workspace as string | undefined,
-      category: search.category as string | undefined,
-      settings: search.settings as boolean | undefined,
+      id: typeof search.id === "string" ? search.id : undefined,
+      workspace: typeof search.workspace === "string" ? search.workspace : undefined,
+      category: typeof search.category === "string" ? search.category : undefined,
+      settings: typeof search.settings === "boolean" ? search.settings : undefined,
     };
   },
   component: NovoChecklistPage,

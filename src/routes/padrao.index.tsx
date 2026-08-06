@@ -13,7 +13,7 @@ import { listChecklistProjects, type ChecklistProject } from "@/lib/camera-block
 import { listStandards, type LabRun, type VisualStandard } from "@/lib/visual-standards";
 
 export const Route = createFileRoute("/padrao/")({
-  validateSearch: (search: Record<string, unknown>) => ({
+  validateSearch: (search: Record<string, unknown>): { checklist?: string; block?: string } => ({
     checklist: typeof search["checklist"] === "string" ? (search["checklist"] as string) : undefined,
     block: typeof search["block"] === "string" ? (search["block"] as string) : undefined,
   }),

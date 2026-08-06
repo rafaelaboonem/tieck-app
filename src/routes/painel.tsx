@@ -38,7 +38,11 @@ export const Route = createFileRoute("/painel")({
       endDate: typeof raw.endDate === "string" ? raw.endDate : undefined,
       unitId: typeof raw.unitId === "string" ? raw.unitId : undefined,
     });
-    return { startDate: s.startDate, endDate: s.endDate, unitId: s.unitId };
+    return { 
+      startDate: s.startDate || undefined, 
+      endDate: s.endDate || undefined, 
+      unitId: s.unitId || undefined 
+    };
   },
   head: () => ({
     meta: [
