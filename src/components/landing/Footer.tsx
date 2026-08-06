@@ -8,7 +8,7 @@ export const Footer = () => {
         <div className="grid md:grid-cols-4 gap-12 mb-16">
           <div className="col-span-1 md:col-span-1">
             <Link to="/" className="inline-block">
-              <img src={logoUrl} alt="Tieck" className="h-8 w-auto object-contain" />
+              <img src={logoUrl} alt="Tieck" className="h-16 w-auto object-contain" />
             </Link>
             <p className="mt-6 text-neutral-500 text-sm leading-relaxed">
               A ferramenta de checklists mais simples e poderosa do Brasil. Feita para quem busca eficiência e clareza.
