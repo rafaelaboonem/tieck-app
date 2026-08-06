@@ -902,7 +902,8 @@ async function processAnalysis(analysisId: string) {
         candidateMime: mimeType,
       });
 
-      const status = verdict.decision === "approved"
+      const isApproved = verdict.decision === "approved";
+      const status = isApproved
         ? "normal"
         : verdict.decision === "retake"
           ? "anomalous"
@@ -914,8 +915,13 @@ async function processAnalysis(analysisId: string) {
         status,
         confidence: verdict.confidence,
         anomaly_score: status === "anomalous" ? verdict.confidence : Math.max(0, 1 - verdict.confidence),
-        regions: { reason_code: verdict.reasonCode, condition_status: verdict.conditionStatus },
+        regions: { 
+          reason_code: verdict.reasonCode, 
+          condition_status: verdict.conditionStatus,
+          gate: (verdict as any).gate 
+        },
         inference_ms: verdict.inferenceMs,
+        verified_at: isApproved ? new Date().toISOString() : null,
         raw_response: {
           version: "camera_ai_v3",
           decision: verdict.decision,
@@ -927,8 +933,9 @@ async function processAnalysis(analysisId: string) {
         processing_finished_at: new Date().toISOString(),
       }).eq("id", analysisId);
       if (stdErr) throw new Error("analysis_update_failed");
-      console.log(`[analysis:${logId}] completed v3 status=${status} ms=${verdict.inferenceMs}`);
+      console.log(`[analysis:${logId}] completed v3 status=${status} ms=${verdict.inferenceMs} verified=${isApproved}`);
       return;
+
     }
 
   } catch (e) {
