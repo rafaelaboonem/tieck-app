@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Star, Camera, ArrowRight, ArrowUpRight, ArrowRightCircle, ArrowBigRight, MoveRight, Send, SendHorizontal, Check, CheckCircle, CheckCheck } from "lucide-react";
-import logoUrl from "../assets/local/logo-tieck.webp";
+import logoUrl from "../assets/local/logo-k.webp";
 const tieckLogo = logoUrl;
 import { toast } from "sonner";
 import { BlockRenderer } from "@/components/BlockRenderer";
@@ -984,7 +984,7 @@ function PublicChecklistPage() {
             <img 
               src={tieckLogo} 
               alt="Tieck" 
-              className="h-14 w-auto object-contain grayscale opacity-60 group-hover:grayscale-0 group-hover:opacity-100 transition-all duration-300" 
+              className="h-20 w-auto object-contain grayscale opacity-60 group-hover:grayscale-0 group-hover:opacity-100 transition-all duration-300" 
             />
           </Link>
 

@@ -181,7 +181,7 @@ function ChecklistPreview({
       <div className="sticky top-0 z-[110] flex items-center justify-between px-6 py-3 bg-white/80 backdrop-blur-md border-b border-neutral-100 dark:bg-neutral-900/80 dark:border-neutral-800">
         <div className={`flex items-center gap-2 transition-all duration-300 ${sidebarOpen ? "pl-0" : "pl-14"}`}>
           <Link to="/organizar">
-            <img src={logoUrl} alt="Logo" className="w-10 h-10 object-contain grayscale hover:grayscale-0 active:grayscale-0 transition-all cursor-pointer" />
+            <img src={logoUrl} alt="Logo" className="w-14 h-14 object-contain grayscale hover:grayscale-0 active:grayscale-0 transition-all cursor-pointer" />
           </Link>
           <span className="text-neutral-400">›</span>
           <span className="text-xs font-semibold px-2 py-0.5 bg-blue-100 text-blue-600 rounded-full">Modo de Visualização</span>
@@ -425,7 +425,7 @@ import {
     CheckCheck,
     Ban,
   } from "lucide-react";
-import logoUrl from "../assets/local/logo-tieck.webp";
+import logoUrl from "../assets/local/logo-k.webp";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { mapAuthError } from "@/utils/auth-errors";
@@ -2454,7 +2454,7 @@ function NovoChecklistPage() {
       <header className="flex items-center justify-between px-6 py-3 border-b border-neutral-100">
         <div className={`flex items-center gap-2 transition-all duration-300 ${sidebarOpen ? "pl-0" : "pl-14"}`}>
           <Link to={user ? "/inicio" : "/"}>
-            <img src={logoUrl} alt="Logo" className="w-10 h-10 object-contain grayscale hover:grayscale-0 active:grayscale-0 transition-all cursor-pointer" />
+            <img src={logoUrl} alt="Logo" className="w-14 h-14 object-contain grayscale hover:grayscale-0 active:grayscale-0 transition-all cursor-pointer" />
           </Link>
           <span className="text-neutral-400">›</span>
           <Link to={user ? "/inicio" : "/"} className="text-neutral-600 hover:text-neutral-900 transition-colors text-sm">
