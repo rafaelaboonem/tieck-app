@@ -260,9 +260,27 @@ function LinkRow({
 
 function ActivationPanel({ standard, onChanged }: { standard: VisualStandard; onChanged: () => void }) {
   const [busy, setBusy] = useState(false);
+  const [preparing, setPreparing] = useState(false);
   const checks = activationChecks(standard);
   const ready = canActivate(standard);
   const active = standard.status === "validated" && !standard.needs_validation;
+
+  const prepare = async () => {
+    setPreparing(true);
+    try {
+      const res = await prepareStandard(standard.workspace_id, standard.id);
+      if (res.ok) {
+        toast.success(res.message || "Padrão preparado com sucesso.");
+        onChanged();
+      } else {
+        toast.error(res.message || "Não foi possível preparar o padrão.");
+      }
+    } catch (e) {
+      toast.error(`Erro na preparação: ${(e as Error).message}`);
+    } finally {
+      setPreparing(false);
+    }
+  };
 
   const activate = async () => {
     setBusy(true);
@@ -286,23 +304,54 @@ function ActivationPanel({ standard, onChanged }: { standard: VisualStandard; on
   }
 
   return (
-    <div className="space-y-2 rounded-md border p-2">
-      <ul className="space-y-1">
-        {checks.map((c) => (
-          <li key={c.key} className="flex items-center gap-2 text-xs">
-            {c.ok ? (
-              <Check className="h-3.5 w-3.5 text-emerald-600" aria-hidden />
-            ) : (
-              <X className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
-            )}
-            <span className={c.ok ? "" : "text-muted-foreground"}>{c.label}</span>
-          </li>
-        ))}
-      </ul>
-      <Button size="sm" className="w-full" disabled={!ready || busy} onClick={activate}>
-        {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-        Ativar padrão
-      </Button>
+    <div className="space-y-4 rounded-md border p-3">
+      <div className="space-y-2">
+        <p className="text-sm font-medium">Preparação do padrão</p>
+        <ul className="space-y-1.5">
+          {checks.map((c) => (
+            <li key={c.key} className="flex items-start gap-2 text-xs">
+              {c.ok ? (
+                <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600" aria-hidden />
+              ) : (
+                <X className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
+              )}
+              <div className="flex flex-col">
+                <span className={c.ok ? "" : "text-muted-foreground"}>{c.label}</span>
+                {!c.ok && (
+                  <span className="text-[10px] text-amber-600">
+                    {c.key === "question" && "Defina a pergunta no editor."}
+                    {c.key === "reference" && "Envie uma foto de referência."}
+                    {c.key === "accessible" && "Verificando acesso..."}
+                    {c.key === "profile" && "Clique em 'Preparar padrão'."}
+                    {c.key === "version" && "Aguarde a geração do perfil."}
+                    {c.key === "verifiability" && "O padrão deve ser verificável."}
+                  </span>
+                )}
+              </div>
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2">
+        <Button 
+          variant="outline" 
+          size="sm" 
+          disabled={preparing || busy || active} 
+          onClick={prepare}
+        >
+          {preparing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <PlayCircle className="mr-2 h-4 w-4" />}
+          Preparar padrão
+        </Button>
+        <Button 
+          size="sm" 
+          disabled={!ready || busy || preparing} 
+          onClick={activate}
+        >
+          {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Check className="mr-2 h-4 w-4" />}
+          Ativar padrão
+        </Button>
+      </div>
     </div>
   );
 }
