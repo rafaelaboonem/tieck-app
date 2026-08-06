@@ -169,6 +169,7 @@ function PublicChecklistPage() {
   const [authorProfile, setAuthorProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [submitted, setSubmitted] = useState(false);
+  const [cameraOpen, setCameraOpen] = useState(false);
   const [analyticsId, setAnalyticsId] = useState<string | null>(null);
   const [answers, setAnswers] = useState<Record<string, any>>({});
   const [uploading, setUploading] = useState(false);
@@ -925,6 +926,7 @@ function PublicChecklistPage() {
                             onAnswer={setAnswer}
                             textColor={settings.textColor}
                             accentColor={settings.accentColor || settings.btnBgColor || "#111827"}
+                            onCameraToggle={setCameraOpen}
                           />
                         </div>
                       );
@@ -938,6 +940,7 @@ function PublicChecklistPage() {
                         answers={answers}
                         setAnswer={setAnswer}
                         isDark={isDark}
+                        onCameraToggle={setCameraOpen}
                       />
                     );
                   })}
@@ -976,7 +979,7 @@ function PublicChecklistPage() {
           {/* Desktop Version */}
           <Link 
             to={isLoggedIn ? "/inicio" : "/"} 
-            className="hidden md:flex fixed bottom-6 right-8 z-[100] group items-center gap-3 transition-all hover:scale-105"
+            className={`hidden md:flex fixed bottom-6 right-8 z-[100] group items-center gap-3 transition-all hover:scale-105 ${cameraOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
           >
             <span className="text-sm font-medium text-neutral-400 group-hover:text-neutral-600 transition-colors">
               Feito com
@@ -989,7 +992,7 @@ function PublicChecklistPage() {
           </Link>
 
           {/* Mobile Version - Fixed Bar */}
-          <div className="md:hidden fixed bottom-0 left-0 right-0 z-[100] bg-white/80 dark:bg-neutral-900/80 backdrop-blur-md border-t border-neutral-200 dark:border-neutral-800 py-3 flex items-center justify-center">
+          <div className={`md:hidden fixed bottom-0 left-0 right-0 z-[100] bg-white/80 dark:bg-neutral-900/80 backdrop-blur-md border-t border-neutral-200 dark:border-neutral-800 py-3 flex items-center justify-center transition-opacity ${cameraOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
             <Link 
               to={isLoggedIn ? "/inicio" : "/"} 
               className="flex items-center gap-3"

@@ -98,7 +98,7 @@ function FileInputWithThumbnails({
   );
 }
 
-function CameraField({ value, onChange, textColor }: { value: any; onChange: (file: File | null) => void; textColor?: string }) {
+function CameraField({ value, onChange, textColor, onCameraToggle }: { value: any; onChange: (file: File | null) => void; textColor?: string; onCameraToggle?: (open: boolean) => void }) {
   const [preview, setPreview] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
@@ -113,7 +113,10 @@ function CameraField({ value, onChange, textColor }: { value: any; onChange: (fi
   return (
     <div className="w-full">
       <div
-        onClick={() => inputRef.current?.click()}
+        onClick={() => {
+          onCameraToggle?.(true);
+          inputRef.current?.click();
+        }}
         className={`relative w-full ${preview ? "h-20" : "h-16"} border rounded-lg bg-neutral-50/50 dark:bg-neutral-800/50 cursor-pointer transition-all flex items-center px-4 overflow-hidden group ${preview ? "" : "border-neutral-200 dark:border-neutral-700"}`}
         style={preview ? { borderColor: color } : undefined}
       >
@@ -143,7 +146,10 @@ function CameraField({ value, onChange, textColor }: { value: any; onChange: (fi
         )}
         <input
           ref={inputRef} type="file" accept="image/*" capture="environment" className="hidden"
-          onChange={(e) => onChange(e.target.files?.[0] ?? null)}
+          onChange={(e) => {
+            onCameraToggle?.(false);
+            onChange(e.target.files?.[0] ?? null);
+          }}
         />
       </div>
     </div>
@@ -155,11 +161,13 @@ function CameraFieldMulti({
   onChange,
   textColor,
   max,
+  onCameraToggle,
 }: {
   value: any;
   onChange: (files: File[]) => void;
   textColor?: string;
   max: number;
+  onCameraToggle?: (open: boolean) => void;
 }) {
   const files: File[] = Array.isArray(value) ? value.filter((f: any) => f instanceof File) : [];
   const [previews, setPreviews] = useState<string[]>([]);
@@ -192,7 +200,12 @@ function CameraFieldMulti({
   return (
     <div className="w-full">
       <div
-        onClick={() => canAdd && inputRef.current?.click()}
+        onClick={() => {
+          if (canAdd) {
+            onCameraToggle?.(true);
+            inputRef.current?.click();
+          }
+        }}
         className={`relative w-full ${files.length > 0 ? "h-20" : "h-16"} border rounded-lg transition-all flex items-center px-4 gap-3 overflow-hidden ${canAdd ? "cursor-pointer bg-neutral-50/50 dark:bg-neutral-800/50" : "cursor-not-allowed"} ${files.length > 0 ? "" : "border-neutral-200 dark:border-neutral-700"}`}
         style={
           !canAdd
@@ -243,14 +256,17 @@ function CameraFieldMulti({
           </div>
         )}
       </div>
-      <input
-        ref={inputRef}
-        type="file"
-        accept="image/*"
-        capture="environment"
-        className="hidden"
-        onChange={handleAdd}
-      />
+        <input
+          ref={inputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          className="hidden"
+          onChange={(e) => {
+            onCameraToggle?.(false);
+            handleAdd(e);
+          }}
+        />
     </div>
   );
 }
@@ -316,6 +332,8 @@ export interface BlockRendererProps {
   setAnswer?: (id: string, v: any) => void;
   /** public mode only — affects radio button style */
   isDark?: boolean;
+  /** public mode only — used to hide branding when camera is open */
+  onCameraToggle?: (open: boolean) => void;
 }
 
 /**
@@ -325,7 +343,7 @@ export interface BlockRendererProps {
  *
  * Adding a new block type? Add ONE case here and both surfaces update.
  */
-export function BlockRenderer({ block, settings, mode, answers = {}, setAnswer, isDark }: BlockRendererProps) {
+export function BlockRenderer({ block, settings, mode, answers = {}, setAnswer, isDark, onCameraToggle }: BlockRendererProps) {
   if (block.type === "image" && (block.variant === "profile" || block.variant === "cover")) return null;
 
   const accent = settings.accentColor || "#FF007F";
@@ -619,9 +637,10 @@ export function BlockRenderer({ block, settings, mode, answers = {}, setAnswer, 
               onChange={(files) => set(block.id, files)}
               textColor={textColor}
               max={Math.max(1, Math.min(20, block.maxPhotos ?? 5))}
+              onCameraToggle={onCameraToggle}
             />
           ) : (
-            <CameraField value={get(block.id)} onChange={(f) => set(block.id, f)} textColor={textColor} />
+            <CameraField value={get(block.id)} onChange={(f) => set(block.id, f)} textColor={textColor} onCameraToggle={onCameraToggle} />
           )
         ) : (
           <FileInputWithThumbnails id={block.id} accept="image/*" capture="environment" multiple accentColor={accent} />

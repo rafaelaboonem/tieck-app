@@ -35,6 +35,7 @@ type Props = {
   onAnswer: (blockId: string, value: PublicCameraAnswer | null) => void;
   textColor?: string;
   accentColor?: string;
+  onCameraToggle?: (open: boolean) => void;
 };
 
 /**
@@ -42,7 +43,7 @@ type Props = {
  * Abrir a câmera NÃO consome nenhuma chamada de IA: a única inferência
  * acontece uma vez, após o upload da foto capturada.
  */
-export function PublicCameraBlock({ block, checklistId, ensureResponseSession, onAnswer, textColor, accentColor }: Props) {
+export function PublicCameraBlock({ block, checklistId, ensureResponseSession, onAnswer, textColor, accentColor, onCameraToggle }: Props) {
   const title = String(block?.title || block?.subtitle || "").trim();
   const description = String(block?.description ?? "").trim();
   const required = block?.required === true;
@@ -109,10 +110,12 @@ export function PublicCameraBlock({ block, checklistId, ensureResponseSession, o
       if (created) setSession(created);
     }
     setCameraOpen(true);
+    onCameraToggle?.(true);
   };
 
   const handleCapture = (file: File) => {
     setCameraOpen(false);
+    onCameraToggle?.(false);
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     setPreviewUrl(URL.createObjectURL(file));
     setErrorMsg(null);
@@ -431,7 +434,10 @@ export function PublicCameraBlock({ block, checklistId, ensureResponseSession, o
       <TieckCamera
         open={cameraOpen}
         title={title || "Câmera"}
-        onClose={() => setCameraOpen(false)}
+        onClose={() => {
+          setCameraOpen(false);
+          onCameraToggle?.(false);
+        }}
         onCapture={handleCapture}
       />
     </div>
