@@ -57,7 +57,8 @@ export function LabTab({ workspaceId, selected, runs, onRun }: Props) {
 
   const profile = profileOf(selected);
   const question = selected?.question ?? "";
-  const hasReference = Boolean(selected?.reference_path);
+  const refs = selected?.references || [];
+  const hasReferences = refs.length >= 2;
   const isOwner = Boolean(userId && selected && selected.created_by === userId);
 
 
@@ -98,8 +99,8 @@ export function LabTab({ workspaceId, selected, runs, onRun }: Props) {
     try {
       const imageBase64 = await blobToBase64(file);
       let ref: string | null = null;
-      if (hasReference && selected?.reference_path && provider !== "google_gemini") {
-        ref = await referenceBase64(selected.reference_path);
+      if (hasReferences && selected?.references && selected.references.length > 0 && provider !== "google_gemini") {
+        ref = await referenceBase64(selected.references[0].storage_path);
       }
       // Sessão e tentativa são emitidas pelo servidor: o cliente não escolhe o orçamento.
       const session = await startLabSession(workspaceId, selected?.id ?? null);
@@ -210,7 +211,7 @@ export function LabTab({ workspaceId, selected, runs, onRun }: Props) {
             </p>
           </div>
 
-          {hasReference && (
+          {hasReferences && (
             <p className="flex items-center gap-2 rounded-lg border p-3 text-xs text-muted-foreground">
               <ImageIcon className="h-4 w-4 shrink-0" aria-hidden />
               Referência do padrão será usada automaticamente.
@@ -311,8 +312,8 @@ export function LabTab({ workspaceId, selected, runs, onRun }: Props) {
           question={question}
           profile={profile}
           standardId={selected.id}
-          referencePath={selected.reference_path}
-          useReference={hasReference}
+          referencePath={selected.references?.[0]?.storage_path ?? null}
+          useReference={hasReferences}
           onClose={() => setCameraOpen(false)}
           onResult={({ response, live }) =>
             pushRun({

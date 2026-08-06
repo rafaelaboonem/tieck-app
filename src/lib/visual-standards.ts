@@ -20,6 +20,15 @@ export const STATUS_TONE: Record<StandardStatus, string> = {
   archived: "bg-neutral-500/15 text-neutral-700",
 };
 
+export interface VisualStandardReference {
+  id: string;
+  visual_standard_id: string;
+  workspace_id: string;
+  storage_path: string;
+  position: 1 | 2;
+  created_at: string;
+}
+
 export interface VisualStandard {
   id: string;
   workspace_id: string;
@@ -27,7 +36,9 @@ export interface VisualStandard {
   name: string;
   question: string;
   internal_notes: string | null;
+  /** @deprecated Use references instead */
   reference_path: string | null;
+  references?: VisualStandardReference[];
   status: StandardStatus;
   test_count: number;
   accuracy: number | null;
@@ -50,7 +61,6 @@ export interface VisualStandard {
   required_evidence_count?: number | null;
   confidence_threshold?: number | null;
 }
-
 
 export interface StandardProfile {
   target_phrase: string;
@@ -83,7 +93,7 @@ export interface CameraBlockStandardBinding {
 export async function listStandards(workspaceId: string): Promise<VisualStandard[]> {
   const { data, error } = await supabase
     .from("visual_standards")
-    .select("*")
+    .select("*, references:visual_standard_references(*)")
     .eq("workspace_id", workspaceId)
     .order("created_at", { ascending: false });
   if (error) throw error;
@@ -181,8 +191,13 @@ export async function createStandard(input: {
   // 2) Envia a referência e 3) atualiza o registro com o caminho.
   if (input.referenceFile) {
     try {
-      const updated = await uploadReference(standard, input.referenceFile);
-      return updated;
+      await uploadReference(standard, input.referenceFile, 1);
+      const { data: updated } = await supabase
+        .from("visual_standards")
+        .select("*, references:visual_standard_references(*)")
+        .eq("id", standard.id)
+        .single();
+      return updated as VisualStandard;
     } catch (e) {
       throw new Error(
         `Padrão criado, mas a foto de referência não pôde ser enviada: ${(e as Error).message}`,
@@ -290,34 +305,81 @@ function extFor(file: File): string {
   return file.type.includes("png") ? "png" : file.type.includes("webp") ? "webp" : "jpg";
 }
 
-/** Envia/substitui a referência de um padrão existente, sem deixar arquivo órfão. */
+/** Envia/substitui uma referência (posição 1 ou 2) sem deixar arquivo órfão. */
 export async function uploadReference(
   standard: VisualStandard,
   file: File,
-): Promise<VisualStandard> {
-  const path = `${standard.workspace_id}/${standard.id}/reference.${extFor(file)}`;
+  position: 1 | 2 = 1
+): Promise<VisualStandardReference> {
+  const path = `${standard.workspace_id}/${standard.id}/reference-${position}.${extFor(file)}`;
+  
+  // 1. Upload new file
   const { error: upErr } = await supabase.storage
     .from(STANDARDS_BUCKET)
     .upload(path, file, { contentType: file.type, upsert: true });
   if (upErr) throw upErr;
 
-  const { data, error } = await supabase
-    .from("visual_standards")
-    .update({ reference_path: path })
-    .eq("id", standard.id)
-    .select("*")
-    .single();
-  if (error) {
-    // Falha no banco depois do upload: remove apenas este arquivo.
-    await supabase.storage.from(STANDARDS_BUCKET).remove([path]);
-    throw error;
-  }
+  try {
+    // 2. Get existing reference at this position to delete later
+    const existing = standard.references?.find(r => r.position === position);
 
-  // Remove referência anterior somente se o caminho mudou.
-  if (standard.reference_path && standard.reference_path !== path) {
-    await supabase.storage.from(STANDARDS_BUCKET).remove([standard.reference_path]);
+    // 3. Update database
+    const { data, error } = await supabase
+      .from("visual_standard_references")
+      .upsert({
+        visual_standard_id: standard.id,
+        workspace_id: standard.workspace_id,
+        storage_path: path,
+        position
+      }, { onConflict: 'visual_standard_id,position' })
+      .select("*")
+      .single();
+
+    if (error) throw error;
+
+    // 4. Delete old file if path changed
+    if (existing && existing.storage_path !== path) {
+      await supabase.storage.from(STANDARDS_BUCKET).remove([existing.storage_path]);
+    }
+
+    // 5. If this was position 1, also update legacy reference_path for compatibility
+    if (position === 1) {
+      await supabase
+        .from("visual_standards")
+        .update({ reference_path: path })
+        .eq("id", standard.id);
+    }
+
+    return data as VisualStandardReference;
+  } catch (err) {
+    // Cleanup: remove the newly uploaded file if DB update failed
+    await supabase.storage.from(STANDARDS_BUCKET).remove([path]);
+    throw err;
   }
-  return data as VisualStandard;
+}
+
+export async function deleteReference(
+  standard: VisualStandard,
+  position: 1 | 2
+): Promise<void> {
+  const reference = standard.references?.find(r => r.position === position);
+  if (!reference) return;
+
+  const { error } = await supabase
+    .from("visual_standard_references")
+    .delete()
+    .eq("id", reference.id);
+  if (error) throw error;
+
+  await supabase.storage.from(STANDARDS_BUCKET).remove([reference.storage_path]);
+
+  // Compatibility: clear legacy path if position 1 removed
+  if (position === 1) {
+    await supabase
+      .from("visual_standards")
+      .update({ reference_path: null })
+      .eq("id", standard.id);
+  }
 }
 
 export async function deleteStandard(standard: VisualStandard): Promise<void> {
@@ -530,8 +592,9 @@ export interface ActivationCheck {
 
 export function activationChecks(s: VisualStandard): ActivationCheck[] {
   const profile = profileOf(s);
-  const unverifiable = Array.isArray(s.unverifiable_conditions) ? s.unverifiable_conditions : [];
-  const hasReference = Boolean(s.reference_path);
+  const refs = s.references || [];
+  const hasRef1 = refs.some(r => r.position === 1);
+  const hasRef2 = refs.some(r => r.position === 2);
   
   return [
     { 
@@ -540,14 +603,19 @@ export function activationChecks(s: VisualStandard): ActivationCheck[] {
       ok: Boolean(s.question?.trim()) 
     },
     {
-      key: "reference",
-      label: "Pelo menos uma referência válida",
-      ok: hasReference,
+      key: "reference_1",
+      label: "Referência principal válida",
+      ok: hasRef1,
+    },
+    {
+      key: "reference_2",
+      label: "Ângulo complementar válido",
+      ok: hasRef2,
     },
     {
       key: "accessible",
-      label: "Referência acessível pelo servidor",
-      ok: hasReference, // Simplificado para o check visual, a RPC validará o acesso
+      label: "Referências acessíveis pelo servidor",
+      ok: hasRef1 && hasRef2,
     },
     { 
       key: "profile", 

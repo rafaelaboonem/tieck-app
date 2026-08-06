@@ -17,11 +17,11 @@ export type PublicDecision = "approved" | "retake" | "not_observable";
 export type StandardRecord = {
   id: string;
   question: string;
-  reference_path: string | null;
   internal_profile: any;
   confidence_threshold: number | null;
   status: string | null;
   unverifiable_conditions: any;
+  references?: { storage_path: string }[];
 };
 
 export type StandardVerdict = {
@@ -65,7 +65,7 @@ export async function loadStandardForBlock(
   const { data } = await db
     .from("visual_standards")
     .select(
-      "id, question, reference_path, internal_profile, confidence_threshold, status, unverifiable_conditions",
+      "id, question, internal_profile, confidence_threshold, status, unverifiable_conditions, references:visual_standard_references(storage_path)",
     )
     .eq("checklist_id", checklistId)
     .eq("camera_block_id", cameraBlockId)
@@ -88,14 +88,16 @@ export async function analyzeWithStandard(args: {
     ...strList(args.standard.unverifiable_conditions, 4),
   ];
 
-  let reference: { mime: string; base64: string } | null = null;
-  if (args.standard.reference_path) {
+  const references: { mime: string; base64: string }[] = [];
+  const refPaths = (args.standard.references || []).map(r => r.storage_path);
+  
+  for (const path of refPaths) {
     const { data: file } = await args.db.storage
       .from("visual-standards")
-      .download(args.standard.reference_path);
+      .download(path);
     if (file) {
       const buf = new Uint8Array(await file.arrayBuffer());
-      reference = { mime: file.type || "image/jpeg", base64: bytesToBase64(buf) };
+      references.push({ mime: file.type || "image/jpeg", base64: bytesToBase64(buf) });
     }
   }
 
@@ -103,14 +105,14 @@ export async function analyzeWithStandard(args: {
     question: args.standard.question || args.question,
     profile,
     conditions,
-    hasReference: Boolean(reference),
+    referenceCount: references.length,
   });
 
   let call;
   try {
     call = await callGemini({
       instruction,
-      reference,
+      references,
       candidate: { mime: args.candidateMime, base64: bytesToBase64(args.candidate) },
       timeoutMs: 45_000,
     });
@@ -124,7 +126,7 @@ export async function analyzeWithStandard(args: {
 
   const threshold = Number(args.standard.confidence_threshold);
   const verdict = decideGemini(payload, {
-    hasReference: Boolean(reference),
+    hasReference: references.length > 0,
     threshold: Number.isFinite(threshold) && threshold > 0 ? threshold : undefined,
   });
 

@@ -383,6 +383,8 @@ export function CameraV3Preview(props: Props) {
     setError(null);
     try {
       let ref: string | null = null;
+      // Note: for now CameraV3Preview still uses the legacy referenceBase64 single call
+      // which is fine as it's a test preview and usually standard-analysis will use all references.
       if (useReference && referencePath) ref = await referenceBase64(referencePath);
       if (!sessionIdRef.current) throw new Error("session_missing");
       // Uma tentativa por foto: o servidor registra e conta a decisão final.
