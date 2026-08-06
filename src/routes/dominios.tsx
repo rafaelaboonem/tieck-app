@@ -126,7 +126,7 @@ function DominiosPage() {
       <header className="flex items-center justify-between px-6 py-4 border-b border-neutral-200 bg-white sticky top-0 z-10">
         <div className={`flex items-center gap-2 text-sm transition-all duration-300 ${sidebarOpen ? "pl-0" : "pl-14"}`}>
           <Link to="/inicio">
-            <img src={logo} alt="Logo" className="w-14 h-14 object-contain grayscale hover:grayscale-0 transition-all cursor-pointer" />
+            <img src={logo} alt="Logo" className="w-20 h-20 object-contain grayscale hover:grayscale-0 transition-all cursor-pointer" />
           </Link>
           <span className="text-neutral-400">›</span>
           <span className="text-neutral-700 font-medium">Personalizar Links</span>

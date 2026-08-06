@@ -65,8 +65,8 @@ export const Route = createFileRoute("/c/$id")({
     const seo = loaderData as Awaited<ReturnType<typeof getChecklistSeo>> | undefined;
     const title = seo?.title || "Checklist — Tieck";
     const description = seo?.description || "Preencha este checklist criado na Tieck.";
-    const ogImage = seo?.ogImage || null;
-    const favicon = seo?.favicon || null;
+    const ogImage = seo?.ogImage || "/og-image.webp";
+    const favicon = seo?.favicon || "/favicon.png";
     const publicBase = (typeof process !== "undefined" && process.env?.PUBLIC_URL) || "";
     const url = publicBase ? `${publicBase.replace(/\/+$/, "")}/c/${params.id}` : `/c/${params.id}`;
 
@@ -1000,7 +1000,7 @@ function PublicChecklistPage() {
               <img 
                 src={tieckLogo} 
                 alt="Tieck" 
-                className="h-10 w-auto object-contain" 
+                className="h-20 w-auto object-contain" 
               />
             </Link>
           </div>

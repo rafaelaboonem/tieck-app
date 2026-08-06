@@ -5,14 +5,13 @@ import { MotionProvider, m } from "@/lib/motion";
 import { ArrowRight } from "lucide-react";
 
 import logoUrl from "../assets/local/logo-tieck.webp";
+import ogImageUrl from "/og-image.webp?url";
 import { Header } from "@/components/landing/Header";
 import { Hero } from "@/components/landing/Hero";
 import { Features } from "@/components/landing/Features";
 import { HowItWorks } from "@/components/landing/HowItWorks";
 import { Contact } from "@/components/landing/Contact";
 import { Footer } from "@/components/landing/Footer";
-
-const ogImageUrl = logoUrl;
 
 export const Route = createFileRoute("/")({
   head: () => ({
