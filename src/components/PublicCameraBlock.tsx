@@ -43,7 +43,7 @@ type Props = {
  * Abrir a câmera NÃO consome nenhuma chamada de IA: a única inferência
  * acontece uma vez, após o upload da foto capturada.
  */
-export function PublicCameraBlock({ block, checklistId, ensureResponseSession, onAnswer, textColor, accentColor }: Props) {
+export function PublicCameraBlock({ block, checklistId, ensureResponseSession, onAnswer, textColor, accentColor, onCameraToggle }: Props) {
   const title = String(block?.title || block?.subtitle || "").trim();
   const description = String(block?.description ?? "").trim();
   const required = block?.required === true;
