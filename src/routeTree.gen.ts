@@ -28,7 +28,6 @@ import { Route as PadraoPublicIdRouteImport } from './routes/padrao.$publicId'
 import { Route as CIdRouteImport } from './routes/c.$id'
 import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
 import { Route as UnidadesUnitIdOperacaoRouteImport } from './routes/unidades.$unitId.operacao'
-import { Route as ApiPublicVerifyCameraV4RouteImport } from './routes/api/public/verify-camera-v4'
 
 const PainelRoute = PainelRouteImport.update({
   id: '/painel',
@@ -125,11 +124,6 @@ const UnidadesUnitIdOperacaoRoute = UnidadesUnitIdOperacaoRouteImport.update({
   path: '/unidades/$unitId/operacao',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiPublicVerifyCameraV4Route = ApiPublicVerifyCameraV4RouteImport.update({
-  id: '/api/public/verify-camera-v4',
-  path: '/api/public/verify-camera-v4',
-  getParentRoute: () => rootRouteImport,
-} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -150,7 +144,6 @@ export interface FileRoutesByFullPath {
   '/c/$id': typeof CIdRoute
   '/padrao/$publicId': typeof PadraoPublicIdRoute
   '/padrao/': typeof PadraoIndexRoute
-  '/api/public/verify-camera-v4': typeof ApiPublicVerifyCameraV4Route
   '/unidades/$unitId/operacao': typeof UnidadesUnitIdOperacaoRoute
 }
 export interface FileRoutesByTo {
@@ -172,7 +165,6 @@ export interface FileRoutesByTo {
   '/c/$id': typeof CIdRoute
   '/padrao/$publicId': typeof PadraoPublicIdRoute
   '/padrao': typeof PadraoIndexRoute
-  '/api/public/verify-camera-v4': typeof ApiPublicVerifyCameraV4Route
   '/unidades/$unitId/operacao': typeof UnidadesUnitIdOperacaoRoute
 }
 export interface FileRoutesById {
@@ -195,7 +187,6 @@ export interface FileRoutesById {
   '/c/$id': typeof CIdRoute
   '/padrao/$publicId': typeof PadraoPublicIdRoute
   '/padrao/': typeof PadraoIndexRoute
-  '/api/public/verify-camera-v4': typeof ApiPublicVerifyCameraV4Route
   '/unidades/$unitId/operacao': typeof UnidadesUnitIdOperacaoRoute
 }
 export interface FileRouteTypes {
@@ -219,7 +210,6 @@ export interface FileRouteTypes {
     | '/c/$id'
     | '/padrao/$publicId'
     | '/padrao/'
-    | '/api/public/verify-camera-v4'
     | '/unidades/$unitId/operacao'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -241,7 +231,6 @@ export interface FileRouteTypes {
     | '/c/$id'
     | '/padrao/$publicId'
     | '/padrao'
-    | '/api/public/verify-camera-v4'
     | '/unidades/$unitId/operacao'
   id:
     | '__root__'
@@ -263,7 +252,6 @@ export interface FileRouteTypes {
     | '/c/$id'
     | '/padrao/$publicId'
     | '/padrao/'
-    | '/api/public/verify-camera-v4'
     | '/unidades/$unitId/operacao'
   fileRoutesById: FileRoutesById
 }
@@ -286,7 +274,6 @@ export interface RootRouteChildren {
   CIdRoute: typeof CIdRoute
   PadraoPublicIdRoute: typeof PadraoPublicIdRoute
   PadraoIndexRoute: typeof PadraoIndexRoute
-  ApiPublicVerifyCameraV4Route: typeof ApiPublicVerifyCameraV4Route
   UnidadesUnitIdOperacaoRoute: typeof UnidadesUnitIdOperacaoRoute
 }
 
@@ -425,13 +412,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof UnidadesUnitIdOperacaoRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/public/verify-camera-v4': {
-      id: '/api/public/verify-camera-v4'
-      path: '/api/public/verify-camera-v4'
-      fullPath: '/api/public/verify-camera-v4'
-      preLoaderRoute: typeof ApiPublicVerifyCameraV4RouteImport
-      parentRoute: typeof rootRouteImport
-    }
   }
 }
 
@@ -454,19 +434,8 @@ const rootRouteChildren: RootRouteChildren = {
   CIdRoute: CIdRoute,
   PadraoPublicIdRoute: PadraoPublicIdRoute,
   PadraoIndexRoute: PadraoIndexRoute,
-  ApiPublicVerifyCameraV4Route: ApiPublicVerifyCameraV4Route,
   UnidadesUnitIdOperacaoRoute: UnidadesUnitIdOperacaoRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}

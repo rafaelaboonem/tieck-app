@@ -7,10 +7,8 @@ import { DashboardLayout } from "@/components/DashboardLayout";
 import { Label } from "@/components/ui/label";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { StandardsTab } from "@/components/padrao/StandardsTab";
-import { LabTab } from "@/components/padrao/LabTab";
-import { PerformanceTab } from "@/components/padrao/PerformanceTab";
 import { listChecklistProjects, type ChecklistProject } from "@/lib/camera-blocks";
-import { listStandards, type LabRun, type VisualStandard } from "@/lib/visual-standards";
+import { listStandards, type VisualStandard } from "@/lib/visual-standards";
 
 export const Route = createFileRoute("/padrao/")({
   validateSearch: (search: Record<string, unknown>): { checklist?: string; block?: string } => ({
@@ -20,21 +18,12 @@ export const Route = createFileRoute("/padrao/")({
   head: () => ({
     meta: [
       { title: "Central Visual · Tieck" },
-      { name: "description", content: "Crie padrões visuais, teste a Camera AI e acompanhe o desempenho das análises." },
+      { name: "description", content: "Crie padrões visuais para suas perguntas de câmera." },
       { name: "robots", content: "noindex, nofollow" },
     ],
   }),
   component: CentralVisualPage,
 });
-
-
-type TabKey = "padroes" | "laboratorio" | "desempenho";
-
-const TABS: [TabKey, string][] = [
-  ["padroes", "Padrões visuais"],
-  ["laboratorio", "Laboratório de testes"],
-  ["desempenho", "Desempenho"],
-];
 
 function CentralVisualPage() {
   const search = Route.useSearch();
@@ -42,12 +31,10 @@ function CentralVisualPage() {
 
   const { currentWorkspace, isLoading: wsLoading } = useWorkspace();
   const [authChecked, setAuthChecked] = useState(false);
-  const [tab, setTab] = useState<TabKey>("padroes");
   const [standards, setStandards] = useState<VisualStandard[]>([]);
   const [projects, setProjects] = useState<ChecklistProject[]>([]);
   const [projectsLoading, setProjectsLoading] = useState(true);
   const [loading, setLoading] = useState(true);
-  const [runs, setRuns] = useState<LabRun[]>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -85,7 +72,6 @@ function CentralVisualPage() {
     if (authChecked && currentWorkspace) void load();
   }, [authChecked, currentWorkspace, load]);
 
-  // Contexto global: projeto + pergunta vivem na URL (?checklist=&block=).
   const projectId = search.checklist ?? "";
   const blockId = search.block ?? "";
 
@@ -125,7 +111,7 @@ function CentralVisualPage() {
           <div>
             <h1 className="text-3xl font-bold tracking-tight">Central Visual</h1>
             <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-              Ensine à IA o que é uma foto correta, teste antes de publicar e acompanhe o desempenho das análises.
+              Gerencie os padrões visuais para suas perguntas de câmera.
             </p>
           </div>
         </header>
@@ -163,34 +149,13 @@ function CentralVisualPage() {
                   <option key={b.cameraBlockId} value={b.cameraBlockId}>{b.question}</option>
                 ))}
               </select>
-              {project && project.cameraBlocks.length === 0 && (
-                <p className="text-xs text-muted-foreground">
-                  Este projeto ainda não possui perguntas com câmera.
-                </p>
-              )}
             </div>
           </div>
         )}
 
-        <div className="mb-8 inline-flex rounded-full border bg-background p-1 shadow-sm">
-          {TABS.map(([key, label]) => (
-            <button
-              key={key}
-              type="button"
-              onClick={() => setTab(key)}
-              className={
-                "rounded-full px-5 py-2 text-sm font-medium transition-colors " +
-                (tab === key ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground")
-              }
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-
         {!currentWorkspace ? (
           <p className="text-sm text-muted-foreground">Selecione um workspace para continuar.</p>
-        ) : tab === "padroes" ? (
+        ) : (
           <StandardsTab
             workspaceId={currentWorkspace.id}
             project={project}
@@ -199,17 +164,8 @@ function CentralVisualPage() {
             standards={standards}
             loading={loading || projectsLoading}
             onChanged={() => void load()}
-            onTest={() => setTab("laboratorio")}
+            onTest={() => {}}
           />
-        ) : tab === "laboratorio" ? (
-          <LabTab
-            workspaceId={currentWorkspace.id}
-            selected={standard}
-            runs={runs}
-            onRun={(run) => setRuns((prev) => [run, ...prev])}
-          />
-        ) : (
-          <PerformanceTab runs={runs} cameraBlockId={blockId || null} />
         )}
       </div>
     </DashboardLayout>
