@@ -71,10 +71,12 @@ export async function createStandard(params: {
   internalNotes?: string;
   referenceFile?: File | null;
 }) {
+  const { data: user } = await supabase.auth.getUser();
   const { data, error } = await supabase
     .from("visual_standards")
     .insert({
       workspace_id: params.workspaceId,
+      created_by: user.user?.id || '00000000-0000-0000-0000-000000000000',
       checklist_id: params.checklistId,
       camera_block_id: params.cameraBlockId,
       question: params.question,

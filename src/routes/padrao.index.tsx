@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { StandardsTab } from "@/components/padrao/StandardsTab";
 import { listChecklistProjects, type ChecklistProject } from "@/lib/camera-blocks";
-import { listStandards, type VisualStandard } from "@/lib/visual-standards";
+import { fetchStandards as listStandards, type VisualStandard } from "@/lib/visual-standards";
 
 export const Route = createFileRoute("/padrao/")({
   validateSearch: (search: Record<string, unknown>): { checklist?: string; block?: string } => ({

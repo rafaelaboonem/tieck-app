@@ -210,19 +210,19 @@ function PublicChecklistPage() {
       localStorage.setItem("tieck_visitor_id", visitorId);
     }
     responseSessionPromise.current = (async () => {
-      // Criação de sessão de resposta direta via RPC neutra
       const { data, error } = await supabase.rpc("create_public_response", {
         p_checklist_id: checklistUuid,
         p_visitor_id: visitorId
       });
 
-      if (error || !data?.[0]?.response_id) {
+      if (error || !data || (data as any).length === 0) {
         console.error("Erro ao criar sessão de resposta:", error);
         return null;
       }
+      const respData = (data as any)[0];
       const session = { 
-        responseId: data[0].response_id as string, 
-        responseToken: data[0].response_token as string 
+        responseId: respData.response_id as string, 
+        responseToken: respData.response_token as string 
       };
       try { sessionStorage.setItem(responseSessionKey(), JSON.stringify(session)); } catch { /* noop */ }
       return session;
