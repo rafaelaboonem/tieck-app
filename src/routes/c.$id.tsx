@@ -585,15 +585,6 @@ function PublicChecklistPage() {
     // Removida chamada para Edge Function legada analyze-checklist-evidence.
     // O fluxo neutro agora segue diretamente para a finalização.
     
-    clearResponseSession();
-    setSubmitted(true);
-    setUploading(false);
-    return;
-
-    clearResponseSession();
-    setSubmitted(true);
-    setUploading(false);
-
     // Redirect to a custom URL if configured
     if (settings.redirectOnCompletion && settings.redirectUrl) {
       try {
@@ -620,7 +611,6 @@ function PublicChecklistPage() {
     } catch (e) {
       console.error("Error triggering email notification:", e);
     }
-
     
     // Update analytics with submission time
     if (analyticsId) {
@@ -632,6 +622,10 @@ function PublicChecklistPage() {
         })
         .eq("id", analyticsId);
     }
+
+    clearResponseSession();
+    setSubmitted(true);
+    setUploading(false);
     } catch (err: any) {
       console.error("Erro inesperado no envio:", err);
       toast.error(`${t((checklist?.settings as any)?.language, "unexpectedError")}: ${err?.message || ""}`);
@@ -888,7 +882,6 @@ function PublicChecklistPage() {
                             onAnswer={setAnswer}
                             textColor={settings.textColor}
                             accentColor={settings.accentColor || settings.btnBgColor || "#111827"}
-                            onCameraToggle={setCameraOpen}
                           />
                         </div>
                       );
