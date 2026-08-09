@@ -1,10 +1,10 @@
-import { Camera, RefreshCw, AlertCircle, CheckCircle2, Loader2, X } from "lucide-react";
-import { useState, useRef } from "react";
+import { Camera, RefreshCw, AlertCircle, CheckCircle2, Loader2 } from "lucide-react";
+import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { TieckCamera } from "./TieckCamera";
 import { Button } from "./ui/button";
 import { Alert, AlertDescription } from "./ui/alert";
-import { compressImage } from "@/lib/image-utils";
+import { compressImage } from "@/lib/compress-image";
 
 interface PublicCameraBlockProps {
   block: any;
@@ -12,12 +12,12 @@ interface PublicCameraBlockProps {
   accentColor?: string;
   textColor?: string;
   title?: string;
-  onAnswer?: (value: string) => void;
+  onAnswer?: (blockId: string, value: string) => void;
   session?: { responseId: string; responseToken: string } | null;
   ensureResponseSession: () => Promise<{ responseId: string; responseToken: string } | null>;
 }
 
-type VerificationPhase = "idle" | "capturing" | "local_check" | "uploading" | "received" | "technical_failure" | "retake";
+type VerificationPhase = "idle" | "capturing" | "uploading" | "received" | "technical_failure";
 
 export function PublicCameraBlock({
   block,
@@ -31,19 +31,15 @@ export function PublicCameraBlock({
 }: PublicCameraBlockProps) {
   const [phase, setPhase] = useState<VerificationPhase>("idle");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [evidenceId, setEvidenceId] = useState<string | null>(null);
-  const [activeSession, setActiveSession] = useState(session);
   const [preview, setPreview] = useState<string | null>(null);
 
   const handleCapture = async (source: File | string) => {
     if (typeof source === "string") {
       setPreview(source);
-      setPhase("local_check");
-      // Conversão mock para demonstrar o fluxo neutro; idealmente TieckCamera retorna File
-      fetch(source).then(r => r.blob()).then(blob => {
-        const file = new File([blob], "capture.jpg", { type: "image/jpeg" });
-        void processFile(file);
-      });
+      // TieckCamera can return base64 for preview, but we need a file for storage
+      const blob = await (await fetch(source)).blob();
+      const file = new File([blob], "capture.jpg", { type: "image/jpeg" });
+      void processFile(file);
       return;
     }
     setPreview(URL.createObjectURL(source));
@@ -51,13 +47,12 @@ export function PublicCameraBlock({
   };
 
   const processFile = async (file: File) => {
-    const active = activeSession ?? (await ensureResponseSession());
+    const active = session ?? (await ensureResponseSession());
     if (!active) {
       setErrorMsg("Falha ao iniciar sessão.");
       setPhase("technical_failure");
       return;
     }
-    setActiveSession(active);
     setPhase("uploading");
 
     try {
@@ -67,7 +62,9 @@ export function PublicCameraBlock({
         if (compressed) fileToUpload = compressed;
       }
 
-      const path = `responses/${checklistId}/${crypto.randomUUID()}.jpg`;
+      const ext = fileToUpload.type.split("/")[1] || "jpg";
+      const path = `responses/${checklistId}/${crypto.randomUUID()}.${ext}`;
+      
       const { error: upErr } = await supabase.storage
         .from("checklist-assets")
         .upload(path, fileToUpload);
@@ -76,8 +73,7 @@ export function PublicCameraBlock({
 
       const { data: publicUrl } = supabase.storage.from("checklist-assets").getPublicUrl(path);
       
-      setEvidenceId(path);
-      onAnswer?.(publicUrl.publicUrl);
+      onAnswer?.(block.id, publicUrl.publicUrl);
       setPhase("received");
     } catch (err) {
       console.error("Upload error:", err);
@@ -97,7 +93,6 @@ export function PublicCameraBlock({
         <TieckCamera
           onCapture={handleCapture}
           onClose={() => setPhase("idle")}
-          accentColor={accentColor}
         />
       </div>
     );
@@ -113,7 +108,7 @@ export function PublicCameraBlock({
           style={{ borderColor: accentColor, color: textColor }}
         >
           <Camera className="w-5 h-5" />
-          <span>Adicionar foto</span>
+          <span>{title || "Adicionar foto"}</span>
         </Button>
       )}
 
