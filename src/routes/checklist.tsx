@@ -432,7 +432,7 @@ import { mapAuthError } from "@/utils/auth-errors";
 const InsightsTab = lazy(() => import("@/components/InsightsTab").then(m => ({ default: m.InsightsTab })));
 const SubmissionsTab = lazy(() => import("@/components/SubmissionsTab").then(m => ({ default: m.SubmissionsTab })));
 import { BlockRenderer, INTERACTIVE_BLOCK_TYPES } from "@/components/BlockRenderer";
-import { CameraStandardStatus } from "@/components/padrao/CameraStandardStatus";
+
 import { ensureCameraBlockIds, withNewCameraBlockId, extractCameraQuestions } from "@/lib/camera-blocks";
 import { syncStandardsWithBlocks } from "@/lib/visual-standards";
 
@@ -4332,10 +4332,6 @@ function NovoChecklistPage() {
                                 />
                               </div>
 
-                              <CameraStandardStatus
-                                checklistId={currentChecklistId || sessionChecklistIdRef.current || checklistId || null}
-                                cameraBlockId={((block as any).cameraBlockId as string | undefined) ?? null}
-                              />
 
 
                               {/* Regras da captura */}
