@@ -121,22 +121,28 @@ export function PublicCameraBlock({ block, checklistId, ensureResponseSession, o
 
     let startData: any = null;
     try {
-      const res = await supabase.functions.invoke("analyze-checklist-evidence", {
-        body: {
-          action: "start-upload",
-          checklistId,
-          blockId: block.id,
-          responseToken: active.responseToken,
-          fileName: file.name,
-          mimeType: file.type || "image/jpeg",
-          fileSize: file.size,
-        },
+      // Inicia a resposta no banco e reserva o ID da evidência
+      const { data, error } = await supabase.rpc("prepare_evidence_upload", {
+        p_checklist_id: checklistId,
+        p_block_id: block.id,
+        p_response_token: active.responseToken,
+        p_file_name: file.name,
+        p_mime_type: file.type || "image/jpeg",
+        p_file_size: file.size
       });
-      if (res.error || !res.data?.uploadUrl || !res.data?.uploadToken || !res.data?.storagePath || !res.data?.evidenceId) {
-        throw new Error("start_upload_failed");
+
+      if (error || !data?.upload_url || !data?.storage_path || !data?.evidence_id) {
+        throw new Error("prepare_failed");
       }
-      startData = res.data;
-    } catch {
+
+      startData = {
+        uploadUrl: data.upload_url,
+        uploadToken: data.upload_token,
+        storagePath: data.storage_path,
+        evidenceId: data.evidence_id
+      };
+    } catch (err) {
+      console.error("Prepare error:", err);
       setErrorMsg("Falha ao iniciar o envio. Tente novamente.");
       setPhase("technical_failure");
       return;
@@ -157,18 +163,18 @@ export function PublicCameraBlock({ block, checklistId, ensureResponseSession, o
     }
 
     try {
-      const res = await supabase.functions.invoke("analyze-checklist-evidence", {
-        body: {
-          action: "confirm-upload",
-          responseToken: active.responseToken,
-          evidenceId: startData.evidenceId,
-        },
+      // Confirmação direta no banco via RPC neutra
+      const { error } = await supabase.rpc("confirm_evidence_upload", {
+        p_response_token: active.responseToken,
+        p_evidence_id: startData.evidenceId
       });
-      if (res.error || !res.data) throw new Error("confirm_failed");
+
+      if (error) throw error;
       
       setEvidenceId(startData.evidenceId as string);
       setPhase("received");
-    } catch {
+    } catch (err) {
+      console.error("Confirm error:", err);
       setErrorMsg("Não foi possível confirmar o envio. Tente novamente.");
       setPhase("technical_failure");
     }
