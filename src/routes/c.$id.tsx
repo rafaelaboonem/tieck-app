@@ -11,39 +11,15 @@ import { CameraSessionProvider } from "@/contexts/CameraSessionContext";
 import { getChecklistSeo } from "@/lib/checklist_seo.functions";
 import { t } from "@/lib/checklist-i18n";
 
-// Mapa de `error` retornado pela Edge Function `analyze-checklist-evidence`
-// → chave pública i18n. Nunca expor detalhes técnicos ao usuário final.
-const SUBMIT_ERROR_KEY: Record<
-  string,
-  Parameters<typeof t>[1]
-> = {
-  analysis_in_progress: "submitAnalysisInProgress",
-  resubmit_required: "submitResubmitRequired",
-  analysis_blocks_submission: "submitBlockedByAnalysis",
-  upload_pending_confirmation: "submitEvidencePending",
+// Mapeamento de erros de submissão (neutro)
+const SUBMIT_ERROR_KEY: Record<string, Parameters<typeof t>[1]> = {
   required_evidence_missing: "requiredError",
   required_block_missing: "requiredError",
   invalid_response_token: "submitSessionExpired",
   checklist_mismatch: "submitSessionExpired",
   checklist_not_published: "submitChecklistUnavailable",
   rate_limited: "submitRateLimited",
-  checklist_update_required: "submitUpdateRequired",
 };
-
-/** Extrai o `error` do corpo JSON de uma FunctionsHttpError; retorna null se
- * o body não é JSON legível. Nunca lê `error.message` técnico. */
-async function readInvokeErrorCode(err: unknown): Promise<string | null> {
-  try {
-    const anyErr = err as { context?: { response?: Response } } | undefined;
-    const resp = anyErr?.context?.response;
-    if (!resp || typeof resp.clone !== "function") return null;
-    const body = await resp.clone().json().catch(() => null);
-    const code = body && typeof body === "object" ? (body as any).error : null;
-    return typeof code === "string" ? code : null;
-  } catch {
-    return null;
-  }
-}
 
 
 export const Route = createFileRoute("/c/$id")({
@@ -234,15 +210,20 @@ function PublicChecklistPage() {
       localStorage.setItem("tieck_visitor_id", visitorId);
     }
     responseSessionPromise.current = (async () => {
-      const { data, error } = await supabase.functions.invoke(
-        "analyze-checklist-evidence",
-        { body: { action: "create-response", checklistId: checklistUuid, visitorId } },
-      );
-      if (error || !data?.responseId || !data?.responseToken) {
+      // Criação de sessão de resposta direta via RPC neutra
+      const { data, error } = await supabase.rpc("create_public_response", {
+        p_checklist_id: checklistUuid,
+        p_visitor_id: visitorId
+      });
+
+      if (error || !data?.[0]?.response_id) {
         console.error("Erro ao criar sessão de resposta:", error);
         return null;
       }
-      const session = { responseId: data.responseId as string, responseToken: data.responseToken as string };
+      const session = { 
+        responseId: data[0].response_id as string, 
+        responseToken: data[0].response_token as string 
+      };
       try { sessionStorage.setItem(responseSessionKey(), JSON.stringify(session)); } catch { /* noop */ }
       return session;
     })();
