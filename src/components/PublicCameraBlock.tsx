@@ -91,6 +91,8 @@ export function PublicCameraBlock({
     return (
       <div className="fixed inset-0 z-50 bg-black">
         <TieckCamera
+          open={true}
+          title={title || "Câmera"}
           onCapture={handleCapture}
           onClose={() => setPhase("idle")}
         />
