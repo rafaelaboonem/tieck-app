@@ -10,15 +10,17 @@ Este documento registra os componentes e estruturas de IA que foram removidos do
 - `src/lib/camera-v4.sanitize.ts`
 - `src/lib/camera-v4.types.ts`
 - `src/routes/api/public/verify-camera-v4.ts`
-- `src/components/padrao/CameraStandardStatus.tsx` (Desativado/Removido do Editor)
+- `src/components/padrao/CameraStandardStatus.tsx`
 - `src/components/padrao/CameraV3Preview.tsx`
-- `src/components/padrao/LabTab.tsx` (Removido)
-- `src/components/padrao/PerformanceTab.tsx` (Removido)
+- `src/components/padrao/LabTab.tsx`
+- `src/components/padrao/PerformanceTab.tsx`
+- `src/hooks/useCameraVerificationV4.ts`
+- `src/hooks/useChecklistEvidenceAnalysis.ts`
 
 ## Endpoints e Edge Functions Desativados
 - `verify-camera-v4` (Server Route)
-- `vision-benchmark` (Edge Function - Referências removidas)
-- `analyze-checklist-evidence` (Edge Function - Lógica de análise removida no frontend)
+- `vision-benchmark` (Edge Function - Referências de Lab e Benchmark removidas do frontend)
+- `analyze-checklist-evidence` (Edge Function - Referências de análise removidas do bloco público)
 
 ## Resíduos Mantidos no Banco de Dados (Temporário)
 - Tabela `public.camera_v4_attempts`
@@ -26,7 +28,7 @@ Este documento registra os componentes e estruturas de IA que foram removidos do
 - Colunas `verified_at`, `provider`, `model_id` em tabelas de resposta/evidência.
 - Buckets de storage `visual-standards`.
 
-## Secrets a serem removidas (após validação)
+## Secrets que já podem ser removidas com segurança
 - `GEMINI_API_KEY`
 - `CLOUDFLARE_API_TOKEN`
 - `CLOUDFLARE_ACCOUNT_ID`
@@ -34,3 +36,7 @@ Este documento registra os componentes e estruturas de IA que foram removidos do
 - `LAB_DIAG_TOKEN`
 - `CAMERA_V4_MODE`
 
+## Observações
+A funcionalidade de captura de foto foi preservada em `PublicCameraBlock.tsx` e `TieckCamera.tsx`, operando agora como um upload comum sem intervenção de IA.
+As abas "Laboratório" e "Desempenho" foram removidas da Central Visual (`src/routes/padrao.index.tsx`).
+A RPC `publish_checklist` e a função `syncStandardsWithBlocks` foram mantidas, mas os metadados de IA são ignorados pelo runtime público.
