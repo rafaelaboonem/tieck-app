@@ -19,10 +19,7 @@ import {
   STATUS_LABEL,
   STATUS_TONE,
   createStandard,
-  linkStandardToBlock,
   restoreStandard,
-  activationChecks,
-  canActivate,
   activateStandard,
   prepareStandard,
   uploadReference,
@@ -439,7 +436,7 @@ function ActivationPanel({ standard, onChanged }: { standard: VisualStandard; on
   const activate = async () => {
     setBusy(true);
     try {
-      await activateStandard(standard);
+      await activateStandard(standard.id);
       toast.success("Padrão ativado.");
       onChanged();
     } catch (e) {
