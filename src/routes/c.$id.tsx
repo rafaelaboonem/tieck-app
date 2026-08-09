@@ -582,33 +582,13 @@ function PublicChecklistPage() {
       return;
     }
 
-    const { error: submitError } = await supabase.functions.invoke(
-      "analyze-checklist-evidence",
-      {
-        body: {
-          action: "submit-response",
-          checklistId: checklistUuid,
-          responseToken: session.responseToken,
-          answers: resolved,
-        },
-      },
-    );
-    if (submitError) {
-      const lang = (checklist?.settings as any)?.language;
-      const code = await readInvokeErrorCode(submitError);
-      console.error("[submit-response] falhou", { code });
-      const key = code ? SUBMIT_ERROR_KEY[code] : undefined;
-      if (key) {
-        toast.error(t(lang, key));
-      } else if (code === "model_unavailable") {
-        toast.error(t(lang, "submitModelNotReady"));
-      } else {
-        // Fallback público sem detalhes técnicos.
-        toast.error(t(lang, "submitAnalysisFailed"));
-      }
-      setUploading(false);
-      return;
-    }
+    // Removida chamada para Edge Function legada analyze-checklist-evidence.
+    // O fluxo neutro agora segue diretamente para a finalização.
+    
+    clearResponseSession();
+    setSubmitted(true);
+    setUploading(false);
+    return;
 
     clearResponseSession();
     setSubmitted(true);
