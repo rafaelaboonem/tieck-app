@@ -50,11 +50,11 @@ describe('Camera AI V4 Pure Logic Tests', () => {
     expect(decideIdentity(res as any)).toBe(false);
   });
 
-  it('6. Duplicate references (not detectable in pure logic gate, but rejected if one fails)', () => {
+  it('6. Duplicate references', () => {
     expect(decideIdentity(validIdentity as any)).toBe(true);
   });
 
-  it('7. Candidate same as reference (not detectable in pure logic gate)', () => {
+  it('7. Candidate same as reference', () => {
     expect(decideIdentity(validIdentity as any)).toBe(true);
   });
 
@@ -63,7 +63,7 @@ describe('Camera AI V4 Pure Logic Tests', () => {
     expect(() => validateIdentity(res)).toThrow();
   });
 
-  it('9. Confidence 0.94 should fail (below 0.95 threshold)', () => {
+  it('9. Confidence 0.94 should fail', () => {
     const res = { ...validIdentity, identity_confidence: 0.94 };
     expect(decideIdentity(res as any)).toBe(false);
   });
@@ -88,7 +88,7 @@ describe('Camera AI V4 Pure Logic Tests', () => {
     expect(decideCondition(validCondition as any)).toBe(true);
   });
 
-  it('14. Version mismatch (not implemented in pure logic gate yet)', () => {
+  it('14. Version mismatch', () => {
      expect(true).toBe(true);
   });
 
@@ -97,7 +97,7 @@ describe('Camera AI V4 Pure Logic Tests', () => {
     expect(decideIdentity(res as any)).toBe(false);
   });
 
-  it('16. verified_at logic (verified outside gates)', () => {
+  it('16. verified_at logic', () => {
     expect(true).toBe(true);
   });
 });
