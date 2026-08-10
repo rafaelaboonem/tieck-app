@@ -1,6 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { createClient } from '@supabase/supabase-js';
 import OpenAI from 'openai';
+import { zodTextFormat } from "openai/helpers/zod";
 import { z } from 'zod';
 
 const LabAnalysisSchema = z.object({
@@ -125,7 +126,7 @@ export const Route = createFileRoute('/api/camera-ai-openai-lab')({
           const model = process.env.OPENAI_VISION_MODEL || "gpt-5.6";
 
           // Usando a Responses API do SDK v7.4.0 conforme solicitado
-          const completion = await (openai.responses as any).parse({
+          const response = await (openai.responses as any).parse({
             model,
             input: [
               {
@@ -145,35 +146,13 @@ export const Route = createFileRoute('/api/camera-ai-openai-lab')({
                 ]
               }
             ],
-            response_format: {
-              type: "json_schema",
-              json_schema: {
-                name: "analysis",
-                strict: true,
-                schema: {
-                  type: "object",
-                  properties: {
-                    schema_version: { type: "string", enum: ["tieck_openai_lab_v1"] },
-                    target_present: { type: "boolean" },
-                    same_task_context: { type: "boolean" },
-                    condition_observable: { type: "boolean" },
-                    condition_met: { type: "boolean" },
-                    image_quality_usable: { type: "boolean" },
-                    reference_consistency: { type: "string", enum: ["match", "mismatch", "insufficient"] },
-                    observed_evidence: { type: "array", items: { type: "string" } },
-                    blocking_reasons: { type: "array", items: { type: "string" } },
-                    capture_instruction: { type: "string" },
-                    model_decision: { type: "string", enum: ["approved", "retake", "not_verifiable"] },
-                    confidence: { type: "number" }
-                  },
-                  required: ["schema_version", "target_present", "same_task_context", "condition_observable", "condition_met", "image_quality_usable", "reference_consistency", "observed_evidence", "blocking_reasons", "capture_instruction", "model_decision", "confidence"],
-                  additionalProperties: false
-                }
-              }
-            },
+            text: {
+              format: zodTextFormat(LabAnalysisSchema, "camera_analysis")
+            }
           });
 
-          const result = LabAnalysisSchema.parse(completion.output_parsed);
+          const result = response.output_parsed;
+          if (!result) throw new Error("Falha ao processar resposta estruturada da OpenAI");
 
           let serverDecision: 'approved' | 'retake' | 'not_verifiable' = 'retake';
           
@@ -187,8 +166,8 @@ export const Route = createFileRoute('/api/camera-ai-openai-lab')({
             result.observed_evidence.length > 0 &&
             result.confidence >= 0.90 &&
             refs.length === 2 &&
-            !!completion.id &&
-            !!completion.usage;
+            !!response.id &&
+            !!response.usage;
 
           if (isIntegralApproved) {
             serverDecision = 'approved';
@@ -197,7 +176,7 @@ export const Route = createFileRoute('/api/camera-ai-openai-lab')({
           }
 
           const latency = Date.now() - startTime;
-          const usage = completion.usage;
+          const usage = response.usage;
 
           const attemptData = {
             user_id: user.id,
@@ -209,7 +188,7 @@ export const Route = createFileRoute('/api/camera-ai-openai-lab')({
             ...result,
             server_decision: serverDecision,
             model,
-            response_id: completion.id,
+            response_id: response.id,
             tokens_input: usage?.prompt_tokens,
             tokens_output: usage?.completion_tokens,
             tokens_total: usage?.total_tokens,
@@ -224,7 +203,7 @@ export const Route = createFileRoute('/api/camera-ai-openai-lab')({
             server_decision: serverDecision,
             telemetry: {
               model,
-              response_id: completion.id,
+              response_id: response.id,
               usage,
               latency
             }
