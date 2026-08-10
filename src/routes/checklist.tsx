@@ -2066,7 +2066,7 @@ function NovoChecklistPage() {
       if (isPublishedOverride === true && data?.id) {
         const { error: pubErr } = await supabase.rpc("publish_checklist", {
           p_checklist_id: data.id,
-        } as any);
+        });
         if (pubErr) {
           // O servidor recusa publicar bloco Camera com IA sem padrão visual
           // vinculado e ativo. Mensagem única e clara para o proprietário.
