@@ -1,7 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { createClient } from '@supabase/supabase-js';
 import OpenAI from 'openai';
-import { zodResponseFormat } from 'openai/helpers/zod';
 import { z } from 'zod';
 
 const LabAnalysisSchema = z.object({
@@ -65,7 +64,7 @@ export const Route = createFileRoute('/api/camera-ai-openai-lab')({
           }
 
           const rateLimitKey = `openai_lab:${user.id}:${standardId}`;
-          const { data: rateLimitOk, error: rlErr } = await supabase.rpc('hit_public_rate_limit' as any, {
+          const { data: rateLimitOk, error: rlErr } = await (supabase.rpc as any)('hit_public_rate_limit', {
             p_key: rateLimitKey,
             p_limit: 5,
             p_window_seconds: 600
@@ -125,9 +124,10 @@ export const Route = createFileRoute('/api/camera-ai-openai-lab')({
           const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
           const model = process.env.OPENAI_VISION_MODEL || "gpt-5.6";
 
-          const completion = await openai.beta.chat.completions.parse({
+          // Usando a Responses API do SDK v7.4.0 conforme solicitado
+          const completion = await (openai.responses as any).parse({
             model,
-            messages: [
+            input: [
               {
                 role: "system",
                 content: "Especialista em verificação visual. Compare a FOTO CANDIDATA com as REFERÊNCIAS. Seja conservador."
@@ -137,19 +137,43 @@ export const Route = createFileRoute('/api/camera-ai-openai-lab')({
                 content: [
                   { type: "text", text: `PERGUNTA: ${standard.question}` },
                   { type: "text", text: "REFERÊNCIA 1:" },
-                  { type: "image_url", image_url: { url: ref1Url, detail: "high" } },
+                  { type: "input_image", input_image: { image_url: { url: ref1Url, detail: "high" } } },
                   { type: "text", text: "REFERÊNCIA 2:" },
-                  { type: "image_url", image_url: { url: ref2Url, detail: "high" } },
+                  { type: "input_image", input_image: { image_url: { url: ref2Url, detail: "high" } } },
                   { type: "text", text: "FOTO CANDIDATA:" },
-                  { type: "image_url", image_url: { url: candidateBase64, detail: "high" } }
+                  { type: "input_image", input_image: { image_url: { url: candidateBase64, detail: "high" } } }
                 ]
               }
             ],
-            response_format: zodResponseFormat(LabAnalysisSchema, "analysis"),
+            response_format: {
+              type: "json_schema",
+              json_schema: {
+                name: "analysis",
+                strict: true,
+                schema: {
+                  type: "object",
+                  properties: {
+                    schema_version: { type: "string", enum: ["tieck_openai_lab_v1"] },
+                    target_present: { type: "boolean" },
+                    same_task_context: { type: "boolean" },
+                    condition_observable: { type: "boolean" },
+                    condition_met: { type: "boolean" },
+                    image_quality_usable: { type: "boolean" },
+                    reference_consistency: { type: "string", enum: ["match", "mismatch", "insufficient"] },
+                    observed_evidence: { type: "array", items: { type: "string" } },
+                    blocking_reasons: { type: "array", items: { type: "string" } },
+                    capture_instruction: { type: "string" },
+                    model_decision: { type: "string", enum: ["approved", "retake", "not_verifiable"] },
+                    confidence: { type: "number" }
+                  },
+                  required: ["schema_version", "target_present", "same_task_context", "condition_observable", "condition_met", "image_quality_usable", "reference_consistency", "observed_evidence", "blocking_reasons", "capture_instruction", "model_decision", "confidence"],
+                  additionalProperties: false
+                }
+              }
+            },
           });
 
-          const result = completion.choices[0].message.parsed;
-          if (!result) throw new Error("Failed to parse AI response");
+          const result = LabAnalysisSchema.parse(completion.output_parsed);
 
           let serverDecision: 'approved' | 'retake' | 'not_verifiable' = 'retake';
           
