@@ -4,8 +4,8 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import type { CameraQuestion } from "@/lib/camera-blocks";
 import type { VisualStandard } from "@/lib/visual-standards";
-import { PadraoHeader, ProjectSelector, ReferenceImageSlot } from "./new-ui/Components";
-import { OpenAILabTest } from "./new-ui/OpenAILabTest";
+import { PadraoHeader, ProjectSelector, ReferenceImageSlot } from "./Components";
+import { OpenAILabTest } from "./OpenAILabTest";
 
 interface StandardWorkspaceProps {
   workspaceId: string;
