@@ -146,7 +146,7 @@ function PublicChecklistPage() {
   const [authorProfile, setAuthorProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [submitted, setSubmitted] = useState(false);
-  const [cameraOpen, setCameraOpen] = useState(false);
+  const [cameraActive, setCameraActive] = useState(false);
   const [analyticsId, setAnalyticsId] = useState<string | null>(null);
   const [answers, setAnswers] = useState<Record<string, any>>({});
   const [uploading, setUploading] = useState(false);
