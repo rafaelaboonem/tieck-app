@@ -125,8 +125,8 @@ export const Route = createFileRoute('/api/camera-ai-openai-lab')({
           const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
           const model = process.env.OPENAI_VISION_MODEL || "gpt-5.6";
 
-          // Usando a Responses API do SDK v7.4.0 conforme solicitado
-          const response = await (openai.responses as any).parse({
+          // Usando a Responses API seguindo rigorosamente a tipagem do SDK
+          const response = await openai.responses.parse({
             model,
             input: [
               {
@@ -136,13 +136,13 @@ export const Route = createFileRoute('/api/camera-ai-openai-lab')({
               {
                 role: "user",
                 content: [
-                  { type: "text", text: `PERGUNTA: ${standard.question}` },
-                  { type: "text", text: "REFERÊNCIA 1:" },
-                  { type: "input_image", input_image: { image_url: { url: ref1Url, detail: "high" } } },
-                  { type: "text", text: "REFERÊNCIA 2:" },
-                  { type: "input_image", input_image: { image_url: { url: ref2Url, detail: "high" } } },
-                  { type: "text", text: "FOTO CANDIDATA:" },
-                  { type: "input_image", input_image: { image_url: { url: candidateBase64, detail: "high" } } }
+                  { type: "input_text", text: `PERGUNTA: ${standard.question}` },
+                  { type: "input_text", text: "REFERÊNCIA VISUAL 1:" },
+                  { type: "input_image", image_url: ref1Url, detail: "high" },
+                  { type: "input_text", text: "REFERÊNCIA VISUAL 2:" },
+                  { type: "input_image", image_url: ref2Url, detail: "high" },
+                  { type: "input_text", text: "FOTO CANDIDATA:" },
+                  { type: "input_image", image_url: candidateBase64, detail: "high" }
                 ]
               }
             ],
@@ -189,8 +189,8 @@ export const Route = createFileRoute('/api/camera-ai-openai-lab')({
             server_decision: serverDecision,
             model,
             response_id: response.id,
-            tokens_input: usage?.prompt_tokens,
-            tokens_output: usage?.completion_tokens,
+            tokens_input: usage?.input_tokens,
+            tokens_output: usage?.output_tokens,
             tokens_total: usage?.total_tokens,
             latency_ms: latency,
             prompt_version: "v2_lab_openai"
