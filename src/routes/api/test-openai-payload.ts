@@ -59,3 +59,5 @@ export async function testPayloadTyping() {
   console.log("Offline Payload Verification: SUCCESS (Types Matched)");
   return payload;
 }
+
+testPayloadTyping().catch(console.error);
