@@ -13,6 +13,7 @@ interface PublicCameraBlockProps {
   textColor?: string;
   title?: string;
   onAnswer?: (blockId: string, value: string) => void;
+  onCameraActiveChange?: (active: boolean) => void;
   session?: { responseId: string; responseToken: string } | null;
   ensureResponseSession: () => Promise<{ responseId: string; responseToken: string } | null>;
 }
@@ -26,6 +27,7 @@ export function PublicCameraBlock({
   textColor,
   title,
   onAnswer,
+  onCameraActiveChange,
   session,
   ensureResponseSession,
 }: PublicCameraBlockProps) {
@@ -84,7 +86,13 @@ export function PublicCameraBlock({
 
   const openCamera = () => {
     setPhase("capturing");
+    onCameraActiveChange?.(true);
     setErrorMsg(null);
+  };
+
+  const closeCamera = () => {
+    setPhase("idle");
+    onCameraActiveChange?.(false);
   };
 
   if (phase === "capturing") {
@@ -94,7 +102,7 @@ export function PublicCameraBlock({
           open={true}
           title={title || "Câmera"}
           onCapture={handleCapture}
-          onClose={() => setPhase("idle")}
+          onClose={closeCamera}
         />
       </div>
     );
