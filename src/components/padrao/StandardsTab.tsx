@@ -75,21 +75,36 @@ export function StandardsTab({
 
   return (
     <div className="space-y-5">
-      {standard ? (
-        <StandardCard standard={standard} onChanged={onChanged} onTest={onTest} />
-      ) : (
-        <Card>
-          <CardContent className="flex flex-col items-center gap-3 py-14 text-center">
-            <ImageIcon className="h-10 w-10 text-muted-foreground" />
-            <p className="max-w-md text-sm text-muted-foreground">
-              Esta pergunta ainda não possui um padrão visual.
-            </p>
-            <Button className="bg-[#FF007F] hover:bg-[#e6006f]" onClick={() => setOpen(true)}>
-              <Plus className="mr-2 h-4 w-4" /> Configurar padrão visual
-            </Button>
-          </CardContent>
-        </Card>
-      )}
+      <Tabs defaultValue="visual" className="w-full">
+        <TabsList className="grid w-full grid-cols-2 mb-6">
+          <TabsTrigger value="visual">Padrão Visual</TabsTrigger>
+          <TabsTrigger value="lab" disabled={!standard || (standard.references?.length ?? 0) < 2}>
+            Laboratório OpenAI
+          </TabsTrigger>
+        </TabsList>
+        
+        <TabsContent value="visual" className="space-y-5">
+          {standard ? (
+            <StandardCard standard={standard} onChanged={onChanged} onTest={onTest} />
+          ) : (
+            <Card>
+              <CardContent className="flex flex-col items-center gap-3 py-14 text-center">
+                <ImageIcon className="h-10 w-10 text-muted-foreground" />
+                <p className="max-w-md text-sm text-muted-foreground">
+                  Esta pergunta ainda não possui um padrão visual.
+                </p>
+                <Button className="bg-[#FF007F] hover:bg-[#e6006f]" onClick={() => setOpen(true)}>
+                  <Plus className="mr-2 h-4 w-4" /> Configurar padrão visual
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+
+        <TabsContent value="lab">
+          {standard && <LabTab standard={standard} workspaceId={workspaceId} />}
+        </TabsContent>
+      </Tabs>
 
       <Dialog open={open} onOpenChange={setOpen}>
         <CreateStandardDialog

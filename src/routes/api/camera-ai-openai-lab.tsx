@@ -54,8 +54,8 @@ export const Route = createFileRoute('/api/camera-ai-openai-lab')({
           };
 
           const [ref1Base64, ref2Base64] = await Promise.all([
-            getBase64(refs.find((r: any) => r.position === 1).storage_path),
-            getBase64(refs.find((r: any) => r.position === 2).storage_path)
+            getBase64(refs.find((r: any) => r.position === 1)!.storage_path),
+            getBase64(refs.find((r: any) => r.position === 2)!.storage_path)
           ]);
 
           const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
