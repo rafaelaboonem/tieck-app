@@ -102,7 +102,7 @@ export function PublicCameraBlock({
           open={true}
           title={title || "Câmera"}
           onCapture={handleCapture}
-          onClose={() => setPhase("idle")}
+          onClose={closeCamera}
         />
       </div>
     );
