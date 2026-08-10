@@ -895,7 +895,7 @@ function PublicChecklistPage() {
                         answers={answers}
                         setAnswer={setAnswer}
                         isDark={isDark}
-                        onCameraToggle={setCameraOpen}
+                        onCameraToggle={setCameraActive}
                       />
                     );
                   })}
