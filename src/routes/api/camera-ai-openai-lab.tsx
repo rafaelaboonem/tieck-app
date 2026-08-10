@@ -65,11 +65,13 @@ export const Route = createFileRoute('/api/camera-ai-openai-lab')({
           }
 
           const rateLimitKey = `openai_lab:${user.id}:${standardId}`;
-          const { data: rateLimitOk, error: rlErr } = await (supabase.rpc as any)('hit_public_rate_limit', {
-            p_key: rateLimitKey,
+          const { data: rlData, error: rlErr } = await supabase.rpc('hit_public_rate_limit', {
+            p_action: 'openai_lab_inference',
+            p_key_hash: rateLimitKey,
             p_limit: 5,
             p_window_seconds: 600
           });
+          const rateLimitOk = rlData?.[0]?.allowed;
 
           if (rlErr || !rateLimitOk) {
             return new Response(JSON.stringify({ error: 'rate_limit', message: 'Too many attempts' }), { 
