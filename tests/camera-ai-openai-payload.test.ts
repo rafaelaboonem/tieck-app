@@ -22,32 +22,33 @@ const LabAnalysisSchema = z.object({
  * Ele usa o SDK oficial da OpenAI e o helper zodTextFormat.
  */
 export async function testPayloadTyping() {
-  const openai = new OpenAI({ apiKey: 'mock-key' });
+  // Mock OpenAI client that does NOT perform network calls
+  const openai = new OpenAI({ apiKey: 'mock-key', dangerouslyAllowBrowser: true });
   const model = "gpt-5.6";
   const standard = { question: "A lâmpada está acesa?" };
   const ref1Url = "data:image/jpeg;base64,/mock1";
   const ref2Url = "data:image/jpeg;base64,/mock2";
   const candidateBase64 = "data:image/jpeg;base64,/mock_candidate";
 
-  // Esta atribuição valida que o objeto segue a interface esperada pelo SDK
-  // O TypeScript falhará aqui se houver erros de estrutura ou tipos proibidos
-  const payload: any = {
+  // Validate the structure matches OpenAI's expected types for responses.parse
+  // We use the same structure as in src/routes/api/camera-ai-openai-lab.tsx
+  const payload = {
     model,
     input: [
       {
-        role: "system",
+        role: "system" as const,
         content: "Especialista em verificação visual. Compare a FOTO CANDIDATA com as REFERÊNCIAS. Seja conservador."
       },
       {
-        role: "user",
+        role: "user" as const,
         content: [
-          { type: "input_text", text: `PERGUNTA: ${standard.question}` },
-          { type: "input_text", text: "REFERÊNCIA VISUAL 1:" },
-          { type: "input_image", image_url: ref1Url, detail: "high" },
-          { type: "input_text", text: "REFERÊNCIA VISUAL 2:" },
-          { type: "input_image", image_url: ref2Url, detail: "high" },
-          { type: "input_text", text: "FOTO CANDIDATA:" },
-          { type: "input_image", image_url: candidateBase64, detail: "high" }
+          { type: "input_text" as const, text: `PERGUNTA: ${standard.question}` },
+          { type: "input_text" as const, text: "REFERÊNCIA VISUAL 1:" },
+          { type: "input_image" as const, image_url: ref1Url, detail: "high" as const },
+          { type: "input_text" as const, text: "REFERÊNCIA VISUAL 2:" },
+          { type: "input_image" as const, image_url: ref2Url, detail: "high" as const },
+          { type: "input_text" as const, text: "FOTO CANDIDATA:" },
+          { type: "input_image" as const, image_url: candidateBase64, detail: "high" as const }
         ]
       }
     ],
@@ -60,4 +61,6 @@ export async function testPayloadTyping() {
   return payload;
 }
 
-testPayloadTyping().catch(console.error);
+if (import.meta.url.endsWith(process.argv[1])) {
+  testPayloadTyping().catch(console.error);
+}
