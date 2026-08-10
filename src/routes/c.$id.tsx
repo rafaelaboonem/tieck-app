@@ -880,6 +880,7 @@ function PublicChecklistPage() {
                             checklistId={checklist.id}
                             ensureResponseSession={ensureResponseSession}
                             onAnswer={setAnswer}
+                            onCameraActiveChange={setCameraActive}
                             textColor={settings.textColor}
                             accentColor={settings.accentColor || settings.btnBgColor || "#111827"}
                           />
