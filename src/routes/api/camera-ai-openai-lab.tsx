@@ -125,7 +125,7 @@ export const Route = createFileRoute('/api/camera-ai-openai-lab')({
           const model = process.env.OPENAI_VISION_MODEL || "gpt-5.6";
 
           // Usando a Responses API do SDK v7.4.0 conforme solicitado
-          const completion = await (openai.responses as any).parse({
+          const completion = await (openai.beta.responses as any).parse({
             model,
             input: [
               {

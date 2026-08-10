@@ -2064,7 +2064,7 @@ function NovoChecklistPage() {
       let serverSlug: string | null = data?.custom_slug ?? null;
 
       if (isPublishedOverride === true && data?.id) {
-        const { error: pubErr } = await supabase.rpc("publish_checklist", {
+        const { error: pubErr } = await (supabase.rpc as any)("publish_checklist", {
           p_checklist_id: data.id,
         });
         if (pubErr) {
