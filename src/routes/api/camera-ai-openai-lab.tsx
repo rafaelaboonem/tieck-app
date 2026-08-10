@@ -189,8 +189,8 @@ export const Route = createFileRoute('/api/camera-ai-openai-lab')({
             server_decision: serverDecision,
             model,
             response_id: response.id,
-            tokens_input: usage?.prompt_tokens,
-            tokens_output: usage?.completion_tokens,
+            tokens_input: usage?.input_tokens,
+            tokens_output: usage?.output_tokens,
             tokens_total: usage?.total_tokens,
             latency_ms: latency,
             prompt_version: "v2_lab_openai"
