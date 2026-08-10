@@ -25,7 +25,6 @@ export const Route = createFileRoute('/api/camera-ai-openai-lab')({
       POST: async ({ request }) => {
         const startTime = Date.now();
         
-        // 1. Gate de Ambiente e API Key
         if (process.env.CAMERA_AI_MODE !== "lab_only") {
           return new Response(JSON.stringify({ error: 'forbidden', message: 'Lab mode only' }), { status: 403 });
         }
@@ -33,7 +32,6 @@ export const Route = createFileRoute('/api/camera-ai-openai-lab')({
           return new Response(JSON.stringify({ error: 'service_unavailable', message: 'AI service not configured' }), { status: 503 });
         }
 
-        // 2. Autenticação do Usuário (Sem Service Role)
         const authHeader = request.headers.get('Authorization');
         if (!authHeader) return new Response('Unauthorized', { status: 401 });
         const token = authHeader.replace('Bearer ', '');
@@ -49,7 +47,6 @@ export const Route = createFileRoute('/api/camera-ai-openai-lab')({
         if (authErr || !user) return new Response('Unauthorized', { status: 401 });
 
         try {
-          // 3. Upload Seguro (Multipart)
           const formData = await request.formData();
           const standardId = formData.get('standardId') as string;
           const idempotencyKey = formData.get('idempotencyKey') as string;
@@ -59,7 +56,6 @@ export const Route = createFileRoute('/api/camera-ai-openai-lab')({
             return new Response('Missing parameters', { status: 400 });
           }
 
-          // Validação básica de imagem
           const allowedMimes = ['image/jpeg', 'image/png', 'image/webp'];
           if (!allowedMimes.includes(candidateFile.type)) {
             return new Response('Invalid file type', { status: 400 });
@@ -68,13 +64,12 @@ export const Route = createFileRoute('/api/camera-ai-openai-lab')({
             return new Response('File too large (max 8MB)', { status: 400 });
           }
 
-          // 4. Rate Limit Persistente (Supabase RPC)
           const rateLimitKey = `openai_lab:${user.id}:${standardId}`;
-          const { data: rateLimitOk, error: rlErr } = await supabase.rpc('hit_public_rate_limit', {
+          const { data: rateLimitOk, error: rlErr } = await supabase.rpc('hit_public_rate_limit' as any, {
             p_key: rateLimitKey,
             p_limit: 5,
             p_window_seconds: 600
-          } as any);
+          });
 
           if (rlErr || !rateLimitOk) {
             return new Response(JSON.stringify({ error: 'rate_limit', message: 'Too many attempts' }), { 
@@ -83,7 +78,6 @@ export const Route = createFileRoute('/api/camera-ai-openai-lab')({
             });
           }
 
-          // 5. Idempotência Persistente
           const { data: existingAttempt } = await supabase
             .from('camera_openai_lab_attempts')
             .select('*')
@@ -102,7 +96,6 @@ export const Route = createFileRoute('/api/camera-ai-openai-lab')({
             }), { headers: { 'Content-Type': 'application/json' } });
           }
 
-          // 6. Buscar Padrão e Referências (Preservando RLS)
           const { data: standard, error: stdErr } = await supabase
             .from('visual_standards')
             .select('*, references:visual_standard_references(*)')
@@ -114,10 +107,9 @@ export const Route = createFileRoute('/api/camera-ai-openai-lab')({
           const refs = (standard.references || []).filter((r: any) => r.position === 1 || r.position === 2);
           if (refs.length !== 2) return new Response('Exactly two references required', { status: 400 });
 
-          // Converter imagens para Data URL efêmero
           const getBase64 = async (path: string) => {
             const { data, error } = await supabase.storage.from('visual-standards').download(path);
-            if (error || !data) throw new Error(`Failed to download reference: ${path} (Check RLS policies)`);
+            if (error || !data) throw new Error(`Failed to download reference: ${path}`);
             const buffer = await data.arrayBuffer();
             return `data:image/jpeg;base64,${Buffer.from(buffer).toString('base64')}`;
           };
@@ -127,10 +119,9 @@ export const Route = createFileRoute('/api/camera-ai-openai-lab')({
 
           const [ref1Url, ref2Url] = await Promise.all([
             getBase64(refs.find((r: any) => r.position === 1)!.storage_path),
-            getBase64(getBase64(refs.find((r: any) => r.position === 2)!.storage_path))
+            getBase64(refs.find((r: any) => r.position === 2)!.storage_path)
           ]);
 
-          // 7. OpenAI Responses API (gpt-5.6 + Structured Outputs)
           const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
           const model = process.env.OPENAI_VISION_MODEL || "gpt-5.6";
 
@@ -160,7 +151,6 @@ export const Route = createFileRoute('/api/camera-ai-openai-lab')({
           const result = completion.choices[0].message.parsed;
           if (!result) throw new Error("Failed to parse AI response");
 
-          // 8. Gate Determinístico Integral (Recalculado no Servidor)
           let serverDecision: 'approved' | 'retake' | 'not_verifiable' = 'retake';
           
           const isIntegralApproved = 
@@ -185,7 +175,6 @@ export const Route = createFileRoute('/api/camera-ai-openai-lab')({
           const latency = Date.now() - startTime;
           const usage = completion.usage;
 
-          // 9. Persistência de Telemetria e Idempotência
           const attemptData = {
             user_id: user.id,
             workspace_id: standard.workspace_id,
