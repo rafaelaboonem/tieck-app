@@ -210,7 +210,7 @@ function PublicChecklistPage() {
       localStorage.setItem("tieck_visitor_id", visitorId);
     }
     responseSessionPromise.current = (async () => {
-      const { data, error } = await (supabase.rpc as any)("create_public_response", {
+      const { data, error } = await supabase.rpc("create_public_response", {
         p_checklist_id: checklistUuid,
         p_visitor_id: visitorId
       });
