@@ -27,6 +27,7 @@ export function PublicCameraBlock({
   textColor,
   title,
   onAnswer,
+  onCameraActiveChange,
   session,
   ensureResponseSession,
 }: PublicCameraBlockProps) {
