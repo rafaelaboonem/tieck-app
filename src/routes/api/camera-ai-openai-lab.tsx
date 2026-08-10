@@ -1,5 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { supabase } from '@/integrations/supabase/client.server';
+import { supabaseAdmin as supabase } from '@/integrations/supabase/client.server';
 import OpenAI from 'openai';
 import { z } from 'zod';
 
