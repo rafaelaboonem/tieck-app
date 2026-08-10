@@ -86,7 +86,13 @@ export function PublicCameraBlock({
 
   const openCamera = () => {
     setPhase("capturing");
+    onCameraActiveChange?.(true);
     setErrorMsg(null);
+  };
+
+  const closeCamera = () => {
+    setPhase("idle");
+    onCameraActiveChange?.(false);
   };
 
   if (phase === "capturing") {
