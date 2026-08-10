@@ -14,6 +14,104 @@ export type Database = {
   }
   public: {
     Tables: {
+      camera_openai_lab_attempts: {
+        Row: {
+          blocking_reasons: string[]
+          capture_instruction: string
+          condition_met: boolean
+          condition_observable: boolean
+          confidence: number
+          created_at: string | null
+          error_code: string | null
+          id: string
+          image_quality_usable: boolean
+          latency_ms: number | null
+          model: string
+          model_decision: string
+          observed_evidence: string[]
+          prompt_version: string
+          reference_consistency: string
+          reference_ids: string[]
+          response_id: string | null
+          same_task_context: boolean
+          schema_version: string
+          server_decision: string
+          standard_id: string | null
+          target_present: boolean
+          tokens_input: number | null
+          tokens_output: number | null
+          tokens_total: number | null
+          user_id: string | null
+          workspace_id: string
+        }
+        Insert: {
+          blocking_reasons: string[]
+          capture_instruction: string
+          condition_met: boolean
+          condition_observable: boolean
+          confidence: number
+          created_at?: string | null
+          error_code?: string | null
+          id?: string
+          image_quality_usable: boolean
+          latency_ms?: number | null
+          model: string
+          model_decision: string
+          observed_evidence: string[]
+          prompt_version: string
+          reference_consistency: string
+          reference_ids: string[]
+          response_id?: string | null
+          same_task_context: boolean
+          schema_version?: string
+          server_decision: string
+          standard_id?: string | null
+          target_present: boolean
+          tokens_input?: number | null
+          tokens_output?: number | null
+          tokens_total?: number | null
+          user_id?: string | null
+          workspace_id: string
+        }
+        Update: {
+          blocking_reasons?: string[]
+          capture_instruction?: string
+          condition_met?: boolean
+          condition_observable?: boolean
+          confidence?: number
+          created_at?: string | null
+          error_code?: string | null
+          id?: string
+          image_quality_usable?: boolean
+          latency_ms?: number | null
+          model?: string
+          model_decision?: string
+          observed_evidence?: string[]
+          prompt_version?: string
+          reference_consistency?: string
+          reference_ids?: string[]
+          response_id?: string | null
+          same_task_context?: boolean
+          schema_version?: string
+          server_decision?: string
+          standard_id?: string | null
+          target_present?: boolean
+          tokens_input?: number | null
+          tokens_output?: number | null
+          tokens_total?: number | null
+          user_id?: string | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "camera_openai_lab_attempts_standard_id_fkey"
+            columns: ["standard_id"]
+            isOneToOne: false
+            referencedRelation: "visual_standards"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       checklist_analytics: {
         Row: {
           checklist_id: string
