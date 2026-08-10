@@ -210,7 +210,7 @@ function PublicChecklistPage() {
       localStorage.setItem("tieck_visitor_id", visitorId);
     }
     responseSessionPromise.current = (async () => {
-      const { data, error } = await supabase.rpc("create_public_response" as any, {
+      const { data, error } = await (supabase.rpc as any)("create_public_response", {
         p_checklist_id: checklistUuid,
         p_visitor_id: visitorId
       });
@@ -292,7 +292,7 @@ function PublicChecklistPage() {
       // Anonymous SELECT on public.checklists is not allowed. Load the
       // published checklist through the SECURITY DEFINER RPC, which never
       // exposes owner_id / workspace_id / user_id to the client.
-      const { data: rows, error } = await (supabase.rpc as any)(
+      const { data: rows, error } = await supabase.rpc(
         "get_public_checklist",
         { p_public_id: id },
       );

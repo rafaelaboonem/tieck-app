@@ -1,6 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { supabaseAdmin as supabase } from '@/integrations/supabase/client.server';
+import { createClient } from '@supabase/supabase-js';
 import OpenAI from 'openai';
+import { zodResponseFormat } from 'openai/helpers/zod';
 import { z } from 'zod';
 
 const LabAnalysisSchema = z.object({
@@ -23,17 +24,77 @@ export const Route = createFileRoute('/api/camera-ai-openai-lab')({
     handlers: {
       POST: async ({ request }) => {
         const startTime = Date.now();
+        
+        if (process.env.CAMERA_AI_MODE !== "lab_only") {
+          return new Response(JSON.stringify({ error: 'forbidden', message: 'Lab mode only' }), { status: 403 });
+        }
+        if (!process.env.OPENAI_API_KEY) {
+          return new Response(JSON.stringify({ error: 'service_unavailable', message: 'AI service not configured' }), { status: 503 });
+        }
+
         const authHeader = request.headers.get('Authorization');
         if (!authHeader) return new Response('Unauthorized', { status: 401 });
+        const token = authHeader.replace('Bearer ', '');
 
-        const { data: { user }, error: authErr } = await supabase.auth.getUser(authHeader.replace('Bearer ', ''));
+        const supabaseUrl = process.env.SUPABASE_URL!;
+        const supabaseAnonKey = process.env.SUPABASE_PUBLISHABLE_KEY!;
+        
+        const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+          global: { headers: { Authorization: `Bearer ${token}` } }
+        });
+
+        const { data: { user }, error: authErr } = await supabase.auth.getUser();
         if (authErr || !user) return new Response('Unauthorized', { status: 401 });
 
         try {
-          const body = await request.json();
-          const { standardId, candidateBase64 } = body;
+          const formData = await request.formData();
+          const standardId = formData.get('standardId') as string;
+          const idempotencyKey = formData.get('idempotencyKey') as string;
+          const candidateFile = formData.get('candidate') as File;
 
-          if (!standardId || !candidateBase64) return new Response('Missing parameters', { status: 400 });
+          if (!standardId || !candidateFile || !idempotencyKey) {
+            return new Response('Missing parameters', { status: 400 });
+          }
+
+          const allowedMimes = ['image/jpeg', 'image/png', 'image/webp'];
+          if (!allowedMimes.includes(candidateFile.type)) {
+            return new Response('Invalid file type', { status: 400 });
+          }
+          if (candidateFile.size > 8 * 1024 * 1024) {
+            return new Response('File too large (max 8MB)', { status: 400 });
+          }
+
+          const rateLimitKey = `openai_lab:${user.id}:${standardId}`;
+          const { data: rateLimitOk, error: rlErr } = await supabase.rpc('hit_public_rate_limit' as any, {
+            p_key: rateLimitKey,
+            p_limit: 5,
+            p_window_seconds: 600
+          });
+
+          if (rlErr || !rateLimitOk) {
+            return new Response(JSON.stringify({ error: 'rate_limit', message: 'Too many attempts' }), { 
+              status: 429,
+              headers: { 'Retry-After': '600' }
+            });
+          }
+
+          const { data: existingAttempt } = await supabase
+            .from('camera_openai_lab_attempts')
+            .select('*')
+            .eq('idempotency_key', idempotencyKey)
+            .maybeSingle();
+
+          if (existingAttempt) {
+            return new Response(JSON.stringify({
+              ...existingAttempt,
+              telemetry: {
+                model: existingAttempt.model,
+                response_id: existingAttempt.response_id,
+                usage: { total_tokens: existingAttempt.tokens_total },
+                latency: existingAttempt.latency_ms
+              }
+            }), { headers: { 'Content-Type': 'application/json' } });
+          }
 
           const { data: standard, error: stdErr } = await supabase
             .from('visual_standards')
@@ -41,7 +102,7 @@ export const Route = createFileRoute('/api/camera-ai-openai-lab')({
             .eq('id', standardId)
             .single();
 
-          if (stdErr || !standard) return new Response('Standard not found', { status: 404 });
+          if (stdErr || !standard) return new Response('Standard not found (or access denied)', { status: 404 });
 
           const refs = (standard.references || []).filter((r: any) => r.position === 1 || r.position === 2);
           if (refs.length !== 2) return new Response('Exactly two references required', { status: 400 });
@@ -50,10 +111,13 @@ export const Route = createFileRoute('/api/camera-ai-openai-lab')({
             const { data, error } = await supabase.storage.from('visual-standards').download(path);
             if (error || !data) throw new Error(`Failed to download reference: ${path}`);
             const buffer = await data.arrayBuffer();
-            return Buffer.from(buffer).toString('base64');
+            return `data:image/jpeg;base64,${Buffer.from(buffer).toString('base64')}`;
           };
 
-          const [ref1Base64, ref2Base64] = await Promise.all([
+          const candidateBuffer = await candidateFile.arrayBuffer();
+          const candidateBase64 = `data:${candidateFile.type};base64,${Buffer.from(candidateBuffer).toString('base64')}`;
+
+          const [ref1Url, ref2Url] = await Promise.all([
             getBase64(refs.find((r: any) => r.position === 1)!.storage_path),
             getBase64(refs.find((r: any) => r.position === 2)!.storage_path)
           ]);
@@ -61,93 +125,82 @@ export const Route = createFileRoute('/api/camera-ai-openai-lab')({
           const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
           const model = process.env.OPENAI_VISION_MODEL || "gpt-5.6";
 
-          const response = await openai.chat.completions.create({
+          const completion = await openai.beta.chat.completions.parse({
             model,
             messages: [
               {
                 role: "system",
-                content: `Você é um especialista em verificação visual do Tieck.
-Avalie a FOTO CANDIDATA baseando-se na PERGUNTA e nas REFERÊNCIAS APROVADAS.
-Regras:
-1. Alvo deve estar presente e no contexto correto.
-2. A condição solicitada deve ser visualmente comprovada.
-3. Use as referências apenas como padrão de comparação.
-4. Seja conservador: na dúvida, peça nova foto (retake).`
+                content: "Especialista em verificação visual. Compare a FOTO CANDIDATA com as REFERÊNCIAS. Seja conservador."
               },
               {
                 role: "user",
                 content: [
                   { type: "text", text: `PERGUNTA: ${standard.question}` },
-                  { type: "text", text: "REFERÊNCIA APROVADA 1 (Exemplo do que é correto):" },
-                  { type: "image_url", image_url: { url: `data:image/jpeg;base64,${ref1Base64}`, detail: "high" } },
-                  { type: "text", text: "REFERÊNCIA APROVADA 2 (Exemplo do que é correto):" },
-                  { type: "image_url", image_url: { url: `data:image/jpeg;base64,${ref2Base64}`, detail: "high" } },
-                  { type: "text", text: "FOTO CANDIDATA QUE DEVE SER JULGADA:" },
+                  { type: "text", text: "REFERÊNCIA 1:" },
+                  { type: "image_url", image_url: { url: ref1Url, detail: "high" } },
+                  { type: "text", text: "REFERÊNCIA 2:" },
+                  { type: "image_url", image_url: { url: ref2Url, detail: "high" } },
+                  { type: "text", text: "FOTO CANDIDATA:" },
                   { type: "image_url", image_url: { url: candidateBase64, detail: "high" } }
                 ]
               }
             ],
-            response_format: { type: "json_schema", json_schema: { name: "analysis", strict: true, schema: {
-              type: "object",
-              properties: {
-                schema_version: { type: "string" },
-                target_present: { type: "boolean" },
-                same_task_context: { type: "boolean" },
-                condition_observable: { type: "boolean" },
-                condition_met: { type: "boolean" },
-                image_quality_usable: { type: "boolean" },
-                reference_consistency: { type: "string", enum: ["match", "mismatch", "insufficient"] },
-                observed_evidence: { type: "array", items: { type: "string" } },
-                blocking_reasons: { type: "array", items: { type: "string" } },
-                capture_instruction: { type: "string" },
-                model_decision: { type: "string", enum: ["approved", "retake", "not_verifiable"] },
-                confidence: { type: "number" }
-              },
-              required: ["schema_version", "target_present", "same_task_context", "condition_observable", "condition_met", "image_quality_usable", "reference_consistency", "observed_evidence", "blocking_reasons", "capture_instruction", "model_decision", "confidence"],
-              additionalProperties: false
-            }}},
+            response_format: zodResponseFormat(LabAnalysisSchema, "analysis"),
           });
 
-          const result = LabAnalysisSchema.parse(JSON.parse(response.choices[0].message.content!));
+          const result = completion.choices[0].message.parsed;
+          if (!result) throw new Error("Failed to parse AI response");
+
+          let serverDecision: 'approved' | 'retake' | 'not_verifiable' = 'retake';
           
-          let serverDecision = result.model_decision;
-          if (serverDecision === 'approved') {
-            const isValid = result.target_present && 
-                            result.same_task_context && 
-                            result.condition_observable && 
-                            result.condition_met && 
-                            result.image_quality_usable && 
-                            result.reference_consistency === 'match' &&
-                            result.observed_evidence.length > 0 &&
-                            result.confidence >= 0.90;
-            if (!isValid) serverDecision = 'retake';
+          const isIntegralApproved = 
+            result.target_present === true &&
+            result.same_task_context === true &&
+            result.condition_observable === true &&
+            result.condition_met === true &&
+            result.image_quality_usable === true &&
+            result.reference_consistency === "match" &&
+            result.observed_evidence.length > 0 &&
+            result.confidence >= 0.90 &&
+            refs.length === 2 &&
+            !!completion.id &&
+            !!completion.usage;
+
+          if (isIntegralApproved) {
+            serverDecision = 'approved';
+          } else if (!result.condition_observable) {
+            serverDecision = 'not_verifiable';
           }
 
           const latency = Date.now() - startTime;
-          const usage = response.usage;
+          const usage = completion.usage;
 
-          await supabase.from('camera_openai_lab_attempts').insert({
+          const attemptData = {
             user_id: user.id,
             workspace_id: standard.workspace_id,
             standard_id: standard.id,
+            idempotency_key: idempotencyKey,
             reference_ids: refs.map((r: any) => r.id),
+            reference_count: refs.length,
             ...result,
             server_decision: serverDecision,
             model,
-            response_id: response.id,
+            response_id: completion.id,
             tokens_input: usage?.prompt_tokens,
             tokens_output: usage?.completion_tokens,
             tokens_total: usage?.total_tokens,
             latency_ms: latency,
-            prompt_version: "v1_lab"
-          });
+            prompt_version: "v2_lab_openai"
+          };
+
+          await supabase.from('camera_openai_lab_attempts').insert(attemptData);
 
           return new Response(JSON.stringify({
             ...result,
             server_decision: serverDecision,
             telemetry: {
               model,
-              response_id: response.id,
+              response_id: completion.id,
               usage,
               latency
             }

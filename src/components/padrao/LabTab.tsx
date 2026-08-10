@@ -2,50 +2,73 @@ import { useState, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Camera, FlaskConical, AlertCircle, CheckCircle2, XCircle } from "lucide-react";
+import { Loader2, Camera, FlaskConical, CheckCircle2, XCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
 export function LabTab({ standard, workspaceId }: { standard: any, workspaceId: string }) {
-  const [candidate, setCandidate] = useState<string | null>(null);
+  const [candidate, setCandidate] = useState<File | null>(null);
+  const [preview, setPreview] = useState<string | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [result, setResult] = useState<any>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const analysisPromiseRef = useRef<Promise<any> | null>(null);
 
   const refs = standard?.references || [];
   const ref1 = refs.find((r: any) => r.position === 1);
   const ref2 = refs.find((r: any) => r.position === 2);
+  const hasExactTwoRefs = refs.length === 2 && ref1 && ref2;
 
   const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      setCandidate(file);
       const reader = new FileReader();
-      reader.onload = (ev) => setCandidate(ev.target?.result as string);
+      reader.onload = (ev) => setPreview(ev.target?.result as string);
       reader.readAsDataURL(file);
     }
   };
 
   const analyze = async () => {
-    if (!candidate) return;
+    if (!candidate || analyzing || analysisPromiseRef.current) return;
+    
     setAnalyzing(true);
     setResult(null);
-    try {
+    
+    const idempotencyKey = crypto.randomUUID();
+    
+    const performAnalysis = async () => {
       const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Unauthorized');
+
+      const formData = new FormData();
+      formData.append('standardId', standard.id);
+      formData.append('idempotencyKey', idempotencyKey);
+      formData.append('candidate', candidate);
+
       const res = await fetch('/api/camera-ai-openai-lab', {
         method: 'POST',
         headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session?.access_token}`
+          'Authorization': `Bearer ${session.access_token}`
         },
-        body: JSON.stringify({ standardId: standard.id, candidateBase64: candidate })
+        body: formData
       });
+
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || 'Erro na análise');
+      return data;
+    };
+
+    analysisPromiseRef.current = performAnalysis();
+
+    try {
+      const data = await analysisPromiseRef.current;
       setResult(data);
     } catch (e: any) {
       toast.error(e.message);
     } finally {
       setAnalyzing(false);
+      analysisPromiseRef.current = null;
     }
   };
 
@@ -75,15 +98,15 @@ export function LabTab({ standard, workspaceId }: { standard: any, workspaceId: 
             <div className="space-y-2">
               <span className="text-xs font-medium text-muted-foreground uppercase">Foto Candidata</span>
               <div className="relative aspect-video rounded-lg border-2 border-dashed bg-muted/50 overflow-hidden flex items-center justify-center cursor-pointer hover:bg-muted" onClick={() => fileRef.current?.click()}>
-                {candidate ? <img src={candidate} className="w-full h-full object-cover" /> : <Camera className="h-8 w-8 text-muted-foreground" />}
-                <input type="file" className="hidden" ref={fileRef} accept="image/*" onChange={onFileChange} />
+                {preview ? <img src={preview} className="w-full h-full object-cover" /> : <Camera className="h-8 w-8 text-muted-foreground" />}
+                <input type="file" className="hidden" ref={fileRef} accept="image/jpeg,image/png,image/webp" onChange={onFileChange} />
               </div>
             </div>
           </div>
 
           <Button 
             className="w-full bg-[#FF007F] hover:bg-[#e6006f]" 
-            disabled={!candidate || analyzing || refs.length < 2}
+            disabled={!candidate || analyzing || !hasExactTwoRefs}
             onClick={analyze}
           >
             {analyzing ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Analisando a foto...</> : 'Analisar com OpenAI'}
@@ -108,32 +131,15 @@ export function LabTab({ standard, workspaceId }: { standard: any, workspaceId: 
                 <Metric label="Consistência" value={result.reference_consistency === 'match'} />
               </div>
 
-              <Card className="bg-muted/30 border-none shadow-none">
-                <CardContent className="p-4 space-y-3">
-                  <div>
-                    <span className="text-xs font-bold uppercase text-muted-foreground">Evidências</span>
-                    <ul className="text-sm space-y-1 mt-1">
-                      {result.observed_evidence.map((e: string, i: number) => <li key={i} className="flex gap-2">• {e}</li>)}
-                    </ul>
-                  </div>
-                  {result.blocking_reasons.length > 0 && (
-                    <div>
-                      <span className="text-xs font-bold uppercase text-rose-600">Bloqueios</span>
-                      <ul className="text-sm space-y-1 mt-1 text-rose-700">
-                        {result.blocking_reasons.map((e: string, i: number) => <li key={i} className="flex gap-2">• {e}</li>)}
-                      </ul>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-
               <div className="flex flex-wrap gap-2 text-[10px] text-muted-foreground border-t pt-4 font-mono">
                 <span>Model: {result.telemetry.model}</span>
                 <span>• ID: {result.telemetry.response_id}</span>
                 <span>• Tokens: {result.telemetry.usage?.total_tokens}</span>
                 <span>• Latência: {result.telemetry.latency}ms</span>
                 <span>• Confiança: {(result.confidence * 100).toFixed(1)}%</span>
-                <span className="text-emerald-600 font-bold ml-auto">INFERÊNCIA REAL CONFIRMADA</span>
+                {result.telemetry.response_id && result.telemetry.usage && (
+                  <span className="text-emerald-600 font-bold ml-auto">INFERÊNCIA REAL CONFIRMADA</span>
+                )}
               </div>
             </div>
           )}
