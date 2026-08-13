@@ -34,7 +34,7 @@ REGRAS:
           { type: "input_text", text: `PERGUNTA: "${question}"` },
           {
             type: "input_image",
-            image_data: base64Image
+            image: { data: base64Image, detail: "auto" }
           }
         ]
       }
