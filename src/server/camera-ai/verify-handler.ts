@@ -192,7 +192,7 @@ export async function verifyCameraRequest(
 
   // 10. OpenAI
   const startTime = deps.now().getTime();
-  let analysis;
+  let analysis: CameraVerification;
   try {
     analysis = await deps.analyzeImage(deps.openai, deps.model, question, imageFile.buffer, mimeType);
   } catch (aiError) {
