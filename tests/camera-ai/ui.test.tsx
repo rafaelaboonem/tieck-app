@@ -213,7 +213,7 @@ describe('PublicCameraBlock UI', { timeout: 30000 }, () => {
     expect(screen.queryByText('OLD')).not.toBeInTheDocument();
   });
 
-  it('10. timeout: technical failure', { timeout: 15000 }, async () => {
+  it('10. timeout: technical failure', async () => {
     expect.hasAssertions();
     vi.useFakeTimers();
     let aborted = false;
