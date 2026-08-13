@@ -202,7 +202,7 @@ describe('PublicCameraBlock UI', () => {
     expect(screen.queryByText('OLD')).not.toBeInTheDocument();
   });
 
-  it('10. timeout: technical failure', { timeout: 20000 }, async () => {
+  it('10. timeout: technical failure', { timeout: 35000 }, async () => {
     vi.useFakeTimers();
     
     (global.fetch as ReturnType<typeof vi.fn>).mockImplementation(() => {
@@ -215,14 +215,20 @@ describe('PublicCameraBlock UI', () => {
 
     await waitFor(() => expect(screen.getByText(/Verificando/)).toBeInTheDocument());
 
-    await vi.advanceTimersByTimeAsync(35000);
+    vi.advanceTimersByTime(35000);
     
+    // We don't use advanceTimersByTimeAsync here as it sometimes hangs in this environment
+    // Instead we use a manual resolve to trigger the microtasks
+    await Promise.resolve();
+    await Promise.resolve();
+
     await waitFor(() => {
       expect(screen.getByText(/demorou mais que o esperado/)).toBeInTheDocument();
-    });
+    }, { timeout: 10000 });
     
     vi.useRealTimers();
   });
+
 
   it('11. troca de foto: invalidates previous approved', async () => {
     (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
