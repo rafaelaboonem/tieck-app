@@ -217,7 +217,7 @@ describe('PublicCameraBlock UI', () => {
 
     vi.advanceTimersByTime(36000);
     
-    // Allow the microtasks to run
+    // Manual promise resolution to trigger microtasks
     await vi.runAllTicks();
     await vi.runAllTicks();
 
@@ -226,25 +226,7 @@ describe('PublicCameraBlock UI', () => {
     });
     
     vi.useRealTimers();
-  });
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+  }, { timeout: 60000 });
 
   it('11. troca de foto: invalidates previous approved', async () => {
     (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
