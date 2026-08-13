@@ -1,8 +1,8 @@
 import { LucideIcon, Camera, X, SwitchCamera, Zap, ZapOff, Images, CheckCircle2, RefreshCw, Loader2, AlertCircle } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useCameraSession } from "@/contexts/CameraSessionContext";
-import { Button } from "../ui/button";
-import { Alert, AlertDescription } from "../ui/alert";
+import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface PublicCameraV5Props {
   block: any;
