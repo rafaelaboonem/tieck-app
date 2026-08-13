@@ -219,7 +219,7 @@ describe('PublicCameraBlock UI', () => {
     let aborted = false;
 
     (global.fetch as ReturnType<typeof vi.fn>).mockImplementation((_url, options) => {
-      const p = new Promise((_, reject) => {
+      return new Promise((_, reject) => {
         if (options.signal) {
           options.signal.addEventListener('abort', () => {
             aborted = true;
@@ -227,7 +227,6 @@ describe('PublicCameraBlock UI', () => {
           });
         }
       });
-      return p;
     });
 
     render(<PublicCameraBlock {...mockProps} />);
@@ -236,12 +235,16 @@ describe('PublicCameraBlock UI', () => {
     
     await waitFor(() => expect(screen.getByText(/Verificando/)).toBeInTheDocument());
     
-    await vi.advanceTimersByTimeAsync(36000);
+    await React.act(async () => {
+      vi.advanceTimersByTime(36000);
+      vi.runAllTicks();
+      await Promise.resolve();
+    });
 
     await waitFor(() => {
       expect(screen.getByText(/demorou mais que o esperado/)).toBeInTheDocument();
       expect(aborted).toBe(true);
-    });
+    }, { timeout: 2000, interval: 50 });
 
     expect(screen.getByText('Tentar novamente')).toBeInTheDocument();
     
