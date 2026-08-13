@@ -37,7 +37,7 @@ export const Route = createFileRoute('/api/camera-ai/verify')({
           
           const deps: VerifyDependencies = {
             mode,
-            openai: apiKey ? new OpenAI({ apiKey }) : null,
+            openai: (apiKey ? new OpenAI({ apiKey }) : null) as any,
             model,
             supabaseAdmin: supabaseAdmin as any, // Cast to avoid complex interface mismatch
             now: () => new Date(),
