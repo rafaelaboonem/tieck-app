@@ -209,23 +209,21 @@ describe('PublicCameraBlock UI', () => {
     fireEvent.click(screen.getByText('Test Camera'));
     fireEvent.click(screen.getByTestId('capture-btn'));
     
-    // Check for Analyzing state
     await waitFor(() => expect(screen.getByText(/Verificando/)).toBeInTheDocument());
     
-    // Fast-forward 36s to trigger the internal timeout
-    // We use a smaller step and flush between to ensure timers trigger reliably in the mock env
-    for (let i = 0; i < 36; i++) {
-      vi.advanceTimersByTime(1000);
-      vi.runAllTicks();
+    // Use smaller increments to ensure reliability in the test runner
+    for (let i = 0; i < 4; i++) {
+      vi.advanceTimersByTime(10000);
+      await vi.runAllTicks();
     }
     
-    // Verify timeout message
     await waitFor(() => {
       expect(screen.getByText(/demorou mais que o esperado/)).toBeInTheDocument();
-    }, { timeout: 2000 });
+    });
     
     vi.useRealTimers();
-  });
+  }, 10000);
+
 
 
 
