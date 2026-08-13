@@ -169,7 +169,7 @@ describe('Camera AI Server Runtime', () => {
     });
 
     it('UUID de checklistId inválido falha no schema', async () => {
-      const payload: any = { ...validPayload, checklistId: 'not-a-uuid' };
+      const payload: unknown = { ...validPayload, checklistId: 'not-a-uuid' };
       // O tanstack start chama o schema antes do handler, mas aqui testamos o handler recebendo payload já validado tipadamente.
       // O teste de schema abaixo já cobre a validação.
     });
