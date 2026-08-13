@@ -4127,7 +4127,7 @@ function NovoChecklistPage() {
                            return "manual_review";
                        }
                      };
-                    // Camera AI V2: análise semântica sempre ativa.
+                    // Camera AI V2: análise semântica desativada na baseline neutra.
                     const visionBadge: { label: string; tone: "off" | "warn" | "active" } | null = null;
 
                    return (
