@@ -34,9 +34,9 @@ REGRAS:
           { type: "input_text", text: `PERGUNTA: "${question}"` },
           {
             type: "input_image",
-            image_data: { data: base64Image }
+            image: { data: base64Image }
           }
-        ]
+        ] as any
       }
     ],
     text: {
@@ -46,7 +46,7 @@ REGRAS:
     timeout: timeoutMs
   });
 
-  const result = response.parsed;
+  const result = (response as any).parsed;
   if (!result) {
     throw new Error('OpenAI failed to parse structured output.');
   }
