@@ -169,8 +169,16 @@ describe('PublicCameraBlock UI', () => {
 
   it('9. resposta antiga: request sequence protection', async () => {
     expect.hasAssertions();
-    let resolveA: (v: any) => void = () => {};
-    const promiseA = new Promise(resolve => { resolveA = resolve; });
+    
+    interface FakeResponse {
+      ok: boolean;
+      status: number;
+      headers: Map<string, string>;
+      json: () => Promise<{ ok: boolean; decision: string; evidence?: string; code?: string }>;
+    }
+
+    let resolveA: (v: FakeResponse) => void = () => {};
+    const promiseA = new Promise<FakeResponse>(resolve => { resolveA = resolve; });
     
     (global.fetch as ReturnType<typeof vi.fn>).mockImplementation((_url, options) => {
       const form = options.body as FormData;
@@ -184,6 +192,7 @@ describe('PublicCameraBlock UI', () => {
       });
     });
 
+    mockProps.onAnswer.mockClear();
     render(<PublicCameraBlock {...mockProps} />);
     
     fireEvent.click(screen.getByText('Test Camera'));
@@ -194,13 +203,14 @@ describe('PublicCameraBlock UI', () => {
     
     await waitFor(() => expect(screen.getByText(/Verificando/)).toBeInTheDocument());
 
-    // Capture B (triggers handleCapture again, which increments sequence and aborts previous)
+    // Capture B
     vi.spyOn(crypto, 'randomUUID').mockReturnValueOnce('00000000-0000-4000-8000-00000000000b');
     if (lastOnCapture) {
       lastOnCapture(new File([''], 'test-b.jpg', { type: 'image/jpeg' }));
     }
 
     await waitFor(() => expect(screen.getByText('LATEST')).toBeInTheDocument());
+    expect(mockProps.onAnswer).toHaveBeenCalledWith('block-1', 'http://mock-url.com/img.jpg');
 
     // Resolve A (stale)
     resolveA({
@@ -211,44 +221,55 @@ describe('PublicCameraBlock UI', () => {
     await new Promise(r => setTimeout(r, 50));
     expect(screen.getByText('LATEST')).toBeInTheDocument();
     expect(screen.queryByText('OLD')).not.toBeInTheDocument();
+    expect(mockProps.onAnswer).not.toHaveBeenCalledWith('block-1', 'OLD');
   });
 
-  it('10. timeout: technical failure', { timeout: 15000 }, async () => {
+  it('10. timeout: technical failure', async () => {
     expect.hasAssertions();
     vi.useFakeTimers();
-    let aborted = false;
+    try {
+      let aborted = false;
+      let signalSent: AbortSignal | null = null;
 
-    (global.fetch as ReturnType<typeof vi.fn>).mockImplementation((_url, options) => {
-      return new Promise((_, reject) => {
-        if (options.signal) {
-          options.signal.addEventListener('abort', () => {
-            aborted = true;
-            reject(new DOMException('Aborted', 'AbortError'));
-          });
-        }
+      (global.fetch as ReturnType<typeof vi.fn>).mockImplementation((_url, options) => {
+        signalSent = options.signal;
+        return new Promise((_, reject) => {
+          if (options.signal) {
+            options.signal.addEventListener('abort', () => {
+              aborted = true;
+              reject(new DOMException('Aborted', 'AbortError'));
+            });
+          }
+        });
       });
-    });
 
-    render(<PublicCameraBlock {...mockProps} />);
-    fireEvent.click(screen.getByText('Test Camera'));
-    fireEvent.click(screen.getByTestId('capture-btn'));
-    
-    await waitFor(() => expect(screen.getByText(/Verificando/)).toBeInTheDocument());
-    
-    await React.act(async () => {
-      vi.advanceTimersByTime(36000);
-      vi.runAllTicks();
+      render(<PublicCameraBlock {...mockProps} />);
+      fireEvent.click(screen.getByText('Test Camera'));
+      fireEvent.click(screen.getByTestId('capture-btn'));
+      
+      // Flush microtasks para garantir que ensureResponseSession resolva e o fetch inicie
       await Promise.resolve();
-    });
+      await Promise.resolve();
+      
+      expect(global.fetch).toHaveBeenCalled();
+      expect(signalSent).not.toBeNull();
+      
+      await React.act(async () => {
+        await vi.advanceTimersByTimeAsync(36000);
+      });
 
-    await waitFor(() => {
-      expect(screen.getByText(/demorou mais que o esperado/)).toBeInTheDocument();
+      // Flush microtasks novamente para processar o catch do fetch
+      await Promise.resolve();
+      await Promise.resolve();
+
       expect(aborted).toBe(true);
-    }, { timeout: 2000, interval: 50 });
-
-    expect(screen.getByText('Tentar novamente')).toBeInTheDocument();
-    
-    vi.useRealTimers();
+      expect(signalSent?.aborted).toBe(true);
+      expect(screen.getByText(/demorou mais que o esperado/)).toBeInTheDocument();
+      expect(screen.queryByText(/Verificando a foto/)).not.toBeInTheDocument();
+      expect(screen.getByText('Tentar novamente')).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('11. troca de foto: invalidates previous approved', async () => {
