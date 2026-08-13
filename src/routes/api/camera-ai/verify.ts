@@ -54,17 +54,20 @@ export const Route = createFileRoute('/api/camera-ai/verify')({
             now: () => new Date(),
             isConfigured: () => true,
             resolveSession: async (token: string) => {
-              return supabaseAdmin.rpc('resolve_public_response', { p_token: token });
+              const client = createServerSupabaseClient();
+              return client.rpc('resolve_public_response', { p_token: token });
             },
             claimAttempt: async ({ responseId, blockId, idempotencyKey }: { responseId: string; blockId: string; idempotencyKey: string }) => {
-              return supabaseAdmin.rpc('claim_camera_ai_attempt', {
+              const client = createServerSupabaseClient();
+              return client.rpc('claim_camera_ai_attempt', {
                 p_response_id: responseId,
                 p_block_id: blockId,
                 p_idempotency_key: idempotencyKey
               });
             },
             hitRateLimit: async (responseId: string) => {
-              return supabaseAdmin.rpc('hit_public_rate_limit', {
+              const client = createServerSupabaseClient();
+              return client.rpc('hit_public_rate_limit', {
                 p_key_hash: String(responseId),
                 p_action: 'camera_ai_verify',
                 p_window_seconds: 600,
@@ -72,10 +75,12 @@ export const Route = createFileRoute('/api/camera-ai/verify')({
               });
             },
             analyzeImage: async (question: string, buffer: ArrayBuffer, mimeType: string) => {
-              return analyzeImage(openai, model, question, buffer, mimeType);
+              const openaiClient = new OpenAI({ apiKey });
+              return analyzeImage(openaiClient, model, question, buffer, mimeType);
             },
             markFailed: async ({ responseId, blockId, idempotencyKey, code }: { responseId: string; blockId: string; idempotencyKey: string; code: string }) => {
-              return supabaseAdmin
+              const client = createServerSupabaseClient();
+              return client
                 .from('camera_ai_attempts')
                 .update({ 
                   status: 'failed', 
@@ -90,7 +95,8 @@ export const Route = createFileRoute('/api/camera-ai/verify')({
                 });
             },
             markCompleted: async (params) => {
-              return supabaseAdmin
+              const client = createServerSupabaseClient();
+              return client
                 .from('camera_ai_attempts')
                 .update({
                   status: 'completed',
