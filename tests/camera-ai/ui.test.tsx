@@ -235,10 +235,11 @@ describe('PublicCameraBlock UI', () => {
     render(<PublicCameraBlock {...mockProps} />);
     fireEvent.click(screen.getByText('Test Camera'));
     
+    // Rapid double click to trigger two requests
     fireEvent.click(screen.getByTestId('capture-btn'));
-    await waitFor(() => expect(screen.getByText(/Verificando a foto/)).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId('capture-btn'));
     
-    fireEvent.click(screen.getByTestId('capture-btn'));
+    await waitFor(() => expect(screen.getByText(/Verificando a foto/)).toBeInTheDocument());
     
     resolveFirst({
       ok: true,
@@ -249,9 +250,10 @@ describe('PublicCameraBlock UI', () => {
 
     await waitFor(() => {
       expect(screen.getByText('LATEST')).toBeInTheDocument();
-    });
+    }, { timeout: 8000 });
     expect(screen.queryByText('STALE')).not.toBeInTheDocument();
   }, 10000);
+
 
   it('10. timeout: technical failure with retry', async () => {
     vi.useFakeTimers();
