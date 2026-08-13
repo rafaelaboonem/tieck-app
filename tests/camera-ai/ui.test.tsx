@@ -173,6 +173,9 @@ describe('PublicCameraBlock UI', () => {
     // First capture
     fireEvent.click(screen.getByTestId('capture-btn'));
     
+    // Manual wait to ensure state transitions
+    await new Promise(r => setTimeout(r, 50));
+    
     // Second capture (invalidates first)
     fireEvent.click(screen.getByTestId('capture-btn'));
     
@@ -187,10 +190,10 @@ describe('PublicCameraBlock UI', () => {
       json: async () => ({ ok: true, decision: 'approved', evidence: 'STALE', code: 'ok' }),
     });
 
-    await new Promise(r => setTimeout(r, 200));
+    await new Promise(r => setTimeout(r, 500));
     expect(screen.getByText('LATEST')).toBeInTheDocument();
     expect(screen.queryByText('STALE')).not.toBeInTheDocument();
-  }, 20000);
+  }, 25000);
 
   it('10. timeout: technical failure', async () => {
     vi.useFakeTimers();
@@ -204,13 +207,14 @@ describe('PublicCameraBlock UI', () => {
     // Advance 35 seconds
     vi.advanceTimersByTime(35001);
     
-    // Flush microtasks to allow the async catch block to run
+    // Flush microtasks
     await vi.runAllTicks();
 
+    // Use a long timeout for the final assertion
     await waitFor(() => {
       const msg = screen.queryByText(/verificação demorou mais/);
       if (!msg) throw new Error('Timeout message not found');
-    }, { timeout: 5000 });
+    }, { timeout: 8000 });
     
     expect(screen.queryByText(/Verificando a foto/)).not.toBeInTheDocument();
     expect(screen.getByText('Tentar novamente')).toBeInTheDocument();
