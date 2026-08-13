@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { evaluateGate } from '../src/server/camera-ai/gate';
-import { validateImageBuffer } from '../src/server/camera-ai/image-validation';
-import { CameraVerification, PublishedBlock, VerifyPayloadSchema } from '../src/server/camera-ai/schema';
-import { verifyCameraRequest, VerifyDependencies } from '../src/server/camera-ai/verify-handler';
-import fs from 'fs';
-import path from 'path';
+import { evaluateGate } from '../../src/server/camera-ai/gate';
+import { validateImageBuffer } from '../../src/server/camera-ai/image-validation';
+import { CameraVerification, PublishedBlock, VerifyPayloadSchema } from '../../src/server/camera-ai/schema';
+import { verifyCameraRequest, VerifyDependencies } from '../../src/server/camera-ai/verify-handler';
+import fs from 'node:fs';
+import path from 'node:path';
 
 describe('Camera AI Server Runtime', () => {
   let deps: VerifyDependencies;
@@ -14,9 +14,9 @@ describe('Camera AI Server Runtime', () => {
     vi.clearAllMocks();
     deps = {
       mode: 'enabled',
-      openai: {},
+      openai: {} as any,
       model: 'gpt-4o-mini',
-      supabaseAdmin: {},
+      supabaseAdmin: {} as any,
       now: () => mockNow,
       resolveSession: vi.fn().mockResolvedValue({ 
         data: [{ 
@@ -54,7 +54,7 @@ describe('Camera AI Server Runtime', () => {
     });
 
     it('configuração ausente retorna 503', async () => {
-      deps.supabaseAdmin = null;
+      deps.supabaseAdmin = null as any;
       const res = await verifyCameraRequest(validPayload as any, validImage, deps);
       expect(res.status).toBe(503);
       expect(res.body.code).toBe('config_missing');
