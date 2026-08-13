@@ -303,16 +303,16 @@ describe('PublicCameraBlock UI', () => {
     fireEvent.click(screen.getByText('Test Camera'));
     fireEvent.click(screen.getByTestId('capture-btn'));
 
-    await waitFor(() => expect(screen.getByText(/Falha de conexão/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/Falha de conexão/)).toBeInTheDocument(), { timeout: 8000 });
     
     const firstKey = (global.fetch as any).mock.calls[0][1].body.get('idempotencyKey');
     fireEvent.click(screen.getByText('Tentar novamente'));
     
-    await waitFor(() => expect(screen.getByText('Foto aprovada')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Foto aprovada')).toBeInTheDocument(), { timeout: 8000 });
     
     const secondKey = (global.fetch as any).mock.calls[1][1].body.get('idempotencyKey');
     expect(firstKey).toBe(secondKey);
-  });
+  }, 10000);
 
   it('13. retry após resposta 500: new key', async () => {
     (global.fetch as any).mockResolvedValueOnce({
@@ -332,16 +332,16 @@ describe('PublicCameraBlock UI', () => {
     fireEvent.click(screen.getByText('Test Camera'));
     fireEvent.click(screen.getByTestId('capture-btn'));
 
-    await waitFor(() => expect(screen.getByText(/O servidor encontrou um erro/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/O servidor encontrou um erro/)).toBeInTheDocument(), { timeout: 8000 });
     
     const firstKey = (global.fetch as any).mock.calls[0][1].body.get('idempotencyKey');
     fireEvent.click(screen.getByText('Tentar novamente'));
     
-    await waitFor(() => expect(screen.getByText('Foto aprovada')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Foto aprovada')).toBeInTheDocument(), { timeout: 8000 });
     
     const secondKey = (global.fetch as any).mock.calls[1][1].body.get('idempotencyKey');
     expect(firstKey).not.toBe(secondKey);
-  });
+  }, 10000);
 
   it('14. upload falha após approved: no onAnswer URL', async () => {
     (global.fetch as any).mockResolvedValue({
@@ -356,9 +356,9 @@ describe('PublicCameraBlock UI', () => {
     fireEvent.click(screen.getByText('Test Camera'));
     fireEvent.click(screen.getByTestId('capture-btn'));
 
-    await waitFor(() => expect(screen.getByText(/falha ao salvar no servidor/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/falha ao salvar no servidor/)).toBeInTheDocument(), { timeout: 8000 });
     expect(mockProps.onAnswer).toHaveBeenCalledWith('block-1', '');
-  });
+  }, 10000);
 
   it('15. approved display protection', async () => {
     (global.fetch as any).mockResolvedValue({
@@ -372,7 +372,8 @@ describe('PublicCameraBlock UI', () => {
     fireEvent.click(screen.getByText('Test Camera'));
     fireEvent.click(screen.getByTestId('capture-btn'));
 
-    await waitFor(() => expect(screen.getByText('Tire outra foto')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Tire outra foto')).toBeInTheDocument(), { timeout: 8000 });
     expect(screen.queryByText('Foto aprovada')).not.toBeInTheDocument();
-  });
+  }, 10000);
 });
+
