@@ -217,14 +217,15 @@ describe('PublicCameraBlock UI', () => {
     await waitFor(() => expect(screen.getByText(/Verificando/)).toBeInTheDocument());
 
     vi.advanceTimersByTime(35000);
-    await vi.runAllTicks();
-
+    
+    // We need to wait for the async abort handling to propagate
     await waitFor(() => {
       expect(screen.getByText(/demorou mais que o esperado/)).toBeInTheDocument();
-    }, { timeout: 10000 });
+    }, { timeout: 1000 });
     
     vi.useRealTimers();
-  }, 15000);
+  });
+
 
 
 
