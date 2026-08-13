@@ -175,7 +175,7 @@ export async function verifyCameraRequest(
   const startTime = deps.now().getTime();
   let analysis: CameraVerification;
   try {
-    analysis = await deps.analyzeImage(deps.openai, deps.model, question, imageFile.buffer, mimeType);
+    analysis = await deps.analyzeImage(question, imageFile.buffer, mimeType);
   } catch (aiError) {
     await deps.markFailed({
       responseId: session.response_id,
