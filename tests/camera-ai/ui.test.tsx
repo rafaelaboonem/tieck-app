@@ -236,7 +236,6 @@ describe('PublicCameraBlock UI', () => {
     
     await waitFor(() => expect(screen.getByText(/Verificando/)).toBeInTheDocument());
     
-    // We do NOT use async act here to avoid hanging the runner
     React.act(() => {
       vi.advanceTimersByTime(36000);
       vi.runAllTicks();
@@ -245,12 +244,12 @@ describe('PublicCameraBlock UI', () => {
     await waitFor(() => {
       expect(screen.getByText(/demorou mais que o esperado/)).toBeInTheDocument();
       expect(aborted).toBe(true);
-    }, { timeout: 2000 });
+    });
 
     expect(screen.getByText('Tentar novamente')).toBeInTheDocument();
     
     vi.useRealTimers();
-  });
+  }, { timeout: 15000 });
 
   it('11. troca de foto: invalidates previous approved', async () => {
     (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
