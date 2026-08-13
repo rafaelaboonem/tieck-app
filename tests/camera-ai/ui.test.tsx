@@ -202,7 +202,7 @@ describe('PublicCameraBlock UI', () => {
     expect(screen.queryByText('OLD')).not.toBeInTheDocument();
   });
 
-  it('10. timeout: technical failure', { timeout: 30000 }, async () => {
+  it('10. timeout: technical failure', async () => {
     vi.useFakeTimers();
     (global.fetch as ReturnType<typeof vi.fn>).mockImplementation(() => new Promise(() => {}));
     render(<PublicCameraBlock {...mockProps} />);
@@ -212,16 +212,21 @@ describe('PublicCameraBlock UI', () => {
     // Check for Analyzing state
     await waitFor(() => expect(screen.getByText(/Verificando/)).toBeInTheDocument());
     
-    // Trigger 35s timeout
-    vi.advanceTimersByTime(36000);
+    // Fast-forward 36s to trigger the internal timeout
+    // We use a smaller step and flush between to ensure timers trigger reliably in the mock env
+    for (let i = 0; i < 36; i++) {
+      vi.advanceTimersByTime(1000);
+      vi.runAllTicks();
+    }
     
     // Verify timeout message
     await waitFor(() => {
       expect(screen.getByText(/demorou mais que o esperado/)).toBeInTheDocument();
-    });
+    }, { timeout: 2000 });
     
     vi.useRealTimers();
   });
+
 
 
 
