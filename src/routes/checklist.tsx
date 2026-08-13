@@ -978,7 +978,6 @@ function NovoChecklistPage() {
         /** Identificador estável do bloco, usado para vincular o padrão visual. */
         cameraBlockId?: string;
         type: "camera";
-
         dataUrls?: string[];
         allowMultiple?: boolean;
         maxPhotos?: number;
@@ -991,24 +990,9 @@ function NovoChecklistPage() {
         framingHint?: string | null;
         distanceHint?: string | null;
         lightingHint?: string | null;
-        referenceImagePath?: string | null;
-        referenceImageAlt?: string | null;
-        vision?: {
-          version?: string;
-          enabled?: boolean;
-          modelId?: string | null;
-          modelVersion?: string | null;
-          
-          criteria?: string[];
-          confidenceThreshold?: number | null;
-          model?: string | null;
-          threshold?: number | null;       // 0..1 (anomaly score máximo aceitável); null quando não há modelo
-          minWidth?: number | null;        // px
-          minHeight?: number | null;       // px
-          onAnomaly?: "allow_continue" | "require_resubmit" | "block_completion" | "manual_review";
-          onAnalysisFailure?: "allow_continue" | "manual_review" | "block_completion";
-        };
+        cameraBlockId?: string;
       }
+
     | { id: string; type: "task-list"; options: { id: string; value: string; checked: boolean }[] }
     | { id: string; type: "counter"; value: number; min: number; max: number; step: number }
     | { id: string; type: "currency"; placeholder: string; currency: string }
