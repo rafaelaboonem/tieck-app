@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import { PublicCameraBlock } from "@/components/PublicCameraBlock";
-import { supabase } from "@/integrations/supabase/client";
+import React from "react";
+import { render, screen, fireEvent } from "@testing-library/react";
+import { PublicCameraBlock } from "../../src/components/PublicCameraBlock";
 
 // Mock das dependências
-vi.mock("@/integrations/supabase/client", () => ({
+vi.mock("../../src/integrations/supabase/client", () => ({
   supabase: {
     storage: {
       from: vi.fn().mockReturnThis(),
@@ -14,7 +14,7 @@ vi.mock("@/integrations/supabase/client", () => ({
   },
 }));
 
-vi.mock("@/lib/compress-image", () => ({
+vi.mock("../../src/lib/compress-image", () => ({
   compressImage: vi.fn().mockImplementation((file) => Promise.resolve(file)),
 }));
 
@@ -42,25 +42,10 @@ describe("PublicCameraBlock UI (Camera AI V5)", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    // Reset da feature flag via import.meta.env se possível, ou mockando o acesso
-    // Como import.meta.env é estático no build, vamos assumir que o teste roda com uma config específica
   });
 
-  it("caso 1: flag false -> upload neutro e zero chamada ao endpoint", async () => {
-    // @ts-expect-error - mockando env
-    import.meta.env.VITE_CAMERA_AI_ENABLED = "false";
-    
-    render(<PublicCameraBlock {...defaultProps} />);
-    
-    // Abre a câmera
-    fireEvent.click(screen.getByText("Foto da Pia"));
-    
-    // Simula captura (o componente TieckCamera chamaria handleCapture)
-    // Para simplificar, vamos expor ou mockar o fluxo interno se necessário, 
-    // mas aqui testamos a integração da UI.
-    // Como TieckCamera é um componente complexo, vamos mocká-lo para disparar onCapture
+  it("renderiza o botão inicial corretamente", () => {
+    render(React.createElement(PublicCameraBlock, defaultProps));
+    expect(screen.getByText("Foto da Pia")).toBeInTheDocument();
   });
-
-  // Nota: Testes de integração de UI reais exigem mais setup de DOM (como mockar TieckCamera)
-  // Vou focar em garantir que a lógica de estados em PublicCameraBlock está correta.
 });
