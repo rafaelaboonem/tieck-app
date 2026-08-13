@@ -211,15 +211,9 @@ describe('PublicCameraBlock UI', () => {
     await waitFor(() => expect(screen.getByText(/Verificando/)).toBeInTheDocument());
     vi.advanceTimersByTime(36000);
     await vi.runAllTicks();
-    await waitFor(() => {
-      expect(screen.getByText(/demorou mais que o esperado/)).toBeInTheDocument();
-    });
+    await waitFor(() => expect(screen.getByText(/demorou mais que o esperado/)).toBeInTheDocument());
     vi.useRealTimers();
-  }, { timeout: 60000 });
-
-
-
-
+  }, 10000);
 
   it('11. troca de foto: invalidates previous approved', async () => {
     (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
