@@ -51,6 +51,9 @@ describe('PublicCameraBlock UI', () => {
     global.fetch = vi.fn();
     vi.spyOn(uploadModule, 'uploadCameraEvidence').mockResolvedValue('http://mock-url.com/img.jpg');
     vi.spyOn(compressModule, 'compressImage').mockImplementation(async (f) => f);
+    
+    // Default env for each test
+    vi.stubEnv('VITE_CAMERA_AI_ENABLED', 'true');
   });
 
   afterEach(() => {
