@@ -64,7 +64,7 @@ export async function verifyCameraRequest(
   }
 
   // 2. Server-only config verification (should be passed by deps)
-  if (!deps.supabaseAdmin) {
+  if (!deps.isConfigured()) {
     return { 
       status: 503, 
       body: { ok: false, code: 'config_missing', message: 'Configuração do servidor ausente.' } 
