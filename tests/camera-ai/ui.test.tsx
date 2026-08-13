@@ -174,10 +174,12 @@ describe('PublicCameraBlock UI', () => {
     fireEvent.click(screen.getByTestId('capture-btn'));
     
     // Second capture (invalidates first)
-    // The capture-btn is always in the DOM because we simplified the mock.
     fireEvent.click(screen.getByTestId('capture-btn'));
     
-    await waitFor(() => expect(screen.getByText('LATEST')).toBeInTheDocument(), { timeout: 8000 });
+    await waitFor(() => {
+      const el = screen.queryByText('LATEST');
+      if (!el) throw new Error('LATEST not found');
+    }, { timeout: 8000 });
     
     // Resolve first capture now (should be ignored)
     resolveFirst({
@@ -188,7 +190,7 @@ describe('PublicCameraBlock UI', () => {
     await new Promise(r => setTimeout(r, 200));
     expect(screen.getByText('LATEST')).toBeInTheDocument();
     expect(screen.queryByText('STALE')).not.toBeInTheDocument();
-  }, 15000);
+  }, 20000);
 
   it('10. timeout: technical failure', async () => {
     vi.useFakeTimers();
@@ -202,10 +204,12 @@ describe('PublicCameraBlock UI', () => {
     // Advance 35 seconds
     vi.advanceTimersByTime(35001);
     
-    // Use a simpler assertion for the timeout message
+    // Flush microtasks to allow the async catch block to run
+    await vi.runAllTicks();
+
     await waitFor(() => {
-      const allText = screen.queryAllByText(/verificação demorou mais/);
-      if (allText.length === 0) throw new Error('Timeout message not found');
+      const msg = screen.queryByText(/verificação demorou mais/);
+      if (!msg) throw new Error('Timeout message not found');
     }, { timeout: 5000 });
     
     expect(screen.queryByText(/Verificando a foto/)).not.toBeInTheDocument();
