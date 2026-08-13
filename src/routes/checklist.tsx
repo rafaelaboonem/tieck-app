@@ -990,7 +990,7 @@ function NovoChecklistPage() {
         framingHint?: string | null;
         distanceHint?: string | null;
         lightingHint?: string | null;
-        cameraBlockId?: string;
+
       }
 
     | { id: string; type: "task-list"; options: { id: string; value: string; checked: boolean }[] }
@@ -1381,19 +1381,6 @@ function NovoChecklistPage() {
         framingHint: null,
         distanceHint: null,
         lightingHint: null,
-        referenceImagePath: null,
-        referenceImageAlt: null,
-        vision: {
-          // 
-          
-          enabled: true,
-          
-          criteria: [],
-          minWidth: 640,
-          minHeight: 480,
-          onAnomaly: "require_resubmit",
-          onAnalysisFailure: "block_completion",
-        },
       };
       default: return null;
     }
