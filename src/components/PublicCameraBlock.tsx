@@ -366,27 +366,15 @@ export function PublicCameraBlock({
 
   if (state === "capturing") {
     return (
-      <div className="relative">
-        <TieckCamera
-          open={true}
-          title={title || block.title || "Câmera"}
-          onCapture={handleCapture}
-          onClose={closeCamera}
-        />
-        {/* Helper for tests to trigger concurrent captures while processing */}
-        {state !== "idle" && (
-           <button 
-             data-testid="force-capture-btn" 
-             className="sr-only" 
-             onClick={() => handleCapture(new File([''], 'test.jpg', { type: 'image/jpeg' }))}
-           >
-             Force Capture
-           </button>
-        )}
-      </div>
+      <TieckCamera
+        open={true}
+        title={title || block.title || "Câmera"}
+        onCapture={handleCapture}
+        onClose={closeCamera}
+      />
     );
-
   }
+
 
   return (
     <div className="w-full space-y-4">
@@ -411,7 +399,7 @@ export function PublicCameraBlock({
           state === "technical_failure" ? "border-red-500" : "border-neutral-200"
         )}>
           {/* Helper for tests to trigger concurrent captures while processing */}
-          {state !== "idle" && state !== "capturing" && (
+          {state !== "idle" && (
             <button 
               data-testid="force-capture-btn" 
               className="hidden" 
@@ -420,6 +408,7 @@ export function PublicCameraBlock({
               Force Capture
             </button>
           )}
+
           <img src={preview} alt="Capture preview" className="w-full h-full object-cover" />
 
           
