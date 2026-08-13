@@ -152,9 +152,9 @@ export async function verifyCameraRequest(
       body: {
         ok: true,
         decision: claim.existing_decision as Decision,
-        code: claim.existing_code,
+        code: claim.existing_code || 'replayed',
         message: 'Replay da decisão anterior.',
-        evidence: claim.existing_evidence
+        evidence: claim.existing_evidence || undefined
       }
     };
   }
