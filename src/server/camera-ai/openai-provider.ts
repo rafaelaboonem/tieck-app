@@ -2,17 +2,11 @@ import OpenAI from 'openai';
 import { CameraVerification, CameraVerificationSchema } from './schema';
 import { zodResponseFormat } from 'openai/helpers/zod';
 
-export interface OpenAIClient {
-  responses: {
-    parse: (options: any) => Promise<any>;
-  };
-}
-
 /**
  * Executes vision analysis using OpenAI Responses API (Structured Outputs).
  */
 export async function analyzeImage(
-  client: OpenAI,
+  client: any,
   model: string,
   question: string,
   imageBuffer: ArrayBuffer,
@@ -21,7 +15,7 @@ export async function analyzeImage(
 ): Promise<CameraVerification> {
   const base64Image = Buffer.from(imageBuffer).toString('base64');
 
-  const response = await client.beta.chat.completions.parse({
+  const response = await (client as any).beta.chat.completions.parse({
     model,
     messages: [
       {
@@ -47,6 +41,15 @@ REGRAS:
     ],
     response_format: zodResponseFormat(CameraVerificationSchema, "camera_verification"),
   }, { timeout: timeoutMs });
+
+  const result = response.choices[0].message.parsed;
+  if (!result) {
+    throw new Error('OpenAI failed to parse structured output.');
+  }
+
+  return result;
+}
+
 
   const result = response.choices[0].message.parsed;
   if (!result) {
