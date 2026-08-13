@@ -1,48 +1,34 @@
 # Tieck
 
-Plataforma de checklists operacionais, evidências e revisão manual de
-padrões visuais. Este remix é uma base **limpa** — sem integrações de
-treinamento visual externo (Anomalib) e sem Railway.
+Plataforma de checklists operacionais, evidências e revisão manual de padrões visuais.
+
+## Status da Camera AI
+
+A Camera AI está em fase de **baseline neutra**.
+
+*   **Baseline atual**: Captura fotográfica pura com upload direto para o Supabase Storage.
+*   **Endpoint de Verificação**: A rota `/api/camera-ai/verify` está implementada mas retorna `503 camera_ai_disabled` por padrão.
+*   **Modo de Operação**: `CAMERA_AI_MODE` deve permanecer como `disabled` até a próxima fase de integração.
+*   **Motores Legados**: Implementações anteriores baseadas em Gemini ou Moondream foram arquivadas em `archive/camera-ai-legacy/` e não possuem consumidores ativos no runtime.
 
 ## Stack
 
 - TanStack Start (React 19, Vite 7) — SSR + server functions.
 - Tailwind CSS v4 + shadcn/ui + Tremor Raw + Apache ECharts.
-- Lovable Cloud (Supabase gerenciado) — Auth, Postgres com RLS,
-  Storage privado, Realtime.
-- Lovable AI Gateway para análise textual/imagem opcional (`OPENAI_*`).
+- Lovable Cloud (Supabase gerenciado) — Auth, Postgres com RLS, Storage privado, Realtime.
+- Lovable AI Gateway para análise textual/imagem futura (`OPENAI_*`).
 
-## Módulos
+## Desenvolvimento
 
-- **Checklists** — criação, publicação, respostas e evidências.
-- **Operação** — execução de tarefas por unidade/turno.
-- **Padrão** — biblioteca **manual** de padrões visuais: cadastrar
-  padrões, subir imagens, classificar (correta / anomalia / ignorada)
-  e revisar manualmente. Não há treinamento automático nem inferência
-  externa.
-- **Insights** — dashboards operacionais (Tremor + ECharts).
-
-## Ambiente
-
-Copie `.env.example` e preencha somente os campos do Supabase do
-projeto. Nenhuma variável do antigo serviço de visão é lida em
-runtime.
+Padronizado para **npm**.
 
 ```bash
-cp .env.example .env
-bun install
-bun run dev
+npm install
+npm run dev
 ```
 
-## Instalação em um Supabase novo
+### Testes de Rota
 
-Scripts SQL em `supabase/manual-install/` reproduzem o schema mínimo
-da baseline limpa (sem tabelas de treinamento visual, sem funções de
-dispatch e sem fixtures `__test_*`). Execute-os na ordem numérica.
-Ver `supabase/clean-baseline/README.md` para o escopo.
-
-## Histórico legado
-
-Todo o material da integração Anomalib/Railway removida está em
-`archive/legacy-integration-history/`. Nenhum arquivo desse diretório
-é importado pelo runtime.
+```bash
+npm run test:routes
+```
