@@ -8,14 +8,6 @@ import { z } from 'zod'
  * This implementation is FAILING CLOSED and respects CAMERA_AI_MODE=disabled.
  */
 
-const verifySchema = z.object({
-  checklistId: z.string().uuid(),
-  blockId: z.string(),
-  responseToken: z.string(),
-  evidenceId: z.string(),
-  idempotencyKey: z.string().optional(),
-})
-
 export const Route = createFileRoute('/api/camera-ai/verify')({
   server: {
     handlers: {
@@ -23,33 +15,32 @@ export const Route = createFileRoute('/api/camera-ai/verify')({
         const mode = process.env['CAMERA_AI_MODE'] || 'disabled';
         
         // Return 503 if disabled
-        if (mode === 'disabled') {
+        if (mode !== 'enabled') {
           return Response.json({ 
             ok: false, 
             code: 'camera_ai_disabled', 
-            message: 'Verificação visual ainda não ativada.' 
+            message: 'A verificação inteligente ainda não está disponível.' 
           }, { status: 503 });
         }
 
-        // Validate basic JSON structure
-        let body;
-        try {
-          body = await request.json();
-        } catch (e) {
-          return Response.json({ ok: false, code: 'bad_request', message: 'Invalid JSON' }, { status: 400 });
-        }
-
-        const result = verifySchema.safeParse(body);
-        if (!result.success) {
-          return Response.json({ ok: false, code: 'bad_request', message: 'Invalid parameters', details: result.error.format() }, { status: 400 });
-        }
-
-        // Fail closed for now
+        // CAMERA_AI_MODE = enabled, enquanto a IA não estiver implementada → JSON 501
         return Response.json({ 
           ok: false, 
-          code: 'not_implemented', 
-          message: 'Processamento real ainda não ativado nesta fase.' 
+          code: 'camera_ai_not_implemented', 
+          message: 'A verificação inteligente ainda não foi implementada.' 
         }, { status: 501 });
+      },
+      GET: async () => {
+        return Response.json({ ok: false, code: 'method_not_allowed', message: 'Method Not Allowed' }, { status: 405 });
+      },
+      PUT: async () => {
+        return Response.json({ ok: false, code: 'method_not_allowed', message: 'Method Not Allowed' }, { status: 405 });
+      },
+      DELETE: async () => {
+        return Response.json({ ok: false, code: 'method_not_allowed', message: 'Method Not Allowed' }, { status: 405 });
+      },
+      PATCH: async () => {
+        return Response.json({ ok: false, code: 'method_not_allowed', message: 'Method Not Allowed' }, { status: 405 });
       },
       OPTIONS: async () => {
         return new Response(null, { 
