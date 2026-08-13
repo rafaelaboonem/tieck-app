@@ -24,14 +24,14 @@ vi.mock('lucide-react', async () => {
 // Mock TieckCamera
 vi.mock('@/components/TieckCamera', () => ({
   TieckCamera: ({ open, onCapture, onClose }: any) => {
-    if (!open) return null;
     return (
-      <div data-testid="tieck-camera">
+      <div data-testid="tieck-camera" style={{ display: open ? 'block' : 'none' }}>
         <button data-testid="capture-btn" onClick={() => onCapture(new File([''], 'test.jpg', { type: 'image/jpeg' }))}>Capture</button>
         <button data-testid="close-camera-btn" onClick={onClose}>Close</button>
       </div>
     );
   }
+
 }));
 
 describe('PublicCameraBlock UI', () => {
