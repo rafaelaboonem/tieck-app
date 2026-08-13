@@ -1,4 +1,4 @@
-import { VerifyPayload, Decision, VerificationResult, PublishedBlock } from './schema';
+import { VerifyPayload, Decision, VerificationResult, PublishedBlock, CameraVerification } from './schema';
 import { validateImageBuffer } from './image-validation';
 import { evaluateGate } from './gate';
 
@@ -53,8 +53,8 @@ export interface VerifyDependencies {
   resolveSession: (token: string) => Promise<{ data: PublicSession[] | null; error: any }>;
   claimAttempt: (params: { responseId: string; blockId: string; idempotencyKey: string }) => Promise<{ data: ClaimResult[] | null; error: any }>;
   hitRateLimit: (responseId: string) => Promise<{ data: RateLimitResult[] | null; error: any }>;
-  analyzeImage: (openai: any, model: string, question: string, buffer: ArrayBuffer, mimeType: string) => Promise<any>;
-  markFailed: (params: { responseId: string; blockId: string; idempotencyKey: string; code: string }) => Promise<any>;
+  analyzeImage: (openai: any, model: string, question: string, buffer: ArrayBuffer, mimeType: string) => Promise<CameraVerification>;
+  markFailed: (params: { responseId: string; blockId: string; idempotencyKey: string; code: string }) => Promise<{ data: any; error: any }>;
   markCompleted: (params: {
     responseId: string;
     blockId: string;
