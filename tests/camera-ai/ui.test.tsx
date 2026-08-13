@@ -226,7 +226,8 @@ describe('PublicCameraBlock UI', () => {
     });
     
     vi.useRealTimers();
-  }, { timeout: 60000 });
+  }, 60000);
+
 
 
 
