@@ -61,7 +61,7 @@ export function PublicCameraBlock({
   const abortReasonRef = useRef<AbortReason | null>(null);
   const requestSequenceRef = useRef<number>(0);
 
-  const isAIEnabled = import.meta.env.VITE_CAMERA_AI_ENABLED === "true" || (typeof process !== 'undefined' && process.env?.VITE_CAMERA_AI_ENABLED_FORCE === "true");
+  const isAIEnabled = import.meta.env.VITE_CAMERA_AI_ENABLED === "true";
 
   // Cleanup effect for preview URL
   useEffect(() => {
