@@ -112,7 +112,7 @@ export function PublicCameraBlock({
   };
 
   const processVerification = async (file: File, key: string, sequence: number) => {
-    if (inFlightRef.current) return;
+    if (inFlightRef.current && key === idempotencyKey) return;
     
     setErrorMsg(null);
     setEvidence(null);
