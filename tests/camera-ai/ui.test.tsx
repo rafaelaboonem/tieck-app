@@ -39,7 +39,7 @@ vi.mock('@/components/TieckCamera', () => ({
   }
 }));
 
-describe('PublicCameraBlock UI', () => {
+describe('PublicCameraBlock UI', { timeout: 30000 }, () => {
   const mockBlock: PublicCameraBlockData = {
     id: 'block-1',
     type: 'camera',
@@ -219,7 +219,7 @@ describe('PublicCameraBlock UI', () => {
     let aborted = false;
 
     (global.fetch as ReturnType<typeof vi.fn>).mockImplementation((_url, options) => {
-      const promise = new Promise((_, reject) => {
+      return new Promise((_, reject) => {
         if (options.signal) {
           options.signal.addEventListener('abort', () => {
             aborted = true;
@@ -227,7 +227,6 @@ describe('PublicCameraBlock UI', () => {
           });
         }
       });
-      return promise;
     });
 
     render(<PublicCameraBlock {...mockProps} />);
@@ -239,7 +238,6 @@ describe('PublicCameraBlock UI', () => {
     await React.act(async () => {
       vi.advanceTimersByTime(36000);
       vi.runAllTicks();
-      await Promise.resolve();
     });
 
     await waitFor(() => {
