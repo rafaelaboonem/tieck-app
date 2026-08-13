@@ -172,7 +172,7 @@ export function PublicCameraBlock({
     abortControllerRef.current = controller;
     abortReasonRef.current = null;
 
-    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    let timeoutId: number | null = null;
 
     try {
       let fileToVerify = file;
@@ -184,7 +184,7 @@ export function PublicCameraBlock({
       if (!isCurrent()) return;
       setState("analyzing");
 
-      timeoutId = setTimeout(() => {
+      timeoutId = window.setTimeout(() => {
         if (requestSequenceRef.current === sequence) {
           abortReasonRef.current = "timeout";
           controller.abort();
