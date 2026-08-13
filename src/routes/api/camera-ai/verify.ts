@@ -1,6 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { z } from 'zod'
-import { supabaseAdmin } from '@/integrations/supabase/client.server'
 
 /**
  * Camera AI Verification Endpoint (V5)
@@ -17,23 +16,22 @@ const verifySchema = z.object({
   idempotencyKey: z.string().optional(),
 })
 
-type OpenAIResponse = {
-  target_present: boolean
-  condition_observable: boolean
-  condition_met: boolean
-  image_quality_usable: boolean
-  confidence: number
-  visible_evidence: string
-  model_decision: 'approved' | 'retake' | 'not_observable'
-}
-
 export const Route = createFileRoute('/api/camera-ai/verify')({
   server: {
     handlers: {
       POST: async ({ request }) => {
         const mode = process.env['CAMERA_AI_MODE'] || 'disabled';
         
-        // 1. Basic security & parsing
+        // Return 503 if disabled
+        if (mode === 'disabled') {
+          return Response.json({ 
+            ok: false, 
+            code: 'camera_ai_disabled', 
+            message: 'Verificação visual ainda não ativada.' 
+          }, { status: 503 });
+        }
+
+        // Validate basic JSON structure
         let body;
         try {
           body = await request.json();
@@ -46,21 +44,7 @@ export const Route = createFileRoute('/api/camera-ai/verify')({
           return Response.json({ ok: false, code: 'bad_request', message: 'Invalid parameters', details: result.error.format() }, { status: 400 });
         }
 
-        const { checklistId, blockId, responseToken, evidenceId } = result.data;
-
-        // 2. Disabled check (Baseline Neutra)
-        if (mode === 'disabled') {
-          return Response.json({ 
-            ok: false, 
-            code: 'camera_ai_disabled', 
-            message: 'Verificação visual ainda não ativada.' 
-          }, { status: 503 });
-        }
-
-        // 3. Validation Logic (Future implementation)
-        // Here we would fetch published_content from Supabase using checklistId
-        // and verify responseToken.
-        
+        // Fail closed for now
         return Response.json({ 
           ok: false, 
           code: 'not_implemented', 

@@ -2304,13 +2304,7 @@ export type Database = {
         Args: { p_display_name: string; p_user_id: string }
         Returns: string
       }
-      publish_checklist: {
-        Args: { p_checklist_id: string }
-        Returns: {
-          id: string
-          published_at: string
-        }[]
-      }
+      publish_checklist: { Args: { p_checklist_id: string }; Returns: Json }
       release_vision_lock: { Args: { p_lock_key: string }; Returns: undefined }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
