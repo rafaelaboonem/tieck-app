@@ -263,16 +263,17 @@ describe('PublicCameraBlock UI', () => {
     fireEvent.click(screen.getByText('Test Camera'));
     fireEvent.click(screen.getByTestId('capture-btn'));
 
-    // Analyzing state should be visible
-    await vi.waitFor(() => expect(screen.getByText(/Verificando a foto/)).toBeInTheDocument());
+    // Wait for Analyzing state - using screen.find* for cleaner async
+    const analyzingText = await screen.findByText(/Verificando a foto/);
+    expect(analyzingText).toBeInTheDocument();
 
     vi.advanceTimersByTime(40000);
 
-    // After timeout, the component should transition to technical_failure
     await vi.waitFor(() => {
       expect(screen.getByText(/demorou mais que o esperado/)).toBeInTheDocument();
     });
   }, 15000);
+
 
 
   it('11. troca de foto: invalidates previous approved', async () => {
