@@ -213,7 +213,7 @@ describe('PublicCameraBlock UI', { timeout: 30000 }, () => {
     expect(screen.queryByText('OLD')).not.toBeInTheDocument();
   });
 
-  it('10. timeout: technical failure', async () => {
+  it('10. timeout: technical failure', { timeout: 15000 }, async () => {
     expect.hasAssertions();
     vi.useFakeTimers();
     let aborted = false;
@@ -236,7 +236,6 @@ describe('PublicCameraBlock UI', { timeout: 30000 }, () => {
     
     await waitFor(() => expect(screen.getByText(/Verificando/)).toBeInTheDocument());
     
-    // Use synchronous act to advance timers and resolve promises immediately
     React.act(() => {
       vi.advanceTimersByTime(36000);
     });
@@ -249,7 +248,7 @@ describe('PublicCameraBlock UI', { timeout: 30000 }, () => {
     expect(screen.getByText('Tentar novamente')).toBeInTheDocument();
     
     vi.useRealTimers();
-  }, { timeout: 15000 });
+  });
 
   it('11. troca de foto: invalidates previous approved', async () => {
     (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
