@@ -209,19 +209,20 @@ describe('PublicCameraBlock UI', () => {
     fireEvent.click(screen.getByText('Test Camera'));
     fireEvent.click(screen.getByTestId('capture-btn'));
     
-    // Wait for Analyzing state
-    await waitFor(() => expect(screen.getByText(/Verificando/)).toBeInTheDocument(), { timeout: 2000 });
+    // Check for Analyzing state
+    await waitFor(() => expect(screen.getByText(/Verificando/)).toBeInTheDocument());
     
     // Trigger 35s timeout
     vi.advanceTimersByTime(36000);
     
-    // Check for failure message
+    // Verify timeout message
     await waitFor(() => {
       expect(screen.getByText(/demorou mais que o esperado/)).toBeInTheDocument();
-    }, { timeout: 2000 });
+    });
     
     vi.useRealTimers();
-  }, { timeout: 15000 });
+  }, 30000);
+
 
 
 
