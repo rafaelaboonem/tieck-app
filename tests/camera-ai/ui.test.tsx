@@ -54,6 +54,7 @@ describe('PublicCameraBlock UI', () => {
     
     // Default env for each test
     vi.stubEnv('VITE_CAMERA_AI_ENABLED', 'true');
+    vi.spyOn(import.meta.env, 'VITE_CAMERA_AI_ENABLED', 'get').mockReturnValue('true');
   });
 
   afterEach(() => {
@@ -62,6 +63,7 @@ describe('PublicCameraBlock UI', () => {
 
   it('1. VITE_CAMERA_AI_ENABLED=false: neutro upload', async () => {
     vi.stubEnv('VITE_CAMERA_AI_ENABLED', 'false');
+    vi.spyOn(import.meta.env, 'VITE_CAMERA_AI_ENABLED', 'get').mockReturnValue('false');
     render(<PublicCameraBlock {...mockProps} />);
 
     fireEvent.click(screen.getByText('Test Camera'));
@@ -252,12 +254,13 @@ describe('PublicCameraBlock UI', () => {
     resolveFirst({
       status: 200,
       headers: new Map([['content-type', 'application/json']]),
-      json: async () => ({ ok: true, decision: 'approved', code: 'ok' }),
+      json: async () => ({ ok: true, decision: 'approved', evidence: 'STALE', code: 'ok' }),
     });
 
     await waitFor(() => {
       expect(screen.getByText('LATEST')).toBeInTheDocument();
     });
+    expect(screen.queryByText('STALE')).not.toBeInTheDocument();
     
     expect(screen.queryByText('Foto aprovada')).not.toBeInTheDocument();
   });
