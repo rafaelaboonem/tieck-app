@@ -217,6 +217,8 @@ describe('PublicCameraBlock UI', () => {
 
     vi.advanceTimersByTime(35000);
     
+    // Allow the microtasks to run
+    await vi.runAllTicks();
     await vi.runAllTicks();
 
     await waitFor(() => {
@@ -224,7 +226,8 @@ describe('PublicCameraBlock UI', () => {
     });
     
     vi.useRealTimers();
-  }, 25000);
+  }, 10000);
+
 
 
 
