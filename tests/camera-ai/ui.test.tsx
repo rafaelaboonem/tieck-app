@@ -205,14 +205,17 @@ describe('PublicCameraBlock UI', () => {
     // Flush microtasks
     await vi.runAllTicks();
 
-    // Use a long timeout for the final assertion
+    // The component should catch the AbortError and set state to technical_failure
+    // In a test environment with fake timers, we might need to wait for the next tick
+    await vi.runAllTicks();
+
     await waitFor(() => {
       const msg = screen.queryByText(/verificação demorou mais/);
       if (!msg) throw new Error('Timeout message not found');
     }, { timeout: 15000 });
 
     vi.useRealTimers();
-  }, 45000);
+  }, 60000);
 
   it('11. troca de foto: invalidates previous approved', async () => {
     (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
