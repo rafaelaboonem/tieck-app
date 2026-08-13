@@ -97,14 +97,12 @@ export function PublicCameraBlock({
 
   if (phase === "capturing") {
     return (
-      <div className="fixed inset-0 z-50 bg-black">
-        <TieckCamera
-          open={true}
-          title={title || "Câmera"}
-          onCapture={handleCapture}
-          onClose={closeCamera}
-        />
-      </div>
+      <TieckCamera
+        open={true}
+        title={title || "Câmera"}
+        onCapture={handleCapture}
+        onClose={closeCamera}
+      />
     );
   }
 
