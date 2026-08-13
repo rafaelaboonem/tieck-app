@@ -398,7 +398,7 @@ export function PublicCameraBlock({
           (state === "retake" || state === "not_observable") ? "border-amber-500 shadow-lg shadow-amber-100" : 
           state === "technical_failure" ? "border-red-500" : "border-neutral-200"
         )}>
-          {/* Removido o botão force-capture-btn conforme Fase 2 stabilização */}
+          
 
           <img src={preview} alt="Capture preview" className="w-full h-full object-cover" />
 
