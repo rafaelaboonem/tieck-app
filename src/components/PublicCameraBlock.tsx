@@ -16,6 +16,7 @@ interface PublicCameraBlockProps {
   onCameraActiveChange?: (active: boolean) => void;
   session?: { responseId: string; responseToken: string } | null;
   ensureResponseSession: () => Promise<{ responseId: string; responseToken: string } | null>;
+  language?: string;
 }
 
 type VerificationPhase = "idle" | "capturing" | "uploading" | "received" | "technical_failure";
