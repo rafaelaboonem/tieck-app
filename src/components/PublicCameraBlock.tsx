@@ -103,7 +103,12 @@ export function PublicCameraBlock({
     setPreview(newPreview);
     setCapturedFile(file);
     
-    // Cada nova foto gera um novo idempotencyKey
+    // Increment sequence BEFORE starting process
+    requestSequenceRef.current += 1;
+    
+    // Clear previous answer when a new capture starts
+    if (onAnswer) onAnswer(block.id, "");
+    
     const newIdempotencyKey = crypto.randomUUID();
     setIdempotencyKey(newIdempotencyKey);
     setFailureReason("none");
