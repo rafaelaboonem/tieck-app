@@ -25,7 +25,6 @@ import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as CIdRouteImport } from './routes/c.$id'
 import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
-import { Route as ApiCameraAiOpenaiLabRouteImport } from './routes/api/camera-ai-openai-lab'
 import { Route as UnidadesUnitIdOperacaoRouteImport } from './routes/unidades.$unitId.operacao'
 import { Route as ApiCameraAiVerifyRouteImport } from './routes/api/camera-ai/verify'
 
@@ -109,11 +108,6 @@ const AuthCallbackRoute = AuthCallbackRouteImport.update({
   path: '/auth/callback',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiCameraAiOpenaiLabRoute = ApiCameraAiOpenaiLabRouteImport.update({
-  id: '/api/camera-ai-openai-lab',
-  path: '/api/camera-ai-openai-lab',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const UnidadesUnitIdOperacaoRoute = UnidadesUnitIdOperacaoRouteImport.update({
   id: '/unidades/$unitId/operacao',
   path: '/unidades/$unitId/operacao',
@@ -140,7 +134,6 @@ export interface FileRoutesByFullPath {
   '/membros': typeof MembrosRoute
   '/organizar': typeof OrganizarRoute
   '/painel': typeof PainelRoute
-  '/api/camera-ai-openai-lab': typeof ApiCameraAiOpenaiLabRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/c/$id': typeof CIdRoute
   '/api/camera-ai/verify': typeof ApiCameraAiVerifyRoute
@@ -161,7 +154,6 @@ export interface FileRoutesByTo {
   '/membros': typeof MembrosRoute
   '/organizar': typeof OrganizarRoute
   '/painel': typeof PainelRoute
-  '/api/camera-ai-openai-lab': typeof ApiCameraAiOpenaiLabRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/c/$id': typeof CIdRoute
   '/api/camera-ai/verify': typeof ApiCameraAiVerifyRoute
@@ -183,7 +175,6 @@ export interface FileRoutesById {
   '/membros': typeof MembrosRoute
   '/organizar': typeof OrganizarRoute
   '/painel': typeof PainelRoute
-  '/api/camera-ai-openai-lab': typeof ApiCameraAiOpenaiLabRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/c/$id': typeof CIdRoute
   '/api/camera-ai/verify': typeof ApiCameraAiVerifyRoute
@@ -206,7 +197,6 @@ export interface FileRouteTypes {
     | '/membros'
     | '/organizar'
     | '/painel'
-    | '/api/camera-ai-openai-lab'
     | '/auth/callback'
     | '/c/$id'
     | '/api/camera-ai/verify'
@@ -227,7 +217,6 @@ export interface FileRouteTypes {
     | '/membros'
     | '/organizar'
     | '/painel'
-    | '/api/camera-ai-openai-lab'
     | '/auth/callback'
     | '/c/$id'
     | '/api/camera-ai/verify'
@@ -248,7 +237,6 @@ export interface FileRouteTypes {
     | '/membros'
     | '/organizar'
     | '/painel'
-    | '/api/camera-ai-openai-lab'
     | '/auth/callback'
     | '/c/$id'
     | '/api/camera-ai/verify'
@@ -270,7 +258,6 @@ export interface RootRouteChildren {
   MembrosRoute: typeof MembrosRoute
   OrganizarRoute: typeof OrganizarRoute
   PainelRoute: typeof PainelRoute
-  ApiCameraAiOpenaiLabRoute: typeof ApiCameraAiOpenaiLabRoute
   AuthCallbackRoute: typeof AuthCallbackRoute
   CIdRoute: typeof CIdRoute
   ApiCameraAiVerifyRoute: typeof ApiCameraAiVerifyRoute
@@ -391,13 +378,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthCallbackRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/camera-ai-openai-lab': {
-      id: '/api/camera-ai-openai-lab'
-      path: '/api/camera-ai-openai-lab'
-      fullPath: '/api/camera-ai-openai-lab'
-      preLoaderRoute: typeof ApiCameraAiOpenaiLabRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/unidades/$unitId/operacao': {
       id: '/unidades/$unitId/operacao'
       path: '/unidades/$unitId/operacao'
@@ -430,7 +410,6 @@ const rootRouteChildren: RootRouteChildren = {
   MembrosRoute: MembrosRoute,
   OrganizarRoute: OrganizarRoute,
   PainelRoute: PainelRoute,
-  ApiCameraAiOpenaiLabRoute: ApiCameraAiOpenaiLabRoute,
   AuthCallbackRoute: AuthCallbackRoute,
   CIdRoute: CIdRoute,
   ApiCameraAiVerifyRoute: ApiCameraAiVerifyRoute,

@@ -19,7 +19,7 @@ interface PublicCameraBlockProps {
   language?: string;
 }
 
-type VerificationPhase = "idle" | "capturing" | "uploading" | "received" | "technical_failure";
+type VerificationPhase = "idle" | "capturing" | "uploading" | "received" | "analyzing" | "technical_failure";
 
 export function PublicCameraBlock({
   block,
@@ -124,9 +124,17 @@ export function PublicCameraBlock({
       {phase === "uploading" && (
         <div className="flex items-center gap-3 p-4 border rounded-xl bg-white shadow-sm">
           <Loader2 className="w-5 h-5 animate-spin text-blue-500" />
-          <span className="text-sm font-medium">Enviando foto...</span>
+          <span className="text-sm font-medium text-neutral-600">Enviando foto...</span>
         </div>
       )}
+
+      {phase === "analyzing" && (
+        <div className="flex items-center gap-3 p-4 border rounded-xl bg-white shadow-sm">
+          <Loader2 className="w-5 h-5 animate-spin text-[#FF007F]" />
+          <span className="text-sm font-medium text-neutral-600">Analisando foto...</span>
+        </div>
+      )}
+
 
       {phase === "received" && (
         <div className="space-y-3">
