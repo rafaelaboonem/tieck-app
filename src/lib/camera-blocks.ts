@@ -81,8 +81,8 @@ export async function listChecklistProjects(workspaceId: string): Promise<Checkl
   if (error) throw error;
 
   return (data ?? [])
-    .filter((c: any) => c.workspace_id === workspaceId || c.workspace_id === null)
-    .map((c: any) => ({
+    .filter((c) => c.workspace_id === workspaceId || c.workspace_id === null)
+    .map((c) => ({
       id: c.id as string,
       title: (c.title as string | null)?.trim() || "Sem título",
       cameraBlocks: extractCameraQuestions(Array.isArray(c.blocks) ? (c.blocks as AnyBlock[]) : []),

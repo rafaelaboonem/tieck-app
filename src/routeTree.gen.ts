@@ -9,83 +9,28 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as IndexRouteImport } from './routes/index'
-import { Route as AdminRouteImport } from './routes/admin'
-import { Route as CadastrarRouteImport } from './routes/cadastrar'
-import { Route as CadastroRouteImport } from './routes/cadastro'
-import { Route as ChecklistRouteImport } from './routes/checklist'
-import { Route as ConfiguracoesRouteImport } from './routes/configuracoes'
-import { Route as ConfirmarEmailRouteImport } from './routes/confirmar-email'
-import { Route as DominiosRouteImport } from './routes/dominios'
-import { Route as InicioRouteImport } from './routes/inicio'
-import { Route as InsightsRouteImport } from './routes/insights'
-import { Route as LoginRouteImport } from './routes/login'
-import { Route as MembrosRouteImport } from './routes/membros'
-import { Route as OrganizarRouteImport } from './routes/organizar'
 import { Route as PainelRouteImport } from './routes/painel'
-import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
+import { Route as OrganizarRouteImport } from './routes/organizar'
+import { Route as MembrosRouteImport } from './routes/membros'
+import { Route as LoginRouteImport } from './routes/login'
+import { Route as InsightsRouteImport } from './routes/insights'
+import { Route as InicioRouteImport } from './routes/inicio'
+import { Route as DominiosRouteImport } from './routes/dominios'
+import { Route as ConfirmarEmailRouteImport } from './routes/confirmar-email'
+import { Route as ConfiguracoesRouteImport } from './routes/configuracoes'
+import { Route as ChecklistRouteImport } from './routes/checklist'
+import { Route as CadastroRouteImport } from './routes/cadastro'
+import { Route as CadastrarRouteImport } from './routes/cadastrar'
+import { Route as AdminRouteImport } from './routes/admin'
+import { Route as IndexRouteImport } from './routes/index'
 import { Route as CIdRouteImport } from './routes/c.$id'
-import { Route as ApiCameraAiVerifyRouteImport } from './routes/api/camera-ai/verify'
+import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
 import { Route as UnidadesUnitIdOperacaoRouteImport } from './routes/unidades.$unitId.operacao'
+import { Route as ApiCameraAiVerifyRouteImport } from './routes/api/camera-ai/verify'
 
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AdminRoute = AdminRouteImport.update({
-  id: '/admin',
-  path: '/admin',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const CadastrarRoute = CadastrarRouteImport.update({
-  id: '/cadastrar',
-  path: '/cadastrar',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const CadastroRoute = CadastroRouteImport.update({
-  id: '/cadastro',
-  path: '/cadastro',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ChecklistRoute = ChecklistRouteImport.update({
-  id: '/checklist',
-  path: '/checklist',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ConfiguracoesRoute = ConfiguracoesRouteImport.update({
-  id: '/configuracoes',
-  path: '/configuracoes',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ConfirmarEmailRoute = ConfirmarEmailRouteImport.update({
-  id: '/confirmar-email',
-  path: '/confirmar-email',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const DominiosRoute = DominiosRouteImport.update({
-  id: '/dominios',
-  path: '/dominios',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const InicioRoute = InicioRouteImport.update({
-  id: '/inicio',
-  path: '/inicio',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const InsightsRoute = InsightsRouteImport.update({
-  id: '/insights',
-  path: '/insights',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const LoginRoute = LoginRouteImport.update({
-  id: '/login',
-  path: '/login',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const MembrosRoute = MembrosRouteImport.update({
-  id: '/membros',
-  path: '/membros',
+const PainelRoute = PainelRouteImport.update({
+  id: '/painel',
+  path: '/painel',
   getParentRoute: () => rootRouteImport,
 } as any)
 const OrganizarRoute = OrganizarRouteImport.update({
@@ -93,14 +38,64 @@ const OrganizarRoute = OrganizarRouteImport.update({
   path: '/organizar',
   getParentRoute: () => rootRouteImport,
 } as any)
-const PainelRoute = PainelRouteImport.update({
-  id: '/painel',
-  path: '/painel',
+const MembrosRoute = MembrosRouteImport.update({
+  id: '/membros',
+  path: '/membros',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AuthCallbackRoute = AuthCallbackRouteImport.update({
-  id: '/auth/callback',
-  path: '/auth/callback',
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const InsightsRoute = InsightsRouteImport.update({
+  id: '/insights',
+  path: '/insights',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const InicioRoute = InicioRouteImport.update({
+  id: '/inicio',
+  path: '/inicio',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DominiosRoute = DominiosRouteImport.update({
+  id: '/dominios',
+  path: '/dominios',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ConfirmarEmailRoute = ConfirmarEmailRouteImport.update({
+  id: '/confirmar-email',
+  path: '/confirmar-email',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ConfiguracoesRoute = ConfiguracoesRouteImport.update({
+  id: '/configuracoes',
+  path: '/configuracoes',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ChecklistRoute = ChecklistRouteImport.update({
+  id: '/checklist',
+  path: '/checklist',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CadastroRoute = CadastroRouteImport.update({
+  id: '/cadastro',
+  path: '/cadastro',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CadastrarRoute = CadastrarRouteImport.update({
+  id: '/cadastrar',
+  path: '/cadastrar',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminRoute = AdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const IndexRoute = IndexRouteImport.update({
+  id: '/',
+  path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CIdRoute = CIdRouteImport.update({
@@ -108,14 +103,19 @@ const CIdRoute = CIdRouteImport.update({
   path: '/c/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiCameraAiVerifyRoute = ApiCameraAiVerifyRouteImport.update({
-  id: '/api/camera-ai/verify',
-  path: '/api/camera-ai/verify',
+const AuthCallbackRoute = AuthCallbackRouteImport.update({
+  id: '/auth/callback',
+  path: '/auth/callback',
   getParentRoute: () => rootRouteImport,
 } as any)
 const UnidadesUnitIdOperacaoRoute = UnidadesUnitIdOperacaoRouteImport.update({
   id: '/unidades/$unitId/operacao',
   path: '/unidades/$unitId/operacao',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiCameraAiVerifyRoute = ApiCameraAiVerifyRouteImport.update({
+  id: '/api/camera-ai/verify',
+  path: '/api/camera-ai/verify',
   getParentRoute: () => rootRouteImport,
 } as any)
 
@@ -266,88 +266,11 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/admin': {
-      id: '/admin'
-      path: '/admin'
-      fullPath: '/admin'
-      preLoaderRoute: typeof AdminRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/cadastrar': {
-      id: '/cadastrar'
-      path: '/cadastrar'
-      fullPath: '/cadastrar'
-      preLoaderRoute: typeof CadastrarRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/cadastro': {
-      id: '/cadastro'
-      path: '/cadastro'
-      fullPath: '/cadastro'
-      preLoaderRoute: typeof CadastroRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/checklist': {
-      id: '/checklist'
-      path: '/checklist'
-      fullPath: '/checklist'
-      preLoaderRoute: typeof ChecklistRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/configuracoes': {
-      id: '/configuracoes'
-      path: '/configuracoes'
-      fullPath: '/configuracoes'
-      preLoaderRoute: typeof ConfiguracoesRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/confirmar-email': {
-      id: '/confirmar-email'
-      path: '/confirmar-email'
-      fullPath: '/confirmar-email'
-      preLoaderRoute: typeof ConfirmarEmailRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/dominios': {
-      id: '/dominios'
-      path: '/dominios'
-      fullPath: '/dominios'
-      preLoaderRoute: typeof DominiosRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/inicio': {
-      id: '/inicio'
-      path: '/inicio'
-      fullPath: '/inicio'
-      preLoaderRoute: typeof InicioRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/insights': {
-      id: '/insights'
-      path: '/insights'
-      fullPath: '/insights'
-      preLoaderRoute: typeof InsightsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/login': {
-      id: '/login'
-      path: '/login'
-      fullPath: '/login'
-      preLoaderRoute: typeof LoginRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/membros': {
-      id: '/membros'
-      path: '/membros'
-      fullPath: '/membros'
-      preLoaderRoute: typeof MembrosRouteImport
+    '/painel': {
+      id: '/painel'
+      path: '/painel'
+      fullPath: '/painel'
+      preLoaderRoute: typeof PainelRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/organizar': {
@@ -357,18 +280,88 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OrganizarRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/painel': {
-      id: '/painel'
-      path: '/painel'
-      fullPath: '/painel'
-      preLoaderRoute: typeof PainelRouteImport
+    '/membros': {
+      id: '/membros'
+      path: '/membros'
+      fullPath: '/membros'
+      preLoaderRoute: typeof MembrosRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/auth/callback': {
-      id: '/auth/callback'
-      path: '/auth/callback'
-      fullPath: '/auth/callback'
-      preLoaderRoute: typeof AuthCallbackRouteImport
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/insights': {
+      id: '/insights'
+      path: '/insights'
+      fullPath: '/insights'
+      preLoaderRoute: typeof InsightsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/inicio': {
+      id: '/inicio'
+      path: '/inicio'
+      fullPath: '/inicio'
+      preLoaderRoute: typeof InicioRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dominios': {
+      id: '/dominios'
+      path: '/dominios'
+      fullPath: '/dominios'
+      preLoaderRoute: typeof DominiosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/confirmar-email': {
+      id: '/confirmar-email'
+      path: '/confirmar-email'
+      fullPath: '/confirmar-email'
+      preLoaderRoute: typeof ConfirmarEmailRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/configuracoes': {
+      id: '/configuracoes'
+      path: '/configuracoes'
+      fullPath: '/configuracoes'
+      preLoaderRoute: typeof ConfiguracoesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/checklist': {
+      id: '/checklist'
+      path: '/checklist'
+      fullPath: '/checklist'
+      preLoaderRoute: typeof ChecklistRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/cadastro': {
+      id: '/cadastro'
+      path: '/cadastro'
+      fullPath: '/cadastro'
+      preLoaderRoute: typeof CadastroRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/cadastrar': {
+      id: '/cadastrar'
+      path: '/cadastrar'
+      fullPath: '/cadastrar'
+      preLoaderRoute: typeof CadastrarRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin': {
+      id: '/admin'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof AdminRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/c/$id': {
@@ -378,11 +371,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CIdRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/camera-ai/verify': {
-      id: '/api/camera-ai/verify'
-      path: '/api/camera-ai/verify'
-      fullPath: '/api/camera-ai/verify'
-      preLoaderRoute: typeof ApiCameraAiVerifyRouteImport
+    '/auth/callback': {
+      id: '/auth/callback'
+      path: '/auth/callback'
+      fullPath: '/auth/callback'
+      preLoaderRoute: typeof AuthCallbackRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/unidades/$unitId/operacao': {
@@ -390,6 +383,13 @@ declare module '@tanstack/react-router' {
       path: '/unidades/$unitId/operacao'
       fullPath: '/unidades/$unitId/operacao'
       preLoaderRoute: typeof UnidadesUnitIdOperacaoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/camera-ai/verify': {
+      id: '/api/camera-ai/verify'
+      path: '/api/camera-ai/verify'
+      fullPath: '/api/camera-ai/verify'
+      preLoaderRoute: typeof ApiCameraAiVerifyRouteImport
       parentRoute: typeof rootRouteImport
     }
   }

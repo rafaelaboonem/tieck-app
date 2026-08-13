@@ -24,14 +24,12 @@ async function checkRoute(url: string) {
 }
 
 async function run() {
-  const baseUrl = process.env.DEPLOY_URL || 'https://tieck.com.br';
-  const routes = ['/', '/login', '/cadastro', '/inicio'];
+  const baseUrl = 'https://checklistapp-wheat.vercel.app';
+  const routes = ['/', '/login', '/dashboard', '/novo-checklist'];
   
   let allOk = true;
   for (const route of routes) {
-    // Ensure no double slashes
-    const fullUrl = `${baseUrl.replace(/\/$/, '')}${route}`;
-    const ok = await checkRoute(fullUrl);
+    const ok = await checkRoute(`${baseUrl}${route}`);
     if (!ok) allOk = false;
   }
   

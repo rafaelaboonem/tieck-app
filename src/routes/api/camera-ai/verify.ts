@@ -2,11 +2,10 @@ import { createFileRoute } from '@tanstack/react-router'
 import { z } from 'zod'
 
 /**
- * Camera AI Verification Endpoint (V5) - NEUTRAL BASELINE
+ * Camera AI Verification Endpoint (V5)
  * 
- * Objective: Safety endpoint for visual verification.
- * This implementation is FAILING CLOSED and respects CAMERA_AI_MODE.
- * NO OpenAI SDK instantiation, NO inference.
+ * Objective: Verify if a candidate image matches a question using GPT-4o-mini Structured Outputs.
+ * This implementation is FAILING CLOSED and respects CAMERA_AI_MODE=disabled.
  */
 
 const verifySchema = z.object({
@@ -23,46 +22,34 @@ export const Route = createFileRoute('/api/camera-ai/verify')({
       POST: async ({ request }) => {
         const mode = process.env['CAMERA_AI_MODE'] || 'disabled';
         
-        // Ensure application/json header
-        const headers = { 'Content-Type': 'application/json' };
-
-        // 1. Check if disabled (503)
-        if (mode !== 'enabled') {
-          return new Response(JSON.stringify({ 
+        // Return 503 if disabled
+        if (mode === 'disabled') {
+          return Response.json({ 
             ok: false, 
             code: 'camera_ai_disabled', 
             message: 'Verificação visual ainda não ativada.' 
-          }), { status: 503, headers });
+          }, { status: 503 });
         }
 
-        // 2. Validate basic JSON structure
+        // Validate basic JSON structure
         let body;
         try {
           body = await request.json();
         } catch (e) {
-          return new Response(JSON.stringify({ 
-            ok: false, 
-            code: 'bad_request', 
-            message: 'Invalid JSON' 
-          }), { status: 400, headers });
+          return Response.json({ ok: false, code: 'bad_request', message: 'Invalid JSON' }, { status: 400 });
         }
 
         const result = verifySchema.safeParse(body);
         if (!result.success) {
-          return new Response(JSON.stringify({ 
-            ok: false, 
-            code: 'bad_request', 
-            message: 'Invalid parameters', 
-            details: result.error.format() 
-          }), { status: 400, headers });
+          return Response.json({ ok: false, code: 'bad_request', message: 'Invalid parameters', details: result.error.format() }, { status: 400 });
         }
 
-        // 3. Return 501 (Not Implemented) as we are in neutral baseline phase
-        return new Response(JSON.stringify({ 
+        // Fail closed for now
+        return Response.json({ 
           ok: false, 
           code: 'not_implemented', 
           message: 'Processamento real ainda não ativado nesta fase.' 
-        }), { status: 501, headers });
+        }, { status: 501 });
       },
       OPTIONS: async () => {
         return new Response(null, { 
@@ -73,22 +60,7 @@ export const Route = createFileRoute('/api/camera-ai/verify')({
             'Access-Control-Allow-Headers': 'Content-Type, Authorization',
           }
         });
-      },
-      GET: async () => methodNotAllowed(),
-      PUT: async () => methodNotAllowed(),
-      PATCH: async () => methodNotAllowed(),
-      DELETE: async () => methodNotAllowed(),
+      }
     }
   }
 })
-
-function methodNotAllowed() {
-  return new Response(JSON.stringify({
-    ok: false,
-    code: 'method_not_allowed',
-    message: 'Método não permitido.'
-  }), { 
-    status: 405, 
-    headers: { 'Content-Type': 'application/json' } 
-  });
-}

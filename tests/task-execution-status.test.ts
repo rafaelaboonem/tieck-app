@@ -1,5 +1,5 @@
 // Testes puros da derivação de status das execuções.
-// Executar com: npx tsx tests/task-execution-status.test.ts
+// Executar com: bun tests/task-execution-status.test.ts
 import { strict as assert } from "node:assert";
 import {
   deriveTaskStatus,

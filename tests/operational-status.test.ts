@@ -1,5 +1,5 @@
 // Testes puros do status operacional e da agregação ponderada.
-// Executar com: npx tsx tests/operational-status.test.ts
+// Executar com: bun tests/operational-status.test.ts
 import { strict as assert } from "node:assert";
 import { getOperationalStatus, aggregateWeighted } from "../src/lib/operational-status";
 import { sanitizeFilters, defaultFilters } from "../src/lib/dashboard-filters";

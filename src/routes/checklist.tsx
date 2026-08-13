@@ -634,7 +634,7 @@ function NovoChecklistPage() {
         .select("*")
         .eq("id", user.id)
         .single()
-        .then(({ data }) => setProfile(data as any));
+        .then(({ data }) => setProfile(data));
     } else {
       setProfile(null);
     }
