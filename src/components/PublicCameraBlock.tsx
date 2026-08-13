@@ -1,12 +1,12 @@
-import { Camera, RefreshCw, AlertCircle, CheckCircle2, Loader2, CameraIcon, RotateCcw, ImagePlus, AlertTriangle } from "lucide-react";
+import { CameraAIResponseSchema, type CameraAIResponse, type PublicCameraBlockData } from "./camera-ai/types";
+import { uploadCameraEvidence } from "./camera-ai/upload";
+import { compressImage } from "@/lib/compress-image";
 import { useState, useRef, useEffect, useCallback } from "react";
+import { Camera, RefreshCw, AlertCircle, CheckCircle2, Loader2, CameraIcon, RotateCcw, ImagePlus, AlertTriangle } from "lucide-react";
 import { TieckCamera } from "./TieckCamera";
 import { Button } from "./ui/button";
 import { Alert, AlertDescription } from "./ui/alert";
-import { compressImage } from "@/lib/compress-image";
 import { cn } from "@/lib/utils";
-import { CameraAIResponseSchema, type CameraAIResponse, type PublicCameraBlockData } from "./camera-ai/types";
-import { uploadCameraEvidence } from "./camera-ai/upload";
 
 interface PublicCameraBlockProps {
   block: PublicCameraBlockData;
@@ -34,6 +34,9 @@ type VerificationState =
   | "uploading" 
   | "received";
 
+type FailureReason = "network_unknown" | "timeout_unknown" | "server_failed" | "processing" | "configuration" | "none";
+type AbortReason = "timeout" | "retake" | "close" | "unmount";
+
 export function PublicCameraBlock({
   block,
   checklistId,
@@ -51,22 +54,50 @@ export function PublicCameraBlock({
   const [preview, setPreview] = useState<string | null>(null);
   const [capturedFile, setCapturedFile] = useState<File | null>(null);
   const [idempotencyKey, setIdempotencyKey] = useState<string | null>(null);
+  const [failureReason, setFailureReason] = useState<FailureReason>("none");
   
   const inFlightRef = useRef<boolean>(false);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const abortReasonRef = useRef<AbortReason | null>(null);
+  const requestSequenceRef = useRef<number>(0);
 
   const isAIEnabled = import.meta.env.VITE_CAMERA_AI_ENABLED === "true";
 
-  // Cleanup on unmount or state change that invalidates current request
+  // Cleanup effect for preview URL
   useEffect(() => {
     return () => {
+      if (preview) {
+        URL.revokeObjectURL(preview);
+      }
+    };
+  }, [preview]);
+
+  // Cleanup effect for requests
+  useEffect(() => {
+    return () => {
+      requestSequenceRef.current++;
       if (abortControllerRef.current) {
+        abortReasonRef.current = "unmount";
         abortControllerRef.current.abort();
       }
     };
   }, []);
 
   const handleCapture = async (file: File) => {
+    // 1. Limpeza de resposta anterior de verdade
+    // Se a foto foi aprovada anteriormente e estamos tirando uma nova, limpamos a resposta anterior.
+    // Isso precisa ocorrer ANTES da nova verificação.
+    if (onAnswer) {
+      onAnswer(block.id, "");
+    }
+
+    // 2. Incremento da sequência e abort da requisição anterior
+    requestSequenceRef.current++;
+    if (abortControllerRef.current) {
+      abortReasonRef.current = "retake";
+      abortControllerRef.current.abort();
+    }
+
     if (preview) URL.revokeObjectURL(preview);
     const newPreview = URL.createObjectURL(file);
     setPreview(newPreview);
@@ -75,29 +106,24 @@ export function PublicCameraBlock({
     // Cada nova foto gera um novo idempotencyKey
     const newIdempotencyKey = crypto.randomUUID();
     setIdempotencyKey(newIdempotencyKey);
-    
-    // Se a foto foi aprovada anteriormente e estamos tirando uma nova, limpamos a resposta anterior
-    // Isso é feito de forma implícita ao trocar o estado, mas chamamos onAnswer se necessário?
-    // A regra diz: "limpe a resposta anterior do bloco para impedir que uma aprovação antiga permita o envio depois de uma nova foto rejeitada."
-    // No Tieck, se passarmos vazio ou null no onAnswer ele deve resetar no banco se for implementado, 
-    // mas aqui garantimos que o estado do componente reflete a nova tentativa.
-    if (onAnswer && state === "approved") {
-      // Notificamos que a resposta anterior não é mais válida
-      // Dependendo da implementação de onAnswer, isso pode ser importante.
-    }
+    setFailureReason("none");
 
-    void processVerification(file, newIdempotencyKey);
+    void processVerification(file, newIdempotencyKey, requestSequenceRef.current);
   };
 
-  const processVerification = async (file: File, key: string, isRetry = false) => {
+  const processVerification = async (file: File, key: string, sequence: number) => {
     if (inFlightRef.current) return;
     
     setErrorMsg(null);
     setEvidence(null);
 
+    const checkSequence = () => sequence === requestSequenceRef.current;
+
     const activeSession = session ?? (await ensureResponseSession());
     if (!activeSession) {
+      if (!checkSequence()) return;
       setErrorMsg("Falha ao iniciar sessão.");
+      setFailureReason("configuration");
       setState("technical_failure");
       return;
     }
@@ -110,16 +136,23 @@ export function PublicCameraBlock({
           const compressed = await compressImage(file);
           if (compressed) fileToUpload = compressed;
         }
-        await uploadCameraEvidence({
+        
+        const url = await uploadCameraEvidence({
           file: fileToUpload,
           checklistId,
           blockId: block.id,
-          onAnswer
+          // Não passamos onAnswer diretamente para controlar o momento da chamada
         });
+
+        if (!checkSequence()) return;
+        
+        if (onAnswer) onAnswer(block.id, url);
         setState("received");
       } catch (err) {
+        if (!checkSequence()) return;
         console.error("Upload error:", err);
         setErrorMsg("Erro ao enviar foto.");
+        setFailureReason("network_unknown");
         setState("technical_failure");
       }
       return;
@@ -129,6 +162,8 @@ export function PublicCameraBlock({
     setState("preparing");
     inFlightRef.current = true;
 
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
     try {
       let fileToVerify = file;
       // Comprimimos se necessário (limite 3MB para a IA)
@@ -137,14 +172,18 @@ export function PublicCameraBlock({
         if (compressed) fileToVerify = compressed;
       }
 
+      if (!checkSequence()) return;
       setState("analyzing");
 
-      if (abortControllerRef.current) abortControllerRef.current.abort();
       abortControllerRef.current = new AbortController();
       const signal = abortControllerRef.current.signal;
+      abortReasonRef.current = null;
 
-      const timeoutId = setTimeout(() => {
-        if (abortControllerRef.current) abortControllerRef.current.abort();
+      timeoutId = setTimeout(() => {
+        if (abortControllerRef.current) {
+          abortReasonRef.current = "timeout";
+          abortControllerRef.current.abort();
+        }
       }, 35000);
 
       const formData = new FormData();
@@ -160,16 +199,14 @@ export function PublicCameraBlock({
         signal
       });
 
-      clearTimeout(timeoutId);
-
-      if (signal.aborted) {
-        throw new Error("Timeout ou cancelado");
-      }
+      if (timeoutId) clearTimeout(timeoutId);
+      if (!checkSequence()) return;
 
       const contentType = response.headers.get("content-type");
       if (!contentType || !contentType.includes("application/json")) {
         setState("technical_failure");
-        setErrorMsg("Resposta do servidor inválida.");
+        setFailureReason("server_failed");
+        setErrorMsg("Ocorreu uma falha técnica no servidor. Tente novamente.");
         return;
       }
 
@@ -181,46 +218,68 @@ export function PublicCameraBlock({
       }
 
       if (response.status === 409) {
-        // processing_conflict
         setState("technical_failure");
+        setFailureReason("processing");
         setErrorMsg("A foto ainda está sendo processada. Tente novamente em instantes.");
         return;
       }
 
       if (response.status === 503) {
+        setState("technical_failure");
+        setFailureReason("configuration");
         if (data.code === "camera_ai_disabled") {
-          setState("technical_failure");
-          setErrorMsg("A verificação ainda não está disponível.");
+          setErrorMsg("A verificação inteligente está temporariamente indisponível.");
         } else {
-          setState("technical_failure");
-          setErrorMsg("Servidor em manutenção.");
+          setErrorMsg("Servidor em manutenção ou configuração ausente.");
         }
         return;
       }
 
-      const parsed = CameraAIResponseSchema.safeParse(data);
-      if (!parsed.success || !data.ok) {
+      if (response.status >= 500) {
         setState("technical_failure");
+        setFailureReason("server_failed");
+        setErrorMsg("O servidor encontrou um erro. Tente novamente.");
         return;
       }
 
-      const result = parsed.data as CameraAIResponse;
+      const parsed = CameraAIResponseSchema.safeParse(data);
+      if (!parsed.success) {
+        setState("technical_failure");
+        setFailureReason("server_failed");
+        setErrorMsg("Resposta do servidor em formato inválido.");
+        return;
+      }
+
+      const result = parsed.data;
+      if (!result.ok) {
+        setState("technical_failure");
+        setFailureReason("server_failed");
+        setErrorMsg(result.message || "Falha na verificação.");
+        return;
+      }
 
       if (result.decision === "approved") {
         setState("uploading");
         try {
-          await uploadCameraEvidence({
+          const url = await uploadCameraEvidence({
             file: fileToVerify,
             checklistId,
             blockId: block.id,
-            onAnswer
           });
+
+          if (!checkSequence()) return;
+          
+          if (onAnswer) onAnswer(block.id, url);
           setEvidence(result.evidence || null);
           setState("approved");
         } catch (uploadErr) {
+          if (!checkSequence()) return;
           console.error("Upload error after approval:", uploadErr);
           setState("technical_failure");
-          setErrorMsg("Aprovado, mas falha ao salvar imagem.");
+          setFailureReason("network_unknown");
+          setErrorMsg("Foto aprovada, mas falha ao salvar no servidor.");
+          // Limpa resposta aprovada se upload falhou
+          if (onAnswer) onAnswer(block.id, "");
         }
       } else if (result.decision === "retake") {
         setState("retake");
@@ -232,20 +291,43 @@ export function PublicCameraBlock({
         setEvidence(result.evidence || null);
       } else {
         setState("technical_failure");
+        setFailureReason("server_failed");
       }
 
     } catch (err: unknown) {
-      if ((err as Error).name === 'AbortError') return;
+      if (timeoutId) clearTimeout(timeoutId);
+      
+      const isAbort = err instanceof DOMException && err.name === "AbortError";
+      
+      if (isAbort) {
+        if (abortReasonRef.current === "timeout") {
+          if (!checkSequence()) return;
+          setState("technical_failure");
+          setFailureReason("timeout_unknown");
+          setErrorMsg("A verificação demorou mais que o esperado. Tente novamente.");
+        }
+        // Outros aborts (close/retake/unmount) são ignorados silenciosamente
+        return;
+      }
+
+      if (!checkSequence()) return;
       console.error("Verification error:", err);
       setState("technical_failure");
+      setFailureReason("network_unknown");
+      setErrorMsg("Falha de conexão com o servidor. Verifique sua internet.");
     } finally {
+      if (timeoutId) clearTimeout(timeoutId);
       inFlightRef.current = false;
       abortControllerRef.current = null;
     }
   };
 
   const openCamera = () => {
-    if (abortControllerRef.current) abortControllerRef.current.abort();
+    requestSequenceRef.current++;
+    if (abortControllerRef.current) {
+      abortReasonRef.current = "close";
+      abortControllerRef.current.abort();
+    }
     setState("capturing");
     onCameraActiveChange?.(true);
     setErrorMsg(null);
@@ -261,7 +343,16 @@ export function PublicCameraBlock({
 
   const retryCurrentPhoto = () => {
     if (capturedFile && idempotencyKey) {
-      void processVerification(capturedFile, idempotencyKey, true);
+      // Regras de retry:
+      // network_unknown, timeout_unknown, processing -> Reutiliza mesma chave
+      // server_failed -> Nova chave
+      let keyToUse = idempotencyKey;
+      if (failureReason === "server_failed") {
+        keyToUse = crypto.randomUUID();
+        setIdempotencyKey(keyToUse);
+      }
+      
+      void processVerification(capturedFile, keyToUse, requestSequenceRef.current);
     }
   };
 
@@ -278,7 +369,6 @@ export function PublicCameraBlock({
 
   return (
     <div className="w-full space-y-4">
-      {/* Botão inicial ou preview de estados finais */}
       {state === "idle" && (
         <Button
           variant="outline"
@@ -292,8 +382,7 @@ export function PublicCameraBlock({
         </Button>
       )}
 
-      {/* Preview da Imagem com Animação de Análise */}
-      {(["preparing", "analyzing", "approved", "retake", "not_observable", "technical_failure", "uploading", "received"].includes(state)) && preview && (
+      {(["preparing", "analyzing", "approved", "retake", "not_observable", "technical_failure", "rate_limited", "uploading", "received"].includes(state)) && preview && (
         <div className={cn(
           "relative aspect-[4/3] rounded-2xl overflow-hidden border-2 transition-colors duration-500",
           state === "approved" ? "border-green-500 shadow-lg shadow-green-100" : 
@@ -302,7 +391,6 @@ export function PublicCameraBlock({
         )}>
           <img src={preview} alt="Capture preview" className="w-full h-full object-cover" />
           
-          {/* Animação de varredura (Analisando) */}
           {state === "analyzing" && (
             <div className="absolute inset-0 z-10">
               <div className="w-full h-0.5 bg-[#FF007F] shadow-[0_0_15px_#FF007F] absolute animate-[scan_2s_ease-in-out_infinite]" />
@@ -310,7 +398,6 @@ export function PublicCameraBlock({
             </div>
           )}
 
-          {/* Overlays de Estado */}
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/20 p-6 text-center">
             {state === "preparing" && (
               <div className="bg-white/90 backdrop-blur-sm rounded-2xl p-4 flex items-center gap-3 shadow-xl">
@@ -381,7 +468,6 @@ export function PublicCameraBlock({
         </div>
       )}
 
-      {/* Erros e Alertas fora do preview */}
       {state === "technical_failure" && (
         <Alert variant="destructive" className="border-red-200 bg-red-50">
           <AlertCircle className="h-4 w-4 text-red-600" />
@@ -390,9 +476,11 @@ export function PublicCameraBlock({
               {errorMsg || "Não foi possível verificar esta foto agora."}
             </span>
             <div className="flex gap-2">
-              <Button variant="outline" size="sm" onClick={retryCurrentPhoto} disabled={inFlightRef.current} className="bg-white border-red-200 text-red-700 hover:bg-red-100">
-                Tentar novamente
-              </Button>
+              {failureReason !== "configuration" && (
+                <Button variant="outline" size="sm" onClick={retryCurrentPhoto} disabled={inFlightRef.current} className="bg-white border-red-200 text-red-700 hover:bg-red-100">
+                  Tentar novamente
+                </Button>
+              )}
               <Button variant="ghost" size="sm" onClick={openCamera} className="text-red-700 underline">
                 Tirar outra foto
               </Button>
