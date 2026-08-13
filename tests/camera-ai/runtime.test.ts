@@ -183,7 +183,8 @@ describe('Camera AI Server Runtime', () => {
 
   describe('Static SQL Validation', () => {
     it('migration contém as definições exigidas', () => {
-      const migrationPath = path.resolve(process.cwd(), 'supabase/migrations/20260813203351_494f8cca-6603-47ae-b28d-e2a7c90741fd.sql');
+      const migrationFile = fs.readdirSync(path.resolve(process.cwd(), 'supabase/migrations')).find(f => f.startsWith('20260813210243'));
+      const migrationPath = path.resolve(process.cwd(), 'supabase/migrations', migrationFile!);
       const content = fs.readFileSync(migrationPath, 'utf8');
       
       expect(content).toContain('c.workspace_id'); 
