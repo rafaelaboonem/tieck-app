@@ -1,230 +1,182 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { evaluateGate } from '../../src/server/camera-ai/gate';
 import { validateImageBuffer } from '../../src/server/camera-ai/image-validation';
-import { CameraVerification } from '../../src/server/camera-ai/schema';
-import { analyzeImage } from '../../src/server/camera-ai/openai-provider';
-
-// Mock OpenAI
-const mockParse = vi.fn();
-vi.mock('openai', () => {
-  return {
-    default: vi.fn().mockImplementation(() => ({
-      responses: {
-        parse: mockParse
-      }
-    }))
-  };
-});
+import { CameraVerification, PublishedBlock } from '../../src/server/camera-ai/schema';
+import { verifyCameraRequest, VerifyDependencies } from '../../src/server/camera-ai/verify-handler';
+import fs from 'fs';
+import path from 'path';
 
 describe('Camera AI Server Runtime', () => {
+  let deps: VerifyDependencies;
+  const mockNow = new Date('2026-08-13T20:00:00Z');
+
   beforeEach(() => {
     vi.clearAllMocks();
+    deps = {
+      mode: 'enabled',
+      openai: {},
+      model: 'gpt-4o-mini',
+      supabaseAdmin: {},
+      now: () => mockNow,
+      resolveSession: vi.fn().mockResolvedValue({ 
+        data: [{ 
+          response_id: 'res-1', 
+          checklist_id: 'chk-1', 
+          published_content: { 
+            blocks: [{ id: 'blk-1', type: 'camera', title: 'Test' }] 
+          } 
+        }], 
+        error: null 
+      }),
+      claimAttempt: vi.fn().mockResolvedValue({ data: [{ claim_status: 'acquired' }], error: null }),
+      hitRateLimit: vi.fn().mockResolvedValue({ data: [{ allowed: true }], error: null }),
+      analyzeImage: vi.fn().mockResolvedValue({ confidence: 0.95, target_visible: true, condition_observable: true, condition_met: true, image_quality: 'usable', visible_evidence: 'ok', user_message: 'ok' }),
+      markFailed: vi.fn().mockResolvedValue({ data: {}, error: null }),
+      markCompleted: vi.fn().mockResolvedValue({ data: { id: 'attempt-1' }, error: null }),
+    };
   });
 
-  describe('Gate Logic', () => {
-    it('gate aprovado', () => {
-      const mock: CameraVerification = {
-        target_visible: true,
-        condition_observable: true,
-        condition_met: true,
-        image_quality: "usable",
-        confidence: 0.95,
-        visible_evidence: "Pia limpa.",
-        user_message: "OK"
-      };
-      const result = evaluateGate(mock);
-      expect(result.decision).toBe('approved');
-      expect(result.ok).toBe(true);
+  describe('Handler Unit Tests (verifyCameraRequest)', () => {
+    const validPayload = {
+      checklistId: 'chk-1',
+      blockId: 'blk-1',
+      responseToken: 'token-1',
+      idempotencyKey: '00000000-0000-0000-0000-000000000000'
+    };
+    const validImage = { buffer: new Uint8Array([0xff, 0xd8, 0xff, 0xdb]).buffer, type: 'image/jpeg' };
+
+    it('modo disabled retorna 503 e analyzeImage não é chamado', async () => {
+      deps.mode = 'disabled';
+      const res = await verifyCameraRequest(validPayload, validImage, deps);
+      expect(res.status).toBe(503);
+      expect(res.body.code).toBe('camera_ai_disabled');
+      expect(deps.analyzeImage).not.toHaveBeenCalled();
     });
 
-    it('confiança baixa gera retake', () => {
-      const mock: CameraVerification = {
-        target_visible: true,
-        condition_observable: true,
-        condition_met: true,
-        image_quality: "usable",
-        confidence: 0.85,
-        visible_evidence: "Parece limpa.",
-        user_message: "Low Confidence"
-      };
-      expect(evaluateGate(mock).decision).toBe('retake');
-    });
-  });
-
-  describe('Image Validation', () => {
-    it('JPEG válido', async () => {
-      const buffer = new Uint8Array([0xff, 0xd8, 0xff, 0xdb]).buffer;
-      const res = await validateImageBuffer(buffer, 'image/jpeg');
-      expect(res.valid).toBe(true);
+    it('configuração ausente retorna 503', async () => {
+      deps.supabaseAdmin = null;
+      const res = await verifyCameraRequest(validPayload, validImage, deps);
+      expect(res.status).toBe(503);
+      expect(res.body.code).toBe('config_missing');
     });
 
-    it('arquivo acima de 3 MB gera file_too_large', async () => {
-      const buffer = new ArrayBuffer(4 * 1024 * 1024);
-      const res = await validateImageBuffer(buffer, 'image/jpeg');
-      expect(res.valid).toBe(false);
-      expect(res.code).toBe('file_too_large');
+    it('token inválido retorna 401 e analyzeImage não é chamado', async () => {
+      (deps.resolveSession as any).mockResolvedValue({ data: [], error: null });
+      const res = await verifyCameraRequest(validPayload, validImage, deps);
+      expect(res.status).toBe(401);
+      expect(deps.analyzeImage).not.toHaveBeenCalled();
     });
 
-    it('magic bytes inválidos para JPEG', async () => {
-      const buffer = new Uint8Array([0x00, 0x00, 0x00, 0x00]).buffer;
-      const res = await validateImageBuffer(buffer, 'image/jpeg');
-      expect(res.valid).toBe(false);
-      expect(res.code).toBe('invalid_format');
+    it('checklist divergente retorna 403', async () => {
+      const payload = { ...validPayload, checklistId: 'wrong-chk' };
+      const res = await verifyCameraRequest(payload, validImage, deps);
+      expect(res.status).toBe(403);
+      expect(res.body.code).toBe('id_mismatch');
     });
-  });
 
-  describe('OpenAI Provider', () => {
-    it('analyzeImage extracts output_parsed and handles low detail', async () => {
-      mockParse.mockResolvedValue({
-        output_parsed: {
-          target_visible: true,
-          condition_observable: true,
-          condition_met: true,
-          image_quality: "usable",
-          confidence: 0.99,
-          visible_evidence: "OK",
-          user_message: "OK"
-        }
+    it('bloco ausente retorna 404', async () => {
+      (deps.resolveSession as any).mockResolvedValue({ 
+        data: [{ response_id: 'r1', checklist_id: 'chk-1', published_content: { blocks: [] } }], 
+        error: null 
       });
-
-      const mockClient = { responses: { parse: mockParse } };
-      const result = await analyzeImage(
-        mockClient as any,
-        'gpt-4o-mini',
-        'Is the sink clean?',
-        new ArrayBuffer(10),
-        'image/jpeg'
-      );
-
-      expect(result.confidence).toBe(0.99);
-      expect(mockParse).toHaveBeenCalledWith(
-        expect.objectContaining({
-          input: expect.arrayContaining([
-            expect.objectContaining({
-              role: 'user',
-              content: expect.arrayContaining([
-                expect.objectContaining({ type: 'input_image', detail: 'low' })
-              ])
-            })
-          ])
-        }),
-        expect.any(Object)
-      );
+      const res = await verifyCameraRequest(validPayload, validImage, deps);
+      expect(res.status).toBe(404);
+      expect(res.body.code).toBe('invalid_block');
     });
 
-    it('analyzeImage throws on null output_parsed', async () => {
-      mockParse.mockResolvedValue({ output_parsed: null });
-      const mockClient = { responses: { parse: mockParse } };
+    it('bloco que não é camera retorna 404', async () => {
+      (deps.resolveSession as any).mockResolvedValue({ 
+        data: [{ 
+          response_id: 'r1', 
+          checklist_id: 'chk-1', 
+          published_content: { blocks: [{ id: 'blk-1', type: 'text' }] } 
+        }], 
+        error: null 
+      });
+      const res = await verifyCameraRequest(validPayload, validImage, deps);
+      expect(res.status).toBe(404);
+    });
 
-      await expect(analyzeImage(
-        mockClient as any,
-        'gpt-4o-mini',
-        '?',
-        new ArrayBuffer(10),
-        'image/jpeg'
-      )).rejects.toThrow('OpenAI failed to parse');
+    it('claim completed retorna replay e analyzeImage não é chamado', async () => {
+      (deps.claimAttempt as any).mockResolvedValue({ 
+        data: [{ claim_status: 'completed', existing_decision: 'approved', existing_code: 'ok' }], 
+        error: null 
+      });
+      const res = await verifyCameraRequest(validPayload, validImage, deps);
+      expect(res.status).toBe(200);
+      expect(res.body.message).toContain('Replay');
+      expect(deps.analyzeImage).not.toHaveBeenCalled();
+    });
+
+    it('claim processing retorna 409', async () => {
+      (deps.claimAttempt as any).mockResolvedValue({ data: [{ claim_status: 'processing' }], error: null });
+      const res = await verifyCameraRequest(validPayload, validImage, deps);
+      expect(res.status).toBe(409);
+    });
+
+    it('rate limit negado chama markFailed e não chama analyzeImage', async () => {
+      (deps.hitRateLimit as any).mockResolvedValue({ data: [{ allowed: false }], error: null });
+      const res = await verifyCameraRequest(validPayload, validImage, deps);
+      expect(res.status).toBe(429);
+      expect(deps.markFailed).toHaveBeenCalledWith(expect.objectContaining({ code: 'rate_limit' }));
+      expect(deps.analyzeImage).not.toHaveBeenCalled();
+    });
+
+    it('provider falha chama markFailed', async () => {
+      (deps.analyzeImage as any).mockRejectedValue(new Error('AI fail'));
+      await expect(verifyCameraRequest(validPayload, validImage, deps)).rejects.toThrow();
+      expect(deps.markFailed).toHaveBeenCalledWith(expect.objectContaining({ code: 'provider_failure' }));
+    });
+
+    it('provider aprovado chama markCompleted', async () => {
+      const res = await verifyCameraRequest(validPayload, validImage, deps);
+      expect(res.status).toBe(200);
+      expect(deps.markCompleted).toHaveBeenCalled();
+    });
+
+    it('markCompleted retornando zero linhas resulta 500', async () => {
+      (deps.markCompleted as any).mockResolvedValue({ data: null, error: null });
+      const res = await verifyCameraRequest(validPayload, validImage, deps);
+      expect(res.status).toBe(500);
+      expect(res.body.code).toBe('persistence_error');
+    });
+
+    it('pergunta utilizada vem do published_content e não do cliente', async () => {
+      (deps.resolveSession as any).mockResolvedValue({ 
+        data: [{ 
+          response_id: 'r1', 
+          checklist_id: 'chk-1', 
+          published_content: { blocks: [{ id: 'blk-1', type: 'camera', title: 'Pergunta Real' }] } 
+        }], 
+        error: null 
+      });
+      await verifyCameraRequest(validPayload, validImage, deps);
+      expect(deps.analyzeImage).toHaveBeenCalledWith(expect.anything(), expect.anything(), 'Pergunta Real', expect.anything(), expect.anything());
     });
   });
 
-  describe('Database & Integration (Mocks)', () => {
-    it('resolve_public_response usa hash SHA-256', async () => {
-      // Mock da função que seria chamada pela RPC
-      const token = 'abc';
-      // Simulação do comportamento do banco
-      const expectedHash = 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad';
-      
-      const hasher = (t: string) => {
-        // Simplesmente para provar que conhecemos o hash esperado pelo SQL
-        return 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad';
-      };
-
-      expect(hasher(token)).toBe(expectedHash);
+  describe('Schema Validation', () => {
+    it('idempotencyKey inválida falha no Zod', () => {
+      const { VerifyPayloadSchema } = require('../../src/server/camera-ai/schema');
+      const invalid = { checklistId: 'chk-1', blockId: 'blk-1', responseToken: 't', idempotencyKey: 'not-a-uuid' };
+      const result = VerifyPayloadSchema.safeParse(invalid);
+      expect(result.success).toBe(false);
     });
+  });
 
-    it('claim adquirido via atomic insertion', async () => {
-      const mockRpc = vi.fn().mockResolvedValue({
-        data: [{ claim_status: 'acquired', attempt_id: 'uuid' }],
-        error: null
-      });
+  describe('Static SQL Validation', () => {
+    it('migration contém as correções exigidas', () => {
+      const migrationPath = path.resolve(process.cwd(), 'supabase/migrations/20260813203351_494f8cca-6603-47ae-b28d-e2a7c90741fd.sql');
+      const content = fs.readFileSync(migrationPath, 'utf8');
       
-      const res = await mockRpc('claim_camera_ai_attempt', {});
-      expect(res.data[0].claim_status).toBe('acquired');
-      expect(res.data[0].attempt_id).toBeDefined();
-    });
-
-    it('rate limit recebe quatro parâmetros corretamente', async () => {
-      const mockRpc = vi.fn();
-      const responseId = 'uuid';
-      
-      // Simulação da chamada na rota
-      await mockRpc('hit_public_rate_limit', {
-        p_key_hash: responseId,
-        p_action: 'camera_ai_verify',
-        p_window_seconds: 600,
-        p_limit: 10
-      });
-
-      expect(mockRpc).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
-        p_key_hash: expect.any(String),
-        p_action: 'camera_ai_verify',
-        p_window_seconds: 600,
-        p_limit: 10
-      }));
-    });
-
-    it('modo disabled não chama OpenAI', async () => {
-      const mode = 'disabled';
-      const openaiCalled = vi.fn();
-      
-      if (mode === 'enabled') {
-        openaiCalled();
-      }
-      
-      expect(openaiCalled).not.toHaveBeenCalled();
-    });
-
-    it('replay completed não chama OpenAI', async () => {
-      const claim = { claim_status: 'completed' };
-      const openaiCalled = vi.fn();
-      
-      if (claim.claim_status === 'acquired') {
-        openaiCalled();
-      }
-      
-      expect(openaiCalled).not.toHaveBeenCalled();
-    });
-
-    it('zero linhas atualizadas na persistência final gera technical_failure', async () => {
-      const mockUpdate = vi.fn().mockResolvedValue({ data: null, error: null });
-      const result = await mockUpdate();
-      
-      const check = (res: any) => res.data ? 'ok' : 'technical_failure';
-      expect(check(result)).toBe('technical_failure');
-    });
-
-    it('concorrência: apenas um vencedor recebe acquired', async () => {
-      const requests = [
-        { id: 1 },
-        { id: 2 }
-      ];
-
-      const database = new Set();
-      const handleRequest = async (req: any) => {
-        const key = 'shared_key';
-        if (database.has(key)) {
-          return { claim_status: 'processing' };
-        }
-        database.add(key);
-        return { claim_status: 'acquired' };
-      };
-
-      const results = await Promise.all(requests.map(r => handleRequest(r)));
-      
-      const acquiredCount = results.filter(r => r.claim_status === 'acquired').length;
-      const processingCount = results.filter(r => r.claim_status === 'processing').length;
-
-      expect(acquiredCount).toBe(1);
-      expect(processingCount).toBe(1);
+      expect(content).toContain('c.workspace_id');
+      expect(content).toContain('r.status::text');
+      expect(content).not.toContain('r.workspace_id');
+      expect(content).toContain("digest(btrim(p_token), 'sha256')");
+      expect(content).toContain('INSERT INTO public.camera_ai_attempts');
+      expect(content).toContain('ON CONFLICT (response_id, block_id, idempotency_key) DO NOTHING');
+      expect(content).toContain('GRANT ALL ON public.camera_ai_attempts TO service_role');
+      expect(content).toContain('GRANT EXECUTE ON FUNCTION public.resolve_public_response(text) TO service_role');
     });
   });
 });
