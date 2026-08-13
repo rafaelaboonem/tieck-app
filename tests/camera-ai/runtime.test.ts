@@ -69,7 +69,7 @@ describe('Camera AI Server Runtime', () => {
       const buffer = new Uint8Array([0x00, 0x00, 0x00, 0x00]).buffer;
       const res = await validateImageBuffer(buffer, 'image/jpeg');
       expect(res.valid).toBe(false);
-      expect(res.code).toBe('invalid_image_type');
+      expect(res.code).toBe('invalid_format');
     });
   });
 
