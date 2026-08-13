@@ -56,8 +56,7 @@ describe('PublicCameraBlock UI', () => {
     vi.spyOn(compressModule, 'compressImage').mockImplementation(async (f) => f);
     
     // Default env for each test
-    vi.stubEnv('VITE_CAMERA_AI_ENABLED', 'true');
-    vi.spyOn(import.meta.env, 'VITE_CAMERA_AI_ENABLED', 'get').mockReturnValue('true');
+    vi.stubEnv('VITE_CAMERA_AI_ENABLED_TEST', 'true');
   });
 
   afterEach(() => {
