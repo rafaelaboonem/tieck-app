@@ -1,28 +1,25 @@
-Vou transformar a landing page em uma experiência moderna, profissional e dinâmica. Minha proposta foca em três pilares: Design Visual de Alto Nível, Animações Fluídas e Seções Estratégicas de Conversão.
+# Plano de Correção da Camera AI (Fase 1 Auditada)
 
-### O que vou construir:
-1.  **Navegação Inteligente**: Header fixo (sticky) com efeito de desfoque (glassmorphism) e menu mobile otimizado.
-2.  **Hero Section de Alto Impacto**:
-    *   Fundo dinâmico com gradientes suaves e formas abstratas.
-    *   Título com tipografia impactante e animação de entrada.
-    *   Mockup flutuante simulando a interface do checklist para dar clareza visual imediata.
-3.  **Seção de Funcionalidades (Grid Moderno)**:
-    *   Cards interativos com ícones Lucide.
-    *   Efeitos de hover suaves que elevam os elementos.
-    *   Destaques para: Checklists Independentes, Espaço de Trabalho, Prevenção de Duplicados e Insights.
-4.  **Seção "Como Funciona"**:
-    *   Layout de passos visuais (1-2-3) para guiar o usuário de forma intuitiva.
-5.  **Prova Social e Chamada Final (CTA)**:
-    *   Seção de encerramento com design diferenciado para impulsionar a criação do primeiro checklist.
-6.  **Animações com Framer Motion**:
-    *   Fade-ins e efeitos de "revelação ao rolar a página" (scroll reveal) para manter o usuário engajado.
+Implementação das correções críticas da Camera AI conforme a auditoria do commit c6eaa92.
 
-### Detalhes Técnicos:
-*   Utilização de `framer-motion` para transições suaves.
-*   Componentização das seções para melhor manutenção.
-*   Design totalmente responsivo (Mobile-first).
-*   Paleta de cores baseada no Rosa da marca (#FF007F) com tons complementares modernos.
+## Mudanças do Usuário
+- Substituição do motor OpenAI pela Responses API real (Structured Outputs).
+- Remoção de `as any` e tipos obsoletos.
+- Criação de migration SQL para RPCs e tabelas necessárias.
+- Implementação de cliente Supabase exclusivamente server-side.
+- Validação real de tokens e idempotência persistente.
+- Expansão da suíte de testes (26+ casos).
 
----
+## Detalhes Técnicos
+- **OpenAI**: Uso de `client.responses.parse` com `zodTextFormat`.
+- **Autorização**: Hashing de tokens e resolução via RPC `resolve_public_response`.
+- **Idempotência**: Tabela `camera_ai_attempts` com estados `processing`, `completed`, `failed`.
+- **Rate Limit**: Uso da RPC `hit_public_rate_limit` com cliente admin.
+- **Segurança**: Validação de magic bytes (JPEG/PNG/WebP) e limite de 3MB.
+- **Testes**: Vitest com mocks para evitar chamadas de rede e tokens reais.
 
-Vou começar a implementação agora para você ver o resultado no preview.
+## Próximos Passos
+1. Validar SQL da migration.
+2. Aplicar correções no `openai-provider.ts` (corrigindo erros de tipagem).
+3. Atualizar endpoint `/api/camera-ai/verify`.
+4. Executar suíte de testes completa.
