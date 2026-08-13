@@ -227,6 +227,7 @@ describe('PublicCameraBlock UI', () => {
 
   it('9. resposta antiga: request sequence protection', async () => {
     vi.stubEnv('VITE_CAMERA_AI_ENABLED_FORCE', 'true');
+    vi.stubEnv('VITE_CAMERA_AI_ENABLED', 'true');
     
     let resolveFirst: any;
     const firstPromise = new Promise(r => { resolveFirst = r; });
