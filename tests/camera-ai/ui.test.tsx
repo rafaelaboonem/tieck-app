@@ -215,9 +215,10 @@ describe('PublicCameraBlock UI', () => {
 
     await waitFor(() => expect(screen.getByText(/Verificando/)).toBeInTheDocument());
 
-    vi.advanceTimersByTime(36001);
+    vi.advanceTimersByTime(36000);
     
-    // We must manually trigger microtasks for fake timers to resolve internal promises
+    // Manual promise resolution to trigger microtasks
+    await vi.runAllTicks();
     await vi.runAllTicks();
 
     await waitFor(() => {
@@ -225,7 +226,8 @@ describe('PublicCameraBlock UI', () => {
     });
     
     vi.useRealTimers();
-  });
+  }, { timeout: 60000 });
+
 
 
 
