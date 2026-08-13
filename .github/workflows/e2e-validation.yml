@@ -9,18 +9,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: oven-sh/setup-bun@v1
+      - uses: actions/setup-node@v4
         with:
-          bun-version: latest
+          node-version: '20'
+          cache: 'npm'
 
       - name: Install dependencies
-        run: bun install
+        run: npm ci
 
       - name: Verify Routes
         env:
           DEPLOY_URL: ${{ github.event.deployment_status.target_url }}
-        run: |
-          URL=${DEPLOY_URL:-"https://checklistapp-wheat.vercel.app"}
-          echo "Validating routes for $URL"
-          sed -i "s|https://checklistapp-wheat.vercel.app|$URL|g" tests/verify_routes.ts
-          bun test:routes
+        run: npm run test:routes

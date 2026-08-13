@@ -8,7 +8,7 @@ export default defineConfig({
   workers: process.env.CI ? 1 : undefined,
   reporter: 'html',
   use: {
-    baseURL: 'https://checklistapp-wheat.vercel.app',
+    baseURL: process.env.DEPLOY_URL || "https://tieck.com.br",
     trace: 'on-first-retry',
   },
   projects: [
