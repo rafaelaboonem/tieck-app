@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { evaluateGate } from '../../src/server/camera-ai/gate';
-import { validateImageBuffer } from '../../src/server/camera-ai/image-validation';
-import { CameraVerification, PublishedBlock, VerifyPayloadSchema } from '../../src/server/camera-ai/schema';
-import { verifyCameraRequest, VerifyDependencies } from '../../src/server/camera-ai/verify-handler';
+import { evaluateGate } from '../src/server/camera-ai/gate';
+import { validateImageBuffer } from '../src/server/camera-ai/image-validation';
+import { CameraVerification, PublishedBlock, VerifyPayloadSchema } from '../src/server/camera-ai/schema';
+import { verifyCameraRequest, VerifyDependencies } from '../src/server/camera-ai/verify-handler';
 import fs from 'fs';
 import path from 'path';
 
