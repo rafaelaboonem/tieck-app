@@ -879,7 +879,7 @@ function PublicChecklistPage() {
                             block={block}
                             checklistId={checklist.id}
                             ensureResponseSession={ensureResponseSession}
-                            session={responseSession}
+                            session={readResponseSession()}
                             onAnswer={setAnswer}
                             onCameraActiveChange={setCameraActive}
                             textColor={settings.textColor}
