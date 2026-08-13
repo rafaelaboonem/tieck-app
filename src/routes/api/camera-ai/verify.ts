@@ -10,11 +10,13 @@ export const Route = createFileRoute('/api/camera-ai/verify')({
   server: {
     handlers: {
       POST: async ({ request }) => {
+        // 1. CAMERA_AI_MODE
         const mode = process.env['CAMERA_AI_MODE'] || 'disabled';
         if (mode !== 'enabled') {
           return Response.json({ ok: false, code: 'camera_ai_disabled', message: 'IA desativada.' }, { status: 503 });
         }
 
+        // 2. Server-only config
         const supabaseAdmin = createServerSupabaseClient();
         if (!supabaseAdmin) {
           return Response.json({ ok: false, code: 'config_missing', message: 'Configuração do servidor ausente.' }, { status: 503 });
@@ -26,6 +28,7 @@ export const Route = createFileRoute('/api/camera-ai/verify')({
         }
 
         try {
+          // 3. Multipart
           const formData = await request.formData();
           const rawPayload = {
             checklistId: formData.get('checklistId'),
@@ -40,20 +43,20 @@ export const Route = createFileRoute('/api/camera-ai/verify')({
           }
 
           const { checklistId, blockId, responseToken, idempotencyKey } = validation.data;
-          const file = formData.get('candidate') as unknown as File | null;
+          const file = formData.get('candidate');
 
           if (!file || !(file instanceof File)) {
             return Response.json({ ok: false, code: 'missing_image' }, { status: 400 });
           }
 
-          // 1. Image Validation (Binary)
+          // 4. Binary Image Validation
           const buffer = await file.arrayBuffer();
           const imgVal = await validateImageBuffer(buffer, file.type);
           if (!imgVal.valid) {
             return Response.json({ ok: false, code: imgVal.code, message: imgVal.message }, { status: 400 });
           }
 
-          // 2. Authorization (Server-side hash)
+          // 5. Session Hash & Expiration
           const { data: sessionData, error: sessionError } = await supabaseAdmin.rpc('resolve_public_response', {
             p_token: responseToken
           });
@@ -63,11 +66,12 @@ export const Route = createFileRoute('/api/camera-ai/verify')({
           }
 
           const session = sessionData[0];
+
+          // 6. Checklist & Block Validation
           if (session.checklist_id !== checklistId) {
             return Response.json({ ok: false, code: 'id_mismatch' }, { status: 403 });
           }
 
-          // 3. Extract Question from Snapshot
           const blocks = session.published_content?.blocks || [];
           const block = blocks.find((b: any) => b.id === blockId);
 
@@ -77,57 +81,50 @@ export const Route = createFileRoute('/api/camera-ai/verify')({
 
           const question = (String(block.title || '') + ' ' + String(block.description || '')).trim();
 
-          // 4. Rate Limit
-          const { data: limitData, error: limitError } = await supabaseAdmin.rpc('hit_public_rate_limit', {
-            p_action: 'camera_ai_verify',
-            p_key_hash: session.response_id,
-            p_limit: 10,
-            p_window_seconds: 600
+          // 7 & 8. Replay & Atomic Claim
+          const { data: claimData, error: claimError } = await supabaseAdmin.rpc('claim_camera_ai_attempt', {
+            p_response_id: session.response_id,
+            p_block_id: blockId,
+            p_idempotency_key: idempotencyKey
           });
 
-          if (limitError || !limitData || !limitData[0].allowed) {
-            return Response.json({ ok: false, code: 'rate_limit', message: 'Muitas tentativas. Tente novamente em breve.' }, { status: 429, headers: { 'Retry-After': '600' } });
+          if (claimError || !claimData || !claimData.length) {
+            return Response.json({ ok: false, code: 'technical_failure' }, { status: 500 });
           }
 
-          // 5. Idempotency Check (Completed)
-          const { data: existingAttempt } = await supabaseAdmin
-            .from('camera_ai_attempts')
-            .select('*')
-            .eq('response_id', session.response_id)
-            .eq('block_id', blockId)
-            .eq('idempotency_key', idempotencyKey)
-            .maybeSingle();
+          const claim = claimData[0];
 
-          if (existingAttempt?.status === 'completed') {
+          // Replay Completed
+          if (claim.claim_status === 'completed') {
             return Response.json({
               ok: true,
-              decision: existingAttempt.decision,
-              code: existingAttempt.code,
-              message: existingAttempt.evidence ? 'Replay da decisão anterior.' : 'Processado.',
-              evidence: existingAttempt.evidence
+              decision: claim.existing_decision,
+              code: claim.existing_code,
+              message: 'Replay da decisão anterior.',
+              evidence: claim.existing_evidence
             });
           }
 
-          if (existingAttempt?.status === 'processing') {
+          // Concurrent Processing
+          if (claim.claim_status === 'processing') {
             return Response.json({ ok: false, code: 'processing_conflict' }, { status: 409 });
           }
 
-          // 6. Create/Update Attempt (Processing)
-          const { error: upsertError } = await supabaseAdmin
-            .from('camera_ai_attempts')
-            .upsert({
-              response_id: session.response_id,
-              block_id: blockId,
-              idempotency_key: idempotencyKey,
-              status: 'processing',
-              updated_at: new Date().toISOString()
-            }, { onConflict: 'response_id,block_id,idempotency_key' });
-
-          if (upsertError) {
-             return Response.json({ ok: false, code: 'technical_failure' }, { status: 500 });
+          // Handle Failed (Retry logic could be here, but for now we block if not acquired)
+          if (claim.claim_status !== 'acquired') {
+            return Response.json({ ok: false, code: 'technical_failure' }, { status: 500 });
           }
 
-          // 7. OpenAI Inference
+          // 9. Rate Limit (for truly new attempts)
+          const { data: limitData, error: limitError } = await supabaseAdmin.rpc('hit_public_rate_limit', {
+            p_key_hash: session.response_id
+          });
+
+          if (limitError || !limitData || !limitData[0].allowed) {
+            return Response.json({ ok: false, code: 'rate_limit', message: 'Muitas tentativas.' }, { status: 429, headers: { 'Retry-After': '600' } });
+          }
+
+          // 10. OpenAI
           const openai = new OpenAI({ apiKey });
           const model = process.env['OPENAI_VISION_MODEL'] || 'gpt-4o-mini';
           const startTime = Date.now();
@@ -138,18 +135,22 @@ export const Route = createFileRoute('/api/camera-ai/verify')({
           } catch (aiError) {
             await supabaseAdmin
               .from('camera_ai_attempts')
-              .update({ status: 'failed' })
-              .eq('response_id', session.response_id)
-              .eq('block_id', blockId)
-              .eq('idempotency_key', idempotencyKey);
+              .update({ status: 'failed', updated_at: new Date().toISOString() })
+              .match({ 
+                response_id: session.response_id, 
+                block_id: blockId, 
+                idempotency_key: idempotencyKey 
+              });
             throw aiError;
           }
 
           const duration = Date.now() - startTime;
+          
+          // 11. Gate
           const result = evaluateGate(analysis);
 
-          // 8. Persist Final Decision
-          await supabaseAdmin
+          // 12. Final Persistence Confirmation
+          const { error: finalError } = await supabaseAdmin
             .from('camera_ai_attempts')
             .update({
               status: 'completed',
@@ -158,17 +159,26 @@ export const Route = createFileRoute('/api/camera-ai/verify')({
               evidence: result.evidence,
               model,
               duration_ms: duration,
-              updated_at: new Date().toISOString()
+              updated_at: new Date().toISOString(),
+              completed_at: new Date().toISOString()
             })
-            .eq('response_id', session.response_id)
-            .eq('block_id', blockId)
-            .eq('idempotency_key', idempotencyKey);
+            .match({ 
+              response_id: session.response_id, 
+              block_id: blockId, 
+              idempotency_key: idempotencyKey,
+              status: 'processing' // Guard condition
+            });
 
+          if (finalError) {
+            return Response.json({ ok: false, code: 'technical_failure' }, { status: 500 });
+          }
+
+          // 13. Sanitized Response
           return Response.json(result);
 
         } catch (error) {
           console.error('[CameraAI] Verification failed (sanitized log)');
-          return Response.json({ ok: false, code: 'technical_failure', message: 'Falha técnica na análise.' }, { status: 500 });
+          return Response.json({ ok: false, code: 'technical_failure' }, { status: 500 });
         }
       },
       OPTIONS: async () => new Response(null, { status: 204 })
