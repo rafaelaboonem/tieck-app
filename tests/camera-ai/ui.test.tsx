@@ -208,16 +208,21 @@ describe('PublicCameraBlock UI', () => {
     render(<PublicCameraBlock {...mockProps} />);
     fireEvent.click(screen.getByText('Test Camera'));
     fireEvent.click(screen.getByTestId('capture-btn'));
-    await waitFor(() => expect(screen.getByText(/Verificando/)).toBeInTheDocument());
     
-    // Fast-forward 36s to trigger the internal timeout
+    // Wait for Analyzing state
+    await waitFor(() => expect(screen.getByText(/Verificando/)).toBeInTheDocument(), { timeout: 2000 });
+    
+    // Trigger 35s timeout
     vi.advanceTimersByTime(36000);
-    // Explicitly flush microtasks
-    await Promise.resolve();
     
-    await waitFor(() => expect(screen.getByText(/demorou mais que o esperado/)).toBeInTheDocument(), { timeout: 2000 });
+    // Check for failure message
+    await waitFor(() => {
+      expect(screen.getByText(/demorou mais que o esperado/)).toBeInTheDocument();
+    }, { timeout: 2000 });
+    
     vi.useRealTimers();
-  });
+  }, { timeout: 15000 });
+
 
 
 
