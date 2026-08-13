@@ -217,12 +217,16 @@ describe('PublicCameraBlock UI', () => {
 
     vi.advanceTimersByTime(36001);
     
+    // We must manually trigger microtasks for fake timers to resolve internal promises
+    await vi.runAllTicks();
+
     await waitFor(() => {
       expect(screen.getByText(/demorou mais que o esperado/)).toBeInTheDocument();
     });
     
     vi.useRealTimers();
   });
+
 
 
 
