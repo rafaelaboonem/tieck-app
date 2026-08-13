@@ -218,14 +218,15 @@ describe('PublicCameraBlock UI', { timeout: 30000 }, () => {
     vi.useFakeTimers();
     let aborted = false;
 
-    (global.fetch as ReturnType<typeof vi.fn>).mockImplementation((_url, options) => {
-      return new Promise((_, reject) => {
+    const fetchPromise = new Promise((_, reject) => {
+      (global.fetch as ReturnType<typeof vi.fn>).mockImplementation((_url, options) => {
         if (options.signal) {
           options.signal.addEventListener('abort', () => {
             aborted = true;
             reject(new DOMException('Aborted', 'AbortError'));
           });
         }
+        return fetchPromise;
       });
     });
 
