@@ -263,12 +263,17 @@ describe('PublicCameraBlock UI', () => {
     fireEvent.click(screen.getByText('Test Camera'));
     fireEvent.click(screen.getByTestId('capture-btn'));
 
+    // Analyzing state should be visible
+    await vi.waitFor(() => expect(screen.getByText(/Verificando a foto/)).toBeInTheDocument());
+
     vi.advanceTimersByTime(40000);
 
-    await waitFor(() => {
+    // After timeout, the component should transition to technical_failure
+    await vi.waitFor(() => {
       expect(screen.getByText(/demorou mais que o esperado/)).toBeInTheDocument();
-    }, { timeout: 8000 });
-  }, 10000);
+    });
+  }, 15000);
+
 
   it('11. troca de foto: invalidates previous approved', async () => {
     (global.fetch as any).mockResolvedValue({
