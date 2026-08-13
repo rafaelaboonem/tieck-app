@@ -213,13 +213,13 @@ describe('PublicCameraBlock UI', () => {
     expect(screen.queryByText('OLD')).not.toBeInTheDocument();
   });
 
-  it('10. timeout: technical failure', { timeout: 15000 }, async () => {
+  it('10. timeout: technical failure', async () => {
     expect.hasAssertions();
     vi.useFakeTimers();
     let aborted = false;
 
     (global.fetch as ReturnType<typeof vi.fn>).mockImplementation((_url, options) => {
-      return new Promise((_, reject) => {
+      const promise = new Promise((_, reject) => {
         if (options.signal) {
           options.signal.addEventListener('abort', () => {
             aborted = true;
@@ -227,6 +227,7 @@ describe('PublicCameraBlock UI', () => {
           });
         }
       });
+      return promise;
     });
 
     render(<PublicCameraBlock {...mockProps} />);
@@ -238,6 +239,7 @@ describe('PublicCameraBlock UI', () => {
     await React.act(async () => {
       vi.advanceTimersByTime(36000);
       vi.runAllTicks();
+      await Promise.resolve();
     });
 
     await waitFor(() => {
@@ -248,7 +250,7 @@ describe('PublicCameraBlock UI', () => {
     expect(screen.getByText('Tentar novamente')).toBeInTheDocument();
     
     vi.useRealTimers();
-  });
+  }, 10000);
 
   it('11. troca de foto: invalidates previous approved', async () => {
     (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
