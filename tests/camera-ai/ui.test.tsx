@@ -26,7 +26,7 @@ vi.mock('lucide-react', async () => {
 vi.mock('@/components/TieckCamera', () => ({
   TieckCamera: ({ open, onCapture, onClose }: { open: boolean; onCapture: (f: File) => void; onClose: () => void }) => {
     return (
-      <div data-testid="tieck-camera" style={{ display: open ? 'block' : 'none' }}>
+      <div data-testid="tieck-camera">
         <button data-testid="capture-btn" onClick={() => onCapture(new File([''], 'test.jpg', { type: 'image/jpeg' }))}>Capture</button>
         <button data-testid="close-camera-btn" onClick={onClose}>Close</button>
       </div>
