@@ -39,7 +39,7 @@ vi.mock('@/components/TieckCamera', () => ({
   }
 }));
 
-describe('PublicCameraBlock UI', { timeout: 30000 }, () => {
+describe('PublicCameraBlock UI', () => {
   const mockBlock: PublicCameraBlockData = {
     id: 'block-1',
     type: 'camera',
