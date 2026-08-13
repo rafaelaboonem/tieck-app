@@ -204,29 +204,19 @@ describe('PublicCameraBlock UI', () => {
 
   it('10. timeout: technical failure', async () => {
     vi.useFakeTimers();
-    
-    (global.fetch as ReturnType<typeof vi.fn>).mockImplementation(() => {
-      return new Promise(() => {}); 
-    });
-
+    (global.fetch as ReturnType<typeof vi.fn>).mockImplementation(() => new Promise(() => {}));
     render(<PublicCameraBlock {...mockProps} />);
     fireEvent.click(screen.getByText('Test Camera'));
     fireEvent.click(screen.getByTestId('capture-btn'));
-
     await waitFor(() => expect(screen.getByText(/Verificando/)).toBeInTheDocument());
-
     vi.advanceTimersByTime(36000);
-    
-    // Allow microtasks to run
     await vi.runAllTicks();
-    await vi.runAllTicks();
-
     await waitFor(() => {
       expect(screen.getByText(/demorou mais que o esperado/)).toBeInTheDocument();
     });
-    
     vi.useRealTimers();
   });
+
 
 
 
