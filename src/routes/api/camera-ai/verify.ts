@@ -10,8 +10,13 @@ export const Route = createFileRoute('/api/camera-ai/verify')({
     handlers: {
       POST: async ({ request }) => {
         const mode = process.env['CAMERA_AI_MODE'] || 'disabled';
-        const supabaseAdmin = createServerSupabaseClient();
         const apiKey = process.env['OPENAI_API_KEY'];
+        
+        if (mode === 'enabled' && !apiKey) {
+          return Response.json({ ok: false, code: 'config_missing', message: 'OPENAI_API_KEY não configurada.' }, { status: 503 });
+        }
+
+        const supabaseAdmin = createServerSupabaseClient();
         const model = process.env['OPENAI_VISION_MODEL'] || 'gpt-4o-mini';
 
         try {
@@ -37,22 +42,25 @@ export const Route = createFileRoute('/api/camera-ai/verify')({
           
           const deps: VerifyDependencies = {
             mode,
-            openai: apiKey ? new OpenAI({ apiKey }) : null,
+            openai: (apiKey ? new OpenAI({ apiKey }) : null) as any,
             model,
-            supabaseAdmin,
+            supabaseAdmin: supabaseAdmin as any, // Cast to avoid complex interface mismatch
             now: () => new Date(),
             resolveSession: async (token) => {
-              return supabaseAdmin!.rpc('resolve_public_response', { p_token: token });
+              if (!supabaseAdmin) return { data: null, error: 'no_client' };
+              return supabaseAdmin.rpc('resolve_public_response', { p_token: token });
             },
             claimAttempt: async ({ responseId, blockId, idempotencyKey }) => {
-              return supabaseAdmin!.rpc('claim_camera_ai_attempt', {
+              if (!supabaseAdmin) return { data: null, error: 'no_client' };
+              return supabaseAdmin.rpc('claim_camera_ai_attempt', {
                 p_response_id: responseId,
                 p_block_id: blockId,
                 p_idempotency_key: idempotencyKey
               });
             },
             hitRateLimit: async (responseId) => {
-              return supabaseAdmin!.rpc('hit_public_rate_limit', {
+              if (!supabaseAdmin) return { data: null, error: 'no_client' };
+              return supabaseAdmin.rpc('hit_public_rate_limit', {
                 p_key_hash: String(responseId),
                 p_action: 'camera_ai_verify',
                 p_window_seconds: 600,
@@ -63,7 +71,8 @@ export const Route = createFileRoute('/api/camera-ai/verify')({
               return analyzeImage(openai, model, question, buffer, mimeType);
             },
             markFailed: async ({ responseId, blockId, idempotencyKey, code }) => {
-              return supabaseAdmin!
+              if (!supabaseAdmin) return { data: null, error: 'no_client' };
+              return supabaseAdmin
                 .from('camera_ai_attempts')
                 .update({ 
                   status: 'failed', 
@@ -78,7 +87,8 @@ export const Route = createFileRoute('/api/camera-ai/verify')({
                 });
             },
             markCompleted: async (params) => {
-              return supabaseAdmin!
+              if (!supabaseAdmin) return { data: null, error: 'no_client' };
+              return supabaseAdmin
                 .from('camera_ai_attempts')
                 .update({
                   status: 'completed',

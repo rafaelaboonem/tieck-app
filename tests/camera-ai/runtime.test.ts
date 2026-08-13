@@ -22,15 +22,28 @@ describe('Camera AI Server Runtime', () => {
         data: [{ 
           response_id: 'res-1', 
           checklist_id: 'c1234567-89ab-cdef-0123-456789abcdef', 
+          workspace_id: 'w123',
+          status: 'in_progress',
           published_content: { 
             blocks: [{ id: 'blk-1', type: 'camera', title: 'Test' }] 
           } 
         }], 
         error: null 
       }),
-      claimAttempt: vi.fn().mockResolvedValue({ data: [{ claim_status: 'acquired' }], error: null }),
+      claimAttempt: vi.fn().mockResolvedValue({ 
+        data: [{ claim_status: 'acquired', attempt_id: 'att-1', current_retry_count: 0 }], 
+        error: null 
+      }),
       hitRateLimit: vi.fn().mockResolvedValue({ data: [{ allowed: true }], error: null }),
-      analyzeImage: vi.fn().mockResolvedValue({ confidence: 0.95, target_visible: true, condition_observable: true, condition_met: true, image_quality: 'usable', visible_evidence: 'ok', user_message: 'ok' }),
+      analyzeImage: vi.fn().mockResolvedValue({ 
+        confidence: 0.95, 
+        target_visible: true, 
+        condition_observable: true, 
+        condition_met: true, 
+        image_quality: 'usable', 
+        visible_evidence: 'ok', 
+        user_message: 'ok' 
+      }),
       markFailed: vi.fn().mockResolvedValue({ data: {}, error: null }),
       markCompleted: vi.fn().mockResolvedValue({ data: { id: 'attempt-1' }, error: null }),
     };
@@ -170,11 +183,13 @@ describe('Camera AI Server Runtime', () => {
 
   describe('Static SQL Validation', () => {
     it('migration contém as definições exigidas', () => {
-      const migrationPath = path.resolve(process.cwd(), 'supabase/migrations/20260813203351_494f8cca-6603-47ae-b28d-e2a7c90741fd.sql');
+      const migrationFile = fs.readdirSync(path.resolve(process.cwd(), 'supabase/migrations')).find(f => f.startsWith('20260813210243'));
+      const migrationPath = path.resolve(process.cwd(), 'supabase/migrations', migrationFile!);
       const content = fs.readFileSync(migrationPath, 'utf8');
       
-      expect(content).toContain('r.workspace_id'); 
-      expect(content).toContain('r.status'); 
+      expect(content).toContain('c.workspace_id'); 
+      expect(content).toContain('r.status::text'); 
+      expect(content).not.toContain('r.workspace_id');
       expect(content).toContain("digest(btrim(p_token), 'sha256')");
       expect(content).toContain('INSERT INTO public.camera_ai_attempts');
       expect(content).toContain('ON CONFLICT (response_id, block_id, idempotency_key) DO NOTHING');

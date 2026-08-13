@@ -1,5 +1,5 @@
--- Camera AI Runtime V1 (Corrected)
--- Timestamp: 2026-08-13 21:05:00
+-- Camera AI Runtime V1 (Consolidated Fix)
+-- Timestamp: 2026-08-13 21:10:00
 
 -- A. Table public.camera_ai_attempts
 CREATE TABLE IF NOT EXISTS public.camera_ai_attempts (
@@ -61,7 +61,7 @@ BEGIN
         r.id as response_id,
         r.checklist_id,
         c.workspace_id,
-        r.status::text,
+        r.status::text as status,
         c.published_content
     FROM public.checklist_responses r
     JOIN public.checklists c ON c.id = r.checklist_id

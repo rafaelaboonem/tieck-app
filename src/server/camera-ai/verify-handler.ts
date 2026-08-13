@@ -1,18 +1,60 @@
-import { VerifyPayload, Decision, VerificationResult, PublishedBlock } from './schema';
+import { VerifyPayload, Decision, VerificationResult, PublishedBlock, CameraVerification } from './schema';
 import { validateImageBuffer } from './image-validation';
 import { evaluateGate } from './gate';
 
+export interface PublicSession {
+  response_id: string;
+  checklist_id: string;
+  workspace_id: string;
+  status: string;
+  published_content: {
+    blocks: PublishedBlock[];
+  };
+}
+
+export interface ClaimResult {
+  claim_status: 'acquired' | 'processing' | 'completed' | 'failed';
+  attempt_id: string;
+  existing_decision?: Decision;
+  existing_code?: string;
+  existing_evidence?: string;
+  current_retry_count: number;
+}
+
+export interface RateLimitResult {
+  allowed: boolean;
+  remaining?: number;
+}
+
 export interface VerifyDependencies {
   mode: string;
-  openai: any; // Using any for simplicity in mock injection, but typed as OpenAI in real usage
+  openai: {
+    beta: {
+      chat: {
+        completions: {
+          parse: (params: any) => Promise<any>;
+        };
+      };
+    };
+  };
   model: string;
-  supabaseAdmin: any;
+  supabaseAdmin: {
+    rpc: (name: string, params: any) => {
+      match: (filter: any) => {
+        select: (columns: string) => {
+          maybeSingle: () => Promise<{ data: any; error: any }>;
+        };
+      };
+      select: (columns: string) => Promise<{ data: any; error: any }>;
+    };
+    from: (table: string) => any;
+  };
   now: () => Date;
-  resolveSession: (token: string) => Promise<{ data: any; error: any }>;
-  claimAttempt: (params: { responseId: string; blockId: string; idempotencyKey: string }) => Promise<{ data: any; error: any }>;
-  hitRateLimit: (responseId: string) => Promise<{ data: any; error: any }>;
-  analyzeImage: (openai: any, model: string, question: string, buffer: ArrayBuffer, mimeType: string) => Promise<any>;
-  markFailed: (params: { responseId: string; blockId: string; idempotencyKey: string; code: string }) => Promise<any>;
+  resolveSession: (token: string) => Promise<{ data: PublicSession[] | null; error: any }>;
+  claimAttempt: (params: { responseId: string; blockId: string; idempotencyKey: string }) => Promise<{ data: ClaimResult[] | null; error: any }>;
+  hitRateLimit: (responseId: string) => Promise<{ data: RateLimitResult[] | null; error: any }>;
+  analyzeImage: (openai: any, model: string, question: string, buffer: ArrayBuffer, mimeType: string) => Promise<CameraVerification>;
+  markFailed: (params: { responseId: string; blockId: string; idempotencyKey: string; code: string }) => Promise<{ data: any; error: any }>;
   markCompleted: (params: {
     responseId: string;
     blockId: string;
@@ -23,8 +65,9 @@ export interface VerifyDependencies {
     model: string;
     durationMs: number;
     at: Date;
-  }) => Promise<{ data: any; error: any }>;
+  }) => Promise<{ data: { id: string } | null; error: any }>;
 }
+
 
 export async function verifyCameraRequest(
   payload: VerifyPayload,
@@ -55,6 +98,7 @@ export async function verifyCameraRequest(
       body: { ok: false, code: imgVal.code || 'invalid', message: imgVal.message || '' } 
     };
   }
+  const mimeType = imgVal.mimeType || 'image/jpeg';
 
   // 5. Session Hash & Expiration
   const { data: sessionData, error: sessionError } = await deps.resolveSession(payload.responseToken);
@@ -109,9 +153,9 @@ export async function verifyCameraRequest(
       body: {
         ok: true,
         decision: claim.existing_decision as Decision,
-        code: claim.existing_code,
+        code: claim.existing_code || 'replayed',
         message: 'Replay da decisão anterior.',
-        evidence: claim.existing_evidence
+        evidence: claim.existing_evidence || undefined
       }
     };
   }
@@ -148,9 +192,9 @@ export async function verifyCameraRequest(
 
   // 10. OpenAI
   const startTime = deps.now().getTime();
-  let analysis;
+  let analysis: CameraVerification;
   try {
-    analysis = await deps.analyzeImage(deps.openai, deps.model, question, imageFile.buffer, imgVal.mimeType || '');
+    analysis = await deps.analyzeImage(deps.openai, deps.model, question, imageFile.buffer, mimeType);
   } catch (aiError) {
     await deps.markFailed({
       responseId: session.response_id,
