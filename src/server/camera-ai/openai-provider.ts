@@ -49,12 +49,3 @@ REGRAS:
 
   return result;
 }
-
-
-  const result = response.choices[0].message.parsed;
-  if (!result) {
-    throw new Error('OpenAI failed to parse structured output.');
-  }
-
-  return result;
-}
