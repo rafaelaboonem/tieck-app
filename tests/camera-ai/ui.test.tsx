@@ -201,12 +201,18 @@ describe('PublicCameraBlock UI', () => {
     fireEvent.click(screen.getByText('Test Camera'));
     fireEvent.click(screen.getByTestId('capture-btn'));
 
-    expect(screen.getByText(/Verificando a foto/)).toBeInTheDocument();
+    // Wait for the state to transition to 'analyzing'
+    await vi.waitFor(() => {
+      if (!screen.queryByText(/Verificando a foto/)) throw new Error('Not analyzing');
+    });
 
     // Advance 35 seconds
     vi.advanceTimersByTime(35000);
 
-    await waitFor(() => expect(screen.getByText(/verificação demorou mais/)).toBeInTheDocument());
+    await vi.waitFor(() => {
+      if (!screen.queryByText(/verificação demorou mais/)) throw new Error('Timeout message not found');
+    });
+    
     expect(screen.queryByText(/Verificando a foto/)).not.toBeInTheDocument();
     expect(screen.getByText('Tentar novamente')).toBeInTheDocument();
     
