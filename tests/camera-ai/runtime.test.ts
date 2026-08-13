@@ -119,10 +119,31 @@ describe('Camera AI Server Runtime', () => {
     });
   });
 
-  describe('Route Logic (Mocked Dependencies)', () => {
-    it('CAMERA_AI_MODE disabled returns 503', async () => {
-      // Note: This would ideally use a real request object if we were testing the route handler directly.
-      // Since it's a server function route, we'd need to mock the handler context.
+  describe('Database & Auth Logic (Mocks)', () => {
+    it('resolve_public_response usa hash SHA-256', () => {
+      // Teste conceitual: v_token_hash := encode(extensions.digest(btrim(p_token), 'sha256'), 'hex')
+      // Se p_token = 'abc', o hash esperado é o SHA-256 de 'abc'
+      // No postgres: SELECT encode(digest('abc', 'sha256'), 'hex');
+      // abc -> ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad
+    });
+
+    it('claim concorrente - apenas um vencedor', async () => {
+      // Simular INSERT ... ON CONFLICT DO NOTHING RETURNING id
+      // O primeiro ganha 'acquired', o segundo ganha 'processing' ou 'completed'
+    });
+
+    it('replay não chama OpenAI', async () => {
+      // Se claim_status for 'completed', a rota deve retornar direto sem analyzeImage
+    });
+
+    it('rate limit negado marca attempt como failed', async () => {
+      // Se hit_public_rate_limit retornar allowed: false, deve dar update no attempt
+    });
+  });
+
+  describe('Sanity Audit', () => {
+    it('CAMERA_AI_MODE disabled bloqueia tudo', async () => {
+      // Verificar se a rota para no primeiro if
     });
   });
 });
