@@ -12,7 +12,7 @@ export interface OpenAIClient {
  * Executes vision analysis using OpenAI Responses API (Structured Outputs).
  */
 export async function analyzeImage(
-  client: any, // OpenAI instance or mock
+  client: OpenAI,
   model: string,
   question: string,
   imageBuffer: ArrayBuffer,
@@ -21,7 +21,6 @@ export async function analyzeImage(
 ): Promise<CameraVerification> {
   const base64Image = Buffer.from(imageBuffer).toString('base64');
 
-  // openai.responses.parse is the modern way to handle structured outputs
   const response = await client.beta.chat.completions.parse({
     model,
     messages: [
