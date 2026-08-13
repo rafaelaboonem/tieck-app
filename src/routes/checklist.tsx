@@ -434,7 +434,7 @@ const SubmissionsTab = lazy(() => import("@/components/SubmissionsTab").then(m =
 import { BlockRenderer, INTERACTIVE_BLOCK_TYPES } from "@/components/BlockRenderer";
 
 import { ensureCameraBlockIds, withNewCameraBlockId, extractCameraQuestions } from "@/lib/camera-blocks";
-import { syncStandardsWithBlocks } from "@/lib/visual-standards";
+// visual-standards import removed (Legacy IA)
 
 
 const BTN_ICON_OPTIONS: { key: string; label: string; Icon: any }[] = [
