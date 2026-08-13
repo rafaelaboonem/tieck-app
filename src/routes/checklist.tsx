@@ -434,7 +434,7 @@ const SubmissionsTab = lazy(() => import("@/components/SubmissionsTab").then(m =
 import { BlockRenderer, INTERACTIVE_BLOCK_TYPES } from "@/components/BlockRenderer";
 
 import { ensureCameraBlockIds, withNewCameraBlockId, extractCameraQuestions } from "@/lib/camera-blocks";
-// visual-standards import removed (Legacy IA)
+
 
 
 const BTN_ICON_OPTIONS: { key: string; label: string; Icon: any }[] = [
@@ -978,7 +978,6 @@ function NovoChecklistPage() {
         /** Identificador estável do bloco, usado para vincular o padrão visual. */
         cameraBlockId?: string;
         type: "camera";
-
         dataUrls?: string[];
         allowMultiple?: boolean;
         maxPhotos?: number;
@@ -991,24 +990,9 @@ function NovoChecklistPage() {
         framingHint?: string | null;
         distanceHint?: string | null;
         lightingHint?: string | null;
-        referenceImagePath?: string | null;
-        referenceImageAlt?: string | null;
-        vision?: {
-          version?: string;
-          enabled?: boolean;
-          modelId?: string | null;
-          modelVersion?: string | null;
-          
-          criteria?: string[];
-          confidenceThreshold?: number | null;
-          model?: string | null;
-          threshold?: number | null;       // 0..1 (anomaly score máximo aceitável); null quando não há modelo
-          minWidth?: number | null;        // px
-          minHeight?: number | null;       // px
-          onAnomaly?: "allow_continue" | "require_resubmit" | "block_completion" | "manual_review";
-          onAnalysisFailure?: "allow_continue" | "manual_review" | "block_completion";
-        };
+
       }
+
     | { id: string; type: "task-list"; options: { id: string; value: string; checked: boolean }[] }
     | { id: string; type: "counter"; value: number; min: number; max: number; step: number }
     | { id: string; type: "currency"; placeholder: string; currency: string }
@@ -1095,8 +1079,15 @@ function NovoChecklistPage() {
             setBlocks(
               ensureCameraBlockIds(
                 ((data.blocks as Block[]) || [{ id: newId(), type: "text", value: "" }]) as any[],
-              ).blocks as Block[],
+              ).blocks.map((b: any) => {
+                if (b.type === 'camera') {
+                  const { vision, criteria, referenceImagePath, referenceImageAlt, confidenceThreshold, model, threshold, modelVersion, ...rest } = b;
+                  return rest;
+                }
+                return b;
+              }) as Block[],
             );
+
 
             setIsStarted(true);
             setShortSlug(data.custom_slug || null);
@@ -1390,19 +1381,6 @@ function NovoChecklistPage() {
         framingHint: null,
         distanceHint: null,
         lightingHint: null,
-        referenceImagePath: null,
-        referenceImageAlt: null,
-        vision: {
-          // 
-          
-          enabled: true,
-          
-          criteria: [],
-          minWidth: 640,
-          minHeight: 480,
-          onAnomaly: "require_resubmit",
-          onAnalysisFailure: "block_completion",
-        },
       };
       default: return null;
     }
@@ -1970,7 +1948,14 @@ function NovoChecklistPage() {
       const checklistData: any = {
         user_id: authUser.id,
         title: (title && title.trim()) ? title.trim() : "Sem título",
-        blocks: blocksWithIds as any,
+        blocks: blocksWithIds.map((b: any) => {
+          if (b.type === 'camera') {
+            const { vision, criteria, referenceImagePath, referenceImageAlt, confidenceThreshold, model, threshold, modelVersion, ...rest } = b;
+            return rest;
+          }
+          return b;
+        }) as any,
+
 
         custom_email_domain_id: customEmailDomainId,
         custom_domain: customDomain,
@@ -2068,26 +2053,9 @@ function NovoChecklistPage() {
           p_checklist_id: data.id,
         });
         if (pubErr) {
-          // O servidor recusa publicar bloco Camera com IA sem padrão visual
-          // vinculado e ativo. Mensagem única e clara para o proprietário.
-          const code = String((pubErr as any)?.message ?? "");
-          if (code.includes("standard_not_configured") || code.includes("standard_not_active")) {
-            const cam = (blocksWithIds as any[]).find(
-              (b) => b?.type === "camera" && b?.vision?.enabled === true,
-            );
-            setPublishBlocker({
-              blockId: String(cam?.id ?? ""),
-              label: String(cam?.title || cam?.subtitle || "Câmera"),
-              code: code.includes("standard_not_configured") ? "standard_not_configured" : "standard_not_active",
-            });
-            throw new Error("Vincule e ative um padrão visual antes de publicar este checklist.");
-          }
           throw pubErr;
         }
 
-
-        // Releitura obrigatória: só liberamos o link público se o servidor
-        // confirmar is_published = true.
         const { data: verified, error: verifyErr } = await supabase
           .from("checklists")
           .select("id, custom_slug, is_published")
@@ -4142,9 +4110,8 @@ function NovoChecklistPage() {
                     const camFraming = ((block as any).framingHint as string | null | undefined) ?? "";
                     const camDistance = ((block as any).distanceHint as string | null | undefined) ?? "";
                     const camLighting = ((block as any).lightingHint as string | null | undefined) ?? "";
-                    const camRefPath = ((block as any).referenceImagePath as string | null | undefined) ?? "";
-                    const camRefAlt = ((block as any).referenceImageAlt as string | null | undefined) ?? "";
-                     type VisionOnAnomaly = "allow_continue" | "require_resubmit" | "block_completion" | "manual_review";
+                      type VisionOnAnomaly = "allow_continue" | "require_resubmit" | "block_completion" | "manual_review";
+
                      const normalizeOnAnomaly = (v: unknown): VisionOnAnomaly => {
                        switch (v) {
                          case "allow_continue":
@@ -4160,30 +4127,9 @@ function NovoChecklistPage() {
                            return "manual_review";
                        }
                      };
-                     const camVision = ((block as any).vision ?? {}) as {
-                      enabled?: boolean;
-                      modelId?: string | null;
-                      modelVersion?: string | null;
-                      
-                      criteria?: string[];
-                      confidenceThreshold?: number | null;
-                      model?: string | null;
-                      threshold?: number | null;
-                      minWidth?: number | null;
-                      minHeight?: number | null;
-                      onAnomaly?: VisionOnAnomaly | "block" | "warn";
-                      onAnalysisFailure?: "allow_continue" | "manual_review" | "block_completion";
-                    };
-                    const camOnAnomaly = normalizeOnAnomaly(camVision.onAnomaly);
-                    const camOnAnalysisFailure: "allow_continue" | "manual_review" | "block_completion" =
-                      camVision.onAnalysisFailure === "allow_continue" ||
-                      camVision.onAnalysisFailure === "block_completion" ||
-                      camVision.onAnalysisFailure === "manual_review"
-                        ? camVision.onAnalysisFailure
-                        : "manual_review";
-                     // Camera AI V2: análise semântica sempre ativa.
-                     const visionBadge: { label: string; tone: "off" | "warn" | "active" } =
-                       { label: "IA ativa", tone: "active" };
+                    // Camera AI V2: análise semântica sempre ativa.
+                    const visionBadge: { label: string; tone: "off" | "warn" | "active" } | null = null;
+
                    return (
                      <div
                        key={block.id}
@@ -4242,20 +4188,8 @@ function NovoChecklistPage() {
                                 <p className="text-xs text-neutral-500 mt-0.5 line-clamp-2">{camDescription}</p>
                               )}
                               <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
-                                {visionBadge && (
-                                  <span
-                                    className={`text-[10px] font-semibold px-1.5 py-0.5 rounded uppercase tracking-wider ${
-                                      visionBadge.tone === "active"
-                                        ? "bg-emerald-50 text-emerald-700"
-                                        : visionBadge.tone === "warn"
-                                          ? "bg-amber-50 text-amber-700"
-                                          : "bg-neutral-100 text-neutral-500"
-                                    }`}
-                                  >
-                                    {visionBadge.label}
-                                  </span>
-                                )}
                               </div>
+
                             </div>
 
                           {urls.length > 0 && (
@@ -6085,51 +6019,13 @@ function NovoChecklistPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Não é possível publicar</AlertDialogTitle>
             <AlertDialogDescription>
-              {publishBlocker?.code === "standard_not_configured" ? (
-                <>Este bloco ainda não possui um padrão visual.</>
-              ) : (
-                <>O padrão visual ainda precisa ser preparado e ativado.</>
-              )}
-              {" "}Vincule e ative um padrão visual antes
-              de publicar este checklist.
+              Houve um erro ao publicar o checklist. Por favor, tente novamente.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter className="flex-col sm:flex-row sm:justify-between gap-2">
+          <AlertDialogFooter>
             <AlertDialogCancel onClick={() => setPublishBlocker(null)}>
-              Voltar ao bloco
+              Fechar
             </AlertDialogCancel>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  const id = publishBlocker?.blockId;
-                  if (!id) return;
-                  updateBlock(id, {
-                    vision: {
-                      ...((blocks.find((b: any) => b.id === id) as any)?.vision ?? {}),
-                      enabled: false,
-                    },
-                  } as any);
-                  setPublishBlocker(null);
-                }}
-                className="px-3 py-1.5 text-sm font-medium rounded-md border border-neutral-200 bg-white hover:bg-neutral-50 text-neutral-700"
-              >
-                Desativar análise visual
-              </button>
-              <AlertDialogAction
-                onClick={() => {
-                  const id = publishBlocker?.blockId;
-                  setPublishBlocker(null);
-                  if (!id) return;
-                  setActiveBlockId(id);
-                  requestAnimationFrame(() => {
-                    blockRefs.current[id]?.scrollIntoView({ behavior: "smooth", block: "center" });
-                  });
-                }}
-              >
-                Definir critérios
-              </AlertDialogAction>
-            </div>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
