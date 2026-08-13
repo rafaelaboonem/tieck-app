@@ -23,6 +23,13 @@ export type VerifyPayload = z.infer<typeof VerifyPayloadSchema>;
 
 export type Decision = 'approved' | 'retake' | 'not_observable' | 'technical_failure';
 
+export interface PublishedBlock {
+  id: string;
+  type: string;
+  title?: string;
+  description?: string;
+}
+
 export interface VerificationResult {
   ok: boolean;
   decision: Decision;
