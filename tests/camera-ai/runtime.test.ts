@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { evaluateGate } from '../../src/server/camera-ai/gate';
-import { validateImageBuffer } from '../../src/server/camera-ai/image-validation';
-import { CameraVerification, PublishedBlock } from '../../src/server/camera-ai/schema';
-import { verifyCameraRequest, VerifyDependencies } from '../../src/server/camera-ai/verify-handler';
+import { evaluateGate } from '../src/server/camera-ai/gate';
+import { validateImageBuffer } from '../src/server/camera-ai/image-validation';
+import { CameraVerification, PublishedBlock, VerifyPayloadSchema } from '../src/server/camera-ai/schema';
+import { verifyCameraRequest, VerifyDependencies } from '../src/server/camera-ai/verify-handler';
 import fs from 'fs';
 import path from 'path';
 
@@ -38,7 +38,7 @@ describe('Camera AI Server Runtime', () => {
 
   describe('Handler Unit Tests (verifyCameraRequest)', () => {
     const validPayload = {
-      checklistId: 'chk-1',
+      checklistId: 'c1234567-89ab-cdef-0123-456789abcdef',
       blockId: 'blk-1',
       responseToken: 'token-1',
       idempotencyKey: '00000000-0000-0000-0000-000000000000'
@@ -47,7 +47,7 @@ describe('Camera AI Server Runtime', () => {
 
     it('modo disabled retorna 503 e analyzeImage não é chamado', async () => {
       deps.mode = 'disabled';
-      const res = await verifyCameraRequest(validPayload, validImage, deps);
+      const res = await verifyCameraRequest(validPayload as any, validImage, deps);
       expect(res.status).toBe(503);
       expect(res.body.code).toBe('camera_ai_disabled');
       expect(deps.analyzeImage).not.toHaveBeenCalled();
@@ -55,31 +55,31 @@ describe('Camera AI Server Runtime', () => {
 
     it('configuração ausente retorna 503', async () => {
       deps.supabaseAdmin = null;
-      const res = await verifyCameraRequest(validPayload, validImage, deps);
+      const res = await verifyCameraRequest(validPayload as any, validImage, deps);
       expect(res.status).toBe(503);
       expect(res.body.code).toBe('config_missing');
     });
 
     it('token inválido retorna 401 e analyzeImage não é chamado', async () => {
       (deps.resolveSession as any).mockResolvedValue({ data: [], error: null });
-      const res = await verifyCameraRequest(validPayload, validImage, deps);
+      const res = await verifyCameraRequest(validPayload as any, validImage, deps);
       expect(res.status).toBe(401);
       expect(deps.analyzeImage).not.toHaveBeenCalled();
     });
 
     it('checklist divergente retorna 403', async () => {
-      const payload = { ...validPayload, checklistId: 'wrong-chk' };
-      const res = await verifyCameraRequest(payload, validImage, deps);
+      const payload = { ...validPayload, checklistId: 'c0000000-0000-0000-0000-000000000000' };
+      const res = await verifyCameraRequest(payload as any, validImage, deps);
       expect(res.status).toBe(403);
       expect(res.body.code).toBe('id_mismatch');
     });
 
     it('bloco ausente retorna 404', async () => {
       (deps.resolveSession as any).mockResolvedValue({ 
-        data: [{ response_id: 'r1', checklist_id: 'chk-1', published_content: { blocks: [] } }], 
+        data: [{ response_id: 'r1', checklist_id: validPayload.checklistId, published_content: { blocks: [] } }], 
         error: null 
       });
-      const res = await verifyCameraRequest(validPayload, validImage, deps);
+      const res = await verifyCameraRequest(validPayload as any, validImage, deps);
       expect(res.status).toBe(404);
       expect(res.body.code).toBe('invalid_block');
     });
@@ -88,12 +88,12 @@ describe('Camera AI Server Runtime', () => {
       (deps.resolveSession as any).mockResolvedValue({ 
         data: [{ 
           response_id: 'r1', 
-          checklist_id: 'chk-1', 
+          checklist_id: validPayload.checklistId, 
           published_content: { blocks: [{ id: 'blk-1', type: 'text' }] } 
         }], 
         error: null 
       });
-      const res = await verifyCameraRequest(validPayload, validImage, deps);
+      const res = await verifyCameraRequest(validPayload as any, validImage, deps);
       expect(res.status).toBe(404);
     });
 
@@ -102,7 +102,7 @@ describe('Camera AI Server Runtime', () => {
         data: [{ claim_status: 'completed', existing_decision: 'approved', existing_code: 'ok' }], 
         error: null 
       });
-      const res = await verifyCameraRequest(validPayload, validImage, deps);
+      const res = await verifyCameraRequest(validPayload as any, validImage, deps);
       expect(res.status).toBe(200);
       expect(res.body.message).toContain('Replay');
       expect(deps.analyzeImage).not.toHaveBeenCalled();
@@ -110,13 +110,13 @@ describe('Camera AI Server Runtime', () => {
 
     it('claim processing retorna 409', async () => {
       (deps.claimAttempt as any).mockResolvedValue({ data: [{ claim_status: 'processing' }], error: null });
-      const res = await verifyCameraRequest(validPayload, validImage, deps);
+      const res = await verifyCameraRequest(validPayload as any, validImage, deps);
       expect(res.status).toBe(409);
     });
 
     it('rate limit negado chama markFailed e não chama analyzeImage', async () => {
       (deps.hitRateLimit as any).mockResolvedValue({ data: [{ allowed: false }], error: null });
-      const res = await verifyCameraRequest(validPayload, validImage, deps);
+      const res = await verifyCameraRequest(validPayload as any, validImage, deps);
       expect(res.status).toBe(429);
       expect(deps.markFailed).toHaveBeenCalledWith(expect.objectContaining({ code: 'rate_limit' }));
       expect(deps.analyzeImage).not.toHaveBeenCalled();
@@ -124,19 +124,19 @@ describe('Camera AI Server Runtime', () => {
 
     it('provider falha chama markFailed', async () => {
       (deps.analyzeImage as any).mockRejectedValue(new Error('AI fail'));
-      await expect(verifyCameraRequest(validPayload, validImage, deps)).rejects.toThrow();
+      await expect(verifyCameraRequest(validPayload as any, validImage, deps)).rejects.toThrow();
       expect(deps.markFailed).toHaveBeenCalledWith(expect.objectContaining({ code: 'provider_failure' }));
     });
 
     it('provider aprovado chama markCompleted', async () => {
-      const res = await verifyCameraRequest(validPayload, validImage, deps);
+      const res = await verifyCameraRequest(validPayload as any, validImage, deps);
       expect(res.status).toBe(200);
       expect(deps.markCompleted).toHaveBeenCalled();
     });
 
     it('markCompleted retornando zero linhas resulta 500', async () => {
       (deps.markCompleted as any).mockResolvedValue({ data: null, error: null });
-      const res = await verifyCameraRequest(validPayload, validImage, deps);
+      const res = await verifyCameraRequest(validPayload as any, validImage, deps);
       expect(res.status).toBe(500);
       expect(res.body.code).toBe('persistence_error');
     });
@@ -145,20 +145,24 @@ describe('Camera AI Server Runtime', () => {
       (deps.resolveSession as any).mockResolvedValue({ 
         data: [{ 
           response_id: 'r1', 
-          checklist_id: 'chk-1', 
+          checklist_id: validPayload.checklistId, 
           published_content: { blocks: [{ id: 'blk-1', type: 'camera', title: 'Pergunta Real' }] } 
         }], 
         error: null 
       });
-      await verifyCameraRequest(validPayload, validImage, deps);
+      await verifyCameraRequest(validPayload as any, validImage, deps);
       expect(deps.analyzeImage).toHaveBeenCalledWith(expect.anything(), expect.anything(), 'Pergunta Real', expect.anything(), expect.anything());
     });
   });
 
   describe('Schema Validation', () => {
     it('idempotencyKey inválida falha no Zod', () => {
-      const { VerifyPayloadSchema } = require('../../src/server/camera-ai/schema');
-      const invalid = { checklistId: 'chk-1', blockId: 'blk-1', responseToken: 't', idempotencyKey: 'not-a-uuid' };
+      const invalid = { 
+        checklistId: 'c1234567-89ab-cdef-0123-456789abcdef', 
+        blockId: 'blk-1', 
+        responseToken: 't', 
+        idempotencyKey: 'not-a-uuid' 
+      };
       const result = VerifyPayloadSchema.safeParse(invalid);
       expect(result.success).toBe(false);
     });
