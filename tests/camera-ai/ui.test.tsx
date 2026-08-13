@@ -61,7 +61,7 @@ describe('PublicCameraBlock UI', () => {
   });
 
   it('1. VITE_CAMERA_AI_ENABLED=false: neutro upload', async () => {
-    vi.stubGlobal('import', { meta: { env: { VITE_CAMERA_AI_ENABLED: 'false' } } });
+    vi.stubEnv('VITE_CAMERA_AI_ENABLED', 'false');
     render(<PublicCameraBlock {...mockProps} />);
 
     fireEvent.click(screen.getByText('Test Camera'));
@@ -77,7 +77,7 @@ describe('PublicCameraBlock UI', () => {
   });
 
   it('2. approved: AI approved flow', async () => {
-    vi.stubGlobal('import', { meta: { env: { VITE_CAMERA_AI_ENABLED: 'true' } } });
+    vi.stubEnv('VITE_CAMERA_AI_ENABLED', 'true');
     (global.fetch as any).mockResolvedValue({
       status: 200,
       headers: new Map([['content-type', 'application/json']]),
@@ -99,7 +99,7 @@ describe('PublicCameraBlock UI', () => {
   });
 
   it('3. retake: AI retake decision', async () => {
-    vi.stubGlobal('import', { meta: { env: { VITE_CAMERA_AI_ENABLED: 'true' } } });
+    vi.stubEnv('VITE_CAMERA_AI_ENABLED', 'true');
     (global.fetch as any).mockResolvedValue({
       status: 200,
       headers: new Map([['content-type', 'application/json']]),
@@ -120,7 +120,7 @@ describe('PublicCameraBlock UI', () => {
   });
 
   it('4. not_observable: AI not observable', async () => {
-    vi.stubGlobal('import', { meta: { env: { VITE_CAMERA_AI_ENABLED: 'true' } } });
+    vi.stubEnv('VITE_CAMERA_AI_ENABLED', 'true');
     (global.fetch as any).mockResolvedValue({
       status: 200,
       headers: new Map([['content-type', 'application/json']]),
@@ -139,7 +139,7 @@ describe('PublicCameraBlock UI', () => {
   });
 
   it('5. resposta HTTP 429: rate limited', async () => {
-    vi.stubGlobal('import', { meta: { env: { VITE_CAMERA_AI_ENABLED: 'true' } } });
+    vi.stubEnv('VITE_CAMERA_AI_ENABLED', 'true');
     (global.fetch as any).mockResolvedValue({
       status: 429,
       headers: new Map([['content-type', 'application/json']]),
@@ -158,7 +158,7 @@ describe('PublicCameraBlock UI', () => {
   });
 
   it('6. HTTP 503 camera_ai_disabled: config indisponível', async () => {
-    vi.stubGlobal('import', { meta: { env: { VITE_CAMERA_AI_ENABLED: 'true' } } });
+    vi.stubEnv('VITE_CAMERA_AI_ENABLED', 'true');
     (global.fetch as any).mockResolvedValue({
       status: 503,
       headers: new Map([['content-type', 'application/json']]),
@@ -175,7 +175,7 @@ describe('PublicCameraBlock UI', () => {
   });
 
   it('7. resposta HTML: technical failure without showing HTML', async () => {
-    vi.stubGlobal('import', { meta: { env: { VITE_CAMERA_AI_ENABLED: 'true' } } });
+    vi.stubEnv('VITE_CAMERA_AI_ENABLED', 'true');
     (global.fetch as any).mockResolvedValue({
       status: 200,
       headers: new Map([['content-type', 'text/html']]),
@@ -193,7 +193,7 @@ describe('PublicCameraBlock UI', () => {
   });
 
   it('8. duplo clique/captura: sequence protection', async () => {
-    vi.stubGlobal('import', { meta: { env: { VITE_CAMERA_AI_ENABLED: 'true' } } });
+    vi.stubEnv('VITE_CAMERA_AI_ENABLED', 'true');
     let calls = 0;
     (global.fetch as any).mockImplementation(() => {
       calls++;
@@ -221,7 +221,7 @@ describe('PublicCameraBlock UI', () => {
   });
 
   it('9. resposta antiga: request sequence protection', async () => {
-    vi.stubGlobal('import', { meta: { env: { VITE_CAMERA_AI_ENABLED: 'true' } } });
+    vi.stubEnv('VITE_CAMERA_AI_ENABLED', 'true');
     
     let resolveFirst: any;
     const firstPromise = new Promise(r => { resolveFirst = r; });
@@ -263,7 +263,7 @@ describe('PublicCameraBlock UI', () => {
   });
 
   it('10. timeout: technical failure with retry', async () => {
-    vi.stubGlobal('import', { meta: { env: { VITE_CAMERA_AI_ENABLED: 'true' } } });
+    vi.stubEnv('VITE_CAMERA_AI_ENABLED', 'true');
     vi.useFakeTimers();
     
     (global.fetch as any).mockImplementation(() => new Promise(() => {})); // Never resolves
@@ -283,7 +283,7 @@ describe('PublicCameraBlock UI', () => {
   });
 
   it('11. troca de foto: invalidates previous approved', async () => {
-    vi.stubGlobal('import', { meta: { env: { VITE_CAMERA_AI_ENABLED: 'true' } } });
+    vi.stubEnv('VITE_CAMERA_AI_ENABLED', 'true');
     (global.fetch as any).mockResolvedValue({
       status: 200,
       headers: new Map([['content-type', 'application/json']]),
@@ -305,7 +305,7 @@ describe('PublicCameraBlock UI', () => {
   });
 
   it('12. retry após falha de rede: same key', async () => {
-    vi.stubGlobal('import', { meta: { env: { VITE_CAMERA_AI_ENABLED: 'true' } } });
+    vi.stubEnv('VITE_CAMERA_AI_ENABLED', 'true');
     (global.fetch as any).mockRejectedValueOnce(new Error('Network error'));
     (global.fetch as any).mockResolvedValue({
       status: 200,
@@ -330,7 +330,7 @@ describe('PublicCameraBlock UI', () => {
   });
 
   it('13. retry após resposta 500: new key', async () => {
-    vi.stubGlobal('import', { meta: { env: { VITE_CAMERA_AI_ENABLED: 'true' } } });
+    vi.stubEnv('VITE_CAMERA_AI_ENABLED', 'true');
     (global.fetch as any).mockResolvedValueOnce({
       status: 500,
       headers: new Map([['content-type', 'application/json']]),
@@ -359,7 +359,7 @@ describe('PublicCameraBlock UI', () => {
   });
 
   it('14. upload falha após approved: no onAnswer URL', async () => {
-    vi.stubGlobal('import', { meta: { env: { VITE_CAMERA_AI_ENABLED: 'true' } } });
+    vi.stubEnv('VITE_CAMERA_AI_ENABLED', 'true');
     (global.fetch as any).mockResolvedValue({
       status: 200,
       headers: new Map([['content-type', 'application/json']]),
@@ -379,7 +379,7 @@ describe('PublicCameraBlock UI', () => {
   });
 
   it('15. approved display protection', async () => {
-    vi.stubGlobal('import', { meta: { env: { VITE_CAMERA_AI_ENABLED: 'true' } } });
+    vi.stubEnv('VITE_CAMERA_AI_ENABLED', 'true');
     (global.fetch as any).mockResolvedValue({
       status: 200,
       headers: new Map([['content-type', 'application/json']]),
