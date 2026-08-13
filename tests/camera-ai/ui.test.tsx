@@ -202,7 +202,7 @@ describe('PublicCameraBlock UI', () => {
     expect(screen.queryByText('OLD')).not.toBeInTheDocument();
   });
 
-  it('10. timeout: technical failure', { timeout: 60000 }, async () => {
+  it('10. timeout: technical failure', async () => {
     vi.useFakeTimers();
     
     (global.fetch as ReturnType<typeof vi.fn>).mockImplementation(() => {
