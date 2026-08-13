@@ -36,7 +36,6 @@ vi.mock('@/components/TieckCamera', () => ({
   }
 }));
 
-
 describe('PublicCameraBlock UI', () => {
   const mockBlock: PublicCameraBlockData = {
     id: 'block-1',
@@ -186,7 +185,7 @@ describe('PublicCameraBlock UI', () => {
     
     await waitFor(() => expect(screen.getByText(/Verificando/)).toBeInTheDocument());
 
-    // Capture B (use force-capture-btn because capture-btn is inside TieckCamera which might be "hidden" by state)
+    // Capture B
     vi.spyOn(crypto, 'randomUUID').mockReturnValueOnce('key-B' as any);
     fireEvent.click(screen.getByTestId('force-capture-btn'));
 
@@ -203,7 +202,7 @@ describe('PublicCameraBlock UI', () => {
     expect(screen.queryByText('OLD')).not.toBeInTheDocument();
   });
 
-  it('10. timeout: technical failure', async () => {
+  it('10. timeout: technical failure', { timeout: 20000 }, async () => {
     vi.useFakeTimers();
     
     (global.fetch as ReturnType<typeof vi.fn>).mockImplementation(() => {
@@ -223,12 +222,7 @@ describe('PublicCameraBlock UI', () => {
     });
     
     vi.useRealTimers();
-  }, 20000);
-
-
-
-
-
+  });
 
   it('11. troca de foto: invalidates previous approved', async () => {
     (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
