@@ -57,6 +57,7 @@ describe('PublicCameraBlock UI', () => {
     
     // Default env for each test
     vi.stubEnv('VITE_CAMERA_AI_ENABLED_FORCE', 'true');
+    vi.stubEnv('VITE_CAMERA_AI_ENABLED', 'true');
   });
 
   afterEach(() => {
