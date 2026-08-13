@@ -879,10 +879,13 @@ function PublicChecklistPage() {
                             block={block}
                             checklistId={checklist.id}
                             ensureResponseSession={ensureResponseSession}
+                            session={readResponseSession()}
                             onAnswer={setAnswer}
                             onCameraActiveChange={setCameraActive}
                             textColor={settings.textColor}
                             accentColor={settings.accentColor || settings.btnBgColor || "#111827"}
+                            title={block.question || block.title}
+                            language={settings.language}
                           />
                         </div>
                       );

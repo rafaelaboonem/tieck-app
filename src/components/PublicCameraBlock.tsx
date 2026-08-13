@@ -16,6 +16,7 @@ interface PublicCameraBlockProps {
   onCameraActiveChange?: (active: boolean) => void;
   session?: { responseId: string; responseToken: string } | null;
   ensureResponseSession: () => Promise<{ responseId: string; responseToken: string } | null>;
+  language?: string;
 }
 
 type VerificationPhase = "idle" | "capturing" | "uploading" | "received" | "technical_failure";
@@ -97,14 +98,12 @@ export function PublicCameraBlock({
 
   if (phase === "capturing") {
     return (
-      <div className="fixed inset-0 z-50 bg-black">
-        <TieckCamera
-          open={true}
-          title={title || "Câmera"}
-          onCapture={handleCapture}
-          onClose={closeCamera}
-        />
-      </div>
+      <TieckCamera
+        open={true}
+        title={title || "Câmera"}
+        onCapture={handleCapture}
+        onClose={closeCamera}
+      />
     );
   }
 
@@ -131,12 +130,15 @@ export function PublicCameraBlock({
 
       {phase === "received" && (
         <div className="space-y-3">
-          <div className="flex items-center justify-between p-4 border rounded-xl bg-emerald-50 border-emerald-100 shadow-sm">
+          <div className="flex items-center justify-between p-4 border rounded-xl bg-blue-50 border-blue-100 shadow-sm">
             <div className="flex items-center gap-3">
-              <CheckCircle2 className="w-5 h-5 text-emerald-600" />
-              <span className="text-sm font-medium text-emerald-900">Foto recebida</span>
+              <CheckCircle2 className="w-5 h-5 text-blue-600" />
+              <div className="flex flex-col">
+                <span className="text-sm font-bold text-blue-900">Foto recebida</span>
+                <span className="text-[10px] text-blue-700 font-medium">A verificação inteligente ainda não está ativada.</span>
+              </div>
             </div>
-            <Button variant="ghost" size="sm" onClick={openCamera} className="text-emerald-700 hover:bg-emerald-100">
+            <Button variant="ghost" size="sm" onClick={openCamera} className="text-blue-700 hover:bg-blue-100">
               <RefreshCw className="w-4 h-4 mr-2" />
               Trocar
             </Button>

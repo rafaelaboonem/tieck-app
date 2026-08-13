@@ -29,6 +29,7 @@ import { Route as CIdRouteImport } from './routes/c.$id'
 import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
 import { Route as ApiCameraAiOpenaiLabRouteImport } from './routes/api/camera-ai-openai-lab'
 import { Route as UnidadesUnitIdOperacaoRouteImport } from './routes/unidades.$unitId.operacao'
+import { Route as ApiCameraAiVerifyRouteImport } from './routes/api/camera-ai/verify'
 
 const PainelRoute = PainelRouteImport.update({
   id: '/painel',
@@ -130,6 +131,11 @@ const UnidadesUnitIdOperacaoRoute = UnidadesUnitIdOperacaoRouteImport.update({
   path: '/unidades/$unitId/operacao',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiCameraAiVerifyRoute = ApiCameraAiVerifyRouteImport.update({
+  id: '/api/camera-ai/verify',
+  path: '/api/camera-ai/verify',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -151,6 +157,7 @@ export interface FileRoutesByFullPath {
   '/c/$id': typeof CIdRoute
   '/padrao/$publicId': typeof PadraoPublicIdRoute
   '/padrao/': typeof PadraoIndexRoute
+  '/api/camera-ai/verify': typeof ApiCameraAiVerifyRoute
   '/unidades/$unitId/operacao': typeof UnidadesUnitIdOperacaoRoute
 }
 export interface FileRoutesByTo {
@@ -173,6 +180,7 @@ export interface FileRoutesByTo {
   '/c/$id': typeof CIdRoute
   '/padrao/$publicId': typeof PadraoPublicIdRoute
   '/padrao': typeof PadraoIndexRoute
+  '/api/camera-ai/verify': typeof ApiCameraAiVerifyRoute
   '/unidades/$unitId/operacao': typeof UnidadesUnitIdOperacaoRoute
 }
 export interface FileRoutesById {
@@ -196,6 +204,7 @@ export interface FileRoutesById {
   '/c/$id': typeof CIdRoute
   '/padrao/$publicId': typeof PadraoPublicIdRoute
   '/padrao/': typeof PadraoIndexRoute
+  '/api/camera-ai/verify': typeof ApiCameraAiVerifyRoute
   '/unidades/$unitId/operacao': typeof UnidadesUnitIdOperacaoRoute
 }
 export interface FileRouteTypes {
@@ -220,6 +229,7 @@ export interface FileRouteTypes {
     | '/c/$id'
     | '/padrao/$publicId'
     | '/padrao/'
+    | '/api/camera-ai/verify'
     | '/unidades/$unitId/operacao'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -242,6 +252,7 @@ export interface FileRouteTypes {
     | '/c/$id'
     | '/padrao/$publicId'
     | '/padrao'
+    | '/api/camera-ai/verify'
     | '/unidades/$unitId/operacao'
   id:
     | '__root__'
@@ -264,6 +275,7 @@ export interface FileRouteTypes {
     | '/c/$id'
     | '/padrao/$publicId'
     | '/padrao/'
+    | '/api/camera-ai/verify'
     | '/unidades/$unitId/operacao'
   fileRoutesById: FileRoutesById
 }
@@ -287,6 +299,7 @@ export interface RootRouteChildren {
   CIdRoute: typeof CIdRoute
   PadraoPublicIdRoute: typeof PadraoPublicIdRoute
   PadraoIndexRoute: typeof PadraoIndexRoute
+  ApiCameraAiVerifyRoute: typeof ApiCameraAiVerifyRoute
   UnidadesUnitIdOperacaoRoute: typeof UnidadesUnitIdOperacaoRoute
 }
 
@@ -432,6 +445,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof UnidadesUnitIdOperacaoRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/camera-ai/verify': {
+      id: '/api/camera-ai/verify'
+      path: '/api/camera-ai/verify'
+      fullPath: '/api/camera-ai/verify'
+      preLoaderRoute: typeof ApiCameraAiVerifyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -455,6 +475,7 @@ const rootRouteChildren: RootRouteChildren = {
   CIdRoute: CIdRoute,
   PadraoPublicIdRoute: PadraoPublicIdRoute,
   PadraoIndexRoute: PadraoIndexRoute,
+  ApiCameraAiVerifyRoute: ApiCameraAiVerifyRoute,
   UnidadesUnitIdOperacaoRoute: UnidadesUnitIdOperacaoRoute,
 }
 export const routeTree = rootRouteImport
