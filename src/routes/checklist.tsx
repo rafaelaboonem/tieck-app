@@ -1977,7 +1977,14 @@ function NovoChecklistPage() {
       const checklistData: any = {
         user_id: authUser.id,
         title: (title && title.trim()) ? title.trim() : "Sem título",
-        blocks: blocksWithIds as any,
+        blocks: blocksWithIds.map((b: any) => {
+          if (b.type === 'camera') {
+            const { vision, criteria, referenceImagePath, referenceImageAlt, confidenceThreshold, model, threshold, modelVersion, ...rest } = b;
+            return rest;
+          }
+          return b;
+        }) as any,
+
 
         custom_email_domain_id: customEmailDomainId,
         custom_domain: customDomain,
