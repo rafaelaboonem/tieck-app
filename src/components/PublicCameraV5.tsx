@@ -165,7 +165,7 @@ export function PublicCameraV5({
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
     const blob = await new Promise<Blob | null>((r) => canvas.toBlob((b) => r(b), "image/jpeg", 0.9));
     if (!blob) return;
-    const file = new File([blob], \`foto-\${Date.now()}.jpg\`, { type: "image/jpeg" });
+    const file = new File([blob], `foto-${Date.now()}.jpg`, { type: "image/jpeg" });
     setCapturedFile(file);
     setPreviewUrl(URL.createObjectURL(file));
     setPhase("reviewing");
@@ -199,7 +199,7 @@ export function PublicCameraV5({
       }
 
       const ext = fileToUpload.type.split("/")[1] || "jpg";
-      const path = \`responses/\${checklistId}/\${crypto.randomUUID()}.\${ext}\`;
+      const path = `responses/${checklistId}/${crypto.randomUUID()}.${ext}`;
       
       const { error: upErr } = await supabase.storage
         .from("checklist-assets")
