@@ -41,3 +41,5 @@ supabase/.temp/
 *.dump
 *.gz
 archive/legacy-integration-history/
+/bun.lock
+/bun.lockb
