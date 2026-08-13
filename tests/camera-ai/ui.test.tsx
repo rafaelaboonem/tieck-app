@@ -219,7 +219,7 @@ describe('PublicCameraBlock UI', { timeout: 30000 }, () => {
     let aborted = false;
 
     (global.fetch as ReturnType<typeof vi.fn>).mockImplementation((_url, options) => {
-      return new Promise((_, reject) => {
+      const p = new Promise((_, reject) => {
         if (options.signal) {
           options.signal.addEventListener('abort', () => {
             aborted = true;
@@ -227,6 +227,7 @@ describe('PublicCameraBlock UI', { timeout: 30000 }, () => {
           });
         }
       });
+      return p;
     });
 
     render(<PublicCameraBlock {...mockProps} />);
@@ -240,7 +241,6 @@ describe('PublicCameraBlock UI', { timeout: 30000 }, () => {
       vi.runAllTicks();
     });
 
-    // Directly wait for the state update instead of just the UI text
     await waitFor(() => {
       expect(screen.getByText(/demorou mais que o esperado/)).toBeInTheDocument();
       expect(aborted).toBe(true);
@@ -249,7 +249,7 @@ describe('PublicCameraBlock UI', { timeout: 30000 }, () => {
     expect(screen.getByText('Tentar novamente')).toBeInTheDocument();
     
     vi.useRealTimers();
-  }, 15000);
+  }, { timeout: 15000 });
 
   it('11. troca de foto: invalidates previous approved', async () => {
     (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
