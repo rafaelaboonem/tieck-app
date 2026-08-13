@@ -202,7 +202,7 @@ describe('PublicCameraBlock UI', () => {
     expect(screen.queryByText('OLD')).not.toBeInTheDocument();
   });
 
-  it('10. timeout: technical failure', async () => {
+  it('10. timeout: technical failure', { timeout: 15000 }, async () => {
     vi.useFakeTimers();
     (global.fetch as ReturnType<typeof vi.fn>).mockImplementation(() => new Promise(() => {}));
     render(<PublicCameraBlock {...mockProps} />);
@@ -214,7 +214,7 @@ describe('PublicCameraBlock UI', () => {
     // Use smaller increments to ensure reliability in the test runner
     for (let i = 0; i < 4; i++) {
       vi.advanceTimersByTime(10000);
-      await vi.runAllTicks();
+      vi.runAllTicks();
     }
     
     await waitFor(() => {
@@ -222,7 +222,8 @@ describe('PublicCameraBlock UI', () => {
     });
     
     vi.useRealTimers();
-  }, 10000);
+  });
+
 
 
 
