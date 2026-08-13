@@ -37,6 +37,7 @@ const dict = {
     submitRateLimited: "Muitas tentativas. Aguarde alguns instantes e tente novamente.",
     submitChecklistUnavailable: "Este checklist não está disponível no momento.",
     submitUpdateRequired: "Este checklist precisa ser atualizado pelo responsável.",
+    cameraAiDisabled: "Foto recebida. A verificação inteligente ainda não está ativada.",
   },
   en: {
     submit: "Submit",
@@ -66,6 +67,7 @@ const dict = {
     submitRateLimited: "Too many attempts. Please wait a moment and try again.",
     submitChecklistUnavailable: "This checklist isn't available right now.",
     submitUpdateRequired: "This checklist needs to be updated by the owner.",
+    cameraAiDisabled: "Photo received. Smart verification is not yet enabled.",
   },
   es: {
     submit: "Enviar",
@@ -95,6 +97,7 @@ const dict = {
     submitRateLimited: "Demasiados intentos. Espera un momento e inténtalo de nuevo.",
     submitChecklistUnavailable: "Este checklist no está disponible ahora.",
     submitUpdateRequired: "Este checklist debe ser actualizado por el responsable.",
+    cameraAiDisabled: "Foto recibida. La verificación inteligente aún no está activada.",
   },
   fr: {
     submit: "Envoyer",
@@ -124,6 +127,7 @@ const dict = {
     submitRateLimited: "Trop de tentatives. Patientez un instant et réessayez.",
     submitChecklistUnavailable: "Cette checklist n'est pas disponible pour le moment.",
     submitUpdateRequired: "Cette checklist doit être mise à jour par le responsable.",
+    cameraAiDisabled: "Photo reçue. La vérification intelligente n'est pas encore activée.",
   },
 } as const;
 
