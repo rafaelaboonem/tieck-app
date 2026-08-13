@@ -52,7 +52,7 @@ export async function verifyCameraRequest(
   if (!imgVal.valid) {
     return { 
       status: 400, 
-      body: { ok: false, code: imgVal.code, message: imgVal.message || '' } 
+      body: { ok: false, code: imgVal.code || 'invalid', message: imgVal.message || '' } 
     };
   }
 
