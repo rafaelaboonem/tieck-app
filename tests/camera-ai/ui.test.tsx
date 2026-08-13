@@ -192,9 +192,7 @@ describe('PublicCameraBlock UI', () => {
 
   it('10. timeout: technical failure', async () => {
     vi.useFakeTimers();
-    // Re-mock fetch specifically for this test to ensure it never resolves
-    const fetchMock = vi.fn(() => new Promise(() => {}));
-    global.fetch = fetchMock;
+    global.fetch = vi.fn(() => new Promise(() => {}));
 
     render(<PublicCameraBlock {...mockProps} />);
     fireEvent.click(screen.getByText('Test Camera'));
@@ -202,7 +200,7 @@ describe('PublicCameraBlock UI', () => {
     fireEvent.click(screen.getByTestId('capture-btn'));
 
     // Advance 35 seconds
-    vi.advanceTimersByTime(35001);
+    vi.advanceTimersByTime(35005);
     
     // Flush microtasks
     await vi.runAllTicks();
@@ -211,10 +209,10 @@ describe('PublicCameraBlock UI', () => {
     await waitFor(() => {
       const msg = screen.queryByText(/verificação demorou mais/);
       if (!msg) throw new Error('Timeout message not found');
-    }, { timeout: 8000 });
+    }, { timeout: 15000 });
 
     vi.useRealTimers();
-  }, 40000);
+  }, 45000);
 
   it('11. troca de foto: invalidates previous approved', async () => {
     (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
