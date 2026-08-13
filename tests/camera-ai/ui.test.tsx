@@ -213,7 +213,7 @@ describe('PublicCameraBlock UI', () => {
     expect(screen.queryByText('OLD')).not.toBeInTheDocument();
   });
 
-  it('10. timeout: technical failure', { timeout: 15000 }, async () => {
+  it('10. timeout: technical failure', async () => {
     expect.hasAssertions();
     vi.useFakeTimers();
     let aborted = false;
@@ -236,10 +236,10 @@ describe('PublicCameraBlock UI', () => {
     
     await waitFor(() => expect(screen.getByText(/Verificando/)).toBeInTheDocument());
     
-    await React.act(async () => {
+    // We do NOT use async act here to avoid hanging the runner
+    React.act(() => {
       vi.advanceTimersByTime(36000);
       vi.runAllTicks();
-      await new Promise(r => setTimeout(r, 0));
     });
 
     await waitFor(() => {
