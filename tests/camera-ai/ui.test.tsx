@@ -243,6 +243,7 @@ describe('PublicCameraBlock UI', () => {
 
 
 
+
   it('11. troca de foto: invalidates previous approved', async () => {
     (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
       ok: true, status: 200, headers: new Map([['content-type', 'application/json']]),
