@@ -28,33 +28,13 @@ export interface RateLimitResult {
 
 export interface VerifyDependencies {
   mode: string;
-  openai: {
-    beta: {
-      chat: {
-        completions: {
-          parse: (params: any) => Promise<any>;
-        };
-      };
-    };
-  };
   model: string;
-  supabaseAdmin: {
-    rpc: (name: string, params: any) => {
-      match: (filter: any) => {
-        select: (columns: string) => {
-          maybeSingle: () => Promise<{ data: any; error: any }>;
-        };
-      };
-      select: (columns: string) => Promise<{ data: any; error: any }>;
-    };
-    from: (table: string) => any;
-  };
   now: () => Date;
-  resolveSession: (token: string) => Promise<{ data: PublicSession[] | null; error: any }>;
-  claimAttempt: (params: { responseId: string; blockId: string; idempotencyKey: string }) => Promise<{ data: ClaimResult[] | null; error: any }>;
-  hitRateLimit: (responseId: string) => Promise<{ data: RateLimitResult[] | null; error: any }>;
-  analyzeImage: (openai: any, model: string, question: string, buffer: ArrayBuffer, mimeType: string) => Promise<CameraVerification>;
-  markFailed: (params: { responseId: string; blockId: string; idempotencyKey: string; code: string }) => Promise<{ data: any; error: any }>;
+  resolveSession: (token: string) => Promise<{ data: PublicSession[] | null; error: unknown }>;
+  claimAttempt: (params: { responseId: string; blockId: string; idempotencyKey: string }) => Promise<{ data: ClaimResult[] | null; error: unknown }>;
+  hitRateLimit: (responseId: string) => Promise<{ data: RateLimitResult[] | null; error: unknown }>;
+  analyzeImage: (question: string, buffer: ArrayBuffer, mimeType: string) => Promise<CameraVerification>;
+  markFailed: (params: { responseId: string; blockId: string; idempotencyKey: string; code: string }) => Promise<{ data: unknown; error: unknown }>;
   markCompleted: (params: {
     responseId: string;
     blockId: string;
@@ -65,7 +45,8 @@ export interface VerifyDependencies {
     model: string;
     durationMs: number;
     at: Date;
-  }) => Promise<{ data: { id: string } | null; error: any }>;
+  }) => Promise<{ data: { id: string } | null; error: unknown }>;
+  isConfigured: () => boolean;
 }
 
 
@@ -83,7 +64,7 @@ export async function verifyCameraRequest(
   }
 
   // 2. Server-only config verification (should be passed by deps)
-  if (!deps.supabaseAdmin) {
+  if (!deps.isConfigured()) {
     return { 
       status: 503, 
       body: { ok: false, code: 'config_missing', message: 'Configuração do servidor ausente.' } 
@@ -194,7 +175,7 @@ export async function verifyCameraRequest(
   const startTime = deps.now().getTime();
   let analysis: CameraVerification;
   try {
-    analysis = await deps.analyzeImage(deps.openai, deps.model, question, imageFile.buffer, mimeType);
+    analysis = await deps.analyzeImage(question, imageFile.buffer, mimeType);
   } catch (aiError) {
     await deps.markFailed({
       responseId: session.response_id,
