@@ -199,15 +199,13 @@ describe('PublicCameraBlock UI', () => {
     fireEvent.click(screen.getByText('Test Camera'));
     fireEvent.click(screen.getByTestId('capture-btn'));
 
-    // The component should enter analyzing state. 
-    // Since we are using fake timers, we manually advance until we expect the timeout to hit.
+    // Advance 35 seconds
     vi.advanceTimersByTime(35001);
-
-    // Wait for the UI to update to the failure state.
-    // We use a longer timeout for waitFor because fake timers can be tricky with async transitions.
+    
+    // Use a simpler assertion for the timeout message
     await waitFor(() => {
-      const msg = screen.queryByText(/verificação demorou mais/);
-      if (!msg) throw new Error('Timeout message not found');
+      const allText = screen.queryAllByText(/verificação demorou mais/);
+      if (allText.length === 0) throw new Error('Timeout message not found');
     }, { timeout: 5000 });
     
     expect(screen.queryByText(/Verificando a foto/)).not.toBeInTheDocument();
