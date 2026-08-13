@@ -1,28 +1,39 @@
-Vou transformar a landing page em uma experiência moderna, profissional e dinâmica. Minha proposta foca em três pilares: Design Visual de Alto Nível, Animações Fluídas e Seções Estratégicas de Conversão.
+# Plano de Correção de Consistência - Baseline Neutra Camera AI
 
-### O que vou construir:
-1.  **Navegação Inteligente**: Header fixo (sticky) com efeito de desfoque (glassmorphism) e menu mobile otimizado.
-2.  **Hero Section de Alto Impacto**:
-    *   Fundo dinâmico com gradientes suaves e formas abstratas.
-    *   Título com tipografia impactante e animação de entrada.
-    *   Mockup flutuante simulando a interface do checklist para dar clareza visual imediata.
-3.  **Seção de Funcionalidades (Grid Moderno)**:
-    *   Cards interativos com ícones Lucide.
-    *   Efeitos de hover suaves que elevam os elementos.
-    *   Destaques para: Checklists Independentes, Espaço de Trabalho, Prevenção de Duplicados e Insights.
-4.  **Seção "Como Funciona"**:
-    *   Layout de passos visuais (1-2-3) para guiar o usuário de forma intuitiva.
-5.  **Prova Social e Chamada Final (CTA)**:
-    *   Seção de encerramento com design diferenciado para impulsionar a criação do primeiro checklist.
-6.  **Animações com Framer Motion**:
-    *   Fade-ins e efeitos de "revelação ao rolar a página" (scroll reveal) para manter o usuário engajado.
+Executar a limpeza final e padronização do repositório para garantir uma baseline neutra e segura antes da integração com OpenAI.
 
-### Detalhes Técnicos:
-*   Utilização de `framer-motion` para transições suaves.
-*   Componentização das seções para melhor manutenção.
-*   Design totalmente responsivo (Mobile-first).
-*   Paleta de cores baseada no Rosa da marca (#FF007F) com tons complementares modernos.
+## 1. Padronização npm
+* Remover `bun.lock`.
+* Adicionar `tsx` como `devDependency` no `package.json`.
+* Alterar o script `test:routes` no `package.json` para usar `tsx`.
+* Executar `npm install` para garantir o `package-lock.json` atualizado.
 
----
+## 2. Limpeza de Código e Arquivamento
+* Remover diretório `src/lib/camera-ai` (implementação incompleta).
+* Mover funções legadas do Supabase para um diretório de histórico:
+    * `supabase/functions/analyze-checklist-evidence` -> `archive/camera-ai-legacy/supabase/functions/analyze-checklist-evidence`
+    * `supabase/functions/vision-benchmark` -> `archive/camera-ai-legacy/supabase/functions/vision-benchmark`
+* Criar diretório `archive/camera-ai-legacy` se não existir.
 
-Vou começar a implementação agora para você ver o resultado no preview.
+## 3. Endpoint Neutro `/api/camera-ai/verify`
+* Refatorar `src/routes/api/camera-ai/verify.ts`:
+    * Garantir que `OPTIONS` retorne `204`.
+    * Retornar `503` se `CAMERA_AI_MODE !== 'enabled'`.
+    * Retornar `501` se `CAMERA_AI_MODE === 'enabled'` (ainda não implementado).
+    * Retornar `405` para outros métodos HTTP.
+    * Garantir `Content-Type: application/json` e ausência de inicialização do SDK OpenAI.
+
+## 4. Checklist Público (`PublicCameraBlock.tsx`)
+* Remover estado `analyzing`.
+* Garantir que não haja chamadas ao endpoint `/api/camera-ai/verify` ou polling.
+* Exibir apenas mensagens neutras como "Foto recebida".
+
+## 5. Documentação e Testes
+* Atualizar `README.md` com a nova baseline.
+* Criar `tests/camera_ai_neutral.test.ts` para validar o comportamento do endpoint sem rede/inferência.
+* Atualizar `.env.example`.
+
+## Detalhes Técnicos
+* Uso de `npm ci` para validação.
+* `npx tsc --noEmit` para typecheck.
+* `npm run build` para garantir integridade.
