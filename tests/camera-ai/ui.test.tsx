@@ -202,7 +202,7 @@ describe('PublicCameraBlock UI', () => {
     expect(screen.queryByText('OLD')).not.toBeInTheDocument();
   });
 
-  it('10. timeout: technical failure', async () => {
+  it('10. timeout: technical failure', { timeout: 60000 }, async () => {
     vi.useFakeTimers();
     
     (global.fetch as ReturnType<typeof vi.fn>).mockImplementation(() => {
@@ -217,7 +217,7 @@ describe('PublicCameraBlock UI', () => {
 
     vi.advanceTimersByTime(36000);
     
-    // Manual promise resolution to trigger microtasks
+    // Allow microtasks to run
     await vi.runAllTicks();
     await vi.runAllTicks();
 
@@ -226,7 +226,8 @@ describe('PublicCameraBlock UI', () => {
     });
     
     vi.useRealTimers();
-  }, { timeout: 60000 });
+  });
+
 
   it('11. troca de foto: invalidates previous approved', async () => {
     (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
