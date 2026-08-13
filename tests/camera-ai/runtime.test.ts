@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { evaluateGate } from '../src/server/camera-ai/gate';
-import { validateImageBuffer } from '../src/server/camera-ai/image-validation';
-import { CameraVerification, PublishedBlock, VerifyPayloadSchema } from '../src/server/camera-ai/schema';
-import { verifyCameraRequest, VerifyDependencies } from '../src/server/camera-ai/verify-handler';
+import { evaluateGate } from '../../src/server/camera-ai/gate';
+import { validateImageBuffer } from '../../src/server/camera-ai/image-validation';
+import { CameraVerification, PublishedBlock, VerifyPayloadSchema } from '../../src/server/camera-ai/schema';
+import { verifyCameraRequest, VerifyDependencies } from '../../src/server/camera-ai/verify-handler';
 import fs from 'fs';
 import path from 'path';
 
@@ -21,7 +21,7 @@ describe('Camera AI Server Runtime', () => {
       resolveSession: vi.fn().mockResolvedValue({ 
         data: [{ 
           response_id: 'res-1', 
-          checklist_id: 'chk-1', 
+          checklist_id: 'c1234567-89ab-cdef-0123-456789abcdef', 
           published_content: { 
             blocks: [{ id: 'blk-1', type: 'camera', title: 'Test' }] 
           } 
