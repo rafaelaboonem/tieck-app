@@ -15,7 +15,9 @@ export async function analyzeImage(
 ): Promise<CameraVerification> {
   const base64Image = Buffer.from(imageBuffer).toString('base64');
 
-  const response = await client.responses.parse({
+  // We use any to bypass strict type check for now because the SDK types
+  // might not fully match the edge runtime expectations for Responses API
+  const response = await (client as any).responses.parse({
     model,
     input: [
       {
@@ -36,7 +38,7 @@ REGRAS:
             type: "input_image",
             image: { data: base64Image }
           }
-        ] as any
+        ]
       }
     ],
     text: {
