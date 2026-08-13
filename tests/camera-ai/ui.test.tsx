@@ -23,10 +23,13 @@ vi.mock('lucide-react', async () => {
 });
 
 // Mock TieckCamera
+let lastOnCapture: ((f: File) => void) | null = null;
 vi.mock('@/components/TieckCamera', () => ({
-  TieckCamera: ({ open, onCapture, onClose }: { open: boolean; onCapture: (f: File) => void; onClose: () => void }) => {
+  TieckCamera: ({ open, onCapture, onClose, title }: { open: boolean; onCapture: (f: File) => void; onClose: () => void; title: string }) => {
+    lastOnCapture = onCapture;
     return (
       <div data-testid="tieck-camera" style={{ border: open ? '1px solid red' : 'none' }}>
+        <div data-testid="camera-title">{title}</div>
         <button data-testid="capture-btn" onClick={() => {
           onCapture(new File([''], 'test.jpg', { type: 'image/jpeg' }));
         }}>Capture</button>
@@ -153,13 +156,19 @@ describe('PublicCameraBlock UI', () => {
     });
     render(<PublicCameraBlock {...mockProps} />);
     fireEvent.click(screen.getByText('Test Camera'));
-    fireEvent.click(screen.getByTestId('capture-btn'));
-    fireEvent.click(screen.getByTestId('capture-btn'));
+    
+    // Simula capturas duplicadas via onCapture do componente mockado
+    if (lastOnCapture) {
+      lastOnCapture(new File([''], 'test.jpg', { type: 'image/jpeg' }));
+      lastOnCapture(new File([''], 'test.jpg', { type: 'image/jpeg' }));
+    }
+    
     await waitFor(() => expect(screen.getByText('Foto aprovada')).toBeInTheDocument());
     expect(calls).toBe(1);
   });
 
   it('9. resposta antiga: request sequence protection', async () => {
+    expect.hasAssertions();
     let resolveA: (v: any) => void = () => {};
     const promiseA = new Promise(resolve => { resolveA = resolve; });
     
@@ -167,7 +176,7 @@ describe('PublicCameraBlock UI', () => {
       const form = options.body as FormData;
       const key = form.get('idempotencyKey');
       
-      if (key === 'key-A') return promiseA;
+      if (key === '00000000-0000-4000-8000-00000000000a') return promiseA;
       
       return Promise.resolve({
         ok: true, status: 200, headers: new Map([['content-type', 'application/json']]),
@@ -180,14 +189,16 @@ describe('PublicCameraBlock UI', () => {
     fireEvent.click(screen.getByText('Test Camera'));
     
     // Capture A
-    vi.spyOn(crypto, 'randomUUID').mockReturnValueOnce('key-A' as any);
+    vi.spyOn(crypto, 'randomUUID').mockReturnValueOnce('00000000-0000-4000-8000-00000000000a');
     fireEvent.click(screen.getByTestId('capture-btn'));
     
     await waitFor(() => expect(screen.getByText(/Verificando/)).toBeInTheDocument());
 
-    // Capture B
-    vi.spyOn(crypto, 'randomUUID').mockReturnValueOnce('key-B' as any);
-    fireEvent.click(screen.getByTestId('force-capture-btn'));
+    // Capture B (triggers handleCapture again, which increments sequence and aborts previous)
+    vi.spyOn(crypto, 'randomUUID').mockReturnValueOnce('00000000-0000-4000-8000-00000000000b');
+    if (lastOnCapture) {
+      lastOnCapture(new File([''], 'test-b.jpg', { type: 'image/jpeg' }));
+    }
 
     await waitFor(() => expect(screen.getByText('LATEST')).toBeInTheDocument());
 
@@ -202,22 +213,40 @@ describe('PublicCameraBlock UI', () => {
     expect(screen.queryByText('OLD')).not.toBeInTheDocument();
   });
 
-  it('10. timeout: technical failure', { timeout: 60000 }, async () => {
+  it('10. timeout: technical failure', { timeout: 15000 }, async () => {
+    expect.hasAssertions();
     vi.useFakeTimers();
-    (global.fetch as ReturnType<typeof vi.fn>).mockImplementation(() => new Promise(() => {}));
+    let aborted = false;
+
+    (global.fetch as ReturnType<typeof vi.fn>).mockImplementation((_url, options) => {
+      return new Promise((_, reject) => {
+        if (options.signal) {
+          options.signal.addEventListener('abort', () => {
+            aborted = true;
+            reject(new DOMException('Aborted', 'AbortError'));
+          });
+        }
+      });
+    });
+
     render(<PublicCameraBlock {...mockProps} />);
     fireEvent.click(screen.getByText('Test Camera'));
     fireEvent.click(screen.getByTestId('capture-btn'));
     
     await waitFor(() => expect(screen.getByText(/Verificando/)).toBeInTheDocument());
     
-    // Step timers 
-    vi.advanceTimersByTime(36000);
-    await vi.runAllTicks();
-    
+    await React.act(async () => {
+      vi.advanceTimersByTime(36000);
+      vi.runAllTicks();
+      await Promise.resolve();
+    });
+
     await waitFor(() => {
       expect(screen.getByText(/demorou mais que o esperado/)).toBeInTheDocument();
-    });
+      expect(aborted).toBe(true);
+    }, { timeout: 2000, interval: 50 });
+
+    expect(screen.getByText('Tentar novamente')).toBeInTheDocument();
     
     vi.useRealTimers();
   });
@@ -249,13 +278,13 @@ describe('PublicCameraBlock UI', () => {
     await waitFor(() => expect(screen.getByText(/Falha de conexão/)).toBeInTheDocument());
     
     const firstRequest = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
-    const firstKey = (firstRequest[1].body as FormData).get('idempotencyKey');
+    const firstKey = (firstRequest[1].body as FormData).get('idempotencyKey') as string;
     
     fireEvent.click(screen.getByText('Tentar novamente'));
     await waitFor(() => expect(screen.getByText('Foto aprovada')).toBeInTheDocument());
     
     const secondRequest = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[1];
-    const secondKey = (secondRequest[1].body as FormData).get('idempotencyKey');
+    const secondKey = (secondRequest[1].body as FormData).get('idempotencyKey') as string;
     
     expect(firstKey).toBe(secondKey);
   });
@@ -275,13 +304,13 @@ describe('PublicCameraBlock UI', () => {
     await waitFor(() => expect(screen.getByText(/O servidor encontrou um erro/)).toBeInTheDocument());
     
     const firstRequest = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
-    const firstKey = (firstRequest[1].body as FormData).get('idempotencyKey');
+    const firstKey = (firstRequest[1].body as FormData).get('idempotencyKey') as string;
     
     fireEvent.click(screen.getByText('Tentar novamente'));
     await waitFor(() => expect(screen.getByText('Foto aprovada')).toBeInTheDocument());
     
     const secondRequest = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[1];
-    const secondKey = (secondRequest[1].body as FormData).get('idempotencyKey');
+    const secondKey = (secondRequest[1].body as FormData).get('idempotencyKey') as string;
     
     expect(firstKey).not.toBe(secondKey);
   });
