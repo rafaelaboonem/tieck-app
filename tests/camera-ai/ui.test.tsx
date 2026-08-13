@@ -173,8 +173,8 @@ describe('PublicCameraBlock UI', () => {
     // First capture
     fireEvent.click(screen.getByTestId('capture-btn'));
     
-    // Manual wait to ensure state transitions
-    await new Promise(r => setTimeout(r, 50));
+    // Wait for the analyzing state to be set
+    await waitFor(() => expect(screen.queryByText(/Verificando a foto/)).toBeInTheDocument());
     
     // Second capture (invalidates first)
     fireEvent.click(screen.getByTestId('capture-btn'));
@@ -215,6 +215,9 @@ describe('PublicCameraBlock UI', () => {
       const msg = screen.queryByText(/verificação demorou mais/);
       if (!msg) throw new Error('Timeout message not found');
     }, { timeout: 8000 });
+
+    vi.useRealTimers();
+  }, 25000);
     
     expect(screen.queryByText(/Verificando a foto/)).not.toBeInTheDocument();
     expect(screen.getByText('Tentar novamente')).toBeInTheDocument();
