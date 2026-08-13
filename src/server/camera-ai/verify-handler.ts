@@ -2,15 +2,57 @@ import { VerifyPayload, Decision, VerificationResult, PublishedBlock } from './s
 import { validateImageBuffer } from './image-validation';
 import { evaluateGate } from './gate';
 
+export interface PublicSession {
+  response_id: string;
+  checklist_id: string;
+  workspace_id: string;
+  status: string;
+  published_content: {
+    blocks: PublishedBlock[];
+  };
+}
+
+export interface ClaimResult {
+  claim_status: 'acquired' | 'processing' | 'completed' | 'failed';
+  attempt_id: string;
+  existing_decision?: Decision;
+  existing_code?: string;
+  existing_evidence?: string;
+  current_retry_count: number;
+}
+
+export interface RateLimitResult {
+  allowed: boolean;
+  remaining?: number;
+}
+
 export interface VerifyDependencies {
   mode: string;
-  openai: any; // Using any for simplicity in mock injection, but typed as OpenAI in real usage
+  openai: {
+    beta: {
+      chat: {
+        completions: {
+          parse: (params: any) => Promise<any>;
+        };
+      };
+    };
+  };
   model: string;
-  supabaseAdmin: any;
+  supabaseAdmin: {
+    rpc: (name: string, params: any) => {
+      match: (filter: any) => {
+        select: (columns: string) => {
+          maybeSingle: () => Promise<{ data: any; error: any }>;
+        };
+      };
+      select: (columns: string) => Promise<{ data: any; error: any }>;
+    };
+    from: (table: string) => any;
+  };
   now: () => Date;
-  resolveSession: (token: string) => Promise<{ data: any; error: any }>;
-  claimAttempt: (params: { responseId: string; blockId: string; idempotencyKey: string }) => Promise<{ data: any; error: any }>;
-  hitRateLimit: (responseId: string) => Promise<{ data: any; error: any }>;
+  resolveSession: (token: string) => Promise<{ data: PublicSession[] | null; error: any }>;
+  claimAttempt: (params: { responseId: string; blockId: string; idempotencyKey: string }) => Promise<{ data: ClaimResult[] | null; error: any }>;
+  hitRateLimit: (responseId: string) => Promise<{ data: RateLimitResult[] | null; error: any }>;
   analyzeImage: (openai: any, model: string, question: string, buffer: ArrayBuffer, mimeType: string) => Promise<any>;
   markFailed: (params: { responseId: string; blockId: string; idempotencyKey: string; code: string }) => Promise<any>;
   markCompleted: (params: {
@@ -23,7 +65,7 @@ export interface VerifyDependencies {
     model: string;
     durationMs: number;
     at: Date;
-  }) => Promise<{ data: any; error: any }>;
+  }) => Promise<{ data: { id: string } | null; error: any }>;
 }
 
 export async function verifyCameraRequest(
