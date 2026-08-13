@@ -1,12 +1,12 @@
 import OpenAI from 'openai';
 import { CameraVerification, CameraVerificationSchema } from './schema';
-import { zodResponseFormat } from 'openai/helpers/zod';
+import { zodTextFormat } from "openai/helpers/zod";
 
 /**
- * Executes vision analysis using OpenAI Responses API (Structured Outputs).
+ * Executes vision analysis using OpenAI Responses API.
  */
 export async function analyzeImage(
-  client: any,
+  client: OpenAI,
   model: string,
   question: string,
   imageBuffer: ArrayBuffer,
@@ -15,9 +15,9 @@ export async function analyzeImage(
 ): Promise<CameraVerification> {
   const base64Image = Buffer.from(imageBuffer).toString('base64');
 
-  const response = await (client as any).beta.chat.completions.parse({
+  const response = await client.responses.parse({
     model,
-    messages: [
+    input: [
       {
         role: "system",
         content: `Você é um especialista em auditoria visual do sistema Tieck. 
@@ -31,18 +31,22 @@ REGRAS:
       {
         role: "user",
         content: [
-          { type: "text", text: `PERGUNTA: "${question}"` },
+          { type: "input_text", text: `PERGUNTA: "${question}"` },
           {
-            type: "image_url",
-            image_url: { url: `data:${mimeType};base64,${base64Image}` }
+            type: "input_image",
+            image_data: base64Image
           }
         ]
       }
     ],
-    response_format: zodResponseFormat(CameraVerificationSchema, "camera_verification"),
-  }, { timeout: timeoutMs });
+    text: {
+      format: zodTextFormat(CameraVerificationSchema, "camera_verification")
+    }
+  }, {
+    timeout: timeoutMs
+  });
 
-  const result = response.choices[0].message.parsed;
+  const result = response.parsed;
   if (!result) {
     throw new Error('OpenAI failed to parse structured output.');
   }
