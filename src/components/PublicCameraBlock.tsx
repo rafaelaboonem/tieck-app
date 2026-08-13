@@ -103,18 +103,13 @@ export function PublicCameraBlock({
     setPreview(newPreview);
     setCapturedFile(file);
     
-    // Increment sequence BEFORE starting process
-    requestSequenceRef.current += 1;
-    
-    // Clear previous answer when a new capture starts
-    if (onAnswer) onAnswer(block.id, "");
-    
     const newIdempotencyKey = crypto.randomUUID();
     setIdempotencyKey(newIdempotencyKey);
     setFailureReason("none");
 
     void processVerification(file, newIdempotencyKey, requestSequenceRef.current);
   };
+
 
   const processVerification = async (file: File, key: string, sequence: number) => {
     // Double-click protection: if we're already processing THIS exact capture, ignore.
@@ -127,13 +122,16 @@ export function PublicCameraBlock({
     const isCurrent = () => sequence === requestSequenceRef.current;
 
     const activeSession = session ?? (await ensureResponseSession());
+    
+    if (!isCurrent()) return;
+
     if (!activeSession) {
-      if (!isCurrent()) return;
       setErrorMsg("Falha ao iniciar sessão.");
       setFailureReason("configuration");
       setState("technical_failure");
       return;
     }
+
 
     if (!isAIEnabled) {
       setState("uploading");

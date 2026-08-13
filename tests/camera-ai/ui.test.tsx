@@ -158,15 +158,78 @@ describe('PublicCameraBlock UI', () => {
   });
 
   it('9. resposta antiga: request sequence protection', async () => {
-    // Skip flaky sequence test in this environment
-    return;
+    let resolveA: (v: any) => void = () => {};
+    const promiseA = new Promise(resolve => { resolveA = resolve; });
+    
+    (global.fetch as ReturnType<typeof vi.fn>).mockImplementation((_url, options) => {
+      const form = options.body as FormData;
+      const key = form.get('idempotencyKey');
+      
+      if (key === 'key-A') return promiseA;
+      
+      return Promise.resolve({
+        ok: true, status: 200, headers: new Map([['content-type', 'application/json']]),
+        json: async () => ({ ok: true, decision: 'approved', evidence: 'LATEST', code: 'ok' }),
+      });
+    });
+
+    render(<PublicCameraBlock {...mockProps} />);
+    
+    // 1. Abrir câmera
+    fireEvent.click(screen.getByText('Test Camera'));
+    
+    // 2. Primeira captura (A)
+    const firstKey = 'key-A';
+    vi.spyOn(crypto, 'randomUUID').mockReturnValueOnce(firstKey as any);
+    fireEvent.click(screen.getByTestId('capture-btn'));
+    
+    await waitFor(() => expect(screen.getByText(/Verificando/)).toBeInTheDocument());
+
+    // 3. Segunda captura (B) - deve abortar A e iniciar B
+    const secondKey = 'key-B';
+    vi.spyOn(crypto, 'randomUUID').mockReturnValueOnce(secondKey as any);
+    fireEvent.click(screen.getByTestId('capture-btn'));
+
+    await waitFor(() => expect(screen.getByText('LATEST')).toBeInTheDocument());
+
+    // 4. Resolver A agora (simulando resposta atrasada)
+    resolveA({
+      ok: true, status: 200, headers: new Map([['content-type', 'application/json']]),
+      json: async () => ({ ok: true, decision: 'approved', evidence: 'OLD', code: 'ok' }),
+    });
+
+    // 5. Garantir que OLD não sobrescreveu LATEST
+    await new Promise(r => setTimeout(r, 20));
+    expect(screen.getByText('LATEST')).toBeInTheDocument();
+    expect(screen.queryByText('OLD')).not.toBeInTheDocument();
   });
 
   it('10. timeout: technical failure', async () => {
-    // Skip this test in environment if it keeps timing out
-    // The logic is verified manually and by the fact it was failing with a specific error before
-    return;
+    vi.useFakeTimers();
+    
+    (global.fetch as ReturnType<typeof vi.fn>).mockImplementation(() => {
+      return new Promise(() => {}); // Never resolves
+    });
+
+    render(<PublicCameraBlock {...mockProps} />);
+    fireEvent.click(screen.getByText('Test Camera'));
+    fireEvent.click(screen.getByTestId('capture-btn'));
+
+    await waitFor(() => expect(screen.getByText(/Verificando/)).toBeInTheDocument());
+
+    // Avancar 35s
+    vi.advanceTimersByTime(35000);
+    
+    // Process async effects of timeout/abort
+    await vi.runAllTicks();
+
+    await waitFor(() => {
+      expect(screen.getByText(/demorou mais que o esperado/)).toBeInTheDocument();
+    });
+    
+    vi.useRealTimers();
   });
+
 
   it('11. troca de foto: invalidates previous approved', async () => {
     (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
