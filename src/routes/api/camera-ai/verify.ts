@@ -1,221 +1,120 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { z } from 'zod';
+import { VerifyPayloadSchema } from '@/server/camera-ai/schema';
+import { validateImageBuffer } from '@/server/camera-ai/image-validation';
+import { analyzeImage } from '@/server/camera-ai/openai-provider';
+import { evaluateGate } from '@/server/camera-ai/gate';
 import OpenAI from 'openai';
 import { supabase } from '@/integrations/supabase/client';
-
-/**
- * Camera AI Verification Endpoint (V5 - OpenAI gpt-4o-mini)
- * 
- * Objective: Verify if a candidate image matches a question using Structured Outputs.
- */
-
-const verifySchema = z.object({
-  checklistId: z.string().uuid(),
-  blockId: z.string(), 
-  responseToken: z.string(),
-  idempotencyKey: z.string().min(1),
-});
 
 export const Route = createFileRoute('/api/camera-ai/verify')({
   server: {
     handlers: {
       POST: async ({ request }) => {
-        const startTime = Date.now();
-        const mode = (process.env as any)['CAMERA_AI_MODE'] || 'disabled';
-        
-        // 1. Fail fast if disabled
+        const mode = process.env['CAMERA_AI_MODE'] || 'disabled';
         if (mode !== 'enabled') {
-          return Response.json({ 
-            ok: false, 
-            code: 'camera_ai_disabled', 
-            message: 'A verificação inteligente está desativada no momento.' 
-          }, { status: 503 });
+          return Response.json({ ok: false, code: 'camera_ai_disabled', message: 'IA desativada.' }, { status: 503 });
+        }
+
+        const apiKey = process.env['OPENAI_API_KEY'];
+        if (!apiKey) {
+          return Response.json({ ok: false, code: 'config_missing', message: 'IA não configurada.' }, { status: 500 });
         }
 
         try {
-          // 2. Parse Multipart Data
           const formData = await request.formData();
-          const payload = {
+          const rawPayload = {
             checklistId: formData.get('checklistId'),
             blockId: formData.get('blockId'),
             responseToken: formData.get('responseToken'),
             idempotencyKey: formData.get('idempotencyKey'),
           };
 
-          const validation = verifySchema.safeParse(payload);
+          const validation = VerifyPayloadSchema.safeParse(rawPayload);
           if (!validation.success) {
-            return Response.json({ ok: false, code: 'invalid_request', errors: validation.error.format() }, { status: 400 });
+            return Response.json({ ok: false, code: 'invalid_payload' }, { status: 400 });
           }
 
           const { checklistId, blockId, responseToken, idempotencyKey } = validation.data;
-          const candidateFile = formData.get('candidate') as unknown as File | null;
+          const file = formData.get('candidate') as unknown as File | null;
 
-          if (!candidateFile || !(candidateFile instanceof File)) {
-            return Response.json({ ok: false, code: 'missing_image', message: 'Nenhuma imagem foi enviada.' }, { status: 400 });
+          if (!file || !(file instanceof File)) {
+            return Response.json({ ok: false, code: 'missing_image' }, { status: 400 });
           }
 
-          // 3. Image Validation (3MB limit, type check)
-          if (candidateFile.size > 3 * 1024 * 1024) {
-            return Response.json({ ok: false, code: 'image_too_large', message: 'A imagem deve ter no máximo 3MB.' }, { status: 413 });
+          // 1. Image Validation (Binary)
+          const buffer = await file.arrayBuffer();
+          const imgVal = await validateImageBuffer(buffer, file.type);
+          if (!imgVal.valid) {
+            return Response.json({ ok: false, code: imgVal.code, message: imgVal.message }, { status: 400 });
           }
 
-          const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
-          if (!allowedTypes.includes(candidateFile.type)) {
-            return Response.json({ ok: false, code: 'invalid_image_type', message: 'Tipo de imagem não suportado. Use JPEG, PNG ou WebP.' }, { status: 400 });
-          }
-
-          // 4. Fetch Checklist Published Content
-          const { data: checklistData, error: checklistError } = await supabase
-            .from('checklists')
-            .select('published_content')
-            .eq('id', checklistId)
-            .maybeSingle();
-
-          if (checklistError || !checklistData) {
-            return Response.json({ ok: false, code: 'checklist_not_found', message: 'Checklist não encontrado.' }, { status: 404 });
-          }
-
-          const publishedContent = checklistData.published_content as any;
-          if (!publishedContent || !Array.isArray(publishedContent.blocks)) {
-            return Response.json({ ok: false, code: 'invalid_snapshot', message: 'O checklist não possui uma versão publicada válida.' }, { status: 404 });
-          }
-
-          // 5. Locate /Camera Block and Extract Question
-          const block = publishedContent.blocks.find((b: any) => b.id === blockId && b.type === 'camera');
-          if (!block) {
-            return Response.json({ ok: false, code: 'block_not_found', message: 'Bloco de câmera não encontrado no snapshot publicado.' }, { status: 404 });
-          }
-
-          const question = (String(block.title || '') + ' ' + String(block.description || '')).trim() || 'Verificar conformidade visual.';
-
-          // 6. OpenAI Inference
-          const apiKey = (process.env as any)['OPENAI_API_KEY'];
-          if (!apiKey) {
-            return Response.json({ ok: false, code: 'technical_failure', message: 'Configuração de IA ausente.' }, { status: 500 });
-          }
-
-          const openai = new OpenAI({ apiKey });
-          const visionModel = (process.env as any)['OPENAI_VISION_MODEL'] || 'gpt-4o-mini';
-
-          const imageBuffer = await candidateFile.arrayBuffer();
-          const base64Image = Buffer.from(imageBuffer).toString('base64');
-
-          // Using completions.create directly to avoid .beta.chat.completions.parse SDK issues in this environment
-          const completion = await openai.chat.completions.create({
-            model: visionModel,
-            messages: [
-              {
-                role: "system",
-                content: `Você é um especialista em auditoria visual do sistema Tieck. 
-Sua tarefa é analisar UMA ÚNICA FOTO enviada por um funcionário e compará-la com a PERGUNTA do auditor.
-
-REGRAS ESTRITAS:
-1. Analise APENAS o que está visível na foto.
-2. Verifique se o objeto ou local citado na pergunta aparece (target_visible).
-3. Nunca infira objetos fora do enquadramento.
-4. Nunca aprove com base apenas no contexto provável. Se não vir o alvo, condition_met=false.
-5. Use linguagem objetiva e curta.
-6. Em visible_evidence, coloque apenas FATOS observáveis. Não invente detalhes.
-7. Fotos aleatórias, pretas ou sem relação com a pergunta devem resultar em target_visible=false.
-8. Não use palavras especulativas como "parece", "provavelmente", "talvez".`
-              },
-              {
-                role: "user",
-                content: [
-                  { type: "text", text: `PERGUNTA DO AUDITOR: "${question}"` },
-                  {
-                    type: "image_url",
-                    image_url: { url: `data:${candidateFile.type};base64,${base64Image}` }
-                  }
-                ]
-              }
-            ],
-            response_format: {
-              type: "json_schema",
-              json_schema: {
-                name: "camera_verification",
-                strict: true,
-                schema: {
-                  type: "object",
-                  properties: {
-                    target_visible: { type: "boolean" },
-                    condition_observable: { type: "boolean" },
-                    condition_met: { type: "boolean" },
-                    image_quality: { type: "string", enum: ["usable", "dark", "blurry", "cropped", "unusable"] },
-                    confidence: { type: "number" },
-                    visible_evidence: { type: "string" },
-                    user_message: { type: "string" }
-                  },
-                  required: ["target_visible", "condition_observable", "condition_met", "image_quality", "confidence", "visible_evidence", "user_message"],
-                  additionalProperties: false
-                }
-              }
-            },
-            timeout: 20000,
-          } as any);
-
-          const rawResult = completion.choices[0].message.content;
-          if (!rawResult) {
-            throw new Error('OpenAI returned empty result');
-          }
-          
-          const result = JSON.parse(rawResult);
-
-          // 7. Deterministic Server Gate
-          const speculativeTerms = ["parece", "provavelmente", "talvez", "aparenta", "suponho", "possivelmente"];
-          const evidenceIsSpeculative = speculativeTerms.some(term => 
-            String(result.visible_evidence || "").toLowerCase().includes(term)
-          );
-
-          let decision: 'approved' | 'retake' | 'not_observable' | 'technical_failure' = 'retake';
-
-          const isApproved = 
-            result.target_visible === true &&
-            result.condition_observable === true &&
-            result.condition_met === true &&
-            result.image_quality === "usable" &&
-            result.confidence >= 0.90 &&
-            String(result.visible_evidence || "").trim().length > 0 &&
-            !evidenceIsSpeculative;
-
-          if (isApproved) {
-            decision = 'approved';
-          } else if (!result.target_visible || result.image_quality !== "usable" || result.confidence < 0.90 || evidenceIsSpeculative) {
-            decision = 'retake';
-          } else if (!result.condition_observable) {
-            decision = 'not_observable';
-          }
-
-          // 8. Log Duration (Sanitized)
-          const duration = Date.now() - startTime;
-          console.log(`[CameraAI] Decision: ${decision} for block ${blockId} (duration: ${duration}ms)`);
-
-          return Response.json({
-            ok: true,
-            decision,
-            analysis: result
+          // 2. Authorization & Data Extraction (Public Session)
+          // We hash the token to match Supabase response_token_hash
+          const { data: sessionData, error: sessionError } = await (supabase as any).rpc('resolve_public_response', {
+            p_token: responseToken
           });
 
-        } catch (error: any) {
-          console.error('[CameraAI] Server Error:', error);
-          
-          return Response.json({ 
-            ok: false, 
-            code: 'technical_failure', 
-            message: 'Ocorreu uma falha técnica na análise da imagem.' 
-          }, { status: 500 });
+          if (sessionError || !sessionData) {
+            return Response.json({ ok: false, code: 'unauthorized', message: 'Sessão inválida ou expirada.' }, { status: 401 });
+          }
+
+          const session = sessionData[0];
+          if (session.checklist_id !== checklistId) {
+            return Response.json({ ok: false, code: 'id_mismatch' }, { status: 403 });
+          }
+
+          // 3. Extract Question from Snapshot
+          const blocks = session.published_content?.blocks || [];
+          const block = blocks.find((b: any) => b.id === blockId);
+
+          if (!block || block.type !== 'camera') {
+            return Response.json({ ok: false, code: 'invalid_block' }, { status: 404 });
+          }
+
+          const question = (String(block.title || '') + ' ' + String(block.description || '')).trim();
+
+          // 4. Rate Limit (Server-side)
+          const { data: limitData, error: limitError } = await (supabase as any).rpc('hit_public_rate_limit', {
+            p_action: 'camera_ai_verify',
+            p_key_hash: session.response_id, // Rate limit per session
+            p_limit: 10,
+            p_window_seconds: 600
+          });
+
+          if (limitError || !limitData || !limitData[0].allowed) {
+            return Response.json({ ok: false, code: 'rate_limit', message: 'Muitas tentativas. Tente novamente em breve.' }, { status: 429, headers: { 'Retry-After': '600' } });
+          }
+
+          // 5. Idempotency & Concurrency (Database-level)
+          const { data: lock, error: lockErr } = await (supabase as any).rpc('acquire_vision_lock', {
+            p_operation: `verify:${session.response_id}:${blockId}:${idempotencyKey}`,
+            p_ttl_seconds: 60,
+            p_user_id: session.visitor_id,
+            p_workspace_id: session.workspace_id
+          });
+
+          if (lockErr || !lock || !lock[0].acquired) {
+            return Response.json({ ok: false, code: 'processing_conflict' }, { status: 409 });
+          }
+
+          // 6. OpenAI Inference (Responses API / Structured Outputs)
+          const openai = new OpenAI({ apiKey });
+          const model = process.env['OPENAI_VISION_MODEL'] || 'gpt-4o-mini';
+
+          const analysis = await analyzeImage(openai, model, question, buffer, imgVal.mimeType!);
+
+          // 7. Deterministic Gate
+          const result = evaluateGate(analysis);
+
+          return Response.json(result);
+
+        } catch (error) {
+          // Log sanitizado
+          console.error('[CameraAI] Verification failed (sanitized log)');
+          return Response.json({ ok: false, code: 'technical_failure', message: 'Falha técnica na análise.' }, { status: 500 });
         }
       },
-      OPTIONS: async () => {
-        return new Response(null, { 
-          status: 204,
-          headers: {
-            'Access-Control-Allow-Origin': '*',
-            'Access-Control-Allow-Methods': 'POST, OPTIONS',
-            'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-          }
-        });
-      }
+      OPTIONS: async () => new Response(null, { status: 204 })
     }
   }
 });
