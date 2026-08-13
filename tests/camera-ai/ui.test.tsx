@@ -174,9 +174,7 @@ describe('PublicCameraBlock UI', () => {
     fireEvent.click(screen.getByTestId('capture-btn'));
     
     // Second capture (invalidates first)
-    // We simulate a re-render or state change that makes the capture button available again
-    // In our simplified mock, it's always there but might be hidden by parent CSS.
-    // We just call the capture handler again.
+    // The capture-btn is always in the DOM because we simplified the mock.
     fireEvent.click(screen.getByTestId('capture-btn'));
     
     await waitFor(() => expect(screen.getByText('LATEST')).toBeInTheDocument(), { timeout: 8000 });
