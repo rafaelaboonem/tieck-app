@@ -304,7 +304,7 @@ export function PublicCameraBlock({
       }
 
     } catch (err: unknown) {
-      if (timeoutId) clearTimeout(timeoutId);
+      if (timeoutId) window.clearTimeout(timeoutId);
       
       const isAbort = err instanceof DOMException && err.name === "AbortError";
       
