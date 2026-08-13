@@ -174,9 +174,14 @@ describe('PublicCameraBlock UI', () => {
     fireEvent.click(screen.getByTestId('capture-btn'));
     
     // Second capture (invalidates first)
-    // We click "Trocar foto" to get back to the camera view if needed
+    // We don't need to click "Trocar foto" if we can find the button
+    // But since the UI state changed to "Verificando...", the capture-btn might be hidden.
+    // Let's use Trocar foto if present, or just ensure we have a way to re-trigger.
     await waitFor(() => expect(screen.queryByText(/Verificando a foto/)).toBeInTheDocument());
-    fireEvent.click(screen.getByText('Trocar foto'));
+    
+    const trocarBtn = screen.getByText('Trocar foto');
+    fireEvent.click(trocarBtn);
+    
     fireEvent.click(screen.getByTestId('capture-btn'));
     
     await waitFor(() => expect(screen.getByText('LATEST')).toBeInTheDocument(), { timeout: 8000 });
