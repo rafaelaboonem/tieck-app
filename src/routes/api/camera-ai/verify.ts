@@ -64,9 +64,7 @@ export const Route = createFileRoute('/api/camera-ai/verify')({
             return Response.json({ ok: false, code: 'invalid_image_type', message: 'Tipo de imagem não suportado. Use JPEG, PNG ou WebP.' }, { status: 400 });
           }
 
-          // 4. Validate Session and Fetch Checklist Published Content
-          // We use the checklistId to fetch the current published version.
-          // Note: In a full implementation, we'd verify the responseToken via an RPC.
+          // 4. Fetch Checklist Published Content
           const { data: checklistData, error: checklistError } = await supabase
             .from('checklists')
             .select('published_content')
@@ -102,8 +100,8 @@ export const Route = createFileRoute('/api/camera-ai/verify')({
           const imageBuffer = await candidateFile.arrayBuffer();
           const base64Image = Buffer.from(imageBuffer).toString('base64');
 
-          // Use cast to any to bypass potential SDK version mismatches in strict typecheck
-          const response = await (openai.beta.chat.completions as any).parse({
+          // Using completions.create directly to avoid .beta.chat.completions.parse SDK issues in this environment
+          const completion = await openai.chat.completions.create({
             model: visionModel,
             messages: [
               {
@@ -154,17 +152,19 @@ REGRAS ESTRITAS:
               }
             },
             timeout: 20000,
-          });
+          } as any);
 
-          const result = response.choices[0].message.parsed;
-          if (!result) {
+          const rawResult = completion.choices[0].message.content;
+          if (!rawResult) {
             throw new Error('OpenAI returned empty result');
           }
+          
+          const result = JSON.parse(rawResult);
 
           // 7. Deterministic Server Gate
           const speculativeTerms = ["parece", "provavelmente", "talvez", "aparenta", "suponho", "possivelmente"];
           const evidenceIsSpeculative = speculativeTerms.some(term => 
-            result.visible_evidence.toLowerCase().includes(term)
+            String(result.visible_evidence || "").toLowerCase().includes(term)
           );
 
           let decision: 'approved' | 'retake' | 'not_observable' | 'technical_failure' = 'retake';
@@ -175,7 +175,7 @@ REGRAS ESTRITAS:
             result.condition_met === true &&
             result.image_quality === "usable" &&
             result.confidence >= 0.90 &&
-            result.visible_evidence.trim().length > 0 &&
+            String(result.visible_evidence || "").trim().length > 0 &&
             !evidenceIsSpeculative;
 
           if (isApproved) {
