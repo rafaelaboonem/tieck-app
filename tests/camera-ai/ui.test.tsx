@@ -172,10 +172,11 @@ describe('PublicCameraBlock UI', () => {
     
     // First capture
     fireEvent.click(screen.getByTestId('capture-btn'));
-    // Wait a bit to ensure the first request is started
-    await new Promise(r => setTimeout(r, 10));
     
     // Second capture (invalidates first)
+    // We click "Trocar foto" to get back to the camera view if needed
+    await waitFor(() => expect(screen.queryByText(/Verificando a foto/)).toBeInTheDocument());
+    fireEvent.click(screen.getByText('Trocar foto'));
     fireEvent.click(screen.getByTestId('capture-btn'));
     
     await waitFor(() => expect(screen.getByText('LATEST')).toBeInTheDocument(), { timeout: 8000 });
@@ -201,17 +202,16 @@ describe('PublicCameraBlock UI', () => {
     fireEvent.click(screen.getByText('Test Camera'));
     fireEvent.click(screen.getByTestId('capture-btn'));
 
-    // Wait for the state to transition to 'analyzing'
     await vi.waitFor(() => {
       if (!screen.queryByText(/Verificando a foto/)) throw new Error('Not analyzing');
-    });
+    }, { timeout: 5000 });
 
     // Advance 35 seconds
     vi.advanceTimersByTime(35000);
 
     await vi.waitFor(() => {
       if (!screen.queryByText(/verificação demorou mais/)) throw new Error('Timeout message not found');
-    });
+    }, { timeout: 5000 });
     
     expect(screen.queryByText(/Verificando a foto/)).not.toBeInTheDocument();
     expect(screen.getByText('Tentar novamente')).toBeInTheDocument();
