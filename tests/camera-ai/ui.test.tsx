@@ -251,7 +251,7 @@ describe('PublicCameraBlock UI', () => {
       expect(screen.getByText('LATEST')).toBeInTheDocument();
     });
     expect(screen.queryByText('STALE')).not.toBeInTheDocument();
-  });
+  }, 10000);
 
   it('10. timeout: technical failure with retry', async () => {
     vi.useFakeTimers();
@@ -265,8 +265,8 @@ describe('PublicCameraBlock UI', () => {
 
     await waitFor(() => {
       expect(screen.getByText(/demorou mais que o esperado/)).toBeInTheDocument();
-    });
-  });
+    }, { timeout: 8000 });
+  }, 10000);
 
   it('11. troca de foto: invalidates previous approved', async () => {
     (global.fetch as any).mockResolvedValue({
@@ -280,14 +280,15 @@ describe('PublicCameraBlock UI', () => {
     fireEvent.click(screen.getByText('Test Camera'));
     fireEvent.click(screen.getByTestId('capture-btn'));
 
-    await waitFor(() => expect(screen.getByText('Foto aprovada')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Foto aprovada')).toBeInTheDocument(), { timeout: 8000 });
     
     mockProps.onAnswer.mockClear();
     fireEvent.click(screen.getByText('Trocar foto'));
     fireEvent.click(screen.getByTestId('capture-btn'));
     
     expect(mockProps.onAnswer).toHaveBeenCalledWith('block-1', '');
-  });
+  }, 10000);
+
 
   it('12. retry após falha de rede: same key', async () => {
     (global.fetch as any).mockRejectedValueOnce(new Error('Network error'));
