@@ -434,7 +434,7 @@ const SubmissionsTab = lazy(() => import("@/components/SubmissionsTab").then(m =
 import { BlockRenderer, INTERACTIVE_BLOCK_TYPES } from "@/components/BlockRenderer";
 
 import { ensureCameraBlockIds, withNewCameraBlockId, extractCameraQuestions } from "@/lib/camera-blocks";
-import { syncStandardsWithBlocks } from "@/lib/visual-standards";
+// visual-standards import removed (Legacy IA)
 
 
 const BTN_ICON_OPTIONS: { key: string; label: string; Icon: any }[] = [
@@ -2130,17 +2130,8 @@ function NovoChecklistPage() {
         sessionChecklistIdRef.current = data.id;
       }
 
-      // Padrões visuais acompanham os blocos: pergunta alterada exige nova
-      // validação; bloco removido arquiva o padrão sem apagar histórico.
-      if (data?.id) {
-        void syncStandardsWithBlocks({
-          checklistId: data.id,
-          blocks: extractCameraQuestions(blocksWithIds as any[]).map((q) => ({
-            cameraBlockId: q.cameraBlockId,
-            question: q.question,
-          })),
-        });
-      }
+      // Padrões visuais legados removidos
+
 
     } catch (err: any) {
       console.error("Save error:", err);
