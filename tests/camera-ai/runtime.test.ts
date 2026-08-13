@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { evaluateGate } from '../../src/server/camera-ai/gate';
 import { validateImageBuffer } from '../../src/server/camera-ai/image-validation';
 import { CameraVerification } from '../../src/server/camera-ai/schema';
@@ -120,10 +120,5 @@ describe('Camera AI Server Runtime', () => {
       expect(res.valid).toBe(false);
       expect(res.code).toBe('file_too_large');
     });
-  });
-
-  describe('Integration Mocks (Authorization & Idempotency)', () => {
-    // Tests for endpoint logic would go here, mock-driven.
-    // Given the constraints, we focus on unit test coverage.
   });
 });
