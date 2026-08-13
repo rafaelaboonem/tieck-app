@@ -14,6 +14,65 @@ export type Database = {
   }
   public: {
     Tables: {
+      camera_ai_attempts: {
+        Row: {
+          block_id: string
+          code: string | null
+          completed_at: string | null
+          created_at: string
+          decision: string | null
+          duration_ms: number | null
+          evidence: string | null
+          id: string
+          idempotency_key: string
+          model: string | null
+          response_id: string
+          retry_count: number
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          block_id: string
+          code?: string | null
+          completed_at?: string | null
+          created_at?: string
+          decision?: string | null
+          duration_ms?: number | null
+          evidence?: string | null
+          id?: string
+          idempotency_key: string
+          model?: string | null
+          response_id: string
+          retry_count?: number
+          status: string
+          updated_at?: string
+        }
+        Update: {
+          block_id?: string
+          code?: string | null
+          completed_at?: string | null
+          created_at?: string
+          decision?: string | null
+          duration_ms?: number | null
+          evidence?: string | null
+          id?: string
+          idempotency_key?: string
+          model?: string | null
+          response_id?: string
+          retry_count?: number
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "camera_ai_attempts_response_id_fkey"
+            columns: ["response_id"]
+            isOneToOne: false
+            referencedRelation: "checklist_responses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       camera_openai_lab_attempts: {
         Row: {
           blocking_reasons: string[]
@@ -2216,6 +2275,21 @@ export type Database = {
           key: string
         }[]
       }
+      claim_camera_ai_attempt: {
+        Args: {
+          p_block_id: string
+          p_idempotency_key: string
+          p_response_id: string
+        }
+        Returns: {
+          attempt_id: string
+          claim_status: string
+          current_retry_count: number
+          existing_code: string
+          existing_decision: string
+          existing_evidence: string
+        }[]
+      }
       claim_checklist_analysis: {
         Args: { p_analysis_id: string }
         Returns: {
@@ -2306,6 +2380,16 @@ export type Database = {
       }
       publish_checklist: { Args: { p_checklist_id: string }; Returns: Json }
       release_vision_lock: { Args: { p_lock_key: string }; Returns: undefined }
+      resolve_public_response: {
+        Args: { p_token: string }
+        Returns: {
+          checklist_id: string
+          published_content: Json
+          response_id: string
+          status: string
+          workspace_id: string
+        }[]
+      }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
       signup_account_state: { Args: { p_user_id: string }; Returns: string }
