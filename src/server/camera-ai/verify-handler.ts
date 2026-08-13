@@ -97,6 +97,7 @@ export async function verifyCameraRequest(
       body: { ok: false, code: imgVal.code || 'invalid', message: imgVal.message || '' } 
     };
   }
+  const mimeType = imgVal.mimeType || 'image/jpeg';
 
   // 5. Session Hash & Expiration
   const { data: sessionData, error: sessionError } = await deps.resolveSession(payload.responseToken);
