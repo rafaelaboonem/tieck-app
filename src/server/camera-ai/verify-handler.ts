@@ -72,6 +72,12 @@ export async function verifyCameraRequest(
   payload: VerifyPayload,
   imageFile: { buffer: ArrayBuffer; type: string },
   deps: VerifyDependencies
+) => Promise<{ status: number; body: VerificationResult | { ok: false; code: string; message?: string } }>;
+
+export async function verifyCameraRequest(
+  payload: VerifyPayload,
+  imageFile: { buffer: ArrayBuffer; type: string },
+  deps: VerifyDependencies
 ): Promise<{ status: number; body: VerificationResult | { ok: false; code: string; message?: string } }> {
   // 1. CAMERA_AI_MODE
   if (deps.mode !== 'enabled') {
