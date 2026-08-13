@@ -88,7 +88,7 @@ function UnitOperacaoPage() {
       .select("id,name")
       .eq("id", unitId)
       .maybeSingle()
-      .then(({ data, error }) => {
+      .then({ data, error }: { data: any; error: any }) => {
         if (cancelled) return;
         if (error || !data) {
           setAccess("denied");
