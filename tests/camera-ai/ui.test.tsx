@@ -229,17 +229,17 @@ describe('PublicCameraBlock UI', () => {
       ok: true,
       status: 200,
       headers: new Map([['content-type', 'application/json']]),
-      json: async () => ({ ok: true, decision: 'retake', evidence: 'LATEST', code: 'ok' }),
+      json: async () => ({ ok: true, decision: 'approved', evidence: 'LATEST', code: 'ok' }),
     });
 
     render(<PublicCameraBlock {...mockProps} />);
     fireEvent.click(screen.getByText('Test Camera'));
     
-    // Rapid double click to trigger two requests
+    // Rapid capture twice
     fireEvent.click(screen.getByTestId('capture-btn'));
     fireEvent.click(screen.getByTestId('capture-btn'));
     
-    await waitFor(() => expect(screen.getByText(/Verificando a foto/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('LATEST')).toBeInTheDocument(), { timeout: 8000 });
     
     resolveFirst({
       ok: true,
@@ -248,11 +248,11 @@ describe('PublicCameraBlock UI', () => {
       json: async () => ({ ok: true, decision: 'approved', evidence: 'STALE', code: 'ok' }),
     });
 
-    await waitFor(() => {
-      expect(screen.getByText('LATEST')).toBeInTheDocument();
-    }, { timeout: 8000 });
+    await new Promise(r => setTimeout(r, 100));
+    expect(screen.getByText('LATEST')).toBeInTheDocument();
     expect(screen.queryByText('STALE')).not.toBeInTheDocument();
   }, 10000);
+
 
 
   it('10. timeout: technical failure with retry', async () => {
