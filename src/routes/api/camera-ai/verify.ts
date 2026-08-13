@@ -23,8 +23,6 @@ export const Route = createFileRoute('/api/camera-ai/verify')({
           return Response.json({ ok: false, code: 'config_missing', message: 'Configuração do servidor incompleta.' }, { status: 503 });
         }
 
-        const openai = new OpenAI({ apiKey });
-        const supabaseAdmin = createServerSupabaseClient();
         const model = process.env['OPENAI_VISION_MODEL'] || 'gpt-4o-mini';
 
         try {
@@ -55,10 +53,12 @@ export const Route = createFileRoute('/api/camera-ai/verify')({
             isConfigured: () => true,
             resolveSession: async (token: string) => {
               const client = createServerSupabaseClient();
+              if (!client) throw new Error('Supabase client failed');
               return client.rpc('resolve_public_response', { p_token: token });
             },
             claimAttempt: async ({ responseId, blockId, idempotencyKey }: { responseId: string; blockId: string; idempotencyKey: string }) => {
               const client = createServerSupabaseClient();
+              if (!client) throw new Error('Supabase client failed');
               return client.rpc('claim_camera_ai_attempt', {
                 p_response_id: responseId,
                 p_block_id: blockId,
@@ -67,6 +67,7 @@ export const Route = createFileRoute('/api/camera-ai/verify')({
             },
             hitRateLimit: async (responseId: string) => {
               const client = createServerSupabaseClient();
+              if (!client) throw new Error('Supabase client failed');
               return client.rpc('hit_public_rate_limit', {
                 p_key_hash: String(responseId),
                 p_action: 'camera_ai_verify',
@@ -80,6 +81,7 @@ export const Route = createFileRoute('/api/camera-ai/verify')({
             },
             markFailed: async ({ responseId, blockId, idempotencyKey, code }: { responseId: string; blockId: string; idempotencyKey: string; code: string }) => {
               const client = createServerSupabaseClient();
+              if (!client) throw new Error('Supabase client failed');
               return client
                 .from('camera_ai_attempts')
                 .update({ 
@@ -96,6 +98,7 @@ export const Route = createFileRoute('/api/camera-ai/verify')({
             },
             markCompleted: async (params) => {
               const client = createServerSupabaseClient();
+              if (!client) throw new Error('Supabase client failed');
               return client
                 .from('camera_ai_attempts')
                 .update({
