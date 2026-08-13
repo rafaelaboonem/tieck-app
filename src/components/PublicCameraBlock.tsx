@@ -324,7 +324,7 @@ export function PublicCameraBlock({
       setFailureReason("network_unknown");
       setErrorMsg("Falha de conexão com o servidor. Verifique sua internet.");
     } finally {
-      if (timeoutId) clearTimeout(timeoutId);
+      if (timeoutId) window.clearTimeout(timeoutId);
       if (isCurrent()) {
         inFlightRef.current = false;
         abortControllerRef.current = null;
