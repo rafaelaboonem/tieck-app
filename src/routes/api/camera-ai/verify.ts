@@ -10,8 +10,13 @@ export const Route = createFileRoute('/api/camera-ai/verify')({
     handlers: {
       POST: async ({ request }) => {
         const mode = process.env['CAMERA_AI_MODE'] || 'disabled';
-        const supabaseAdmin = createServerSupabaseClient();
         const apiKey = process.env['OPENAI_API_KEY'];
+        
+        if (mode === 'enabled' && !apiKey) {
+          return Response.json({ ok: false, code: 'config_missing', message: 'OPENAI_API_KEY não configurada.' }, { status: 503 });
+        }
+
+        const supabaseAdmin = createServerSupabaseClient();
         const model = process.env['OPENAI_VISION_MODEL'] || 'gpt-4o-mini';
 
         try {
