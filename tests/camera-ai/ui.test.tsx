@@ -217,7 +217,7 @@ describe('PublicCameraBlock UI', () => {
 
     vi.advanceTimersByTime(36000);
     
-    // Manual promise resolution to trigger microtasks
+    // Allow the microtasks to run
     await vi.runAllTicks();
     await vi.runAllTicks();
 
@@ -226,7 +226,8 @@ describe('PublicCameraBlock UI', () => {
     });
     
     vi.useRealTimers();
-  }, { timeout: 60000 });
+  }, 60000);
+
 
 
 
