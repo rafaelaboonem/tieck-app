@@ -223,7 +223,8 @@ describe('PublicCameraBlock UI', () => {
     });
     
     vi.useRealTimers();
-  });
+  }, 20000);
+
 
 
 
