@@ -172,6 +172,9 @@ describe('PublicCameraBlock UI', () => {
     
     // First capture
     fireEvent.click(screen.getByTestId('capture-btn'));
+    // Wait a bit to ensure the first request is started
+    await new Promise(r => setTimeout(r, 10));
+    
     // Second capture (invalidates first)
     fireEvent.click(screen.getByTestId('capture-btn'));
     
