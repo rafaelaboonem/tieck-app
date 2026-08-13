@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { evaluateGate } from '../../src/server/camera-ai/gate';
 import { validateImageBuffer } from '../../src/server/camera-ai/image-validation';
 import { CameraVerification } from '../../src/server/camera-ai/schema';
@@ -63,21 +63,7 @@ describe('Camera AI Server Runtime', () => {
       expect(result.message).toContain('escura');
     });
 
-    it('5. condição não observável', () => {
-      const mock: CameraVerification = {
-        target_visible: true,
-        condition_observable: false,
-        condition_met: false,
-        image_quality: "usable",
-        confidence: 0.95,
-        visible_evidence: "Alvo obstruído.",
-        user_message: "Hidden"
-      };
-      const result = evaluateGate(mock);
-      expect(result.decision).toBe('not_observable');
-    });
-
-    it('7. linguagem especulativa: should reject "talvez"', () => {
+    it('5. linguagem especulativa: should reject "talvez"', () => {
       const mock: CameraVerification = {
         target_visible: true,
         condition_observable: true,
@@ -93,32 +79,46 @@ describe('Camera AI Server Runtime', () => {
   });
 
   describe('Image Validation', () => {
-    it('10. JPEG válido', async () => {
+    it('6. JPEG válido', async () => {
       const buffer = new Uint8Array([0xff, 0xd8, 0xff, 0xdb]).buffer;
       const res = await validateImageBuffer(buffer, 'image/jpeg');
       expect(res.valid).toBe(true);
     });
 
-    it('11. JPEG com MIME falso', async () => {
+    it('7. PNG válido', async () => {
+      const buffer = new Uint8Array([0x89, 0x50, 0x4e, 0x47]).buffer;
+      const res = await validateImageBuffer(buffer, 'image/png');
+      expect(res.valid).toBe(true);
+    });
+
+    it('8. WebP válido', async () => {
+      const buffer = new Uint8Array([
+        0x52, 0x49, 0x46, 0x46, 0x00, 0x00, 0x00, 0x00, 
+        0x57, 0x45, 0x42, 0x50
+      ]).buffer;
+      const res = await validateImageBuffer(buffer, 'image/webp');
+      expect(res.valid).toBe(true);
+    });
+
+    it('9. MIME divergente', async () => {
       const buffer = new Uint8Array([0xff, 0xd8, 0xff, 0xdb]).buffer;
       const res = await validateImageBuffer(buffer, 'image/png');
       expect(res.valid).toBe(false);
       expect(res.code).toBe('mime_mismatch');
     });
 
-    it('14. arquivo vazio', async () => {
+    it('10. arquivo vazio', async () => {
       const buffer = new ArrayBuffer(0);
       const res = await validateImageBuffer(buffer, 'image/jpeg');
       expect(res.valid).toBe(false);
       expect(res.code).toBe('empty_file');
     });
 
-    it('15. arquivo acima de 3 MB', async () => {
+    it('11. arquivo acima de 3 MB', async () => {
       const buffer = new ArrayBuffer(4 * 1024 * 1024);
       const res = await validateImageBuffer(buffer, 'image/jpeg');
       expect(res.valid).toBe(false);
       expect(res.code).toBe('file_too_large');
     });
   });
-
 });

@@ -19,3 +19,6 @@ export function createServerSupabaseClient() {
     },
   });
 }
+
+// Para manter compatibilidade com código existente que espera supabaseAdmin
+export const supabaseAdmin = createServerSupabaseClient()!;
