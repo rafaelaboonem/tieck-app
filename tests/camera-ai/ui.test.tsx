@@ -213,7 +213,7 @@ describe('PublicCameraBlock UI', () => {
     expect(screen.queryByText('OLD')).not.toBeInTheDocument();
   });
 
-  it('10. timeout: technical failure', async () => {
+  it('10. timeout: technical failure', { timeout: 15000 }, async () => {
     expect.hasAssertions();
     vi.useFakeTimers();
     let aborted = false;
@@ -236,10 +236,7 @@ describe('PublicCameraBlock UI', () => {
     
     await waitFor(() => expect(screen.getByText(/Verificando/)).toBeInTheDocument());
     
-    React.act(() => {
-      vi.advanceTimersByTime(36000);
-      vi.runAllTicks();
-    });
+    await vi.advanceTimersByTimeAsync(36000);
 
     await waitFor(() => {
       expect(screen.getByText(/demorou mais que o esperado/)).toBeInTheDocument();
@@ -249,7 +246,7 @@ describe('PublicCameraBlock UI', () => {
     expect(screen.getByText('Tentar novamente')).toBeInTheDocument();
     
     vi.useRealTimers();
-  }, { timeout: 15000 });
+  });
 
   it('11. troca de foto: invalidates previous approved', async () => {
     (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
