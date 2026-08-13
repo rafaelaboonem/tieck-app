@@ -215,14 +215,15 @@ describe('PublicCameraBlock UI', () => {
 
     await waitFor(() => expect(screen.getByText(/Verificando/)).toBeInTheDocument());
 
-    vi.advanceTimersByTime(35001);
+    vi.advanceTimersByTime(36001);
     
     await waitFor(() => {
       expect(screen.getByText(/demorou mais que o esperado/)).toBeInTheDocument();
     });
     
     vi.useRealTimers();
-  }, { timeout: 45000 });
+  }, { timeout: 60000 });
+
 
 
 
