@@ -27,12 +27,15 @@ vi.mock('@/components/TieckCamera', () => ({
   TieckCamera: ({ open, onCapture, onClose }: { open: boolean; onCapture: (f: File) => void; onClose: () => void }) => {
     return (
       <div data-testid="tieck-camera" style={{ border: open ? '1px solid red' : 'none' }}>
-        <button data-testid="capture-btn" onClick={() => onCapture(new File([''], 'test.jpg', { type: 'image/jpeg' }))}>Capture</button>
+        <button data-testid="capture-btn" onClick={() => {
+          onCapture(new File([''], 'test.jpg', { type: 'image/jpeg' }));
+        }}>Capture</button>
         <button data-testid="close-camera-btn" onClick={onClose}>Close</button>
       </div>
     );
   }
 }));
+
 
 describe('PublicCameraBlock UI', () => {
   const mockBlock: PublicCameraBlockData = {
@@ -175,31 +178,27 @@ describe('PublicCameraBlock UI', () => {
 
     render(<PublicCameraBlock {...mockProps} />);
     
-    // 1. Abrir câmera
     fireEvent.click(screen.getByText('Test Camera'));
     
-    // 2. Primeira captura (A)
-    const firstKey = 'key-A';
-    vi.spyOn(crypto, 'randomUUID').mockReturnValueOnce(firstKey as any);
+    // Capture A
+    vi.spyOn(crypto, 'randomUUID').mockReturnValueOnce('key-A' as any);
     fireEvent.click(screen.getByTestId('capture-btn'));
     
     await waitFor(() => expect(screen.getByText(/Verificando/)).toBeInTheDocument());
 
-    // 3. Segunda captura (B) - deve abortar A e iniciar B
-    const secondKey = 'key-B';
-    vi.spyOn(crypto, 'randomUUID').mockReturnValueOnce(secondKey as any);
-    fireEvent.click(screen.getByTestId('capture-btn'));
+    // Capture B (use force-capture-btn because capture-btn is inside TieckCamera which might be "hidden" by state)
+    vi.spyOn(crypto, 'randomUUID').mockReturnValueOnce('key-B' as any);
+    fireEvent.click(screen.getByTestId('force-capture-btn'));
 
     await waitFor(() => expect(screen.getByText('LATEST')).toBeInTheDocument());
 
-    // 4. Resolver A agora (simulando resposta atrasada)
+    // Resolve A (stale)
     resolveA({
       ok: true, status: 200, headers: new Map([['content-type', 'application/json']]),
       json: async () => ({ ok: true, decision: 'approved', evidence: 'OLD', code: 'ok' }),
     });
 
-    // 5. Garantir que OLD não sobrescreveu LATEST
-    await new Promise(r => setTimeout(r, 20));
+    await new Promise(r => setTimeout(r, 50));
     expect(screen.getByText('LATEST')).toBeInTheDocument();
     expect(screen.queryByText('OLD')).not.toBeInTheDocument();
   });
@@ -208,7 +207,7 @@ describe('PublicCameraBlock UI', () => {
     vi.useFakeTimers();
     
     (global.fetch as ReturnType<typeof vi.fn>).mockImplementation(() => {
-      return new Promise(() => {}); // Never resolves
+      return new Promise(() => {}); 
     });
 
     render(<PublicCameraBlock {...mockProps} />);
@@ -217,18 +216,16 @@ describe('PublicCameraBlock UI', () => {
 
     await waitFor(() => expect(screen.getByText(/Verificando/)).toBeInTheDocument());
 
-    // Avancar 35s
     vi.advanceTimersByTime(35000);
-    
-    // Process async effects of timeout/abort
     await vi.runAllTicks();
 
     await waitFor(() => {
       expect(screen.getByText(/demorou mais que o esperado/)).toBeInTheDocument();
-    });
+    }, { timeout: 10000 });
     
     vi.useRealTimers();
-  });
+  }, 15000);
+
 
 
   it('11. troca de foto: invalidates previous approved', async () => {

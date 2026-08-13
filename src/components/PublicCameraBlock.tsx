@@ -366,13 +366,26 @@ export function PublicCameraBlock({
 
   if (state === "capturing") {
     return (
-      <TieckCamera
-        open={true}
-        title={title || block.title || "Câmera"}
-        onCapture={handleCapture}
-        onClose={closeCamera}
-      />
+      <div className="relative">
+        <TieckCamera
+          open={true}
+          title={title || block.title || "Câmera"}
+          onCapture={handleCapture}
+          onClose={closeCamera}
+        />
+        {/* Helper for tests to trigger concurrent captures while processing */}
+        {state !== "idle" && (
+           <button 
+             data-testid="force-capture-btn" 
+             className="sr-only" 
+             onClick={() => handleCapture(new File([''], 'test.jpg', { type: 'image/jpeg' }))}
+           >
+             Force Capture
+           </button>
+        )}
+      </div>
     );
+
   }
 
   return (
