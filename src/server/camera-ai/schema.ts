@@ -16,12 +16,19 @@ export const VerifyPayloadSchema = z.object({
   checklistId: z.string().uuid(),
   blockId: z.string().min(1),
   responseToken: z.string().min(1),
-  idempotencyKey: z.string().min(1),
+  idempotencyKey: z.string().uuid(),
 });
 
 export type VerifyPayload = z.infer<typeof VerifyPayloadSchema>;
 
 export type Decision = 'approved' | 'retake' | 'not_observable' | 'technical_failure';
+
+export interface PublishedBlock {
+  id: string;
+  type: string;
+  title?: string;
+  description?: string;
+}
 
 export interface VerificationResult {
   ok: boolean;
