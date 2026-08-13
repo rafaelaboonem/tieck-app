@@ -72,11 +72,6 @@ export const Route = createFileRoute('/api/camera-ai/verify')({
             return Response.json({ ok: false, code: 'id_mismatch' }, { status: 403 });
           }
 
-          // 6. Checklist & Block Validation
-          if (session.checklist_id !== checklistId) {
-            return Response.json({ ok: false, code: 'id_mismatch' }, { status: 403 });
-          }
-
           interface PublishedBlock {
             id: string;
             type: string;
