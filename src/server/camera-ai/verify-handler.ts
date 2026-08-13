@@ -68,11 +68,6 @@ export interface VerifyDependencies {
   }) => Promise<{ data: { id: string } | null; error: any }>;
 }
 
-export async function verifyCameraRequest(
-  payload: VerifyPayload,
-  imageFile: { buffer: ArrayBuffer; type: string },
-  deps: VerifyDependencies
-) => Promise<{ status: number; body: VerificationResult | { ok: false; code: string; message?: string } }>;
 
 export async function verifyCameraRequest(
   payload: VerifyPayload,
