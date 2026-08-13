@@ -236,15 +236,15 @@ describe('PublicCameraBlock UI', { timeout: 30000 }, () => {
     
     await waitFor(() => expect(screen.getByText(/Verificando/)).toBeInTheDocument());
     
-    await React.act(async () => {
+    // Use synchronous act to advance timers and resolve promises immediately
+    React.act(() => {
       vi.advanceTimersByTime(36000);
-      vi.runAllTicks();
     });
 
     await waitFor(() => {
       expect(screen.getByText(/demorou mais que o esperado/)).toBeInTheDocument();
       expect(aborted).toBe(true);
-    }, { timeout: 1000 });
+    });
 
     expect(screen.getByText('Tentar novamente')).toBeInTheDocument();
     
