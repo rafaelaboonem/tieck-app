@@ -634,7 +634,7 @@ function NovoChecklistPage() {
         .select("*")
         .eq("id", user.id)
         .single()
-        .then({ data }: { data: any }) => setProfile(data));
+        .then(({ data }) => setProfile(data as any));
     } else {
       setProfile(null);
     }
@@ -649,7 +649,7 @@ function NovoChecklistPage() {
         .eq("domain", customDomain)
         .eq("user_id", user.id)
         .single()
-        .then({ data }: { data: any }) => {
+        .then(({ data }) => {
           if (data) setCustomDomainStatus(data.status as any);
         });
     }
