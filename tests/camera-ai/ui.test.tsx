@@ -197,7 +197,7 @@ describe('PublicCameraBlock UI', () => {
   }, 10000);
 
   it('10. timeout: technical failure', async () => {
-    vi.useFakeTimers();
+    vi.useFakeTimers({ shouldAdvanceTime: true });
     
     // Mock fetch to never resolve until we want
     (global.fetch as ReturnType<typeof vi.fn>).mockImplementation(() => new Promise(() => {}));
