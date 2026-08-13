@@ -90,7 +90,7 @@ export function OpenAILabTest({ standard }: { standard: any }) {
 
     } catch (e: any) {
       toast.error(e.message);
-      if (state === "analyzing") setState("technical_failure");
+      if (state === "analyzing" as LabState) setState("technical_failure");
     }
   };
 
