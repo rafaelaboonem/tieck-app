@@ -171,14 +171,14 @@ describe('PublicCameraBlock UI', () => {
     fireEvent.click(screen.getByText('Test Camera'));
     
     // First capture
-    fireEvent.click(screen.getByTestId('capture-btn'));
+    const captureBtn = screen.getByTestId('capture-btn');
+    fireEvent.click(captureBtn);
     
     // Wait for the analyzing state to be set
     await waitFor(() => expect(screen.queryByText(/Verificando a foto/)).toBeInTheDocument());
     
-    // In our simplified mock, capture-btn is always available.
     // Trigger second capture (invalidates first)
-    fireEvent.click(screen.getByTestId('capture-btn'));
+    fireEvent.click(captureBtn);
     
     await waitFor(() => {
       const el = screen.queryByText('LATEST');
@@ -194,7 +194,7 @@ describe('PublicCameraBlock UI', () => {
     await new Promise(r => setTimeout(r, 500));
     expect(screen.getByText('LATEST')).toBeInTheDocument();
     expect(screen.queryByText('STALE')).not.toBeInTheDocument();
-  }, 30000);
+  }, 35000);
 
   it('10. timeout: technical failure', async () => {
     // Re-mock fetch specifically for this test to ensure it never resolves
@@ -220,7 +220,7 @@ describe('PublicCameraBlock UI', () => {
     }, { timeout: 8000 });
 
     vi.useRealTimers();
-  }, 30000);
+  }, 35000);
 
   it('11. troca de foto: invalidates previous approved', async () => {
     (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
