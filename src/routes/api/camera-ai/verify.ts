@@ -72,8 +72,20 @@ export const Route = createFileRoute('/api/camera-ai/verify')({
             return Response.json({ ok: false, code: 'id_mismatch' }, { status: 403 });
           }
 
-          const blocks = session.published_content?.blocks || [];
-          const block = blocks.find((b: any) => b.id === blockId);
+          // 6. Checklist & Block Validation
+          if (session.checklist_id !== checklistId) {
+            return Response.json({ ok: false, code: 'id_mismatch' }, { status: 403 });
+          }
+
+          interface PublishedBlock {
+            id: string;
+            type: string;
+            title?: string;
+            description?: string;
+          }
+
+          const blocks: PublishedBlock[] = session.published_content?.blocks || [];
+          const block = blocks.find((b) => b.id === blockId);
 
           if (!block || block.type !== 'camera') {
             return Response.json({ ok: false, code: 'invalid_block' }, { status: 404 });
@@ -116,11 +128,30 @@ export const Route = createFileRoute('/api/camera-ai/verify')({
           }
 
           // 9. Rate Limit (for truly new attempts)
+          // RPC signature: hit_public_rate_limit(p_key_hash text, p_action text, p_window_seconds integer, p_limit integer)
           const { data: limitData, error: limitError } = await supabaseAdmin.rpc('hit_public_rate_limit', {
-            p_key_hash: session.response_id
+            p_key_hash: String(session.response_id),
+            p_action: 'camera_ai_verify',
+            p_window_seconds: 600,
+            p_limit: 10
           });
 
-          if (limitError || !limitData || !limitData[0].allowed) {
+          if (limitError || !limitData || !limitData[0]?.allowed) {
+            // Se negado, marcamos a tentativa adquirida como falha por rate limit
+            await supabaseAdmin
+              .from('camera_ai_attempts')
+              .update({ 
+                status: 'failed', 
+                code: 'rate_limit',
+                updated_at: new Date().toISOString() 
+              })
+              .match({ 
+                response_id: session.response_id, 
+                block_id: blockId, 
+                idempotency_key: idempotencyKey,
+                status: 'processing'
+              });
+
             return Response.json({ ok: false, code: 'rate_limit', message: 'Muitas tentativas.' }, { status: 429, headers: { 'Retry-After': '600' } });
           }
 
@@ -135,11 +166,16 @@ export const Route = createFileRoute('/api/camera-ai/verify')({
           } catch (aiError) {
             await supabaseAdmin
               .from('camera_ai_attempts')
-              .update({ status: 'failed', updated_at: new Date().toISOString() })
+              .update({ 
+                status: 'failed', 
+                code: 'provider_failure',
+                updated_at: new Date().toISOString() 
+              })
               .match({ 
                 response_id: session.response_id, 
                 block_id: blockId, 
-                idempotency_key: idempotencyKey 
+                idempotency_key: idempotencyKey,
+                status: 'processing'
               });
             throw aiError;
           }
@@ -150,7 +186,7 @@ export const Route = createFileRoute('/api/camera-ai/verify')({
           const result = evaluateGate(analysis);
 
           // 12. Final Persistence Confirmation
-          const { error: finalError } = await supabaseAdmin
+          const { data: finalUpdate, error: finalError } = await supabaseAdmin
             .from('camera_ai_attempts')
             .update({
               status: 'completed',
@@ -166,11 +202,18 @@ export const Route = createFileRoute('/api/camera-ai/verify')({
               response_id: session.response_id, 
               block_id: blockId, 
               idempotency_key: idempotencyKey,
-              status: 'processing' // Guard condition
-            });
+              status: 'processing' // Guard condition: only update if still processing
+            })
+            .select('id')
+            .maybeSingle();
 
-          if (finalError) {
-            return Response.json({ ok: false, code: 'technical_failure' }, { status: 500 });
+          if (finalError || !finalUpdate) {
+            return Response.json({ 
+              ok: false, 
+              decision: 'technical_failure', 
+              code: 'persistence_error',
+              message: 'Falha ao confirmar persistência.'
+            }, { status: 500 });
           }
 
           // 13. Sanitized Response
