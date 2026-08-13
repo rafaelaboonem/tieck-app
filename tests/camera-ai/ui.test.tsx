@@ -215,18 +215,15 @@ describe('PublicCameraBlock UI', () => {
 
     await waitFor(() => expect(screen.getByText(/Verificando/)).toBeInTheDocument());
 
-    vi.advanceTimersByTime(35000);
+    await vi.advanceTimersByTimeAsync(36000);
     
-    // Allow the microtasks to run
-    await vi.runAllTicks();
-    await vi.runAllTicks();
-
     await waitFor(() => {
       expect(screen.getByText(/demorou mais que o esperado/)).toBeInTheDocument();
     });
     
     vi.useRealTimers();
   }, 10000);
+
 
 
 
