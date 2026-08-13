@@ -66,6 +66,7 @@ describe('PublicCameraBlock UI', () => {
 
   it('1. VITE_CAMERA_AI_ENABLED=false: neutro upload', async () => {
     vi.stubEnv('VITE_CAMERA_AI_ENABLED_FORCE', 'false');
+    vi.stubEnv('VITE_CAMERA_AI_ENABLED', 'false');
     render(<PublicCameraBlock {...mockProps} />);
 
     fireEvent.click(screen.getByText('Test Camera'));
