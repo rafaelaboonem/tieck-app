@@ -103,18 +103,13 @@ export function PublicCameraBlock({
     setPreview(newPreview);
     setCapturedFile(file);
     
-    // Increment sequence BEFORE starting process
-    requestSequenceRef.current += 1;
-    
-    // Clear previous answer when a new capture starts
-    if (onAnswer) onAnswer(block.id, "");
-    
     const newIdempotencyKey = crypto.randomUUID();
     setIdempotencyKey(newIdempotencyKey);
     setFailureReason("none");
 
     void processVerification(file, newIdempotencyKey, requestSequenceRef.current);
   };
+
 
   const processVerification = async (file: File, key: string, sequence: number) => {
     // Double-click protection: if we're already processing THIS exact capture, ignore.
@@ -127,13 +122,16 @@ export function PublicCameraBlock({
     const isCurrent = () => sequence === requestSequenceRef.current;
 
     const activeSession = session ?? (await ensureResponseSession());
+    
+    if (!isCurrent()) return;
+
     if (!activeSession) {
-      if (!isCurrent()) return;
       setErrorMsg("Falha ao iniciar sessão.");
       setFailureReason("configuration");
       setState("technical_failure");
       return;
     }
+
 
     if (!isAIEnabled) {
       setState("uploading");
@@ -377,6 +375,7 @@ export function PublicCameraBlock({
     );
   }
 
+
   return (
     <div className="w-full space-y-4">
       {state === "idle" && (
@@ -399,7 +398,19 @@ export function PublicCameraBlock({
           (state === "retake" || state === "not_observable") ? "border-amber-500 shadow-lg shadow-amber-100" : 
           state === "technical_failure" ? "border-red-500" : "border-neutral-200"
         )}>
+          {/* Helper for tests to trigger concurrent captures while processing */}
+          {state !== "idle" && (
+            <button 
+              data-testid="force-capture-btn" 
+              className="hidden" 
+              onClick={() => handleCapture(new File([''], 'test.jpg', { type: 'image/jpeg' }))}
+            >
+              Force Capture
+            </button>
+          )}
+
           <img src={preview} alt="Capture preview" className="w-full h-full object-cover" />
+
           
           {state === "analyzing" && (
             <div className="absolute inset-0 z-10">

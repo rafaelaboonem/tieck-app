@@ -27,7 +27,9 @@ vi.mock('@/components/TieckCamera', () => ({
   TieckCamera: ({ open, onCapture, onClose }: { open: boolean; onCapture: (f: File) => void; onClose: () => void }) => {
     return (
       <div data-testid="tieck-camera" style={{ border: open ? '1px solid red' : 'none' }}>
-        <button data-testid="capture-btn" onClick={() => onCapture(new File([''], 'test.jpg', { type: 'image/jpeg' }))}>Capture</button>
+        <button data-testid="capture-btn" onClick={() => {
+          onCapture(new File([''], 'test.jpg', { type: 'image/jpeg' }));
+        }}>Capture</button>
         <button data-testid="close-camera-btn" onClick={onClose}>Close</button>
       </div>
     );
@@ -158,14 +160,66 @@ describe('PublicCameraBlock UI', () => {
   });
 
   it('9. resposta antiga: request sequence protection', async () => {
-    // Skip flaky sequence test in this environment
-    return;
+    let resolveA: (v: any) => void = () => {};
+    const promiseA = new Promise(resolve => { resolveA = resolve; });
+    
+    (global.fetch as ReturnType<typeof vi.fn>).mockImplementation((_url, options) => {
+      const form = options.body as FormData;
+      const key = form.get('idempotencyKey');
+      
+      if (key === 'key-A') return promiseA;
+      
+      return Promise.resolve({
+        ok: true, status: 200, headers: new Map([['content-type', 'application/json']]),
+        json: async () => ({ ok: true, decision: 'approved', evidence: 'LATEST', code: 'ok' }),
+      });
+    });
+
+    render(<PublicCameraBlock {...mockProps} />);
+    
+    fireEvent.click(screen.getByText('Test Camera'));
+    
+    // Capture A
+    vi.spyOn(crypto, 'randomUUID').mockReturnValueOnce('key-A' as any);
+    fireEvent.click(screen.getByTestId('capture-btn'));
+    
+    await waitFor(() => expect(screen.getByText(/Verificando/)).toBeInTheDocument());
+
+    // Capture B
+    vi.spyOn(crypto, 'randomUUID').mockReturnValueOnce('key-B' as any);
+    fireEvent.click(screen.getByTestId('force-capture-btn'));
+
+    await waitFor(() => expect(screen.getByText('LATEST')).toBeInTheDocument());
+
+    // Resolve A (stale)
+    resolveA({
+      ok: true, status: 200, headers: new Map([['content-type', 'application/json']]),
+      json: async () => ({ ok: true, decision: 'approved', evidence: 'OLD', code: 'ok' }),
+    });
+
+    await new Promise(r => setTimeout(r, 50));
+    expect(screen.getByText('LATEST')).toBeInTheDocument();
+    expect(screen.queryByText('OLD')).not.toBeInTheDocument();
   });
 
-  it('10. timeout: technical failure', async () => {
-    // Skip this test in environment if it keeps timing out
-    // The logic is verified manually and by the fact it was failing with a specific error before
-    return;
+  it('10. timeout: technical failure', { timeout: 60000 }, async () => {
+    vi.useFakeTimers();
+    (global.fetch as ReturnType<typeof vi.fn>).mockImplementation(() => new Promise(() => {}));
+    render(<PublicCameraBlock {...mockProps} />);
+    fireEvent.click(screen.getByText('Test Camera'));
+    fireEvent.click(screen.getByTestId('capture-btn'));
+    
+    await waitFor(() => expect(screen.getByText(/Verificando/)).toBeInTheDocument());
+    
+    // Step timers 
+    vi.advanceTimersByTime(36000);
+    await vi.runAllTicks();
+    
+    await waitFor(() => {
+      expect(screen.getByText(/demorou mais que o esperado/)).toBeInTheDocument();
+    });
+    
+    vi.useRealTimers();
   });
 
   it('11. troca de foto: invalidates previous approved', async () => {
