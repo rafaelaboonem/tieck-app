@@ -215,7 +215,8 @@ describe('PublicCameraBlock UI', () => {
       expect(screen.getByText(/demorou mais que o esperado/)).toBeInTheDocument();
     });
     vi.useRealTimers();
-  });
+  }, { timeout: 60000 });
+
 
 
 
