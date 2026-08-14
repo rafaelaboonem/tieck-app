@@ -639,9 +639,21 @@ function PublicChecklistPage() {
       return;
     }
 
-    // Removida chamada para Edge Function legada analyze-checklist-evidence.
-    // O fluxo neutro agora segue diretamente para a finalização.
-    
+    // Finalização transacional e idempotente da resposta no banco de dados
+    const { data: finalizeData, error: finalizeError } = await (supabase.rpc as any)("finalize_public_response", {
+      p_response_token: session.responseToken,
+      p_checklist_id: checklistUuid,
+      p_answers: resolved
+    });
+
+    if (finalizeError || !finalizeData || finalizeData.length === 0) {
+      console.error("Erro ao finalizar resposta:", finalizeError);
+      const errKey = finalizeError?.message || "sendError";
+      toast.error(t((checklist?.settings as any)?.language, (SUBMIT_ERROR_KEY as any)[errKey] || "sendError"));
+      setUploading(false);
+      return;
+    }
+
     // Redirect to a custom URL if configured
     if (settings.redirectOnCompletion && settings.redirectUrl) {
       try {
@@ -649,6 +661,8 @@ function PublicChecklistPage() {
         if (url && !/^https?:\/\//i.test(url)) url = `https://${url}`;
         const parsed = new URL(url);
         if (parsed.protocol === "http:" || parsed.protocol === "https:") {
+          // Limpa sessão antes do redirect para garantir que se ele voltar, comece do zero
+          clearResponseSession();
           window.location.href = parsed.toString();
           return;
         }
