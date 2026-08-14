@@ -55,19 +55,22 @@ export async function verifyCameraRequest(
   imageFile: { buffer: ArrayBuffer; type: string },
   deps: VerifyDependencies
 ): Promise<{ status: number; body: VerificationResult | { ok: false; code: string; message?: string } }> {
+  // requestId random para logs e resposta
+  const requestId = Math.random().toString(36).substring(7);
+
   // 1. CAMERA_AI_MODE
   if (deps.mode !== 'enabled') {
     return { 
       status: 503, 
-      body: { ok: false, code: 'camera_ai_disabled', message: 'IA desativada.' } 
+      body: { ok: false, code: 'camera_ai_disabled', message: 'IA desativada.', requestId } 
     };
   }
 
-  // 2. Server-only config verification (should be passed by deps)
+  // 2. Server-only config verification
   if (!deps.isConfigured()) {
     return { 
       status: 503, 
-      body: { ok: false, code: 'config_missing', message: 'Configuração do servidor ausente.' } 
+      body: { ok: false, code: 'config_missing', message: 'Configuração do servidor ausente.', requestId } 
     };
   }
 
@@ -76,7 +79,12 @@ export async function verifyCameraRequest(
   if (!imgVal.valid) {
     return { 
       status: 400, 
-      body: { ok: false, code: imgVal.code || 'invalid', message: imgVal.message || '' } 
+      body: { 
+        ok: false, 
+        code: imgVal.code || 'invalid_payload', 
+        message: imgVal.message || 'Não foi possível validar os dados da foto.',
+        requestId 
+      } 
     };
   }
   const mimeType = imgVal.mimeType || 'image/jpeg';
@@ -86,7 +94,12 @@ export async function verifyCameraRequest(
   if (sessionError || !sessionData || !sessionData.length) {
     return { 
       status: 401, 
-      body: { ok: false, code: 'unauthorized', message: 'Sessão inválida ou expirada.' } 
+      body: { 
+        ok: false, 
+        code: 'unauthorized', 
+        message: 'Sua sessão expirou. Estamos iniciando uma nova.',
+        requestId
+      } 
     };
   }
   const session = sessionData[0];
@@ -95,7 +108,12 @@ export async function verifyCameraRequest(
   if (session.checklist_id !== payload.checklistId) {
     return { 
       status: 403, 
-      body: { ok: false, code: 'id_mismatch' } 
+      body: { 
+        ok: false, 
+        code: 'id_mismatch', 
+        message: 'A sessão não pertence a este checklist.',
+        requestId
+      } 
     };
   }
 
@@ -105,7 +123,12 @@ export async function verifyCameraRequest(
   if (!block || block.type !== 'camera') {
     return { 
       status: 404, 
-      body: { ok: false, code: 'invalid_block' } 
+      body: { 
+        ok: false, 
+        code: 'invalid_block', 
+        message: 'Este checklist foi atualizado. Recarregue a página.',
+        requestId
+      } 
     };
   }
 
