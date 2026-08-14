@@ -85,14 +85,21 @@ export const Route = createFileRoute('/api/camera-ai/compile-policy')({
 
           // 4. OpenAI Generation
           const openai = new OpenAI({ apiKey });
-          const response = await openai.beta.chat.completions.parse({
+          const response = await openai.responses.parse({
             model: "gpt-4o-mini",
-            messages: [
+            input: [
               { role: "system", content: POLICY_GENERATION_PROMPT },
               { role: "user", content: `PERGUNTA: "${question}"` }
             ],
-            response_format: zodResponseFormat(CameraVerificationPolicyV1Schema, "camera_verification_policy")
-          });
+            response_format: {
+              type: "json_schema",
+              json_schema: {
+                name: "camera_verification_policy",
+                strict: true,
+                schema: zodResponseFormat(CameraVerificationPolicyV1Schema, "camera_verification_policy").json_schema.schema
+              }
+            }
+          } as any);
 
           const policy = response.choices[0].message.parsed;
           if (!policy) throw new Error('OpenAI parse failed');
