@@ -46,9 +46,12 @@ export const Route = createFileRoute('/api/camera-ai/verify')({
 
           const buffer = await file.arrayBuffer();
           
+          const requestId = Math.random().toString(36).substring(7);
+
           const deps: VerifyDependencies = {
             mode,
             model,
+            requestId,
             now: () => new Date(),
             isConfigured: () => true,
             resolveSession: async (token: string) => {
