@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, MockedFunction } from 'vitest';
 import { VerifyPayload } from '../../src/server/camera-ai/schema';
 import { verifyCameraRequest, VerifyDependencies, PublicSession, ClaimResult } from '../../src/server/camera-ai/verify-handler';
 
-describe('Camera AI Storage Concurrency', () => {
+describe('Camera AI Storage Concurrency & Cleanup', () => {
   let deps: VerifyDependencies;
   const mockNow = new Date('2026-08-14T05:00:00Z');
 
@@ -41,17 +41,10 @@ describe('Camera AI Storage Concurrency', () => {
     };
   });
 
-  it('E. Corrida no Storage: upload retorna 409, falha no banco -> remove() NÃO chamado', async () => {
-    // Simula persistEvidence real (simplificado)
-    deps.persistEvidence = async () => {
-       // upload retorna 409 (conflito)
-       // db retorna erro
-       // O handler não deve chamar remove se o upload falhou com 409
-       return { evidenceId: null, error: 'DB Error after 409' };
-    };
-
+  it('E. Corrida no Storage: upload retorna 409, falha no banco -> não retorna sucesso', async () => {
+    deps.persistEvidence = vi.fn().mockResolvedValue({ evidenceId: null, error: 'DB Error after conflict' });
     const res = await verifyCameraRequest(validPayload, validImage, deps);
     expect(res.status).toBe(500);
-    // Verificação de lógica interna: persistEvidence deve gerenciar seu cleanup internamente baseada em createdThisRequest
+    expect((res.body as any).code).toBe('storage_failure');
   });
 });
