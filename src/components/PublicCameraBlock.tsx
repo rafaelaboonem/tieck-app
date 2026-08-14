@@ -404,7 +404,7 @@ export function PublicCameraBlock({
   const retryCurrentPhoto = () => {
     if (capturedFile && idempotencyKey) {
       // Regras de retry:
-      // network_unknown, timeout_unknown, processing -> Reutiliza mesma chave
+      // network_unknown, timeout_unknown, processing, storage_failure -> Reutiliza mesma chave
       // server_failed -> Nova chave
       let keyToUse = idempotencyKey;
       if (failureReason === "server_failed") {

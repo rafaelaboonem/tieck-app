@@ -249,7 +249,7 @@ export function SubmissionsTab({
     const bucket = info.origin_bucket || "checklist-evidences";
     const { data, error } = await supabase.storage
       .from(bucket)
-      .createSignedUrl(info.storage_path, 60 * 30);
+      .createSignedUrl(info.storage_path, 60 * 60 * 24); // Aumentado para 24h para revisores
     if (error || !data?.signedUrl) return null;
     setEvidenceUrls((m) => ({ ...m, [info.id]: data.signedUrl }));
     return data.signedUrl;
