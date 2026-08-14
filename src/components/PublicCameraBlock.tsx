@@ -212,7 +212,8 @@ export function PublicCameraBlock({
 
       if (data.code === 'storage_failure') {
         setState("storage_failure");
-        setErrorMsg(data.message || "Foto aprovada, mas falha ao salvar no servidor.");
+        setFailureReason("storage_failure");
+        setErrorMsg(data.message || "A foto foi aprovada. Não conseguimos salvá-la ainda.");
         return;
       }
 
