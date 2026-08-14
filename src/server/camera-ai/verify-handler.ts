@@ -1,4 +1,4 @@
-import { VerifyPayload, Decision, VerificationResult, PublishedBlock, CameraVerification } from './schema';
+import { VerifyPayload, Decision, VerificationResult, PublishedBlock, CameraVerification, CameraVerificationPolicyV1 } from './schema';
 import { createHash } from 'crypto';
 import { validateImageBuffer } from './image-validation';
 import { evaluateGate } from './gate';
@@ -56,7 +56,7 @@ export interface VerifyDependencies {
   resolveSession: (token: string) => Promise<{ data: PublicSession[] | null; error: unknown }>;
   claimAttempt: (params: { responseId: string; blockId: string; idempotencyKey: string }) => Promise<{ data: ClaimResult[] | null; error: unknown }>;
   hitRateLimit: (responseId: string) => Promise<{ data: RateLimitResult[] | null; error: unknown }>;
-  analyzeImage: (question: string, buffer: ArrayBuffer, mimeType: string, policy?: any) => Promise<CameraVerification>;
+  analyzeImage: (question: string, buffer: ArrayBuffer, mimeType: string, policy?: CameraVerificationPolicyV1) => Promise<CameraVerification>;
   markFailed: (params: { responseId: string; blockId: string; idempotencyKey: string; code: string }) => Promise<{ data: unknown; error: unknown }>;
   markCompleted: (params: {
     responseId: string;
@@ -92,9 +92,9 @@ export async function verifyCameraRequest(
   payload: VerifyPayload,
   imageFile: { buffer: ArrayBuffer; type: string },
   deps: VerifyDependencies
-): Promise<{ status: number; body: VerificationResult | { ok: false; code: string; message?: string } }> {
-  // requestId random para logs e resposta
-  const requestId = Math.random().toString(36).substring(7);
+): Promise<{ status: number; body: VerificationResult | { ok: false; code: string; message?: string; requestId?: string } }> {
+  // 0. Use injection-provided requestId or fallback
+  const requestId = deps.requestId || Math.random().toString(36).substring(7);
 
   // 1. CAMERA_AI_MODE
   if (deps.mode !== 'enabled') {
@@ -170,16 +170,17 @@ export async function verifyCameraRequest(
     };
   }
 
+  const { CameraVerificationPolicyV1Schema } = await import('./schema');
   const question = (String(block.title || '') + ' ' + String(block.description || '')).trim();
-  const policy = (block as any).cameraAiPolicy;
+  const policy = block.cameraAiPolicy;
   
-  // Fase 3: Integrity check
+  // SHA-256 helper inside handler for now to avoid dependency issues during tests if subtle is not available in node
   const expectedHash = createHash('sha256').update(question).digest('hex');
-  const isPolicyValid = policy && 
-                       policy.version === 1 && 
-                       policy.questionHash === expectedHash;
+  const policyValidation = CameraVerificationPolicyV1Schema.safeParse(policy);
 
-  if (!isPolicyValid) {
+  if (!policyValidation.success || 
+      policyValidation.data.version !== 1 || 
+      policyValidation.data.questionHash !== expectedHash) {
     return { 
       status: 400, 
       body: { 
@@ -190,6 +191,8 @@ export async function verifyCameraRequest(
       } 
     };
   }
+
+  const validatedPolicy = policyValidation.data;
 
 
   // 7 & 8. Replay & Atomic Claim
@@ -324,7 +327,7 @@ export async function verifyCameraRequest(
   const startTime = deps.now().getTime();
   let analysis: CameraVerification;
   try {
-    analysis = await deps.analyzeImage(question, imageFile.buffer, mimeType, isPolicyValid ? policy : undefined);
+    analysis = await deps.analyzeImage(question, imageFile.buffer, mimeType, validatedPolicy);
   } catch (aiError) {
     await deps.markFailed({
       responseId: session.response_id,

@@ -1,6 +1,26 @@
 import { CameraVerification, Decision, VerificationResult } from './schema';
 
 export function evaluateGate(analysis: CameraVerification): VerificationResult {
+  // 1. Sanitize user_message
+  const sanitizeMessage = (msg: string, isApproved: boolean): string => {
+    if (!msg) return isApproved ? 'Foto verificada com sucesso.' : 'É necessário tirar outra foto.';
+    
+    // Remove technical jargon, model names, JSON-like structures, and markdown
+    let clean = msg
+      .replace(/\{.*\}/g, '') // remove JSON
+      .replace(/gpt-[a-z0-9-]+|openai|claude|gemini|deepseek/gi, '') // remove model names
+      .replace(/[\*\_\`\#]/g, '') // remove markdown
+      .replace(/\s+/g, ' ')
+      .trim();
+    
+    // Limit to 240 chars
+    if (clean.length > 240) {
+      clean = clean.substring(0, 237) + '...';
+    }
+    
+    return clean || (isApproved ? 'Foto verificada com sucesso.' : 'É necessário tirar outra foto.');
+  };
+
   const isApproved = 
     analysis.target_visible === true &&
     analysis.target_identity_confidence >= 0.90 &&
@@ -11,19 +31,21 @@ export function evaluateGate(analysis: CameraVerification): VerificationResult {
     analysis.contradictions.length === 0 &&
     analysis.overall_confidence >= 0.90;
 
+  const sanitizedMessage = sanitizeMessage(analysis.user_message, isApproved);
+
   if (isApproved) {
     return {
       ok: true,
       decision: 'approved',
       code: 'verified',
-      message: analysis.user_message || 'Foto verificada com sucesso.',
+      message: sanitizedMessage,
       evidence: analysis.positive_visible_evidence.join(', ').substring(0, 500)
     };
   }
 
   // Mapeamento Fail-Closed
   let code = 'retake_required';
-  let message = analysis.user_message || 'É necessário tirar outra foto.';
+  let message = sanitizedMessage;
 
   // Objeto ausente ou incorreto
   if (!analysis.target_visible || analysis.target_identity_confidence < 0.90) {
@@ -31,7 +53,7 @@ export function evaluateGate(analysis: CameraVerification): VerificationResult {
       ok: true,
       decision: 'retake',
       code: 'target_missing',
-      message: analysis.user_message || 'O objeto solicitado não foi identificado na foto.',
+      message: sanitizedMessage,
       evidence: analysis.negative_visible_evidence.join(', ')
     };
   }
@@ -42,7 +64,7 @@ export function evaluateGate(analysis: CameraVerification): VerificationResult {
       ok: true,
       decision: 'retake',
       code: 'quality_failure',
-      message: analysis.user_message || 'A qualidade da foto não é suficiente. Procure iluminação e nitidez.',
+      message: sanitizedMessage,
       evidence: analysis.negative_visible_evidence.join(', ')
     };
   }
@@ -53,7 +75,7 @@ export function evaluateGate(analysis: CameraVerification): VerificationResult {
       ok: true,
       decision: 'not_observable',
       code: 'not_observable',
-      message: analysis.user_message || 'Não foi possível confirmar a condição. Tente mostrar o item completo.',
+      message: sanitizedMessage,
       evidence: [...analysis.negative_visible_evidence, ...analysis.contradictions].join(', ')
     };
   }
@@ -64,7 +86,7 @@ export function evaluateGate(analysis: CameraVerification): VerificationResult {
       ok: true,
       decision: 'retake',
       code: 'condition_not_met',
-      message: analysis.user_message || 'A condição solicitada não foi atendida.',
+      message: sanitizedMessage,
       evidence: analysis.negative_visible_evidence.join(', ')
     };
   }
@@ -74,7 +96,7 @@ export function evaluateGate(analysis: CameraVerification): VerificationResult {
     ok: true,
     decision: 'retake',
     code: 'uncertain',
-    message: analysis.user_message || 'A foto não é conclusiva. Tente novamente.',
+    message: sanitizedMessage,
     evidence: analysis.overall_confidence.toString()
   };
 }

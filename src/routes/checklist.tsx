@@ -117,6 +117,7 @@ const InsightsTab = lazy(() => import("@/components/InsightsTab").then(m => ({ d
 const SubmissionsTab = lazy(() => import("@/components/SubmissionsTab").then(m => ({ default: m.SubmissionsTab })));
 import { BlockRenderer, INTERACTIVE_BLOCK_TYPES } from "@/components/BlockRenderer";
 import { ensureCameraBlockIds, withNewCameraBlockId, extractCameraQuestions } from "@/lib/camera-blocks";
+import { hashQuestion } from "@/lib/camera-ai/hashing";
 function CameraBlockPreview({ textColor, blockId }: { textColor?: string; blockId?: string }) {
   const [dataUrl, setDataUrl] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -249,15 +250,7 @@ function CameraBlockPreview({ textColor, blockId }: { textColor?: string; blockI
   );
 }
 
-interface CameraAiPolicy {
-  version: number;
-  questionHash: string;
-  verifiability: 'visual' | 'partially_visual' | 'not_visual';
-  summary: string;
-  requiredEvidence: string[];
-  rejectionSignals: string[];
-  source: 'ai_generated' | 'owner_edited';
-}
+import { CameraVerificationPolicyV1 } from "@/server/camera-ai/schema";
 
 function CameraBlockEditor({ 
   block, 
@@ -287,7 +280,7 @@ function CameraBlockEditor({
   const camTitle = String(block.title || block.subtitle || "");
   const camDescription = String(block.description ?? "");
   const camRequired = block.required !== false;
-  const policy = block.cameraAiPolicy as CameraAiPolicy | undefined;
+  const policy = block.cameraAiPolicy as CameraVerificationPolicyV1 | undefined;
 
   const triggerCompile = async (checklistId: string, blockId: string) => {
     if (isCompiling) return;
@@ -317,22 +310,25 @@ function CameraBlockEditor({
 
   useEffect(() => {
     if (!isActive || !currentChecklistId) return;
-    const question = (camTitle + ' ' + camDescription).trim();
-    if (!question) return;
     
-    const hash = Array.from(new TextEncoder().encode(question))
-      .map(b => b.toString(16).padStart(2, '0'))
-      .join(''); 
-    
-    if (policy?.questionHash === hash) return;
+    const checkHash = async () => {
+      const question = (camTitle + ' ' + camDescription).trim();
+      if (!question) return;
+      
+      const hash = await hashQuestion(camTitle, camDescription);
+      
+      if (policy?.questionHash === hash) return;
 
-    if (compileTimeoutRef.current) clearTimeout(compileTimeoutRef.current);
-    compileTimeoutRef.current = setTimeout(() => {
-      triggerCompile(currentChecklistId, block.id);
-    }, 2000);
+      if (compileTimeoutRef.current) clearTimeout(compileTimeoutRef.current);
+      compileTimeoutRef.current = setTimeout(() => {
+        triggerCompile(currentChecklistId, block.id);
+      }, 2000);
+    };
+
+    checkHash();
 
     return () => clearTimeout(compileTimeoutRef.current);
-  }, [camTitle, camDescription, isActive, currentChecklistId]);
+  }, [camTitle, camDescription, isActive, currentChecklistId, policy?.questionHash]);
 
   const visionBadge = policy?.verifiability === 'not_visual' 
     ? { label: "Não verificável por IA", tone: "warn" as const }
@@ -517,15 +513,15 @@ function CameraBlockEditor({
                     <div className="space-y-2">
                       <label className="block text-[10px] font-bold text-neutral-400 uppercase tracking-wider">Evidência necessária</label>
                       <div className="space-y-1.5">
-                        {(policy.requiredEvidence || []).map((item: string, idx: number) => (
+                        {(policy.requiredVisibleEvidence || []).map((item: string, idx: number) => (
                           <input
                             key={idx}
                             type="text"
                             value={item}
                             onChange={(e) => {
-                              const next = [...policy.requiredEvidence];
+                              const next = [...policy.requiredVisibleEvidence];
                               next[idx] = e.target.value;
-                              updateBlock(block.id, { cameraAiPolicy: { ...policy, requiredEvidence: next, source: 'owner_edited' } });
+                              updateBlock(block.id, { cameraAiPolicy: { ...policy, requiredVisibleEvidence: next, source: 'owner_edited' } });
                             }}
                             className="w-full px-2 py-1.5 text-xs border border-neutral-200 rounded bg-white outline-none focus:border-neutral-400"
                           />

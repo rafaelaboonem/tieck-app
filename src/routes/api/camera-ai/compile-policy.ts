@@ -1,7 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { CompilePolicyPayloadSchema, CameraVerificationPolicyV1Schema } from '@/server/camera-ai/schema';
+import { CompilePolicyPayloadSchema, CameraVerificationPolicyV1Schema, PolicyGenerationSchema, CameraVerificationPolicyV1 } from '@/server/camera-ai/schema';
 import OpenAI from 'openai';
-import { zodResponseFormat } from "openai/helpers/zod";
+import { zodTextFormat } from "openai/helpers/zod";
 import { createServerSupabaseClient } from '@/integrations/supabase/client.server';
 import { createHash } from 'crypto';
 
@@ -39,6 +39,7 @@ export const Route = createFileRoute('/api/camera-ai/compile-policy')({
           const body = await request.json();
           const validation = CompilePolicyPayloadSchema.safeParse(body);
           if (!validation.success) {
+            console.error('[CompilePolicy] Payload validation failed:', validation.error);
             return Response.json({ ok: false, code: 'invalid_payload' }, { status: 400 });
           }
 
@@ -56,16 +57,29 @@ export const Route = createFileRoute('/api/camera-ai/compile-policy')({
           // 2. Fetch checklist and verify ownership/access
           const { data: checklist, error: chkError } = await client
             .from('checklists')
-            .select('blocks, workspace_id')
+            .select('blocks, workspace_id, owner_id')
             .eq('id', checklistId)
             .single();
 
           if (chkError || !checklist) return Response.json({ ok: false, code: 'not_found' }, { status: 404 });
           
-          // Basic ownership check (extend to workspace roles if needed)
-          // For now, check if user is in workspace or is the owner (if workspace_id is null)
-          // Simplified for Phase 1:
-          // const { data: workspace } = await client.from('workspaces').select('id').eq('id', checklist.workspace_id).single();
+          // REAL AUTHORIZATION: Check if user is owner or member of the workspace
+          let isAuthorized = checklist.owner_id === user.id;
+          
+          if (!isAuthorized && checklist.workspace_id) {
+            const { data: member } = await client
+              .from('workspace_members')
+              .select('id')
+              .eq('workspace_id', checklist.workspace_id)
+              .eq('user_id', user.id)
+              .maybeSingle();
+            
+            if (member) isAuthorized = true;
+          }
+
+          if (!isAuthorized) {
+            return Response.json({ ok: false, code: 'forbidden' }, { status: 403 });
+          }
           
           const blocks = checklist.blocks as any[];
           const block = blocks.find(b => b.id === blockId);
@@ -93,32 +107,29 @@ export const Route = createFileRoute('/api/camera-ai/compile-policy')({
               { role: "system", content: POLICY_GENERATION_PROMPT },
               { role: "user", content: `PERGUNTA: "${question}"` }
             ],
-            response_format: {
-              type: "json_schema",
-              json_schema: {
-                name: "camera_verification_policy",
-                strict: true,
-                schema: zodResponseFormat(CameraVerificationPolicyV1Schema, "camera_verification_policy").json_schema.schema
-              }
+            text: {
+              format: zodTextFormat(PolicyGenerationSchema, "camera_verification_policy")
             }
-          } as any);
+          });
 
-          const policy = response.output_parsed;
-          if (!policy) throw new Error('OpenAI parse failed');
+          const generated = response.output_parsed;
+          if (!generated) throw new Error('OpenAI parse failed');
 
-          // Inject version and hash
-          const finalPolicy = {
-            ...policy,
+          // 5. Canonical Validation & Enrichment
+          const finalPolicyData: CameraVerificationPolicyV1 = {
+            ...generated,
             version: 1,
             questionHash,
             source: 'generated',
-            // Map new fields for stability
-            requiredVisibleEvidence: (policy as any).requiredVisibleEvidence || [],
-            rejectionSignals: (policy as any).rejectionSignals || [],
-            notObservableSignals: (policy as any).notObservableSignals || []
           };
 
-          return Response.json({ ok: true, policy: finalPolicy });
+          const finalValidation = CameraVerificationPolicyV1Schema.safeParse(finalPolicyData);
+          if (!finalValidation.success) {
+            console.error('[CompilePolicy] Final validation failed:', finalValidation.error);
+            throw new Error('Generated policy failed final validation');
+          }
+
+          return Response.json({ ok: true, policy: finalValidation.data });
 
         } catch (error: any) {
           console.error('[CompilePolicy] Failed:', error);
