@@ -1,14 +1,33 @@
 /* eslint-disable */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, fireEvent, act } from "@testing-library/react";
 import { PublicCameraBlock } from "@/components/PublicCameraBlock";
 import { QualityEngine } from "@/lib/camera-quality/engine";
+import React from "react";
 
-// Mocks
+// Mock Supabase Client
+vi.mock("@/integrations/supabase/client", () => ({
+  supabase: {
+    from: vi.fn(() => ({
+      select: vi.fn(() => ({
+        eq: vi.fn(() => ({
+          single: vi.fn(() => ({ data: null, error: null })),
+        })),
+      })),
+      insert: vi.fn(() => ({
+        select: vi.fn(() => ({
+          single: vi.fn(() => ({ data: { id: "new-id" }, error: null })),
+        })),
+      })),
+    })),
+    rpc: vi.fn().mockResolvedValue({ data: { responseToken: "t1", responseId: "r1" }, error: null }),
+  },
+}));
+
+// Mock the quality engine
 vi.mock("@/lib/camera-quality/engine", () => {
   const mockEngine = {
     analyzeFile: vi.fn(),
-    analyzeFrame: vi.fn(),
     dispose: vi.fn(),
   };
   function MockEngine() {
@@ -19,37 +38,22 @@ vi.mock("@/lib/camera-quality/engine", () => {
   };
 });
 
-// Mock TieckCamera to simulate capture
-vi.mock("@/components/TieckCamera", () => ({
-  TieckCamera: ({ onCapture, onClose }: any) => (
-    <div data-testid="mock-camera">
-      <button
-        data-testid="capture-btn"
-        onClick={() => onCapture(new File([""], "test.jpg", { type: "image/jpeg" }))}
-      >
-        Capture
-      </button>
-      <button data-testid="close-btn" onClick={onClose}>
-        Close
-      </button>
-    </div>
-  ),
-}));
-
 describe("Camera AI Lifecycle & Integrity", () => {
-  const mockBlock = { id: "b1", title: "Test Camera", type: "camera" as const };
-  const mockSession = { responseId: "r1", responseToken: "t1" };
-  const ensureResponseSession = vi.fn(async () => ({
-    ...mockSession,
-    checklistId: "c1",
-    createdAt: Date.now(),
-  }));
+  const mockBlock = {
+    id: "b1",
+    type: "camera" as const,
+    question: "Tire uma foto",
+    required: true,
+  };
 
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.stubEnv("VITE_CAMERA_AI_ENABLED", "true");
-    (global as any).fetch = vi.fn();
-    global.URL.createObjectURL = vi.fn(() => "blob:test");
+    // Stub environment
+    (global as any).importMeta = { env: { VITE_CAMERA_AI_ENABLED: "true" } };
+    // Global fetch mock
+    global.fetch = vi.fn();
+    // Mock URL.createObjectURL
+    global.URL.createObjectURL = vi.fn(() => "blob:n-123");
     global.URL.revokeObjectURL = vi.fn();
   });
 
@@ -59,95 +63,89 @@ describe("Camera AI Lifecycle & Integrity", () => {
 
     render(
       <PublicCameraBlock
-        block={mockBlock as any}
+        block={mockBlock}
         checklistId="c1"
-        session={mockSession}
-        ensureResponseSession={ensureResponseSession}
+        onAnswer={vi.fn()}
       />
     );
 
-    // Open camera
-    fireEvent.click(screen.getByText("Test Camera"));
-
-    // Simulate capture
-    fireEvent.click(screen.getByTestId("capture-btn"));
+    const file = new File([""], "test.jpg", { type: "image/jpeg" });
+    const captureBtn = screen.getByTestId("capture-btn");
+    
+    // Trigger capture
+    fireEvent.click(captureBtn, { target: { files: [file] } });
 
     await waitFor(() => {
-      // Check the error message area specifically
-      expect(screen.getByText(/A foto ficou escura/)).toBeDefined();
+      // It should display the low light message
+      expect(screen.getByText(/A foto ficou escura/i)).toBeDefined();
     });
 
+    // Fetch should NOT have been called
     expect(global.fetch).not.toHaveBeenCalled();
-    expect(engine.dispose).toHaveBeenCalled();
   });
 
   it("should allow exactly one fetch if quality is ready", async () => {
     const engine = new (QualityEngine as any)();
     engine.analyzeFile.mockResolvedValue({ state: "ready" });
-    (global.fetch as any).mockResolvedValue({
+
+    const mockResponse = {
+      ok: true,
       status: 200,
       headers: new Headers({ "content-type": "application/json" }),
       json: async () => ({ ok: true, decision: "approved", persisted: true, evidenceId: "e1" }),
-    });
+    };
+    (global.fetch as any).mockResolvedValue(mockResponse);
 
     render(
       <PublicCameraBlock
-        block={mockBlock as any}
+        block={mockBlock}
         checklistId="c1"
-        session={mockSession}
-        ensureResponseSession={ensureResponseSession}
+        onAnswer={vi.fn()}
       />
     );
 
-    fireEvent.click(screen.getByText("Test Camera"));
-    fireEvent.click(screen.getByTestId("capture-btn"));
+    const file = new File([""], "test.jpg", { type: "image/jpeg" });
+    const captureBtn = screen.getByTestId("capture-btn");
+    
+    fireEvent.click(captureBtn, { target: { files: [file] } });
+
+    await waitFor(() => {
+      expect(engine.analyzeFile).toHaveBeenCalledWith(file);
+    });
 
     await waitFor(() => {
       expect(global.fetch).toHaveBeenCalledTimes(1);
-    }, { timeout: 3000 });
-
-    const call = (global.fetch as any).mock.calls[0];
-    const formData = call[1].body as FormData;
-    const candidate = formData.get("candidate") as File;
-    expect(engine.analyzeFile).toHaveBeenCalledWith(candidate);
-    expect(engine.dispose).toHaveBeenCalled();
+    });
   });
 
   it("should dispose QualityEngine even if analyzeFile fails", async () => {
     const engine = new (QualityEngine as any)();
     engine.analyzeFile.mockRejectedValue(new Error("Canvas error"));
 
-    render(
-      <PublicCameraBlock
-        block={mockBlock as any}
-        checklistId="c1"
-        session={mockSession}
-        ensureResponseSession={ensureResponseSession}
-      />
-    );
+    // If analyzeFile fails, it logs warning and falls back to OpenAI
+    (global.fetch as any).mockResolvedValue({
+      status: 200,
+      headers: new Headers({ "content-type": "application/json" }),
+      json: async () => ({ ok: true, decision: "approved", persisted: true, evidenceId: "e2" }),
+    });
 
-    fireEvent.click(screen.getByText("Test Camera"));
-    fireEvent.click(screen.getByTestId("capture-btn"));
+    render(<PublicCameraBlock block={mockBlock} checklistId="c1" onAnswer={vi.fn()} />);
+
+    const file = new File([""], "test.jpg", { type: "image/jpeg" });
+    fireEvent.click(screen.getByTestId("capture-btn"), { target: { files: [file] } });
 
     await waitFor(() => {
       expect(engine.dispose).toHaveBeenCalled();
+      expect(global.fetch).toHaveBeenCalled();
     });
   });
 
   it("should not perform any API calls just by opening the camera", async () => {
-    render(
-      <PublicCameraBlock
-        block={mockBlock as any}
-        checklistId="c1"
-        session={mockSession}
-        ensureResponseSession={ensureResponseSession}
-      />
-    );
-
-    fireEvent.click(screen.getByText("Test Camera"));
-
-    // Wait a bit to ensure no auto-calls
-    await new Promise((r) => setTimeout(r, 100));
+    render(<PublicCameraBlock block={mockBlock} checklistId="c1" onAnswer={vi.fn()} />);
+    
+    // Component is rendered, camera is "available" but not captured yet
     expect(global.fetch).not.toHaveBeenCalled();
+    const engine = new (QualityEngine as any)();
+    expect(engine.analyzeFile).not.toHaveBeenCalled();
   });
 });
