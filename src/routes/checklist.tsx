@@ -412,7 +412,7 @@ import {
    Palette,
    Highlighter,
     Hexagon,
-    Sparkles,
+    
     Copy as CopyIcon,
     ArrowRight,
     ArrowUpRight,
