@@ -421,12 +421,12 @@ export function PublicCameraBlock({
         </Button>
       )}
 
-      {(["preparing", "analyzing", "approved", "retake", "not_observable", "technical_failure", "rate_limited", "uploading", "received"].includes(state)) && preview && (
+      {(["preparing", "analyzing", "approved", "retake", "not_observable", "technical_failure", "rate_limited", "uploading", "received", "storage_failure"].includes(state)) && preview && (
         <div className={cn(
           "relative aspect-[4/3] rounded-2xl overflow-hidden border-2 transition-colors duration-500",
           state === "approved" ? "border-green-500 shadow-lg shadow-green-100" : 
           (state === "retake" || state === "not_observable") ? "border-amber-500 shadow-lg shadow-amber-100" : 
-          state === "technical_failure" ? "border-red-500" : "border-neutral-200"
+          (state === "technical_failure" || state === "storage_failure") ? "border-red-500" : "border-neutral-200"
         )}>
           
 
