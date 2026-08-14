@@ -38,6 +38,7 @@ export interface ClaimResult {
   existing_decision?: Decision;
   existing_code?: string;
   existing_evidence?: string;
+  existing_evidence_id?: string;
   current_retry_count: number;
 }
 
@@ -62,11 +63,20 @@ export interface VerifyDependencies {
     decision: Decision;
     code: string;
     evidence?: string;
+    evidenceId?: string;
     model: string;
     durationMs: number;
     at: Date;
   }) => Promise<{ data: { id: string } | null; error: unknown }>;
   isConfigured: () => boolean;
+  persistEvidence: (params: {
+    checklistId: string;
+    responseId: string;
+    blockId: string;
+    idempotencyKey: string;
+    buffer: ArrayBuffer;
+    mimeType: string;
+  }) => Promise<{ evidenceId: string | null; error: any }>;
 }
 
 
@@ -180,6 +190,8 @@ export async function verifyCameraRequest(
         code: claim.existing_code || 'replayed',
         message: 'Replay da decisão anterior.',
         evidence: claim.existing_evidence || undefined,
+        evidenceId: claim.existing_evidence_id || undefined,
+        persisted: !!claim.existing_evidence_id,
         requestId
       }
     };
@@ -235,7 +247,40 @@ export async function verifyCameraRequest(
   // 11. Gate
   const result = evaluateGate(analysis);
 
-  // 12. Final Persistence Confirmation
+  // 12. Persistence (Only for Approved)
+  let evidenceId: string | undefined;
+
+  if (result.decision === 'approved') {
+    const { evidenceId: pId, error: pError } = await deps.persistEvidence({
+      checklistId: session.checklist_id,
+      responseId: session.response_id,
+      blockId: payload.blockId,
+      idempotencyKey: payload.idempotencyKey,
+      buffer: imageFile.buffer,
+      mimeType
+    });
+
+    if (pError || !pId) {
+      await deps.markFailed({
+        responseId: session.response_id,
+        blockId: payload.blockId,
+        idempotencyKey: payload.idempotencyKey,
+        code: 'storage_failure'
+      });
+      return {
+        status: 500,
+        body: {
+          ok: false,
+          code: 'storage_failure',
+          message: 'Foto aprovada, mas falha ao salvar no servidor.',
+          requestId
+        }
+      };
+    }
+    evidenceId = pId;
+  }
+
+  // 13. Final Decision Record Confirmation
   const { data: finalUpdate, error: finalError } = await deps.markCompleted({
     responseId: session.response_id,
     blockId: payload.blockId,
@@ -243,6 +288,7 @@ export async function verifyCameraRequest(
     decision: result.decision,
     code: result.code,
     evidence: result.evidence,
+    evidenceId: evidenceId,
     model: deps.model,
     durationMs: duration,
     at: deps.now()
@@ -261,6 +307,14 @@ export async function verifyCameraRequest(
     };
   }
 
-  // 13. Sanitized Response
-  return { status: 200, body: { ...result, requestId } };
+  // 14. Sanitized Response
+  return { 
+    status: 200, 
+    body: { 
+      ...result, 
+      evidenceId, 
+      persisted: result.decision === 'approved', 
+      requestId 
+    } 
+  };
 }

@@ -37,4 +37,6 @@ export interface VerificationResult {
   message: string;
   evidence?: string;
   requestId?: string;
+  evidenceId?: string;
+  persisted?: boolean;
 }
