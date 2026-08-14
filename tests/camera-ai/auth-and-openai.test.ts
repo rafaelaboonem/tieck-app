@@ -20,11 +20,14 @@ vi.mock('openai', () => {
 });
 
 describe('POST /api/camera-ai/compile-policy Authorization & OpenAI', () => {
+  const checklistId = 'c1234567-89ab-cdef-0123-456789abcdef';
+  const blockId = 'b1234567-89ab-cdef-0123-456789abcdef';
+
   const mockChecklist = {
-    id: 'c1',
-    blocks: [{ id: 'b1', type: 'camera', title: 'Test', description: '' }],
-    workspace_id: 'w1',
-    owner_id: 'u1'
+    id: checklistId,
+    blocks: [{ id: blockId, type: 'camera', title: 'Test', description: '' }],
+    workspace_id: 'w1234567-89ab-cdef-0123-456789abcdef',
+    owner_id: 'u1234567-89ab-cdef-0123-456789abcdef'
   };
 
   const mockSupabase = {
@@ -51,7 +54,7 @@ describe('POST /api/camera-ai/compile-policy Authorization & OpenAI', () => {
     const request = new Request('http://localhost/api/camera-ai/compile-policy', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ checklistId: 'c1', blockId: 'b1' })
+      body: JSON.stringify({ checklistId, blockId })
     });
     
     const handler = (Route as any).options.server.handlers.POST;
@@ -70,7 +73,7 @@ describe('POST /api/camera-ai/compile-policy Authorization & OpenAI', () => {
         'Authorization': 'Bearer token',
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({ checklistId: 'c1', blockId: 'b1' })
+      body: JSON.stringify({ checklistId, blockId })
     });
     
     const handler = (Route as any).options.server.handlers.POST;
@@ -80,7 +83,7 @@ describe('POST /api/camera-ai/compile-policy Authorization & OpenAI', () => {
   });
 
   it('Permite compilação se o usuário for o proprietário', async () => {
-    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: 'u1' } }, error: null });
+    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: mockChecklist.owner_id } }, error: null });
     mockSupabase.single.mockResolvedValue({ data: mockChecklist, error: null });
     
     mockParse.mockResolvedValue({
@@ -103,7 +106,7 @@ describe('POST /api/camera-ai/compile-policy Authorization & OpenAI', () => {
         'Authorization': 'Bearer token',
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({ checklistId: 'c1', blockId: 'b1' })
+      body: JSON.stringify({ checklistId, blockId })
     });
     
     const handler = (Route as any).options.server.handlers.POST;
@@ -117,7 +120,7 @@ describe('POST /api/camera-ai/compile-policy Authorization & OpenAI', () => {
   });
 
   it('Chama OpenAI exatamente uma vez para nova política', async () => {
-    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: 'u1' } }, error: null });
+    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: mockChecklist.owner_id } }, error: null });
     mockSupabase.single.mockResolvedValue({ data: mockChecklist, error: null });
     mockParse.mockResolvedValue({ output_parsed: { verifiability: 'visual', target: 'X', condition: 'Y', targetDescription: 'D', conditionDescription: 'C', requiredVisibleEvidence: [], rejectionSignals: [], notObservableSignals: [], summary: 'S' } });
 
@@ -127,7 +130,7 @@ describe('POST /api/camera-ai/compile-policy Authorization & OpenAI', () => {
         'Authorization': 'Bearer token',
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({ checklistId: 'c1', blockId: 'b1' })
+      body: JSON.stringify({ checklistId, blockId })
     });
     
     const handler = (Route as any).options.server.handlers.POST;
