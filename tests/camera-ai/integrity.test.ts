@@ -37,7 +37,7 @@ describe('Camera AI Final Recovery & Integrity', () => {
               description: '',
               cameraAiPolicy: {
                 version: 1,
-                questionHash: '532eaabd9574880dbf76b9b8cc00832c20a6ec113d682299550d7a6e0f345e25', // hash of "Test"
+                questionHash: '532eaabd9574880dbf76b9b8cc00832c20a6ec113d682299550d7a6e0f345e25', // SHA-256 hex hash of "Test " (normalized question)
                 verifiability: 'visual',
                 target: 'Test',
                 condition: 'present',

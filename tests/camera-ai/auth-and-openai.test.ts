@@ -40,7 +40,7 @@ describe('POST /api/camera-ai/compile-policy Authorization & OpenAI', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    const { createServerSupabaseClient } = require('@/integrations/supabase/client.server');
+    const { createServerSupabaseClient } = await import('@/integrations/supabase/client.server');
     createServerSupabaseClient.mockReturnValue(mockSupabase);
   });
 

@@ -174,7 +174,7 @@ export async function verifyCameraRequest(
   const question = (String(block.title || '') + ' ' + String(block.description || '')).trim();
   const policy = block.cameraAiPolicy;
   
-  // Fase 3: Fail-Closed Integrity check
+  // SHA-256 helper inside handler for now to avoid dependency issues during tests if subtle is not available in node
   const expectedHash = createHash('sha256').update(question).digest('hex');
   const policyValidation = CameraVerificationPolicyV1Schema.safeParse(policy);
 
