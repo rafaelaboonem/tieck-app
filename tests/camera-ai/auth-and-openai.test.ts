@@ -38,11 +38,11 @@ describe('POST /api/camera-ai/compile-policy Authorization & OpenAI', () => {
     maybeSingle: vi.fn()
   };
 
-  beforeEach(() => {
-    vi.clearAllMocks();
-    const { createServerSupabaseClient } = await import('@/integrations/supabase/client.server');
-    createServerSupabaseClient.mockReturnValue(mockSupabase);
-  });
+   beforeEach(async () => {
+     vi.clearAllMocks();
+     const { createServerSupabaseClient } = await import('@/integrations/supabase/client.server');
+     (createServerSupabaseClient as any).mockReturnValue(mockSupabase);
+   });
 
   it('Retorna 401 se não houver token', async () => {
     const request = new Request('http://localhost/api/camera-ai/compile-policy', {
