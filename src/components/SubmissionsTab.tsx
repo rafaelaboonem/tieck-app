@@ -40,7 +40,9 @@ type CameraAIAttempt = {
   completed_at: string;
   code: string;
   evidence_id: string;
+  status: 'processing' | 'completed' | 'failed';
 };
+
 
 type EvidenceData = {
   id: string;
