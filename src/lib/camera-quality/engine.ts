@@ -30,8 +30,41 @@ export class QualityEngine {
       img.onload = async () => {
         URL.revokeObjectURL(url);
         try {
-          const result = await this.processSource(img, img.naturalWidth, img.naturalHeight);
-          resolve(result);
+      const { QualityEngine } = await import("./engine");
+      const engine = new QualityEngine();
+      // @ts-ignore
+      return engine.processSource(img, img.naturalWidth, img.naturalHeight);
+    });
+  }
+
+  /**
+   * Static decision logic for testability outside DOM.
+   */
+  static determineState(metrics: {
+    width: number;
+    height: number;
+    luminance: { average: number; brightPercent: number };
+    sharpness: number;
+    motion: number;
+  }, thresholds: QualityThresholds = DEFAULT_THRESHOLDS): CameraQualityState {
+    if (metrics.width < thresholds.minWidth || metrics.height < thresholds.minHeight) {
+      return "unavailable";
+    }
+    if (metrics.luminance.average < thresholds.minBrightness) {
+      return "low_light";
+    }
+    if (metrics.luminance.brightPercent > 0.3 || metrics.luminance.average > thresholds.maxBrightness) {
+      return "overexposed";
+    }
+    if (metrics.sharpness < thresholds.minSharpness) {
+      return "blurry";
+    }
+    if (metrics.motion > thresholds.maxMotion) {
+      return "moving";
+    }
+    return "ready";
+  }
+
         } catch (err) {
           reject(err);
         }
