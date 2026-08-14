@@ -2330,6 +2330,13 @@ export type Database = {
           storage_path: string
         }[]
       }
+      create_public_response: {
+        Args: { p_checklist_id: string; p_visitor_id: string }
+        Returns: {
+          response_id: string
+          response_token: string
+        }[]
+      }
       generate_dataset_public_id: { Args: never; Returns: string }
       generate_short_slug: { Args: { length?: number }; Returns: string }
       get_public_checklist: {
