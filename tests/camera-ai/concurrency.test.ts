@@ -28,7 +28,25 @@ describe('Camera AI Storage Concurrency & Cleanup', () => {
           checklist_id: 'c123', 
           workspace_id: 'w1',
           status: 'in_progress',
-          published_content: { blocks: [{ id: 'blk-1', type: 'camera' }] } 
+          published_content: { 
+            blocks: [{ 
+              id: 'blk-1', 
+              type: 'camera', 
+              cameraAiPolicy: { 
+                version: 1, 
+                questionHash: '532eaabd9574880dbf76b9b8cc00832c20a6ec113d682299550d7a6e0f345e25',
+                verifiability: 'visual',
+                target: 'X',
+                condition: 'Y',
+                summary: 'S',
+                source: 'generated',
+                requiredVisibleEvidence: [],
+                rejectionSignals: [],
+                notObservableSignals: []
+              } 
+            }] 
+          } 
+
         } satisfies PublicSession], 
         error: null 
       }),
