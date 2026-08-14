@@ -318,7 +318,7 @@ export async function verifyCameraRequest(
   // 11. Gate
   const result = evaluateGate(analysis);
 
-  // 12. Persistence (Only for Approved)
+  // 12. Final Decision & Persistence (Single Atomic markCompleted)
   let evidenceId: string | undefined;
 
   if (result.decision === 'approved') {
@@ -332,7 +332,8 @@ export async function verifyCameraRequest(
     });
 
     if (pError || !pId) {
-      await deps.markCompleted({
+      // markCompleted exactly once for Approved+StorageFailure
+      const { data: finalUpdate, error: finalError } = await deps.markCompleted({
         responseId: session.response_id,
         blockId: payload.blockId,
         idempotencyKey: payload.idempotencyKey,
@@ -344,6 +345,14 @@ export async function verifyCameraRequest(
         durationMs: duration,
         at: deps.now()
       });
+
+      if (finalError || !finalUpdate) {
+        return { 
+          status: 500, 
+          body: { ok: false, code: 'persistence_error', message: 'Falha ao confirmar falha de salvamento.', requestId } 
+        };
+      }
+
       return {
         status: 500,
         body: {
@@ -355,29 +364,15 @@ export async function verifyCameraRequest(
       };
     }
     evidenceId = pId;
-  } else {
-    // Record rejection
-    await deps.markCompleted({
-      responseId: session.response_id,
-      blockId: payload.blockId,
-      idempotencyKey: payload.idempotencyKey,
-      decision: result.decision,
-      code: result.code,
-      evidence: result.evidence,
-      evidenceId: undefined,
-      model: deps.model,
-      durationMs: duration,
-      at: deps.now()
-    });
   }
 
-  // 13. Final Decision Record Confirmation (Atomic Approval)
+  // markCompleted exactly once for all new successful/rejected paths
   const { data: finalUpdate, error: finalError } = await deps.markCompleted({
     responseId: session.response_id,
     blockId: payload.blockId,
     idempotencyKey: payload.idempotencyKey,
     decision: result.decision,
-    code: result.code,
+    code: result.decision === 'approved' ? 'verified' : result.code,
     evidence: result.evidence,
     evidenceId: evidenceId,
     model: deps.model,
@@ -390,9 +385,8 @@ export async function verifyCameraRequest(
       status: 500, 
       body: { 
         ok: false, 
-        decision: 'technical_failure', 
         code: 'persistence_error',
-        message: 'Falha ao confirmar persistência.',
+        message: 'Falha ao confirmar decisão da IA.',
         requestId
       } 
     };

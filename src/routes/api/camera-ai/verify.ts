@@ -98,10 +98,13 @@ export const Route = createFileRoute('/api/camera-ai/verify')({
                   createdThisRequest = true;
                 } else {
                   // If 409, it was created by concurrent request
-                  const isConflict = (err: any): boolean => 
-                    err && typeof err === 'object' && (err.status === 409 || err.statusCode === 409 || err.message?.includes('409'));
+                  const isStorageConflict = (err: unknown): err is { status: number } | { statusCode: number } | { message: string } => {
+                    if (!err || typeof err !== 'object') return false;
+                    const e = err as Record<string, unknown>;
+                    return e.status === 409 || e.statusCode === 409 || (typeof e.message === 'string' && e.message.includes('409'));
+                  };
                   
-                  if (!isConflict(uploadError)) {
+                  if (!isStorageConflict(uploadError)) {
                     console.error(`[CameraAI] Storage upload failed:`, uploadError);
                     return { evidenceId: null, error: uploadError };
                   }
