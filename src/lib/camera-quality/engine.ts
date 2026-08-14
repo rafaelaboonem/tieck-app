@@ -127,5 +127,12 @@ export class QualityEngine {
       this.canvas = null;
     }
     this.ctx = null;
+    this.isDisposed = true;
+  }
+
+  private isDisposed = false;
+
+  getDisposedState() {
+    return this.isDisposed;
   }
 }

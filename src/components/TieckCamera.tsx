@@ -85,12 +85,18 @@ export function TieckCamera({ open, title, allowGallery = false, onClose, onCapt
 
     const engine = qualityEngineRef.current;
     let timeoutId: number;
+    let cancelled = false;
 
     const analyze = async () => {
+      if (cancelled) return;
+
       const video = videoRef.current;
       if (video && video.videoWidth > 0) {
         try {
           const result = await engine.analyzeFrame(video);
+          
+          if (cancelled) return;
+
           setQualityResult(result);
           
           // Smooth transitions: keep track of last 2 states
@@ -102,12 +108,16 @@ export function TieckCamera({ open, title, allowGallery = false, onClose, onCapt
           console.error("[TieckCamera] Quality analysis error:", err);
         }
       }
-      timeoutId = window.setTimeout(analyze, 750); // 600-900ms range
+      
+      if (!cancelled) {
+        timeoutId = window.setTimeout(analyze, 750);
+      }
     };
 
     analyze();
 
     return () => {
+      cancelled = true;
       clearTimeout(timeoutId);
     };
   }, [open, ready, isCapturing]);
@@ -303,4 +313,12 @@ export function TieckCamera({ open, title, allowGallery = false, onClose, onCapt
       </div>
     </div>
   );
+  useEffect(() => {
+    return () => {
+      if (qualityEngineRef.current) {
+        qualityEngineRef.current.dispose();
+        qualityEngineRef.current = null;
+      }
+    };
+  }, []);
 }
