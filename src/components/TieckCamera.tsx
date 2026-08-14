@@ -1,6 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { X, SwitchCamera, Zap, ZapOff, Images } from "lucide-react";
+import { useCallback, useEffect, useRef, useState, useMemo } from "react";
+import { X, SwitchCamera, Zap, ZapOff, Images, Loader2 } from "lucide-react";
 import { isRestrictedWebView, useCameraSession } from "@/contexts/CameraSessionContext";
+import { QualityEngine } from "@/lib/camera-quality/engine";
+import { CameraQualityResult, CameraQualityState } from "@/lib/camera-quality/types";
+import { cn } from "@/lib/utils";
 
 type Props = {
   open: boolean;
@@ -10,43 +13,34 @@ type Props = {
   onCapture: (file: File) => void;
 };
 
-/** Rótulos de "Qualidade da captura" — verificação 100% local, sem IA. */
-type QualityHint = "low_light" | "too_bright" | "shaky" | "blurry" | "too_close" | "ready";
-
-const HINT_LABEL: Record<QualityHint, string> = {
-  low_light: "Mais luz",
-  too_bright: "Menos luz",
-  shaky: "Segure firme",
-  blurry: "Segure firme",
-  too_close: "Afaste um pouco",
+const HINT_LABEL: Record<CameraQualityState, string> = {
+  initializing: "Iniciando...",
   ready: "Pronto para fotografar",
+  low_light: "Ambiente com pouca luz",
+  overexposed: "Reduza a luz direta",
+  blurry: "Mantenha a câmera firme",
+  moving: "Segure o aparelho por um instante",
+  unavailable: "Câmera indisponível",
 };
 
 function haptic(ms = 12) {
   try { navigator.vibrate?.(ms); } catch { /* sem suporte */ }
 }
 
-/**
- * Câmera nativa do Tieck — fullscreen, mobile-first, premium.
- *
- * Nenhuma inferência de IA acontece enquanto a câmera está aberta: nenhum
- * frame sai do aparelho. A "Qualidade da captura" é calculada localmente a
- * partir de amostras 64x48 do próprio <video>.
- */
 export function TieckCamera({ open, title, allowGallery = false, onClose, onCapture }: Props) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const galleryRef = useRef<HTMLInputElement | null>(null);
-  const prevSampleRef = useRef<Float32Array | null>(null);
+  const qualityEngineRef = useRef<QualityEngine | null>(null);
+  const [qualityResult, setQualityResult] = useState<CameraQualityResult | null>(null);
+  const [lastStates, setLastStates] = useState<CameraQualityState[]>([]);
 
   const { stream, granted, denied, acquire, switchFacing } = useCameraSession();
   const [ready, setReady] = useState(false);
-  const [hint, setHint] = useState<QualityHint>("ready");
   const [torchOn, setTorchOn] = useState(false);
   const [torchAvailable, setTorchAvailable] = useState(false);
   const [flash, setFlash] = useState(false);
+  const [isCapturing, setIsCapturing] = useState(false);
 
-  // Só pede permissão depois de uma ação clara do usuário (abrir a câmera),
-  // e reutiliza o stream da sessão nas próximas aberturas.
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
@@ -59,7 +53,6 @@ export function TieckCamera({ open, title, allowGallery = false, onClose, onCapt
     return () => { cancelled = true; };
   }, [open, acquire]);
 
-  // Reanexa o mesmo MediaStream ao elemento de vídeo — sem nova permissão.
   useEffect(() => {
     const video = videoRef.current;
     if (!open || !video || !stream) return;
@@ -71,65 +64,57 @@ export function TieckCamera({ open, title, allowGallery = false, onClose, onCapt
   }, [open, stream]);
 
   useEffect(() => {
-    if (!open) { setReady(false); setHint("ready"); }
+    if (!open) { 
+      setReady(false); 
+      setQualityResult(null);
+      setLastStates([]);
+    }
   }, [open]);
 
-  /** Amostragem local — nunca sai do aparelho, nenhuma requisição de rede. */
+  // Local quality analysis
   useEffect(() => {
-    if (!open || !ready) return;
-    const canvas = document.createElement("canvas");
-    canvas.width = 64;
-    canvas.height = 48;
-    const ctx = canvas.getContext("2d", { willReadFrequently: true });
-    if (!ctx) return;
+    if (!open || !ready || isCapturing) return;
+    
+    if (!qualityEngineRef.current) {
+      qualityEngineRef.current = new QualityEngine();
+    }
 
-    const id = setInterval(() => {
+    const engine = qualityEngineRef.current;
+    let timeoutId: number;
+
+    const analyze = async () => {
       const video = videoRef.current;
-      if (!video || !video.videoWidth) return;
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      const { data } = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      const luma = new Float32Array(canvas.width * canvas.height);
-      let total = 0;
-      for (let i = 0, p = 0; i < data.length; i += 4, p++) {
-        const l = data[i] * 0.2126 + data[i + 1] * 0.7152 + data[i + 2] * 0.0722;
-        luma[p] = l;
-        total += l;
-      }
-      const average = total / luma.length;
-
-      let gradient = 0;
-      for (let y = 1; y < canvas.height; y++) {
-        for (let x = 1; x < canvas.width; x++) {
-          const i = y * canvas.width + x;
-          gradient += Math.abs(luma[i] - luma[i - 1]) + Math.abs(luma[i] - luma[i - canvas.width]);
+      if (video && video.videoWidth > 0) {
+        try {
+          const result = await engine.analyzeFrame(video);
+          setQualityResult(result);
+          
+          // Smooth transitions: keep track of last 2 states
+          setLastStates(prev => {
+            const next = [...prev, result.state].slice(-2);
+            return next;
+          });
+        } catch (err) {
+          console.error("[TieckCamera] Quality analysis error:", err);
         }
       }
-      const sharpness = gradient / luma.length;
+      timeoutId = window.setTimeout(analyze, 750); // 600-900ms range
+    };
 
-      let motion = 0;
-      const prev = prevSampleRef.current;
-      if (prev && prev.length === luma.length) {
-        let diff = 0;
-        for (let i = 0; i < luma.length; i++) diff += Math.abs(luma[i] - prev[i]);
-        motion = diff / luma.length;
-      }
-      prevSampleRef.current = luma;
-
-      const next: QualityHint =
-        average < 28 ? "low_light"
-          : average > 236 ? "too_bright"
-            : motion > 26 ? "shaky"
-              : sharpness < 1.1 ? "too_close"
-                : sharpness < 2.2 ? "blurry"
-                  : "ready";
-      setHint(next);
-    }, 600);
+    analyze();
 
     return () => {
-      clearInterval(id);
-      prevSampleRef.current = null;
+      clearTimeout(timeoutId);
     };
-  }, [open, ready]);
+  }, [open, ready, isCapturing]);
+
+  // Stabilized state for UI
+  const stabilizedState = useMemo(() => {
+    if (lastStates.length < 2) return "initializing";
+    // Only change if both last states are the same
+    if (lastStates[0] === lastStates[1]) return lastStates[0];
+    return lastStates[0]; // Keep previous if they differ
+  }, [lastStates]);
 
   const toggleTorch = useCallback(async () => {
     const track = stream?.getVideoTracks()[0];
@@ -143,27 +128,44 @@ export function TieckCamera({ open, title, allowGallery = false, onClose, onCapt
 
   const shoot = useCallback(async () => {
     const video = videoRef.current;
-    if (!video || !video.videoWidth) return;
+    if (!video || !video.videoWidth || isCapturing) return;
+    
+    setIsCapturing(true);
     haptic(18);
     setFlash(true);
     setTimeout(() => setFlash(false), 160);
+
     const canvas = document.createElement("canvas");
     const scale = Math.min(1, 1920 / video.videoWidth);
     canvas.width = Math.round(video.videoWidth * scale);
     canvas.height = Math.round(video.videoHeight * scale);
     const ctx = canvas.getContext("2d");
-    if (!ctx) return;
+    if (!ctx) {
+      setIsCapturing(false);
+      return;
+    }
+
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    
+    // Final high-quality check before proceeding
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    // Reuse quality engine for one final check on the high-res capture if needed, 
+    // but the engine is tuned for small frames. 
+    // For now, we rely on the continuous feedback being 'ready'.
+    
     const blob = await new Promise<Blob | null>((r) => canvas.toBlob((b) => r(b), "image/jpeg", 0.9));
-    if (!blob) return;
-    // O stream permanece vivo: nenhuma nova permissão no próximo bloco.
+    if (!blob) {
+      setIsCapturing(false);
+      return;
+    }
+    
     onCapture(new File([blob], `foto-${Date.now()}.jpg`, { type: "image/jpeg" }));
-  }, [onCapture]);
+    setIsCapturing(false);
+  }, [onCapture, isCapturing]);
 
   if (!open) return null;
 
   const needsIntro = !granted && !denied;
-  const showHint = ready && hint !== "ready";
 
   return (
     <div
@@ -173,7 +175,7 @@ export function TieckCamera({ open, title, allowGallery = false, onClose, onCapt
       aria-label={title}
       style={{ paddingTop: "env(safe-area-inset-top)", paddingBottom: "env(safe-area-inset-bottom)" }}
     >
-      {/* Barra superior translúcida */}
+      {/* Top bar */}
       <div className="absolute top-0 inset-x-0 z-20 flex items-center gap-3 px-4 py-3 bg-gradient-to-b from-black/70 to-transparent"
         style={{ paddingTop: "calc(env(safe-area-inset-top) + 0.75rem)" }}>
         <button
@@ -200,19 +202,9 @@ export function TieckCamera({ open, title, allowGallery = false, onClose, onCapt
       <div className="relative flex-1 overflow-hidden">
         <video ref={videoRef} playsInline muted autoPlay className="absolute inset-0 w-full h-full object-cover" />
 
-        {/* Moldura-guia discreta */}
+        {/* Center frame guide */}
         {ready && (
           <div className="pointer-events-none absolute inset-x-8 top-1/2 -translate-y-1/2 aspect-[4/3] rounded-3xl border border-white/35 shadow-[0_0_0_9999px_rgba(0,0,0,0.18)] transition-opacity duration-300" />
-        )}
-
-        {/* Feedback curto de qualidade, junto da moldura */}
-        {showHint && (
-          <div
-            className="pointer-events-none absolute left-1/2 -translate-x-1/2 bottom-[calc(50%-9rem)] rounded-full bg-black/65 backdrop-blur px-3 py-1.5 text-xs font-medium animate-in fade-in duration-200"
-            aria-live="polite"
-          >
-            {HINT_LABEL[hint]}
-          </div>
         )}
 
         {flash && <div className="absolute inset-0 bg-white/80 animate-out fade-out duration-150" />}
@@ -220,7 +212,7 @@ export function TieckCamera({ open, title, allowGallery = false, onClose, onCapt
         {needsIntro && (
           <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 px-10 text-center bg-black/85">
             <p className="text-sm text-white/90">
-              Vamos abrir a câmera para registrar esta evidência. Autorize o acesso quando o navegador pedir.
+              O Tieck precisa de acesso à câmera para registrar esta evidência.
             </p>
             <button
               type="button"
@@ -237,9 +229,6 @@ export function TieckCamera({ open, title, allowGallery = false, onClose, onCapt
             <p className="text-sm text-white/90">
               Não conseguimos acessar a câmera. Autorize o acesso nas configurações do navegador.
             </p>
-            {isRestrictedWebView() && (
-              <p className="text-xs text-white/55">Para uma experiência melhor, abra no Safari.</p>
-            )}
             <button type="button" onClick={onClose} className="text-xs text-white/60 underline">
               Voltar
             </button>
@@ -247,10 +236,22 @@ export function TieckCamera({ open, title, allowGallery = false, onClose, onCapt
         )}
       </div>
 
-      {/* Controles inferiores */}
-      <div className="relative z-20 flex items-center justify-between px-10 py-6 bg-gradient-to-t from-black/70 to-transparent">
+      {/* Capture Quality Indicator */}
+      <div className="absolute bottom-32 left-1/2 -translate-x-1/2 z-30">
+        <div className={cn(
+          "px-4 py-2 rounded-full backdrop-blur-md text-xs font-bold transition-all duration-300 flex items-center gap-2",
+          stabilizedState === 'ready' ? "bg-green-500/80 text-white" : 
+          stabilizedState === 'initializing' ? "bg-white/20 text-white/70" : "bg-amber-500/80 text-white"
+        )}>
+          {stabilizedState === 'initializing' && <Loader2 className="w-3 h-3 animate-spin" />}
+          {HINT_LABEL[stabilizedState]}
+        </div>
+      </div>
+
+      {/* Lower controls */}
+      <div className="relative z-20 flex items-center justify-between px-10 py-8 bg-gradient-to-t from-black/80 to-transparent">
         {allowGallery ? (
-          <>
+          <div className="w-11 h-11">
             <button
               type="button"
               onClick={() => galleryRef.current?.click()}
@@ -269,20 +270,28 @@ export function TieckCamera({ open, title, allowGallery = false, onClose, onCapt
                 if (file) onCapture(file);
               }}
             />
-          </>
+          </div>
         ) : (
-          <span className="w-11 h-11" />
+          <div className="w-11 h-11" />
         )}
 
         <button
           type="button"
           onClick={() => void shoot()}
-          disabled={!ready}
+          disabled={!ready || isCapturing}
           aria-label="Tirar foto"
-          className="p-1 rounded-full bg-white/25 disabled:opacity-40 active:scale-95 transition"
-          style={{ width: 76, height: 76 }}
+          className="p-1 rounded-full bg-white/25 disabled:opacity-40 active:scale-95 transition relative group"
+          style={{ width: 80, height: 80 }}
         >
-          <span className="block w-full h-full rounded-full bg-white" />
+          <span className={cn(
+            "block w-full h-full rounded-full transition-all duration-300",
+            stabilizedState === 'ready' ? "bg-white shadow-[0_0_20px_rgba(255,255,255,0.5)]" : "bg-white/80"
+          )} />
+          {isCapturing && (
+            <div className="absolute inset-0 flex items-center justify-center">
+              <Loader2 className="w-8 h-8 animate-spin text-black/20" />
+            </div>
+          )}
         </button>
 
         <button
