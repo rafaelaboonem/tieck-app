@@ -508,17 +508,20 @@ function EvidenceCard({
     load();
   }, [evidenceId]);
 
-  const isApproved = attempt?.decision === 'approved';
-  const isRejected = attempt?.decision === 'rejected';
-  const isTechnicalFailure = attempt?.decision === 'error' || attempt?.code?.includes('failure') || attempt?.code?.includes('error');
+  const isApproved = attempt?.status === 'completed' && attempt?.decision === 'approved';
+  const isRejected = attempt?.status === 'completed' && attempt?.decision === 'rejected';
+  const isNotObservable = attempt?.status === 'completed' && attempt?.decision === 'not_observable';
+  const isTechnicalFailure = attempt?.status === 'failed' || attempt?.decision === 'error' || (attempt?.code && (attempt.code.includes('failure') || attempt.code.includes('error')));
 
   const statusBadge = useMemo(() => {
     if (!attempt) return { label: "Sem verificação automática", tone: "neutral" };
     if (isApproved) return { label: "Aprovada pela IA", tone: "approved" };
     if (isRejected) return { label: "Rejeitada pela IA", tone: "rejected" };
+    if (isNotObservable) return { label: "Não foi possível verificar", tone: "neutral" };
     if (isTechnicalFailure) return { label: "Verificação indisponível", tone: "neutral" };
     return { label: "Verificação não localizada", tone: "neutral" };
-  }, [attempt, isApproved, isRejected, isTechnicalFailure]);
+  }, [attempt, isApproved, isRejected, isNotObservable, isTechnicalFailure]);
+
 
   const reviewStatus = "Não revisada";
 
