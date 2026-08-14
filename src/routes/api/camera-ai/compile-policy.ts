@@ -71,7 +71,7 @@ export const Route = createFileRoute('/api/camera-ai/compile-policy')({
               .eq('user_id', user.id)
               .maybeSingle();
             
-            if (member && member.status === 'active' && (member.role === 'owner' || member.role === 'admin' || member.role === 'member')) {
+            if (member && member.status === 'active' && (member.role === 'admin' || member.role === 'editor' || member.role === 'owner')) {
               isAuthorized = true;
             }
           }
@@ -85,8 +85,16 @@ export const Route = createFileRoute('/api/camera-ai/compile-policy')({
             return Response.json({ ok: false, code: 'invalid_checklist_format' }, { status: 400 });
           }
 
-          const block = blocks.find((b: any) => b && typeof b === 'object' && b.id === blockId);
-          if (!block || block.type !== 'camera') {
+          const block = blocks.find((b: unknown): b is PublishedBlock => 
+            b !== null && 
+            typeof b === 'object' && 
+            'id' in b && 
+            b.id === blockId &&
+            'type' in b &&
+            b.type === 'camera'
+          );
+
+          if (!block) {
             return Response.json({ ok: false, code: 'invalid_block' }, { status: 400 });
           }
 
