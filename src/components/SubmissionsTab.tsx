@@ -518,12 +518,8 @@ function EvidenceCard({
     return { label: "Verificação não localizada", tone: "neutral" };
   }, [attempt, isApproved, isRejected, isTechnicalFailure]);
 
-  const reviewStatus = useMemo(() => {
-    if (!evidence?.status) return "Não revisada";
-    if (evidence.status === 'confirmed') return "Confirmada";
-    if (evidence.status === 'flagged') return "Marcada para revisão";
-    return "Não revisada";
-  }, [evidence?.status]);
+  const reviewStatus = "Não revisada";
+
 
   if (loading) {
     return (
