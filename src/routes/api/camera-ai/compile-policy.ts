@@ -101,7 +101,7 @@ export const Route = createFileRoute('/api/camera-ai/compile-policy')({
             }
           } as any);
 
-          const policy = response.choices[0].message.parsed;
+          const policy = response.output_parsed;
           if (!policy) throw new Error('OpenAI parse failed');
 
           // Inject version and hash
