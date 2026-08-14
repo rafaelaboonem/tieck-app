@@ -62,16 +62,20 @@ describe('Camera AI Persistence & Replay', () => {
     };
   });
 
-  it('foto aprovada + Storage OK -> retorna evidenceId e persisted=true', async () => {
+  it('F. Aprovação normal (Nova): exatamente uma OpenAI, um upload, finaliza com markCompleted', async () => {
     const res = await verifyCameraRequest(validPayload, validImage, deps);
     expect(res.status).toBe(200);
     const body = res.body as any;
     expect(body.decision).toBe('approved');
     expect(body.evidenceId).toBe('ev-1');
     expect(body.persisted).toBe(true);
-    expect(deps.persistEvidence).toHaveBeenCalled();
+    expect(deps.persistEvidence).toHaveBeenCalledTimes(1);
     expect(deps.analyzeImage).toHaveBeenCalledTimes(1);
-    expect(deps.attachEvidence).toHaveBeenCalled();
+    expect(deps.markCompleted).toHaveBeenCalledWith(expect.objectContaining({
+      code: 'verified',
+      evidenceId: 'ev-1'
+    }));
+    expect(deps.attachEvidence).not.toHaveBeenCalled();
   });
 
   it('foto rejeitada -> nenhum upload é realizado', async () => {

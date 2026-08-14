@@ -62,15 +62,15 @@ describe('Camera AI Final Recovery & Integrity', () => {
     };
   });
 
-  it('1. Tentativa antiga failed/storage_failure (mesmo decision NULL) é recuperada como replay', async () => {
+  it('A. Aprovação nova: acquired -> markCompleted (não chama attachEvidence)', async () => {
     (deps.claimAttempt as MockedFunction<any>).mockResolvedValue({ 
       data: [{ 
-        claim_status: 'failed', 
-        attempt_id: 'att-old', 
-        current_retry_count: 2,
-        existing_decision: null, // s88u9p case
-        existing_code: 'storage_failure',
-        existing_evidence: 'Some old evidence',
+        claim_status: 'acquired', 
+        attempt_id: 'att-new', 
+        current_retry_count: 0,
+        existing_decision: null,
+        existing_code: null,
+        existing_evidence: null,
         existing_evidence_id: null
       }], 
       error: null 
@@ -79,13 +79,28 @@ describe('Camera AI Final Recovery & Integrity', () => {
     const res = await verifyCameraRequest(validPayload, validImage, deps);
     
     expect(res.status).toBe(200);
-    expect(deps.analyzeImage).not.toHaveBeenCalled(); // Sem OpenAI
-    expect(deps.persistEvidence).toHaveBeenCalled();
-    expect(deps.attachEvidence).toHaveBeenCalled();
+    expect(deps.analyzeImage).toHaveBeenCalledTimes(1);
+    expect(deps.persistEvidence).toHaveBeenCalledTimes(1);
+    expect(deps.markCompleted).toHaveBeenCalledWith(expect.objectContaining({
+      decision: 'approved',
+      code: 'verified',
+      evidenceId: 'ev-1'
+    }));
+    expect(deps.attachEvidence).not.toHaveBeenCalled();
     expect((res.body as any).persisted).toBe(true);
   });
 
-  it('2. Retry de storage_pending não executa OpenAI nem Rate Limit', async () => {
+  it('B. markCompleted retorna null: retorna storage_failure e persisted false', async () => {
+    (deps.markCompleted as MockedFunction<any>).mockResolvedValue({ data: null, error: null });
+    
+    const res = await verifyCameraRequest(validPayload, validImage, deps);
+    
+    expect(res.status).toBe(500);
+    expect((res.body as any).code).toBe('persistence_error');
+    expect(!!(res.body as any).persisted).toBe(false);
+  });
+
+  it('C. Replay storage_pending: não chama OpenAI nem Rate Limit, usa attachEvidence', async () => {
     (deps.claimAttempt as MockedFunction<any>).mockResolvedValue({ 
       data: [{ 
         claim_status: 'completed', 
@@ -99,45 +114,34 @@ describe('Camera AI Final Recovery & Integrity', () => {
       error: null 
     });
     
-    await verifyCameraRequest(validPayload, validImage, deps);
+    const res = await verifyCameraRequest(validPayload, validImage, deps);
     
+    expect(res.status).toBe(200);
     expect(deps.analyzeImage).not.toHaveBeenCalled();
     expect(deps.hitRateLimit).not.toHaveBeenCalled();
     expect(deps.persistEvidence).toHaveBeenCalled();
+    expect(deps.attachEvidence).toHaveBeenCalled();
+    expect((res.body as any).evidenceId).toBe('ev-1');
   });
 
-  it('3. Falha ao anexar evidence_id no banco nunca retorna persisted: true', async () => {
-    (deps.attachEvidence as MockedFunction<any>).mockResolvedValue({ data: null, error: 'DB Error' });
-    
-    const res = await verifyCameraRequest(validPayload, validImage, deps);
-    
-    expect(res.status).toBe(500);
-    expect(!!(res.body as any).persisted).toBe(false);
-    expect((res.body as any).code).toBe('storage_failure');
-  });
-
-  it('4. Replays concorrentes: se attachEvidence retornar ID preexistente, retorna sucesso', async () => {
-     (deps.claimAttempt as MockedFunction<any>).mockResolvedValue({ 
+  it('D. Registro failed/storage_failure legado: convertido via replay (não chama OpenAI)', async () => {
+    (deps.claimAttempt as MockedFunction<any>).mockResolvedValue({ 
       data: [{ 
-        claim_status: 'completed', 
-        attempt_id: 'att-concurrent', 
-        current_retry_count: 5,
-        existing_decision: 'approved',
-        existing_code: 'storage_pending',
-        existing_evidence: 'Evidence',
+        claim_status: 'failed', 
+        attempt_id: 'att-legacy', 
+        current_retry_count: 2,
+        existing_decision: null,
+        existing_code: 'storage_failure',
+        existing_evidence: 'Legacy',
         existing_evidence_id: null
       }], 
       error: null 
     });
     
-    // Simula que outro processo ganhou a corrida de update
-    (deps.attachEvidence as MockedFunction<any>).mockResolvedValue({ 
-      data: [{ confirmed_evidence_id: 'ev-already-there' }], 
-      error: null 
-    });
-    
     const res = await verifyCameraRequest(validPayload, validImage, deps);
+    
     expect(res.status).toBe(200);
-    expect((res.body as any).evidenceId).toBe('ev-already-there');
+    expect(deps.analyzeImage).not.toHaveBeenCalled();
+    expect(deps.attachEvidence).toHaveBeenCalled();
   });
 });

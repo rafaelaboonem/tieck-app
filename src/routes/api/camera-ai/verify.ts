@@ -84,32 +84,28 @@ export const Route = createFileRoute('/api/camera-ai/verify')({
               
               try {
                 const uint8Array = new Uint8Array(buffer);
+                let createdThisRequest = false;
                 
-                // 1. Check if object already exists in Storage
-                const { data: existingList } = await client.storage
+                // 1. Storage Upload
+                const { error: uploadError } = await client.storage
                   .from('checklist-evidences')
-                  .list(storagePath.substring(0, storagePath.lastIndexOf('/')), {
-                    search: storagePath.split('/').pop()
+                  .upload(storagePath, uint8Array, {
+                    contentType: mimeType,
+                    upsert: false // Security: do not overwrite silently
                   });
-                
-                const alreadyInStorage = existingList && existingList.length > 0;
 
-                if (!alreadyInStorage) {
-                  // Upload only if NOT present
-                  const { error: uploadError } = await client.storage
-                    .from('checklist-evidences')
-                    .upload(storagePath, uint8Array, {
-                      contentType: mimeType,
-                      upsert: false // Security: do not overwrite silently
-                    });
-
-                  if (uploadError) {
-                    // If 409, it might have been created by concurrent request
-                    if ((uploadError as any).status !== 409) {
-                      console.error(`[CameraAI] Storage upload failed:`, uploadError);
-                      return { evidenceId: null, error: uploadError };
-                    }
+                if (!uploadError) {
+                  createdThisRequest = true;
+                } else {
+                  // If 409, it was created by concurrent request
+                  const isConflict = (err: any): boolean => 
+                    err && typeof err === 'object' && (err.status === 409 || err.statusCode === 409 || err.message?.includes('409'));
+                  
+                  if (!isConflict(uploadError)) {
+                    console.error(`[CameraAI] Storage upload failed:`, uploadError);
+                    return { evidenceId: null, error: uploadError };
                   }
+                  // Conflict is OK, we continue to DB record
                 }
 
                 // 2. Database Record (idempotent via storage_path UNIQUE)
@@ -132,9 +128,7 @@ export const Route = createFileRoute('/api/camera-ai/verify')({
                 if (dbError) {
                   console.error(`[CameraAI] Evidence DB record failed:`, dbError);
                   // ONLY cleanup if we were the ones who successfully uploaded it just now
-                  // This is hard to guarantee 100% without more complex state, 
-                  // but we avoid deleting if alreadyInStorage was true.
-                  if (!alreadyInStorage) {
+                  if (createdThisRequest) {
                     await client.storage.from('checklist-evidences').remove([storagePath]);
                   }
                   return { evidenceId: null, error: dbError };

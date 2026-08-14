@@ -44,7 +44,7 @@ describe('Camera AI Server Runtime', () => {
       markFailed: vi.fn().mockResolvedValue({ data: {}, error: null }),
       markCompleted: vi.fn().mockResolvedValue({ data: { id: 'attempt-1' }, error: null }),
       persistEvidence: vi.fn().mockResolvedValue({ evidenceId: 'ev-1', error: null }),
-      isConfigured: vi.fn().mockReturnValue(true),
+      attachEvidence: vi.fn().mockResolvedValue({ data: [{ confirmed_evidence_id: 'ev-1' }], error: null }),
     };
   });
 
@@ -113,7 +113,7 @@ describe('Camera AI Server Runtime', () => {
 
     it('claim completed retorna replay e analyzeImage não é chamado', async () => {
       (deps.claimAttempt as MockedFunction<typeof deps.claimAttempt>).mockResolvedValue({ 
-        data: [{ claim_status: 'completed', attempt_id: 'a', current_retry_count: 0, existing_decision: 'approved', existing_code: 'ok' }], 
+        data: [{ claim_status: 'completed', attempt_id: 'a', current_retry_count: 0, existing_decision: 'approved', existing_code: 'ok', existing_evidence_id: 'ev-1' }], 
         error: null 
       });
       const res = await verifyCameraRequest(validPayload, validImage, deps);
