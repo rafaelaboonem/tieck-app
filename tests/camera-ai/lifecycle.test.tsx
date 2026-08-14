@@ -67,7 +67,7 @@ describe("Camera AI Lifecycle & Integrity", () => {
   });
 
   const getHiddenInput = (container: HTMLElement) => {
-    return container.querySelector('input[type="file"]') as HTMLInputElement;
+    return container.querySelector('input[type="file"]');
   };
 
   it("should block fetch to /api/camera-ai/verify if quality is invalid", async () => {
@@ -84,8 +84,11 @@ describe("Camera AI Lifecycle & Integrity", () => {
 
     const file = new File(["test"], "test.jpg", { type: "image/jpeg" });
     const input = getHiddenInput(container);
+    if (!input) throw new Error("Input not found");
     
-    fireEvent.change(input, { target: { files: [file] } });
+    await act(async () => {
+      fireEvent.change(input, { target: { files: [file] } });
+    });
 
     await waitFor(() => {
       expect(screen.getByText(/A foto ficou escura/i)).toBeDefined();
@@ -116,8 +119,11 @@ describe("Camera AI Lifecycle & Integrity", () => {
 
     const file = new File(["test"], "test.jpg", { type: "image/jpeg" });
     const input = getHiddenInput(container);
+    if (!input) throw new Error("Input not found");
     
-    fireEvent.change(input, { target: { files: [file] } });
+    await act(async () => {
+      fireEvent.change(input, { target: { files: [file] } });
+    });
 
     await waitFor(() => {
       expect(engine.analyzeFile).toHaveBeenCalled();
@@ -140,8 +146,11 @@ describe("Camera AI Lifecycle & Integrity", () => {
 
     const file = new File(["test"], "test.jpg", { type: "image/jpeg" });
     const input = getHiddenInput(container);
+    if (!input) throw new Error("Input not found");
     
-    fireEvent.change(input, { target: { files: [file] } });
+    await act(async () => {
+      fireEvent.change(input, { target: { files: [file] } });
+    });
 
     await waitFor(() => {
       expect(engine.dispose).toHaveBeenCalled();
