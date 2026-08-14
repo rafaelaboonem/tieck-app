@@ -86,8 +86,6 @@ export function PublicCameraBlock({
 
   const handleCapture = async (file: File) => {
     // 1. Limpeza de resposta anterior de verdade
-    // Se a foto foi aprovada anteriormente e estamos tirando uma nova, limpamos a resposta anterior.
-    // Isso precisa ocorrer ANTES da nova verificação.
     if (onAnswer) {
       onAnswer(block.id, "");
     }
@@ -107,14 +105,15 @@ export function PublicCameraBlock({
     const newIdempotencyKey = crypto.randomUUID();
     setIdempotencyKey(newIdempotencyKey);
     setFailureReason("none");
+    setRetryAttempted(false);
 
     void processVerification(file, newIdempotencyKey, requestSequenceRef.current);
   };
 
 
-  const processVerification = async (file: File, key: string, sequence: number) => {
+  const processVerification = async (file: File, key: string, sequence: number, isRetry = false) => {
     // Double-click protection: if we're already processing THIS exact capture, ignore.
-    if (inFlightRef.current && key === idempotencyKey) return;
+    if (inFlightRef.current && key === idempotencyKey && !isRetry) return;
     
     setErrorMsg(null);
     setEvidence(null);
