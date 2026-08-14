@@ -326,18 +326,24 @@ export async function verifyCameraRequest(
     });
 
     if (pError || !pId) {
-      await deps.markFailed({
+      await deps.markCompleted({
         responseId: session.response_id,
-        blockId: payload.blockId,
+        block_id: payload.blockId,
         idempotencyKey: payload.idempotencyKey,
-        code: 'storage_failure'
+        decision: 'approved',
+        code: 'storage_pending',
+        evidence: result.evidence,
+        evidenceId: undefined,
+        model: deps.model,
+        durationMs: duration,
+        at: deps.now()
       });
       return {
         status: 500,
         body: {
           ok: false,
           code: 'storage_failure',
-          message: 'Foto aprovada, mas falha ao salvar no servidor.',
+          message: 'Foto aprovada. Não conseguimos salvá-la ainda.',
           requestId
         }
       };
