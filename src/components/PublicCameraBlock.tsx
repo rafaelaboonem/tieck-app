@@ -90,21 +90,28 @@ export function PublicCameraBlock({
     try {
       const { QualityEngine } = await import("@/lib/camera-quality/engine");
       const engine = new QualityEngine();
-      const quality = await engine.analyzeFile(file);
-      engine.dispose();
-      
-      if (quality.state !== "ready") {
-        const messages: Record<string, string> = {
-          low_light: "A foto ficou escura. Procure mais iluminação e tente novamente.",
-          overexposed: "Há luz excessiva na imagem. Evite apontar diretamente para a fonte de luz.",
-          blurry: "A foto ficou pouco nítida. Segure o aparelho com firmeza e tente novamente.",
-          moving: "A câmera se moveu durante a captura. Tente novamente mantendo o aparelho firme.",
-          unavailable: "A imagem capturada não possui resolução ou qualidade suficiente."
-        };
+      try {
+        const quality = await engine.analyzeFile(file);
         
-        setErrorMsg(messages[quality.state] || "A qualidade da foto não é suficiente. Tente novamente.");
-        setState("retake");
-        return;
+        // Photography doesn't have temporal motion analysis.
+        // We override "moving" to "ready" if all other metrics are fine, 
+        // since motion score on a single frame comparison is irrelevant here.
+        const effectiveState = quality.state === "moving" ? "ready" : quality.state;
+        
+        if (effectiveState !== "ready") {
+          const messages: Record<string, string> = {
+            low_light: "A foto ficou escura. Procure mais iluminação e tente novamente.",
+            overexposed: "Há luz excessiva na imagem. Evite apontar diretamente para a fonte de luz.",
+            blurry: "A foto ficou pouco nítida. Segure o aparelho com firmeza e tente novamente.",
+            unavailable: "A imagem capturada não possui resolução ou qualidade suficiente."
+          };
+          
+          setErrorMsg(messages[effectiveState] || "A qualidade da foto não é suficiente. Tente novamente.");
+          setState("retake");
+          return;
+        }
+      } finally {
+        engine.dispose();
       }
     } catch (err) {
       console.warn("[PublicCameraBlock] Local quality check failed, falling back to OpenAI:", err);
