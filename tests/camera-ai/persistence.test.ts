@@ -143,8 +143,7 @@ describe('Camera AI Persistence & Replay', () => {
     expect(body.evidenceId).toBe('ev-1');
     expect(deps.analyzeImage).not.toHaveBeenCalled();
     expect(deps.persistEvidence).toHaveBeenCalledTimes(1);
-    expect(deps.markCompleted).toHaveBeenCalledWith(expect.objectContaining({
-      code: 'verified',
+    expect(deps.attachEvidence).toHaveBeenCalledWith(expect.objectContaining({
       evidenceId: 'ev-1'
     }));
   });

@@ -355,6 +355,20 @@ export async function verifyCameraRequest(
       };
     }
     evidenceId = pId;
+  } else {
+    // Record rejection
+    await deps.markCompleted({
+      responseId: session.response_id,
+      blockId: payload.blockId,
+      idempotencyKey: payload.idempotencyKey,
+      decision: result.decision,
+      code: result.code,
+      evidence: result.evidence,
+      evidenceId: undefined,
+      model: deps.model,
+      durationMs: duration,
+      at: deps.now()
+    });
   }
 
   // 13. Final Decision Record Confirmation
