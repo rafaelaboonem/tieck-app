@@ -34,7 +34,7 @@ describe('Camera AI Persistence & Replay', () => {
         error: null 
       }),
       claimAttempt: vi.fn().mockResolvedValue({ 
-        data: [{ claim_status: 'acquired', attempt_id: 'att-1', current_retry_count: 0 } satisfies ClaimResult], 
+        data: [{ claim_status: 'acquired', attempt_id: 'att-1', current_retry_count: 0, existing_decision: null, existing_code: null, existing_evidence: null, existing_evidence_id: null } satisfies ClaimResult], 
         error: null 
       }),
       hitRateLimit: vi.fn().mockResolvedValue({ data: [{ allowed: true }], error: null }),
@@ -109,3 +109,31 @@ describe('Camera AI Persistence & Replay', () => {
     expect(deps.persistEvidence).not.toHaveBeenCalled();
   });
 });
+
+  it('retry (replay) de storage_pending -> executa persistEvidence mas NÃO analyzeImage', async () => {
+    (deps.claimAttempt as MockedFunction<any>).mockResolvedValue({ 
+      data: [{ 
+        claim_status: 'completed', 
+        attempt_id: 'a-pending', 
+        current_retry_count: 1, 
+        existing_decision: 'approved', 
+        existing_code: 'storage_pending',
+        existing_evidence: 'AI already said yes',
+        existing_evidence_id: null
+      }], 
+      error: null 
+    });
+    
+    const res = await verifyCameraRequest(validPayload, validImage, deps);
+    
+    expect(res.status).toBe(200);
+    const body = res.body as any;
+    expect(body.persisted).toBe(true);
+    expect(body.evidenceId).toBe('ev-1');
+    expect(deps.analyzeImage).not.toHaveBeenCalled();
+    expect(deps.persistEvidence).toHaveBeenCalledTimes(1);
+    expect(deps.markCompleted).toHaveBeenCalledWith(expect.objectContaining({
+      code: 'verified',
+      evidenceId: 'ev-1'
+    }));
+  });
