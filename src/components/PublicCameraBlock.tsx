@@ -86,31 +86,30 @@ export function PublicCameraBlock({
   }, []);
 
   const handleCapture = async (file: File) => {
-    // Phase 2: Final local technical validation before calling OpenAI
-    const video = document.querySelector('video');
-    if (video) {
-      try {
-        const engine = new (await import("@/lib/camera-quality/engine")).QualityEngine();
-        const quality = await engine.analyzeFrame(video);
+    // Phase 2.1: Final local technical validation ON THE CAPTURED FILE
+    try {
+      const { QualityEngine } = await import("@/lib/camera-quality/engine");
+      const engine = new QualityEngine();
+      const quality = await engine.analyzeFile(file);
+      engine.dispose();
+      
+      if (quality.state !== "ready") {
+        const messages: Record<string, string> = {
+          low_light: "A foto ficou escura. Procure mais iluminação e tente novamente.",
+          overexposed: "Há luz excessiva na imagem. Evite apontar diretamente para a fonte de luz.",
+          blurry: "A foto ficou pouco nítida. Segure o aparelho com firmeza e tente novamente.",
+          moving: "A câmera se moveu durante a captura. Tente novamente mantendo o aparelho firme.",
+          unavailable: "A imagem capturada não possui resolução ou qualidade suficiente."
+        };
         
-        if (quality.state !== "ready") {
-          // Map technical failure to user-friendly messages
-          const messages: Record<string, string> = {
-            low_light: "A foto ficou escura. Procure mais iluminação e tente novamente.",
-            overexposed: "Há luz excessiva na imagem. Evite apontar diretamente para a fonte de luz.",
-            blurry: "A foto ficou pouco nítida. Segure o aparelho com firmeza e tente novamente.",
-            moving: "A câmera se moveu durante a captura. Tente novamente mantendo o aparelho firme.",
-            unavailable: "A câmera não conseguiu gerar uma imagem com qualidade suficiente."
-          };
-          
-          setErrorMsg(messages[quality.state] || "A qualidade da foto não é suficiente. Tente novamente.");
-          setState("retake");
-          return;
-        }
-      } catch (err) {
-        console.error("[PublicCameraBlock] Final quality check failed, falling back to OpenAI:", err);
+        setErrorMsg(messages[quality.state] || "A qualidade da foto não é suficiente. Tente novamente.");
+        setState("retake");
+        return;
       }
+    } catch (err) {
+      console.warn("[PublicCameraBlock] Local quality check failed, falling back to OpenAI:", err);
     }
+
 
     // 1. Limpeza de resposta anterior de verdade
     if (onAnswer) {
