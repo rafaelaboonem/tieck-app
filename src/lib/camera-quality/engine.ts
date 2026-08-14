@@ -12,32 +12,6 @@ export class QualityEngine {
   }
 
   /**
-   * Main entry point for analyzing a video frame.
-   */
-  async analyzeFrame(video: HTMLVideoElement): Promise<CameraQualityResult> {
-    const { videoWidth: vw, videoHeight: vh } = video;
-    return this.processSource(video, vw, vh);
-  }
-
-  /**
-   * Analyzes a specific File or Blob produced by a capture.
-   */
-  async analyzeFile(file: File | Blob): Promise<CameraQualityResult> {
-    return new Promise((resolve, reject) => {
-      const img = new Image();
-      const url = URL.createObjectURL(file);
-      
-      img.onload = async () => {
-        URL.revokeObjectURL(url);
-        try {
-      const { QualityEngine } = await import("./engine");
-      const engine = new QualityEngine();
-      // @ts-ignore
-      return engine.processSource(img, img.naturalWidth, img.naturalHeight);
-    });
-  }
-
-  /**
    * Static decision logic for testability outside DOM.
    */
   static determineState(metrics: {
@@ -65,6 +39,27 @@ export class QualityEngine {
     return "ready";
   }
 
+  /**
+   * Main entry point for analyzing a video frame.
+   */
+  async analyzeFrame(video: HTMLVideoElement): Promise<CameraQualityResult> {
+    const { videoWidth: vw, videoHeight: vh } = video;
+    return this.processSource(video, vw, vh);
+  }
+
+  /**
+   * Analyzes a specific File or Blob produced by a capture.
+   */
+  async analyzeFile(file: File | Blob): Promise<CameraQualityResult> {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      
+      img.onload = async () => {
+        URL.revokeObjectURL(url);
+        try {
+          const result = await this.processSource(img, img.naturalWidth, img.naturalHeight);
+          resolve(result);
         } catch (err) {
           reject(err);
         }
@@ -105,19 +100,13 @@ export class QualityEngine {
     
     this.lastFrame = new Uint8ClampedArray(data);
 
-    let state: CameraQualityState = "ready";
-
-    if (width < this.thresholds.minWidth || height < this.thresholds.minHeight) {
-      state = "unavailable";
-    } else if (luminance.average < this.thresholds.minBrightness) {
-      state = "low_light";
-    } else if (luminance.brightPercent > 0.3 || luminance.average > this.thresholds.maxBrightness) {
-      state = "overexposed";
-    } else if (sharpness < this.thresholds.minSharpness) {
-      state = "blurry";
-    } else if (motion > this.thresholds.maxMotion) {
-      state = "moving";
-    }
+    const state = QualityEngine.determineState({
+      width,
+      height,
+      luminance,
+      sharpness,
+      motion
+    }, this.thresholds);
 
     return {
       state,
