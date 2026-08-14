@@ -142,31 +142,9 @@ export function PublicCameraBlock({
 
 
     if (!isAIEnabled) {
-      setState("uploading");
-      try {
-        let fileToUpload = file;
-        if (file.size > 400_000) {
-          const compressed = await compressImage(file);
-          if (compressed) fileToUpload = compressed;
-        }
-        
-        const url = await uploadCameraEvidence({
-          file: fileToUpload,
-          checklistId,
-          blockId: block.id,
-        });
-
-        if (!isCurrent()) return;
-        
-        if (onAnswer) onAnswer(block.id, url);
-        setState("received");
-      } catch (err: unknown) {
-        if (!isCurrent()) return;
-        console.error("Upload error:", err);
-        setErrorMsg("Erro ao enviar foto.");
-        setFailureReason("network_unknown");
-        setState("technical_failure");
-      }
+      setState("technical_failure");
+      setFailureReason("configuration");
+      setErrorMsg("A verificação inteligente está desativada no momento.");
       return;
     }
 
