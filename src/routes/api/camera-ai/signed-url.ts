@@ -23,9 +23,24 @@ export const Route = createFileRoute('/api/camera-ai/signed-url')({
           return new Response('Unauthorized', { status: 401 });
         }
 
-        // TODO: Em um cenário real, deveríamos verificar se o usuário tem acesso ao checklist/response 
-        // que contém este path. Para esta correção cirúrgica, confiamos no service role 
-        // mas o acesso é restrito a usuários logados.
+        // Verificação de Propriedade: O path contém checklistId e responseId
+        // Formato: checklistId/responseId/blockId/idempotencyKey.ext
+        const parts = path.split('/');
+        if (parts.length < 2) {
+          return new Response('Invalid path format', { status: 400 });
+        }
+        const checklistId = parts[0];
+
+        // Confirma que o usuário é dono do checklist ou tem permissão
+        const { data: checklist, error: chkError } = await client
+          .from('checklists')
+          .select('id')
+          .eq('id', checklistId)
+          .maybeSingle();
+        
+        if (chkError || !checklist) {
+          return new Response('Forbidden: Access to checklist denied', { status: 403 });
+        }
 
         const signedUrl = await getSignedUrl(path, bucket);
         if (!signedUrl) {
