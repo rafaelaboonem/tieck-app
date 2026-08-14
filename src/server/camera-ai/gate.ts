@@ -32,7 +32,7 @@ export function evaluateGate(analysis: CameraVerification): VerificationResult {
   // - Termos especulativos
   if (
     !analysis.target_visible || 
-    !analysis.condition_met ||
+    (analysis.condition_met === false && analysis.condition_observable === true) ||
     analysis.image_quality !== "usable" || 
     analysis.confidence < 0.90 || 
     hasSpeculativeTerms
