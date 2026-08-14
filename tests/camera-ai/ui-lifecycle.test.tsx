@@ -20,16 +20,25 @@ vi.mock("@/lib/camera-quality/engine", () => {
   };
 });
 
-vi.mock("@/contexts/CameraSessionContext", () => ({
-  useCameraSession: () => ({
-    stream: { getVideoTracks: () => [] },
-    granted: true,
-    denied: false,
-    acquire: vi.fn().mockResolvedValue({}),
-    switchFacing: vi.fn(),
-  }),
-  isRestrictedWebView: () => false,
-}));
+vi.mock("@/contexts/CameraSessionContext", () => {
+  const mockStream = {
+    getVideoTracks: vi.fn(() => [{
+      getCapabilities: vi.fn(() => ({})),
+      applyConstraints: vi.fn(),
+      stop: vi.fn(),
+    }]),
+  };
+  return {
+    useCameraSession: () => ({
+      stream: mockStream,
+      granted: true,
+      denied: false,
+      acquire: vi.fn().mockResolvedValue(mockStream),
+      switchFacing: vi.fn(),
+    }),
+    isRestrictedWebView: () => false,
+  };
+});
 
 describe("TieckCamera UI & Engine Lifecycle", () => {
   beforeEach(() => {
@@ -56,6 +65,8 @@ describe("TieckCamera UI & Engine Lifecycle", () => {
 
     await act(async () => {
       vi.advanceTimersByTime(800);
+      // Wait for async acquire logic
+      await Promise.resolve();
     });
 
     unmount();
