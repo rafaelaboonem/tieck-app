@@ -79,4 +79,23 @@ describe('create_public_response session flow', () => {
     const session = await ensureResponseSession(CHECKLIST_ID, VISITOR_ID);
     expect(session).toBeNull();
   });
+  it('successfully creates a session as authenticated user', async () => {
+    // A lógica do componente ensureResponseSession é agnóstica ao token de auth,
+    // pois quem decide a permissão é o Postgres. O mock do RPC simula a chamada.
+    mockRpc.mockResolvedValue({
+      data: [{
+        response_id: 'resp-auth-123',
+        response_token: 'token-auth-123'
+      }],
+      error: null
+    });
+
+    const session = await ensureResponseSession(CHECKLIST_ID, VISITOR_ID);
+    
+    expect(mockRpc).toHaveBeenCalledWith("create_public_response", {
+      p_checklist_id: CHECKLIST_ID,
+      p_visitor_id: VISITOR_ID
+    });
+    expect(session?.responseId).toBe('resp-auth-123');
+  });
 });
