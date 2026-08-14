@@ -4,7 +4,7 @@ import { calculateLuminance, calculateSharpness, calculateMotion } from "./metri
 export class QualityEngine {
   private lastFrame: Uint8ClampedArray | null = null;
   private canvas: HTMLCanvasElement | null = null;
-  private ctx: CanvasRenderingContext2Array | null = null;
+  private ctx: CanvasRenderingContext2D | null = null;
   private thresholds: QualityThresholds;
 
   constructor(thresholds: QualityThresholds = DEFAULT_THRESHOLDS) {
