@@ -24,7 +24,8 @@ export async function analyzeImage(
   question: string,
   imageBuffer: ArrayBuffer,
   mimeType: string,
-  timeoutMs: number = 20000
+  timeoutMs: number = 20000,
+  policy?: any
 ): Promise<CameraVerification> {
   const base64Image = Buffer.from(imageBuffer).toString('base64');
 
@@ -46,7 +47,7 @@ export async function analyzeImage(
           content: [
             {
               type: "input_text",
-              text: `PERGUNTA: "${question}"`
+              text: `PERGUNTA: "${question}"${policy ? `\nPOLÍTICA DE VERIFICAÇÃO:\n${JSON.stringify(policy, null, 2)}` : ''}`
             },
             {
               type: "input_image",

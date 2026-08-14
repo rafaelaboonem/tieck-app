@@ -40,3 +40,25 @@ export interface VerificationResult {
   evidenceId?: string;
   persisted?: boolean;
 }
+
+export const CameraVerificationPolicyV1Schema = z.object({
+  version: z.literal(1),
+  questionHash: z.string(),
+  verifiability: z.enum(["visual", "partially_visual", "not_visual"]),
+  target: z.string(),
+  condition: z.string(),
+  requiredEvidence: z.array(z.string()).max(5),
+  rejectionSignals: z.array(z.string()).max(5),
+  unverifiableWhen: z.array(z.string()).max(5),
+  summary: z.string(),
+  source: z.enum(["generated", "owner_edited"]),
+});
+
+export type CameraVerificationPolicyV1 = z.infer<typeof CameraVerificationPolicyV1Schema>;
+
+export const CompilePolicyPayloadSchema = z.object({
+  checklistId: z.string().uuid(),
+  blockId: z.string().min(1),
+});
+
+export type CompilePolicyPayload = z.infer<typeof CompilePolicyPayloadSchema>;
