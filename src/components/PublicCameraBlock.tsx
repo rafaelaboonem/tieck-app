@@ -532,7 +532,7 @@ export function PublicCameraBlock({
         </div>
       )}
 
-      {state === "technical_failure" && (
+      {(state === "technical_failure" || state === "storage_failure") && (
         <Alert variant="destructive" className="border-red-200 bg-red-50">
           <AlertCircle className="h-4 w-4 text-red-600" />
           <AlertDescription className="flex flex-col gap-3 w-full">
@@ -542,7 +542,7 @@ export function PublicCameraBlock({
             <div className="flex gap-2">
               {failureReason !== "configuration" && (
                 <Button variant="outline" size="sm" onClick={retryCurrentPhoto} disabled={inFlightRef.current} className="bg-white border-red-200 text-red-700 hover:bg-red-100">
-                  Tentar novamente
+                  {state === "storage_failure" ? "Tentar salvar novamente" : "Tentar novamente"}
                 </Button>
               )}
               <Button variant="ghost" size="sm" onClick={openCamera} className="text-red-700 underline">
