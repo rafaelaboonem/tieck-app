@@ -74,20 +74,17 @@ describe("TieckCamera UI & Engine Lifecycle", () => {
     
     const video = container.querySelector("video");
     if (video) {
-      await act(async () => {
-        fireEvent(video, new Event("playing"));
-      });
+      fireEvent(video, new Event("playing"));
     }
 
     // Initial state check
     expect(screen.getByText(/Iniciando/i)).toBeDefined();
 
-    // Trigger first analysis loop
+    // Trigger analysis cycles
     await act(async () => {
       vi.advanceTimersByTime(800);
     });
 
-    // Trigger second analysis loop
     await act(async () => {
       vi.advanceTimersByTime(800);
     });
@@ -120,9 +117,7 @@ describe("TieckCamera UI & Engine Lifecycle", () => {
 
     const video = container.querySelector("video");
     if (video) {
-      await act(async () => {
-        fireEvent(video, new Event("playing"));
-      });
+      fireEvent(video, new Event("playing"));
     }
 
     await act(async () => {

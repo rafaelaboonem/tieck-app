@@ -54,11 +54,15 @@ describe("Camera AI Lifecycle & Integrity", () => {
     global.URL.revokeObjectURL = vi.fn();
   });
 
+  const getHiddenInput = (container: HTMLElement) => {
+    return container.querySelector('input[type="file"]') as HTMLInputElement;
+  };
+
   it("should block fetch to /api/camera-ai/verify if quality is invalid", async () => {
     const engine = new (QualityEngine as any)();
     engine.analyzeFile.mockResolvedValue({ state: "low_light" });
 
-    render(
+    const { container } = render(
       <PublicCameraBlock
         block={mockBlock}
         checklistId="c1"
@@ -66,16 +70,11 @@ describe("Camera AI Lifecycle & Integrity", () => {
       />
     );
 
-    // Open camera to transition state to 'capturing'
-    fireEvent.click(screen.getByText(/Adicionar foto/i));
-    
-    // Find TieckCamera capture button (it has data-testid="capture-btn" in TieckCamera.tsx)
-    await waitFor(() => {
-      expect(screen.getByTestId("capture-btn")).toBeDefined();
-    });
-
     const file = new File(["test"], "test.jpg", { type: "image/jpeg" });
-    fireEvent.click(screen.getByTestId("capture-btn"), { target: { files: [file] } });
+    const input = getHiddenInput(container);
+    
+    // Simulating file selection
+    fireEvent.change(input, { target: { files: [file] } });
 
     await waitFor(() => {
       expect(screen.getByText(/A foto ficou escura/i)).toBeDefined();
@@ -96,7 +95,7 @@ describe("Camera AI Lifecycle & Integrity", () => {
     };
     (global.fetch as any).mockResolvedValue(mockResponse);
 
-    render(
+    const { container } = render(
       <PublicCameraBlock
         block={mockBlock}
         checklistId="c1"
@@ -104,15 +103,16 @@ describe("Camera AI Lifecycle & Integrity", () => {
       />
     );
 
-    fireEvent.click(screen.getByText(/Adicionar foto/i));
-    
     const file = new File(["test"], "test.jpg", { type: "image/jpeg" });
-    await waitFor(() => {
-      fireEvent.click(screen.getByTestId("capture-btn"), { target: { files: [file] } });
-    });
+    const input = getHiddenInput(container);
+    
+    fireEvent.change(input, { target: { files: [file] } });
 
     await waitFor(() => {
       expect(engine.analyzeFile).toHaveBeenCalled();
+    });
+
+    await waitFor(() => {
       expect(global.fetch).toHaveBeenCalledTimes(1);
     });
   });
@@ -128,14 +128,12 @@ describe("Camera AI Lifecycle & Integrity", () => {
       json: async () => ({ ok: true, decision: "approved", persisted: true, evidenceId: "e2" }),
     });
 
-    render(<PublicCameraBlock block={mockBlock} checklistId="c1" onAnswer={vi.fn()} />);
+    const { container } = render(<PublicCameraBlock block={mockBlock} checklistId="c1" onAnswer={vi.fn()} />);
 
-    fireEvent.click(screen.getByText(/Adicionar foto/i));
-    
     const file = new File(["test"], "test.jpg", { type: "image/jpeg" });
-    await waitFor(() => {
-      fireEvent.click(screen.getByTestId("capture-btn"), { target: { files: [file] } });
-    });
+    const input = getHiddenInput(container);
+    
+    fireEvent.change(input, { target: { files: [file] } });
 
     await waitFor(() => {
       expect(engine.dispose).toHaveBeenCalled();
