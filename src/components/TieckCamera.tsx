@@ -24,7 +24,11 @@ const HINT_LABEL: Record<CameraQualityState, string> = {
 };
 
 function haptic(ms = 12) {
-  try { navigator.vibrate?.(ms); } catch { /* sem suporte */ }
+  try {
+    navigator.vibrate?.(ms);
+  } catch {
+    /* sem suporte */
+  }
 }
 
 export function TieckCamera({ open, title, allowGallery = false, onClose, onCapture }: Props) {
@@ -47,10 +51,14 @@ export function TieckCamera({ open, title, allowGallery = false, onClose, onCapt
     void acquire().then((media) => {
       if (cancelled || !media) return;
       const track = media.getVideoTracks()[0];
-      const caps = (track?.getCapabilities?.() ?? {}) as MediaTrackCapabilities & { torch?: boolean };
+      const caps = (track?.getCapabilities?.() ?? {}) as MediaTrackCapabilities & {
+        torch?: boolean;
+      };
       setTorchAvailable(Boolean(caps.torch));
     });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [open, acquire]);
 
   useEffect(() => {
@@ -64,8 +72,8 @@ export function TieckCamera({ open, title, allowGallery = false, onClose, onCapt
   }, [open, stream]);
 
   useEffect(() => {
-    if (!open) { 
-      setReady(false); 
+    if (!open) {
+      setReady(false);
       setQualityResult(null);
       setLastStates([]);
       if (qualityEngineRef.current) {
@@ -75,10 +83,19 @@ export function TieckCamera({ open, title, allowGallery = false, onClose, onCapt
     }
   }, [open]);
 
+  useEffect(() => {
+    return () => {
+      if (qualityEngineRef.current) {
+        qualityEngineRef.current.dispose();
+        qualityEngineRef.current = null;
+      }
+    };
+  }, []);
+
   // Local quality analysis
   useEffect(() => {
     if (!open || !ready || isCapturing) return;
-    
+
     if (!qualityEngineRef.current) {
       qualityEngineRef.current = new QualityEngine();
     }
@@ -94,13 +111,13 @@ export function TieckCamera({ open, title, allowGallery = false, onClose, onCapt
       if (video && video.videoWidth > 0) {
         try {
           const result = await engine.analyzeFrame(video);
-          
+
           if (cancelled) return;
 
           setQualityResult(result);
-          
+
           // Smooth transitions: keep track of last 2 states
-          setLastStates(prev => {
+          setLastStates((prev) => {
             const next = [...prev, result.state].slice(-2);
             return next;
           });
@@ -108,7 +125,7 @@ export function TieckCamera({ open, title, allowGallery = false, onClose, onCapt
           console.error("[TieckCamera] Quality analysis error:", err);
         }
       }
-      
+
       if (!cancelled) {
         timeoutId = window.setTimeout(analyze, 750);
       }
@@ -137,13 +154,15 @@ export function TieckCamera({ open, title, allowGallery = false, onClose, onCapt
     try {
       await track.applyConstraints({ advanced: [{ torch: next } as MediaTrackConstraintSet] });
       setTorchOn(next);
-    } catch { setTorchAvailable(false); }
+    } catch {
+      setTorchAvailable(false);
+    }
   }, [stream, torchOn]);
 
   const shoot = useCallback(async () => {
     const video = videoRef.current;
     if (!video || !video.videoWidth || isCapturing) return;
-    
+
     setIsCapturing(true);
     haptic(18);
     setFlash(true);
@@ -160,13 +179,15 @@ export function TieckCamera({ open, title, allowGallery = false, onClose, onCapt
     }
 
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    
-    const blob = await new Promise<Blob | null>((r) => canvas.toBlob((b) => r(b), "image/jpeg", 0.9));
+
+    const blob = await new Promise<Blob | null>((r) =>
+      canvas.toBlob((b) => r(b), "image/jpeg", 0.9),
+    );
     if (!blob) {
       setIsCapturing(false);
       return;
     }
-    
+
     onCapture(new File([blob], `foto-${Date.now()}.jpg`, { type: "image/jpeg" }));
     setIsCapturing(false);
   }, [onCapture, isCapturing]);
@@ -181,11 +202,16 @@ export function TieckCamera({ open, title, allowGallery = false, onClose, onCapt
       role="dialog"
       aria-modal="true"
       aria-label={title}
-      style={{ paddingTop: "env(safe-area-inset-top)", paddingBottom: "env(safe-area-inset-bottom)" }}
+      style={{
+        paddingTop: "env(safe-area-inset-top)",
+        paddingBottom: "env(safe-area-inset-bottom)",
+      }}
     >
       {/* Top bar */}
-      <div className="absolute top-0 inset-x-0 z-20 flex items-center gap-3 px-4 py-3 bg-gradient-to-b from-black/70 to-transparent"
-        style={{ paddingTop: "calc(env(safe-area-inset-top) + 0.75rem)" }}>
+      <div
+        className="absolute top-0 inset-x-0 z-20 flex items-center gap-3 px-4 py-3 bg-gradient-to-b from-black/70 to-transparent"
+        style={{ paddingTop: "calc(env(safe-area-inset-top) + 0.75rem)" }}
+      >
         <button
           type="button"
           onClick={onClose}
@@ -202,20 +228,32 @@ export function TieckCamera({ open, title, allowGallery = false, onClose, onCapt
             aria-label={torchOn ? "Desligar flash" : "Ligar flash"}
             className="w-9 h-9 rounded-full bg-white/15 backdrop-blur flex items-center justify-center active:scale-95 transition"
           >
-            {torchOn ? <Zap className="w-5 h-5" aria-hidden /> : <ZapOff className="w-5 h-5" aria-hidden />}
+            {torchOn ? (
+              <Zap className="w-5 h-5" aria-hidden />
+            ) : (
+              <ZapOff className="w-5 h-5" aria-hidden />
+            )}
           </button>
         )}
       </div>
 
       <div className="relative flex-1 overflow-hidden">
-        <video ref={videoRef} playsInline muted autoPlay className="absolute inset-0 w-full h-full object-cover" />
+        <video
+          ref={videoRef}
+          playsInline
+          muted
+          autoPlay
+          className="absolute inset-0 w-full h-full object-cover"
+        />
 
         {/* Center frame guide */}
         {ready && (
           <div className="pointer-events-none absolute inset-x-8 top-1/2 -translate-y-1/2 aspect-[4/3] rounded-3xl border border-white/35 shadow-[0_0_0_9999px_rgba(0,0,0,0.18)] transition-opacity duration-300" />
         )}
 
-        {flash && <div className="absolute inset-0 bg-white/80 animate-out fade-out duration-150" />}
+        {flash && (
+          <div className="absolute inset-0 bg-white/80 animate-out fade-out duration-150" />
+        )}
 
         {needsIntro && (
           <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 px-10 text-center bg-black/85">
@@ -246,12 +284,17 @@ export function TieckCamera({ open, title, allowGallery = false, onClose, onCapt
 
       {/* Capture Quality Indicator */}
       <div className="absolute bottom-32 left-1/2 -translate-x-1/2 z-30">
-        <div className={cn(
-          "px-4 py-2 rounded-full backdrop-blur-md text-xs font-bold transition-all duration-300 flex items-center gap-2",
-          stabilizedState === 'ready' ? "bg-green-500/80 text-white" : 
-          stabilizedState === 'initializing' ? "bg-white/20 text-white/70" : "bg-amber-500/80 text-white"
-        )}>
-          {stabilizedState === 'initializing' && <Loader2 className="w-3 h-3 animate-spin" />}
+        <div
+          className={cn(
+            "px-4 py-2 rounded-full backdrop-blur-md text-xs font-bold transition-all duration-300 flex items-center gap-2",
+            stabilizedState === "ready"
+              ? "bg-green-500/80 text-white"
+              : stabilizedState === "initializing"
+                ? "bg-white/20 text-white/70"
+                : "bg-amber-500/80 text-white",
+          )}
+        >
+          {stabilizedState === "initializing" && <Loader2 className="w-3 h-3 animate-spin" />}
           {HINT_LABEL[stabilizedState]}
         </div>
       </div>
@@ -291,10 +334,14 @@ export function TieckCamera({ open, title, allowGallery = false, onClose, onCapt
           className="p-1 rounded-full bg-white/25 disabled:opacity-40 active:scale-95 transition relative group"
           style={{ width: 80, height: 80 }}
         >
-          <span className={cn(
-            "block w-full h-full rounded-full transition-all duration-300",
-            stabilizedState === 'ready' ? "bg-white shadow-[0_0_20px_rgba(255,255,255,0.5)]" : "bg-white/80"
-          )} />
+          <span
+            className={cn(
+              "block w-full h-full rounded-full transition-all duration-300",
+              stabilizedState === "ready"
+                ? "bg-white shadow-[0_0_20px_rgba(255,255,255,0.5)]"
+                : "bg-white/80",
+            )}
+          />
           {isCapturing && (
             <div className="absolute inset-0 flex items-center justify-center">
               <Loader2 className="w-8 h-8 animate-spin text-black/20" />
@@ -304,7 +351,10 @@ export function TieckCamera({ open, title, allowGallery = false, onClose, onCapt
 
         <button
           type="button"
-          onClick={() => { haptic(); void switchFacing(); }}
+          onClick={() => {
+            haptic();
+            void switchFacing();
+          }}
           aria-label="Trocar câmera"
           className="w-11 h-11 rounded-full bg-white/15 backdrop-blur flex items-center justify-center active:scale-95 transition"
         >
@@ -313,12 +363,4 @@ export function TieckCamera({ open, title, allowGallery = false, onClose, onCapt
       </div>
     </div>
   );
-  useEffect(() => {
-    return () => {
-      if (qualityEngineRef.current) {
-        qualityEngineRef.current.dispose();
-        qualityEngineRef.current = null;
-      }
-    };
-  }, []);
 }
