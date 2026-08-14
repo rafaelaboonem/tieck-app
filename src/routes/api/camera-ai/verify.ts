@@ -65,6 +65,16 @@ export const Route = createFileRoute('/api/camera-ai/verify')({
                 p_idempotency_key: idempotencyKey
               });
             },
+            attachEvidence: async ({ responseId, blockId, idempotencyKey, evidenceId }) => {
+              const client = createServerSupabaseClient();
+              if (!client) throw new Error('Supabase client failed');
+              return client.rpc('attach_camera_ai_evidence', {
+                p_response_id: responseId,
+                p_block_id: blockId,
+                p_idempotency_key: idempotencyKey,
+                p_evidence_id: evidenceId
+              });
+            },
             persistEvidence: async ({ checklistId, responseId, blockId, idempotencyKey, buffer, mimeType }) => {
               const client = createServerSupabaseClient();
               if (!client) throw new Error('Supabase client failed');
@@ -74,20 +84,31 @@ export const Route = createFileRoute('/api/camera-ai/verify')({
               
               try {
                 const uint8Array = new Uint8Array(buffer);
-                // 1. Storage Upload (Service Role via client.server)
-                const { error: uploadError } = await client.storage
+                
+                // 1. Check if object already exists in Storage
+                const { data: existingList } = await client.storage
                   .from('checklist-evidences')
-                  .upload(storagePath, uint8Array, {
-                    contentType: mimeType,
-                    upsert: true
+                  .list(storagePath.substring(0, storagePath.lastIndexOf('/')), {
+                    search: storagePath.split('/').pop()
                   });
+                
+                const alreadyInStorage = existingList && existingList.length > 0;
 
-                if (uploadError) {
-                  // If it's a conflict but we can't be sure, we treat it as error for safety
-                  // But if it already exists, we might recover.
-                  if ((uploadError as any).status !== 409) {
-                    console.error('[CameraAI] Storage upload failed:', uploadError);
-                    return { evidenceId: null, error: uploadError };
+                if (!alreadyInStorage) {
+                  // Upload only if NOT present
+                  const { error: uploadError } = await client.storage
+                    .from('checklist-evidences')
+                    .upload(storagePath, uint8Array, {
+                      contentType: mimeType,
+                      upsert: false // Security: do not overwrite silently
+                    });
+
+                  if (uploadError) {
+                    // If 409, it might have been created by concurrent request
+                    if ((uploadError as any).status !== 409) {
+                      console.error(`[CameraAI] Storage upload failed:`, uploadError);
+                      return { evidenceId: null, error: uploadError };
+                    }
                   }
                 }
 
@@ -109,15 +130,19 @@ export const Route = createFileRoute('/api/camera-ai/verify')({
                   .single();
 
                 if (dbError) {
-                  console.error('[CameraAI] Evidence DB record failed:', dbError);
-                  // Cleanup object if DB record failed and it wasn't a replay
-                  await client.storage.from('checklist-evidences').remove([storagePath]);
+                  console.error(`[CameraAI] Evidence DB record failed:`, dbError);
+                  // ONLY cleanup if we were the ones who successfully uploaded it just now
+                  // This is hard to guarantee 100% without more complex state, 
+                  // but we avoid deleting if alreadyInStorage was true.
+                  if (!alreadyInStorage) {
+                    await client.storage.from('checklist-evidences').remove([storagePath]);
+                  }
                   return { evidenceId: null, error: dbError };
                 }
 
                 return { evidenceId: evidence.id, error: null };
               } catch (e) {
-                console.error('[CameraAI] Persistence exception:', e);
+                console.error(`[CameraAI] Persistence exception:`, e);
                 return { evidenceId: null, error: e };
               }
             },

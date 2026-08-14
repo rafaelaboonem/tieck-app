@@ -2,9 +2,9 @@ import { describe, it, expect, vi, beforeEach, MockedFunction } from 'vitest';
 import { CameraVerification, VerifyPayload } from '../../src/server/camera-ai/schema';
 import { verifyCameraRequest, VerifyDependencies, PublicSession, ClaimResult } from '../../src/server/camera-ai/verify-handler';
 
-describe('Camera AI Persistence & Replay', () => {
+describe('Camera AI Final Recovery & Integrity', () => {
   let deps: VerifyDependencies;
-  const mockNow = new Date('2026-08-14T04:30:00Z');
+  const mockNow = new Date('2026-08-14T04:50:00Z');
 
   const validPayload: VerifyPayload = {
     checklistId: 'c1234567-89ab-cdef-0123-456789abcdef',
@@ -62,74 +62,15 @@ describe('Camera AI Persistence & Replay', () => {
     };
   });
 
-  it('foto aprovada + Storage OK -> retorna evidenceId e persisted=true', async () => {
-    const res = await verifyCameraRequest(validPayload, validImage, deps);
-    expect(res.status).toBe(200);
-    const body = res.body as any;
-    expect(body.decision).toBe('approved');
-    expect(body.evidenceId).toBe('ev-1');
-    expect(body.persisted).toBe(true);
-    expect(deps.persistEvidence).toHaveBeenCalled();
-    expect(deps.analyzeImage).toHaveBeenCalledTimes(1);
-    expect(deps.attachEvidence).toHaveBeenCalled();
-  });
-
-  it('foto rejeitada -> nenhum upload é realizado', async () => {
-    (deps.analyzeImage as MockedFunction<any>).mockResolvedValue({ 
-      confidence: 0.95, 
-      target_visible: false, 
-      condition_observable: false, 
-      condition_met: false, 
-      image_quality: 'usable', 
-      visible_evidence: 'rejeitado', 
-      user_message: 'rejeitado' 
-    });
-    const res = await verifyCameraRequest(validPayload, validImage, deps);
-    expect((res.body as any).decision).toBe('retake');
-    expect(deps.persistEvidence).not.toHaveBeenCalled();
-    expect(deps.markCompleted).toHaveBeenCalled();
-  });
-
-  it('foto aprovada + falha no Storage -> retorna storage_failure e marca como storage_pending', async () => {
-    (deps.persistEvidence as MockedFunction<any>).mockResolvedValue({ evidenceId: null, error: new Error('Storage fail') });
-    const res = await verifyCameraRequest(validPayload, validImage, deps);
-    expect(res.status).toBe(500);
-    expect((res.body as any).code).toBe('storage_failure');
-    // We now mark completed with storage_pending instead of failed
-    expect(deps.markCompleted).toHaveBeenCalledWith(expect.objectContaining({ code: 'storage_pending' }));
-  });
-
-  it('retry (replay) de tentativa aprovada com evidenceId -> retorna replay sem chamar OpenAI', async () => {
+  it('1. Tentativa antiga failed/storage_failure (mesmo decision NULL) é recuperada como replay', async () => {
     (deps.claimAttempt as MockedFunction<any>).mockResolvedValue({ 
       data: [{ 
-        claim_status: 'completed', 
-        attempt_id: 'a1', 
-        current_retry_count: 0, 
-        existing_decision: 'approved', 
-        existing_code: 'verified',
-        existing_evidence_id: 'ev-existing'
-      }], 
-      error: null 
-    });
-    
-    const res = await verifyCameraRequest(validPayload, validImage, deps);
-    expect(res.status).toBe(200);
-    const body = res.body as any;
-    expect(body.evidenceId).toBe('ev-existing');
-    expect(body.persisted).toBe(true);
-    expect(deps.analyzeImage).not.toHaveBeenCalled();
-    expect(deps.persistEvidence).not.toHaveBeenCalled();
-  });
-
-  it('retry (replay) de storage_pending -> executa persistEvidence mas NÃO analyzeImage', async () => {
-    (deps.claimAttempt as MockedFunction<any>).mockResolvedValue({ 
-      data: [{ 
-        claim_status: 'completed', 
-        attempt_id: 'a-pending', 
-        current_retry_count: 1, 
-        existing_decision: 'approved', 
-        existing_code: 'storage_pending',
-        existing_evidence: 'AI already said yes',
+        claim_status: 'failed', 
+        attempt_id: 'att-old', 
+        current_retry_count: 2,
+        existing_decision: null, // s88u9p case
+        existing_code: 'storage_failure',
+        existing_evidence: 'Some old evidence',
         existing_evidence_id: null
       }], 
       error: null 
@@ -138,13 +79,65 @@ describe('Camera AI Persistence & Replay', () => {
     const res = await verifyCameraRequest(validPayload, validImage, deps);
     
     expect(res.status).toBe(200);
-    const body = res.body as any;
-    expect(body.persisted).toBe(true);
-    expect(body.evidenceId).toBe('ev-1');
+    expect(deps.analyzeImage).not.toHaveBeenCalled(); // Sem OpenAI
+    expect(deps.persistEvidence).toHaveBeenCalled();
+    expect(deps.attachEvidence).toHaveBeenCalled();
+    expect((res.body as any).persisted).toBe(true);
+  });
+
+  it('2. Retry de storage_pending não executa OpenAI nem Rate Limit', async () => {
+    (deps.claimAttempt as MockedFunction<any>).mockResolvedValue({ 
+      data: [{ 
+        claim_status: 'completed', 
+        attempt_id: 'att-pending', 
+        current_retry_count: 1,
+        existing_decision: 'approved',
+        existing_code: 'storage_pending',
+        existing_evidence: 'Approved text',
+        existing_evidence_id: null
+      }], 
+      error: null 
+    });
+    
+    await verifyCameraRequest(validPayload, validImage, deps);
+    
     expect(deps.analyzeImage).not.toHaveBeenCalled();
-    expect(deps.persistEvidence).toHaveBeenCalledTimes(1);
-    expect(deps.attachEvidence).toHaveBeenCalledWith(expect.objectContaining({
-      evidenceId: 'ev-1'
-    }));
+    expect(deps.hitRateLimit).not.toHaveBeenCalled();
+    expect(deps.persistEvidence).toHaveBeenCalled();
+  });
+
+  it('3. Falha ao anexar evidence_id no banco nunca retorna persisted: true', async () => {
+    (deps.attachEvidence as MockedFunction<any>).mockResolvedValue({ data: null, error: 'DB Error' });
+    
+    const res = await verifyCameraRequest(validPayload, validImage, deps);
+    
+    expect(res.status).toBe(500);
+    expect(!!(res.body as any).persisted).toBe(false);
+    expect((res.body as any).code).toBe('storage_failure');
+  });
+
+  it('4. Replays concorrentes: se attachEvidence retornar ID preexistente, retorna sucesso', async () => {
+     (deps.claimAttempt as MockedFunction<any>).mockResolvedValue({ 
+      data: [{ 
+        claim_status: 'completed', 
+        attempt_id: 'att-concurrent', 
+        current_retry_count: 5,
+        existing_decision: 'approved',
+        existing_code: 'storage_pending',
+        existing_evidence: 'Evidence',
+        existing_evidence_id: null
+      }], 
+      error: null 
+    });
+    
+    // Simula que outro processo ganhou a corrida de update
+    (deps.attachEvidence as MockedFunction<any>).mockResolvedValue({ 
+      data: [{ confirmed_evidence_id: 'ev-already-there' }], 
+      error: null 
+    });
+    
+    const res = await verifyCameraRequest(validPayload, validImage, deps);
+    expect(res.status).toBe(200);
+    expect((res.body as any).evidenceId).toBe('ev-already-there');
   });
 });

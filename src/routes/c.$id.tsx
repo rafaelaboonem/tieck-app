@@ -463,8 +463,26 @@ function PublicChecklistPage() {
     setUploading(true);
 
     try {
-    // Validation: Check for required fields
+    // Validation: Check for required fields and blocking camera blocks
     const blocks = checklist.blocks || [];
+    
+    // hasBlockingCamera logic
+    const hasBlockingCamera = blocks.some((b: any) => {
+      if (b.type !== 'camera' || !b.required) return false;
+      const ans = answers[b.id];
+      if (!ans) return true;
+      try {
+        const parsed = typeof ans === 'string' ? JSON.parse(ans) : ans;
+        return !(parsed.decision === 'approved' && parsed.evidenceId && parsed.canContinue);
+      } catch { return true; }
+    });
+
+    if (hasBlockingCamera) {
+      toast.error(t((checklist?.settings as any)?.language, "requiredError"));
+      setUploading(false);
+      return;
+    }
+
     const missingRequired = blocks.filter((b: any) => {
       const isInteractive = ["short-answer", "long-answer", "multiple-choice", "checkboxes", "dropdown", "multi-select", "number", "email", "phone", "link", "file-upload", "date", "time", "linear-scale", "matrix", "rating", "signature", "ranking", "image", "camera"].includes(b.type);
       if (!isInteractive || b.required === false) return false;
@@ -944,26 +962,40 @@ function PublicChecklistPage() {
                   })}
 
                   <div className="mt-12 mb-4 flex">
-                    <button
-                      type="submit"
-                      disabled={uploading}
-                      className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl font-bold shadow-lg hover:opacity-90 transition-all active:scale-95"
-                      style={{
-                        backgroundColor: settings.btnBgColor || "#FF007F",
-                        color: settings.btnTextColor || "#ffffff",
-                        width: "fit-content"
-                      }}
-                    >
-                      {uploading ? (
-                        t(settings.language, "sending")
-                      ) : (
-                        <>
-                          {(settings as any).btnIconPosition === "start" && renderBtnIcon((settings as any).btnIcon)}
-                          {settings.btnText || t(settings.language, "submit")}
-                          {(settings as any).btnIconPosition !== "start" && renderBtnIcon((settings as any).btnIcon)}
-                        </>
-                      )}
-                    </button>
+                    {(() => {
+                      const hasBlockingCamera = blocks.some((b: any) => {
+                        if (b.type !== 'camera' || !b.required) return false;
+                        const ans = answers[b.id];
+                        if (!ans) return true;
+                        try {
+                          const parsed = typeof ans === 'string' ? JSON.parse(ans) : ans;
+                          return !(parsed.decision === 'approved' && parsed.evidenceId && parsed.canContinue);
+                        } catch { return true; }
+                      });
+
+                      return (
+                        <button
+                          type="submit"
+                          disabled={uploading || hasBlockingCamera}
+                          className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl font-bold shadow-lg hover:opacity-90 transition-all active:scale-95 disabled:opacity-50 disabled:grayscale"
+                          style={{
+                            backgroundColor: settings.btnBgColor || "#FF007F",
+                            color: settings.btnTextColor || "#ffffff",
+                            width: "fit-content"
+                          }}
+                        >
+                          {uploading ? (
+                            t(settings.language, "sending")
+                          ) : (
+                            <>
+                              {(settings as any).btnIconPosition === "start" && renderBtnIcon((settings as any).btnIcon)}
+                              {settings.btnText || t(settings.language, "submit")}
+                              {(settings as any).btnIconPosition !== "start" && renderBtnIcon((settings as any).btnIcon)}
+                            </>
+                          )}
+                        </button>
+                      );
+                    })()}
                   </div>
                 </div>
               </form>

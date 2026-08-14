@@ -2285,6 +2285,17 @@ export type Database = {
           key: string
         }[]
       }
+      attach_camera_ai_evidence: {
+        Args: {
+          p_block_id: string
+          p_evidence_id: string
+          p_idempotency_key: string
+          p_response_id: string
+        }
+        Returns: {
+          confirmed_evidence_id: string
+        }[]
+      }
       claim_camera_ai_attempt: {
         Args: {
           p_block_id: string
@@ -2298,6 +2309,7 @@ export type Database = {
           existing_code: string
           existing_decision: string
           existing_evidence: string
+          existing_evidence_id: string
         }[]
       }
       claim_checklist_analysis: {
