@@ -180,7 +180,65 @@ export async function verifyCameraRequest(
 
   const claim = claimData[0];
 
-  // Replay Completed
+  // Replay Storage-Pending Approved Attempt
+  const isStoragePending = 
+    claim.claim_status === 'completed' && 
+    claim.existing_decision === 'approved' && 
+    !claim.existing_evidence_id;
+
+  if (isStoragePending) {
+    // 12. Persistence Replay (No OpenAI, No Rate Limit)
+    const { evidenceId: pId, error: pError } = await deps.persistEvidence({
+      checklistId: session.checklist_id,
+      responseId: session.response_id,
+      blockId: payload.blockId,
+      idempotencyKey: payload.idempotencyKey,
+      buffer: imageFile.buffer,
+      mimeType
+    });
+
+    if (pError || !pId) {
+      // Stay in storage_pending state
+      return {
+        status: 500,
+        body: {
+          ok: false,
+          code: 'storage_failure',
+          message: 'Foto aprovada. Não conseguimos salvá-la ainda.',
+          requestId
+        }
+      };
+    }
+
+    // 13. Decision Update (Mark as truly completed)
+    await deps.markCompleted({
+      responseId: session.response_id,
+      blockId: payload.blockId,
+      idempotencyKey: payload.idempotencyKey,
+      decision: 'approved',
+      code: 'verified',
+      evidence: claim.existing_evidence,
+      evidenceId: pId,
+      model: deps.model,
+      durationMs: 0,
+      at: deps.now()
+    });
+
+    return {
+      status: 200,
+      body: {
+        ok: true,
+        decision: 'approved',
+        code: 'verified',
+        evidence: claim.existing_evidence,
+        evidenceId: pId,
+        persisted: true,
+        requestId
+      }
+    };
+  }
+
+  // Replay Completed (Already has evidenceId)
   if (claim.claim_status === 'completed') {
     return {
       status: 200,
@@ -206,6 +264,12 @@ export async function verifyCameraRequest(
   }
 
   if (claim.claim_status !== 'acquired') {
+    // If it failed before, but we are here, treat it based on existing_code
+    if (claim.claim_status === 'failed' && claim.existing_code === 'storage_failure') {
+      // This should have been converted by migration, but handle it just in case
+      // Or if it just happened in this session
+    }
+    
     return { 
       status: 500, 
       body: { ok: false, code: 'technical_failure', message: 'Falha técnica ao iniciar verificação.', requestId } 
