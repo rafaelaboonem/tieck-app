@@ -113,7 +113,7 @@ describe('Camera AI Server Runtime', () => {
 
     it('claim completed retorna replay e analyzeImage não é chamado', async () => {
       (deps.claimAttempt as MockedFunction<typeof deps.claimAttempt>).mockResolvedValue({ 
-        data: [{ claim_status: 'completed', attempt_id: 'a', current_retry_count: 0, existing_decision: 'approved', existing_code: 'ok' }], 
+        data: [{ claim_status: 'completed', attempt_id: 'a', current_retry_count: 0, existing_decision: 'approved', existing_code: 'ok', existing_evidence_id: 'ev-1' }], 
         error: null 
       });
       const res = await verifyCameraRequest(validPayload, validImage, deps);
