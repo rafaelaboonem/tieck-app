@@ -36,4 +36,5 @@ export interface VerificationResult {
   code: string;
   message: string;
   evidence?: string;
+  requestId?: string;
 }

@@ -55,19 +55,22 @@ export async function verifyCameraRequest(
   imageFile: { buffer: ArrayBuffer; type: string },
   deps: VerifyDependencies
 ): Promise<{ status: number; body: VerificationResult | { ok: false; code: string; message?: string } }> {
+  // requestId random para logs e resposta
+  const requestId = Math.random().toString(36).substring(7);
+
   // 1. CAMERA_AI_MODE
   if (deps.mode !== 'enabled') {
     return { 
       status: 503, 
-      body: { ok: false, code: 'camera_ai_disabled', message: 'IA desativada.' } 
+      body: { ok: false, code: 'camera_ai_disabled', message: 'IA desativada.', requestId } 
     };
   }
 
-  // 2. Server-only config verification (should be passed by deps)
+  // 2. Server-only config verification
   if (!deps.isConfigured()) {
     return { 
       status: 503, 
-      body: { ok: false, code: 'config_missing', message: 'Configuração do servidor ausente.' } 
+      body: { ok: false, code: 'config_missing', message: 'Configuração do servidor ausente.', requestId } 
     };
   }
 
@@ -76,7 +79,12 @@ export async function verifyCameraRequest(
   if (!imgVal.valid) {
     return { 
       status: 400, 
-      body: { ok: false, code: imgVal.code || 'invalid', message: imgVal.message || '' } 
+      body: { 
+        ok: false, 
+        code: imgVal.code || 'invalid_payload', 
+        message: imgVal.message || 'Não foi possível validar os dados da foto.',
+        requestId 
+      } 
     };
   }
   const mimeType = imgVal.mimeType || 'image/jpeg';
@@ -86,7 +94,12 @@ export async function verifyCameraRequest(
   if (sessionError || !sessionData || !sessionData.length) {
     return { 
       status: 401, 
-      body: { ok: false, code: 'unauthorized', message: 'Sessão inválida ou expirada.' } 
+      body: { 
+        ok: false, 
+        code: 'unauthorized', 
+        message: 'Sua sessão expirou. Estamos iniciando uma nova.',
+        requestId
+      } 
     };
   }
   const session = sessionData[0];
@@ -95,7 +108,12 @@ export async function verifyCameraRequest(
   if (session.checklist_id !== payload.checklistId) {
     return { 
       status: 403, 
-      body: { ok: false, code: 'id_mismatch' } 
+      body: { 
+        ok: false, 
+        code: 'id_mismatch', 
+        message: 'A sessão não pertence a este checklist.',
+        requestId
+      } 
     };
   }
 
@@ -105,7 +123,12 @@ export async function verifyCameraRequest(
   if (!block || block.type !== 'camera') {
     return { 
       status: 404, 
-      body: { ok: false, code: 'invalid_block' } 
+      body: { 
+        ok: false, 
+        code: 'invalid_block', 
+        message: 'Este checklist foi atualizado. Recarregue a página.',
+        requestId
+      } 
     };
   }
 
@@ -121,7 +144,7 @@ export async function verifyCameraRequest(
   if (claimError || !claimData || !claimData.length) {
     return { 
       status: 500, 
-      body: { ok: false, code: 'technical_failure' } 
+      body: { ok: false, code: 'technical_failure', message: 'Falha ao processar idempotência.', requestId } 
     };
   }
 
@@ -136,7 +159,8 @@ export async function verifyCameraRequest(
         decision: claim.existing_decision as Decision,
         code: claim.existing_code || 'replayed',
         message: 'Replay da decisão anterior.',
-        evidence: claim.existing_evidence || undefined
+        evidence: claim.existing_evidence || undefined,
+        requestId
       }
     };
   }
@@ -145,14 +169,14 @@ export async function verifyCameraRequest(
   if (claim.claim_status === 'processing') {
     return { 
       status: 409, 
-      body: { ok: false, code: 'processing_conflict' } 
+      body: { ok: false, code: 'processing_conflict', message: 'A foto ainda está sendo processada. Tente novamente em instantes.', requestId } 
     };
   }
 
   if (claim.claim_status !== 'acquired') {
     return { 
       status: 500, 
-      body: { ok: false, code: 'technical_failure' } 
+      body: { ok: false, code: 'technical_failure', message: 'Falha técnica ao iniciar verificação.', requestId } 
     };
   }
 
@@ -167,7 +191,7 @@ export async function verifyCameraRequest(
     });
     return { 
       status: 429, 
-      body: { ok: false, code: 'rate_limit', message: 'Muitas tentativas.' } 
+      body: { ok: false, code: 'rate_limit', message: 'Muitas tentativas.', requestId } 
     };
   }
 
@@ -211,11 +235,12 @@ export async function verifyCameraRequest(
         ok: false, 
         decision: 'technical_failure', 
         code: 'persistence_error',
-        message: 'Falha ao confirmar persistência.'
+        message: 'Falha ao confirmar persistência.',
+        requestId
       } 
     };
   }
 
   // 13. Sanitized Response
-  return { status: 200, body: result };
+  return { status: 200, body: { ...result, requestId } };
 }

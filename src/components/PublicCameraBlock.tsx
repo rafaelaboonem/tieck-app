@@ -17,7 +17,7 @@ interface PublicCameraBlockProps {
   onAnswer?: (blockId: string, value: string) => void;
   onCameraActiveChange?: (active: boolean) => void;
   session?: { responseId: string; responseToken: string } | null;
-  ensureResponseSession: () => Promise<{ responseId: string; responseToken: string } | null>;
+  ensureResponseSession: (options?: { forceNew?: boolean }) => Promise<{ responseId: string; responseToken: string; checklistId: string; createdAt: number } | null>;
   language?: string;
 }
 
@@ -55,6 +55,7 @@ export function PublicCameraBlock({
   const [capturedFile, setCapturedFile] = useState<File | null>(null);
   const [idempotencyKey, setIdempotencyKey] = useState<string | null>(null);
   const [failureReason, setFailureReason] = useState<FailureReason>("none");
+  const [retryAttempted, setRetryAttempted] = useState<boolean>(false);
   
   const inFlightRef = useRef<boolean>(false);
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -85,8 +86,6 @@ export function PublicCameraBlock({
 
   const handleCapture = async (file: File) => {
     // 1. Limpeza de resposta anterior de verdade
-    // Se a foto foi aprovada anteriormente e estamos tirando uma nova, limpamos a resposta anterior.
-    // Isso precisa ocorrer ANTES da nova verificação.
     if (onAnswer) {
       onAnswer(block.id, "");
     }
@@ -106,14 +105,15 @@ export function PublicCameraBlock({
     const newIdempotencyKey = crypto.randomUUID();
     setIdempotencyKey(newIdempotencyKey);
     setFailureReason("none");
+    setRetryAttempted(false);
 
     void processVerification(file, newIdempotencyKey, requestSequenceRef.current);
   };
 
 
-  const processVerification = async (file: File, key: string, sequence: number) => {
+  const processVerification = async (file: File, key: string, sequence: number, isRetry = false) => {
     // Double-click protection: if we're already processing THIS exact capture, ignore.
-    if (inFlightRef.current && key === idempotencyKey) return;
+    if (inFlightRef.current && key === idempotencyKey && !isRetry) return;
     
     setErrorMsg(null);
     setEvidence(null);
@@ -121,7 +121,7 @@ export function PublicCameraBlock({
     // Closure to check if this request is still the active one
     const isCurrent = () => sequence === requestSequenceRef.current;
 
-    const activeSession = session ?? (await ensureResponseSession());
+    let activeSession = session ?? (await ensureResponseSession());
     
     if (!isCurrent()) return;
 
@@ -217,7 +217,7 @@ export function PublicCameraBlock({
         return;
       }
 
-      const data: unknown = await response.json();
+      const data: any = await response.json();
       
       if (response.status === 429) {
         setState("rate_limited");
@@ -227,18 +227,46 @@ export function PublicCameraBlock({
       if (response.status === 409) {
         setState("technical_failure");
         setFailureReason("processing");
-        setErrorMsg("A foto ainda está sendo processada. Tente novamente em instantes.");
+        setErrorMsg(data.message || "A foto ainda está sendo processada. Tente novamente em instantes.");
         return;
+      }
+
+      // Tratamento de Sessão Expirada ou Divergente
+      if (response.status === 401 || response.status === 403) {
+        if (!retryAttempted && isCurrent()) {
+          setRetryAttempted(true);
+          setState("preparing");
+          const newSession = await ensureResponseSession({ forceNew: true });
+          if (newSession && isCurrent()) {
+            void processVerification(file, key, sequence, true);
+            return;
+          }
+        }
+        
+        setState("technical_failure");
+        setFailureReason("configuration");
+        setErrorMsg(data.message || "Sessão inválida. Recarregue a página.");
+        return;
+      }
+
+      if (response.status === 404) {
+        const code = data?.code;
+        if (code === "invalid_block") {
+          setState("technical_failure");
+          setFailureReason("configuration");
+          setErrorMsg("Este checklist foi atualizado. Recarregue a página.");
+          return;
+        }
       }
 
       if (response.status === 503) {
         setState("technical_failure");
         setFailureReason("configuration");
-        const code = (data as { code?: string })?.code;
+        const code = data?.code;
         if (code === "camera_ai_disabled") {
           setErrorMsg("A verificação inteligente está temporariamente indisponível.");
         } else {
-          setErrorMsg("Servidor em manutenção ou configuração ausente.");
+          setErrorMsg(data.message || "Servidor em manutenção ou configuração ausente.");
         }
         return;
       }
@@ -246,7 +274,7 @@ export function PublicCameraBlock({
       if (response.status >= 500) {
         setState("technical_failure");
         setFailureReason("server_failed");
-        setErrorMsg("O servidor encontrou um erro. Tente novamente.");
+        setErrorMsg(data.message || "O servidor encontrou um erro. Tente novamente.");
         return;
       }
 
