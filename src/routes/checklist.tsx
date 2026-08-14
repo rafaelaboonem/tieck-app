@@ -78,7 +78,14 @@ import {
   SendHorizontal,
   CheckCircle,
   ChevronUp,
-  ChevronLeft
+  ChevronLeft,
+  Zap,
+  FileText,
+  LayoutTemplate,
+  HelpCircle,
+  Navigation,
+  Network,
+  ExternalLink
 } from "lucide-react";
 import { 
   Collapsible, 
@@ -110,7 +117,7 @@ const InsightsTab = lazy(() => import("@/components/InsightsTab").then(m => ({ d
 const SubmissionsTab = lazy(() => import("@/components/SubmissionsTab").then(m => ({ default: m.SubmissionsTab })));
 import { BlockRenderer, INTERACTIVE_BLOCK_TYPES } from "@/components/BlockRenderer";
 import { ensureCameraBlockIds, withNewCameraBlockId, extractCameraQuestions } from "@/lib/camera-blocks";
-function CameraBlockPreview() {
+function CameraBlockPreview({ textColor, blockId }: { textColor?: string; blockId?: string }) {
   const [dataUrl, setDataUrl] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -4687,7 +4694,7 @@ function NovoChecklistPage() {
                                 className="w-full px-3 py-2 text-left text-sm text-neutral-700 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-700 flex items-center justify-between transition-colors"
                               >
                                 <div className="flex items-center gap-2.5">
-                                  <CopyIcon className="w-4 h-4" />
+                                  <Copy className="w-4 h-4" />
                                   Duplicar
                                 </div>
                                 <span className="text-[10px] text-neutral-400">Ctrl D</span>
