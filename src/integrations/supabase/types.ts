@@ -2359,6 +2359,19 @@ export type Database = {
           response_token: string
         }[]
       }
+      finalize_public_response: {
+        Args: {
+          p_answers: Json
+          p_checklist_id: string
+          p_response_token: string
+        }
+        Returns: {
+          already_submitted: boolean
+          response_id: string
+          status: string
+          submitted_at: string
+        }[]
+      }
       generate_dataset_public_id: { Args: never; Returns: string }
       generate_short_slug: { Args: { length?: number }; Returns: string }
       get_public_checklist: {
