@@ -144,7 +144,7 @@ export async function verifyCameraRequest(
   if (claimError || !claimData || !claimData.length) {
     return { 
       status: 500, 
-      body: { ok: false, code: 'technical_failure' } 
+      body: { ok: false, code: 'technical_failure', message: 'Falha ao processar idempotência.', requestId } 
     };
   }
 
@@ -159,7 +159,8 @@ export async function verifyCameraRequest(
         decision: claim.existing_decision as Decision,
         code: claim.existing_code || 'replayed',
         message: 'Replay da decisão anterior.',
-        evidence: claim.existing_evidence || undefined
+        evidence: claim.existing_evidence || undefined,
+        requestId
       }
     };
   }
@@ -168,14 +169,14 @@ export async function verifyCameraRequest(
   if (claim.claim_status === 'processing') {
     return { 
       status: 409, 
-      body: { ok: false, code: 'processing_conflict' } 
+      body: { ok: false, code: 'processing_conflict', message: 'A foto ainda está sendo processada. Tente novamente em instantes.', requestId } 
     };
   }
 
   if (claim.claim_status !== 'acquired') {
     return { 
       status: 500, 
-      body: { ok: false, code: 'technical_failure' } 
+      body: { ok: false, code: 'technical_failure', message: 'Falha técnica ao iniciar verificação.', requestId } 
     };
   }
 
@@ -234,11 +235,12 @@ export async function verifyCameraRequest(
         ok: false, 
         decision: 'technical_failure', 
         code: 'persistence_error',
-        message: 'Falha ao confirmar persistência.'
+        message: 'Falha ao confirmar persistência.',
+        requestId
       } 
     };
   }
 
   // 13. Sanitized Response
-  return { status: 200, body: result };
+  return { status: 200, body: { ...result, requestId } };
 }

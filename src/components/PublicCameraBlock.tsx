@@ -55,6 +55,7 @@ export function PublicCameraBlock({
   const [capturedFile, setCapturedFile] = useState<File | null>(null);
   const [idempotencyKey, setIdempotencyKey] = useState<string | null>(null);
   const [failureReason, setFailureReason] = useState<FailureReason>("none");
+  const [retryAttempted, setRetryAttempted] = useState<boolean>(false);
   
   const inFlightRef = useRef<boolean>(false);
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -121,7 +122,7 @@ export function PublicCameraBlock({
     // Closure to check if this request is still the active one
     const isCurrent = () => sequence === requestSequenceRef.current;
 
-    const activeSession = session ?? (await ensureResponseSession());
+    let activeSession = session ?? (await ensureResponseSession());
     
     if (!isCurrent()) return;
 
