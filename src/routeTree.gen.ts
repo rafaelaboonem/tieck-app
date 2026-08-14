@@ -27,6 +27,7 @@ import { Route as CIdRouteImport } from './routes/c.$id'
 import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
 import { Route as UnidadesUnitIdOperacaoRouteImport } from './routes/unidades.$unitId.operacao'
 import { Route as ApiCameraAiVerifyRouteImport } from './routes/api/camera-ai/verify'
+import { Route as ApiCameraAiCompilePolicyRouteImport } from './routes/api/camera-ai/compile-policy'
 
 const PainelRoute = PainelRouteImport.update({
   id: '/painel',
@@ -118,6 +119,12 @@ const ApiCameraAiVerifyRoute = ApiCameraAiVerifyRouteImport.update({
   path: '/api/camera-ai/verify',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiCameraAiCompilePolicyRoute =
+  ApiCameraAiCompilePolicyRouteImport.update({
+    id: '/api/camera-ai/compile-policy',
+    path: '/api/camera-ai/compile-policy',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -136,6 +143,7 @@ export interface FileRoutesByFullPath {
   '/painel': typeof PainelRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/c/$id': typeof CIdRoute
+  '/api/camera-ai/compile-policy': typeof ApiCameraAiCompilePolicyRoute
   '/api/camera-ai/verify': typeof ApiCameraAiVerifyRoute
   '/unidades/$unitId/operacao': typeof UnidadesUnitIdOperacaoRoute
 }
@@ -156,6 +164,7 @@ export interface FileRoutesByTo {
   '/painel': typeof PainelRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/c/$id': typeof CIdRoute
+  '/api/camera-ai/compile-policy': typeof ApiCameraAiCompilePolicyRoute
   '/api/camera-ai/verify': typeof ApiCameraAiVerifyRoute
   '/unidades/$unitId/operacao': typeof UnidadesUnitIdOperacaoRoute
 }
@@ -177,6 +186,7 @@ export interface FileRoutesById {
   '/painel': typeof PainelRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/c/$id': typeof CIdRoute
+  '/api/camera-ai/compile-policy': typeof ApiCameraAiCompilePolicyRoute
   '/api/camera-ai/verify': typeof ApiCameraAiVerifyRoute
   '/unidades/$unitId/operacao': typeof UnidadesUnitIdOperacaoRoute
 }
@@ -199,6 +209,7 @@ export interface FileRouteTypes {
     | '/painel'
     | '/auth/callback'
     | '/c/$id'
+    | '/api/camera-ai/compile-policy'
     | '/api/camera-ai/verify'
     | '/unidades/$unitId/operacao'
   fileRoutesByTo: FileRoutesByTo
@@ -219,6 +230,7 @@ export interface FileRouteTypes {
     | '/painel'
     | '/auth/callback'
     | '/c/$id'
+    | '/api/camera-ai/compile-policy'
     | '/api/camera-ai/verify'
     | '/unidades/$unitId/operacao'
   id:
@@ -239,6 +251,7 @@ export interface FileRouteTypes {
     | '/painel'
     | '/auth/callback'
     | '/c/$id'
+    | '/api/camera-ai/compile-policy'
     | '/api/camera-ai/verify'
     | '/unidades/$unitId/operacao'
   fileRoutesById: FileRoutesById
@@ -260,6 +273,7 @@ export interface RootRouteChildren {
   PainelRoute: typeof PainelRoute
   AuthCallbackRoute: typeof AuthCallbackRoute
   CIdRoute: typeof CIdRoute
+  ApiCameraAiCompilePolicyRoute: typeof ApiCameraAiCompilePolicyRoute
   ApiCameraAiVerifyRoute: typeof ApiCameraAiVerifyRoute
   UnidadesUnitIdOperacaoRoute: typeof UnidadesUnitIdOperacaoRoute
 }
@@ -392,6 +406,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiCameraAiVerifyRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/camera-ai/compile-policy': {
+      id: '/api/camera-ai/compile-policy'
+      path: '/api/camera-ai/compile-policy'
+      fullPath: '/api/camera-ai/compile-policy'
+      preLoaderRoute: typeof ApiCameraAiCompilePolicyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -412,6 +433,7 @@ const rootRouteChildren: RootRouteChildren = {
   PainelRoute: PainelRoute,
   AuthCallbackRoute: AuthCallbackRoute,
   CIdRoute: CIdRoute,
+  ApiCameraAiCompilePolicyRoute: ApiCameraAiCompilePolicyRoute,
   ApiCameraAiVerifyRoute: ApiCameraAiVerifyRoute,
   UnidadesUnitIdOperacaoRoute: UnidadesUnitIdOperacaoRoute,
 }
