@@ -113,9 +113,9 @@ export const Route = createFileRoute('/api/camera-ai/compile-policy')({
             questionHash,
             source: 'generated',
             // Map new fields for stability
-            requiredVisibleEvidence: policy.requiredVisibleEvidence || [],
-            rejectionSignals: policy.rejectionSignals || [],
-            notObservableSignals: policy.notObservableSignals || []
+            requiredVisibleEvidence: (policy as any).requiredVisibleEvidence || [],
+            rejectionSignals: (policy as any).rejectionSignals || [],
+            notObservableSignals: (policy as any).notObservableSignals || []
           };
 
           return Response.json({ ok: true, policy: finalPolicy });

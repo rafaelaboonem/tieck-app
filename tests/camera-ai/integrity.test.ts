@@ -34,9 +34,10 @@ describe('Camera AI Final Recovery & Integrity', () => {
               id: 'blk-1', 
               type: 'camera', 
               title: 'Test',
+              description: '',
               cameraAiPolicy: {
                 version: 1,
-                questionHash: '94ee059335e587e501cc4bf90613e0814f00a7b08bc7c648fd865a2af6a22cc2', // hash of "Test "
+                questionHash: '532eaabd9574880dbf76b9b8cc00832c20a6ec113d682299550d7a6e0f345e25', // hash of "Test"
                 verifiability: 'visual',
                 target: 'Test',
                 condition: 'present',
