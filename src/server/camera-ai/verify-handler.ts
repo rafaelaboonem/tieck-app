@@ -371,36 +371,30 @@ export async function verifyCameraRequest(
     });
   }
 
-  // 13. Final Decision Record Confirmation (Atomic Attachment)
-  if (result.decision === 'approved') {
-    const { data: attachData, error: attachError } = await deps.attachEvidence({
-      responseId: session.response_id,
-      blockId: payload.blockId,
-      idempotencyKey: payload.idempotencyKey,
-      evidenceId: evidenceId!
-    });
+  // 13. Final Decision Record Confirmation (Atomic Approval)
+  const { data: finalUpdate, error: finalError } = await deps.markCompleted({
+    responseId: session.response_id,
+    blockId: payload.blockId,
+    idempotencyKey: payload.idempotencyKey,
+    decision: result.decision,
+    code: result.code,
+    evidence: result.evidence,
+    evidenceId: evidenceId,
+    model: deps.model,
+    durationMs: duration,
+    at: deps.now()
+  });
 
-    const confirmedId = attachData?.[0]?.confirmed_evidence_id;
-
-    if (attachError || !confirmedId) {
-      return { 
-        status: 500, 
-        body: { 
-          ok: false, 
-          code: 'storage_failure',
-          message: 'Falha ao vincular evidência aprovada.',
-          requestId
-        } 
-      };
-    }
-    evidenceId = confirmedId;
-  }
-
-  // 14. Sanitized Response (Ensure evidenceId is confirmed)
-  if (result.decision === 'approved' && !evidenceId) {
-     return { 
+  if (finalError || !finalUpdate) {
+    return { 
       status: 500, 
-      body: { ok: false, code: 'storage_failure', message: 'Foto aprovada, mas falha ao salvar.', requestId } 
+      body: { 
+        ok: false, 
+        decision: 'technical_failure', 
+        code: 'persistence_error',
+        message: 'Falha ao confirmar persistência.',
+        requestId
+      } 
     };
   }
 
