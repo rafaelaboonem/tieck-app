@@ -23,7 +23,9 @@ describe('Camera AI Recovery & Explicit Errors', () => {
     idempotencyKey: '11111111-1111-1111-1111-111111111111',
   };
 
-  const image = { buffer: new ArrayBuffer(10), type: 'image/jpeg' };
+  // Valid JPEG header
+  const jpegBuffer = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0, 16, 0x4a, 0x46, 0x49, 0x46, 0, 1, 1, 1, 0, 72, 0, 72, 0, 0]).buffer;
+  const image = { buffer: jpegBuffer, type: 'image/jpeg' };
 
   beforeEach(() => {
     vi.clearAllMocks();
