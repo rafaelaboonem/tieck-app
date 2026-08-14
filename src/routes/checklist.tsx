@@ -346,7 +346,8 @@ import {
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { useSidebar } from "@/contexts/SidebarContext";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
-import { ChevronLeft, AlertCircle } from "lucide-react";
+import { ChevronLeft, AlertCircle, Loader2, Info, Sparkles } from "lucide-react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
   FileText,
   LayoutTemplate,
