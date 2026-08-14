@@ -1,5 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { CompilePolicyPayloadSchema, CameraVerificationPolicyV1Schema, PolicyGenerationSchema, CameraVerificationPolicyV1 } from '@/server/camera-ai/schema';
+import { CompilePolicyPayloadSchema, CameraVerificationPolicyV1Schema, PolicyGenerationSchema, CameraVerificationPolicyV1, PublishedBlock } from '@/server/camera-ai/schema';
 import OpenAI from 'openai';
 import { zodTextFormat } from "openai/helpers/zod";
 import { createServerSupabaseClient } from '@/integrations/supabase/client.server';
