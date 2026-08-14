@@ -1,5 +1,4 @@
 import { CameraAIResponseSchema, type CameraAIResponse, type PublicCameraBlockData } from "./camera-ai/types";
-import { uploadCameraEvidence } from "./camera-ai/upload";
 import { compressImage } from "@/lib/compress-image";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { Camera, RefreshCw, AlertCircle, CheckCircle2, Loader2, CameraIcon, RotateCcw, ImagePlus, AlertTriangle } from "lucide-react";
