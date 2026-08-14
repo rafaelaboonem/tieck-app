@@ -187,7 +187,7 @@ export async function verifyCameraRequest(
       responseId: session.response_id,
       blockId: payload.blockId,
       idempotencyKey: payload.idempotencyKey,
-      requestId
+      code: 'rate_limit'
     });
     return { 
       status: 429, 
