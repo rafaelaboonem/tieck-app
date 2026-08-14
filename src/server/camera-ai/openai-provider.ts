@@ -1,5 +1,5 @@
 import OpenAI from 'openai';
-import { CameraVerification, CameraVerificationSchema } from './schema';
+import { CameraVerification, CameraVerificationSchema, CameraVerificationPolicyV1 } from './schema';
 import { zodTextFormat } from "openai/helpers/zod";
 
 const SYSTEM_PROMPT = `Você é um especialista em auditoria visual do sistema Tieck.
@@ -48,7 +48,7 @@ export async function analyzeImage(
   imageBuffer: ArrayBuffer,
   mimeType: string,
   timeoutMs: number = 20000,
-  policy?: any
+  policy?: CameraVerificationPolicyV1
 ): Promise<CameraVerification> {
   const base64Image = Buffer.from(imageBuffer).toString('base64');
 

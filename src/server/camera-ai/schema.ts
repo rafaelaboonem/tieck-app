@@ -31,6 +31,7 @@ export interface PublishedBlock {
   type: string;
   title?: string;
   description?: string;
+  cameraAiPolicy?: CameraVerificationPolicyV1;
 }
 
 export interface VerificationResult {
@@ -44,20 +45,23 @@ export interface VerificationResult {
   persisted?: boolean;
 }
 
-export const CameraVerificationPolicyV1Schema = z.object({
-  version: z.literal(1),
-  questionHash: z.string(),
+export const PolicyGenerationSchema = z.object({
   verifiability: z.enum(["visual", "partially_visual", "not_visual"]),
   target: z.string(),
   condition: z.string(),
-  targetDescription: z.string().optional(),
-  conditionDescription: z.string().optional(),
+  targetDescription: z.string(),
+  conditionDescription: z.string(),
   requiredVisibleEvidence: z.array(z.string()).max(5),
   rejectionSignals: z.array(z.string()).max(5),
   notObservableSignals: z.array(z.string()).max(5),
-  unverifiableWhen: z.array(z.string()).max(5).optional(), // Legacy compat
-  requiredEvidence: z.array(z.string()).max(5).optional(), // Legacy compat
   summary: z.string(),
+});
+
+export type PolicyGeneration = z.infer<typeof PolicyGenerationSchema>;
+
+export const CameraVerificationPolicyV1Schema = PolicyGenerationSchema.extend({
+  version: z.literal(1),
+  questionHash: z.string(),
   source: z.enum(["generated", "owner_edited"]),
 });
 

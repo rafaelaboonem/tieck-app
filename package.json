@@ -11,7 +11,7 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "test:routes": "tsx tests/verify_routes.ts",
-    "test:camera-ai": "vitest run tests/camera-ai/runtime.test.ts",
+    "test:camera-ai": "vitest run tests/camera-ai",
     "test:camera-ui": "vitest run tests/camera-ai/ui.test.tsx",
     "test:camera-quality": "vitest run tests/camera-ai/quality-metrics.test.ts tests/camera-ai/lifecycle.test.tsx tests/camera-ai/ui-lifecycle.test.tsx"
   },
