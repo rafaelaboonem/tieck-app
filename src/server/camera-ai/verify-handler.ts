@@ -230,6 +230,7 @@ export async function verifyCameraRequest(
         ok: true,
         decision: 'approved',
         code: 'verified',
+        message: 'Foto persistida com sucesso.',
         evidence: claim.existing_evidence,
         evidenceId: pId,
         persisted: true,
