@@ -78,7 +78,14 @@ import {
   SendHorizontal,
   CheckCircle,
   ChevronUp,
-  ChevronLeft
+  ChevronLeft,
+  Zap,
+  FileText,
+  LayoutTemplate,
+  HelpCircle,
+  Navigation,
+  Network,
+  ExternalLink
 } from "lucide-react";
 import { 
   Collapsible, 
@@ -110,7 +117,7 @@ const InsightsTab = lazy(() => import("@/components/InsightsTab").then(m => ({ d
 const SubmissionsTab = lazy(() => import("@/components/SubmissionsTab").then(m => ({ default: m.SubmissionsTab })));
 import { BlockRenderer, INTERACTIVE_BLOCK_TYPES } from "@/components/BlockRenderer";
 import { ensureCameraBlockIds, withNewCameraBlockId, extractCameraQuestions } from "@/lib/camera-blocks";
-
+function CameraBlockPreview({ textColor, blockId }: { textColor?: string; blockId?: string }) {
   const [dataUrl, setDataUrl] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -439,114 +446,6 @@ function ChecklistPreview({
     </div>
   );
 }
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useState, useRef, useEffect, useCallback } from "react";
-import { lazy, Suspense } from "react";
-import { EditableBlock } from "@/components/EditableBlock";
-import { ColorPicker } from "@/components/ColorPicker";
-import { Switch } from "@/components/ui/switch";
-import {
-  AlertDialog,
-  AlertDialogContent,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogAction,
-  AlertDialogCancel,
-} from "@/components/ui/alert-dialog";
-import { DashboardLayout } from "@/components/DashboardLayout";
-import { useSidebar } from "@/contexts/SidebarContext";
-import { useWorkspace } from "@/contexts/WorkspaceContext";
-import { ChevronLeft, AlertCircle, Loader2, Info, Sparkles } from "lucide-react";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import {
-  FileText,
-  LayoutTemplate,
-  Navigation,
-   Network,
-  HelpCircle,
-  History,
-  Settings,
-  Zap,
-  Minus,
-  Menu,
-  CircleCheck,
-  CheckSquare,
-  ChevronDown,
-  ChevronUp,
-  ListChecks,
-  Hash,
-  Mail,
-  Phone,
-  Link2,
-  Copy,
-  ExternalLink,
-  Upload,
-  Camera,
-  Calendar,
-  Clock,
-  SlidersHorizontal,
-  Grid3x3,
-  Star,
-  GripVertical,
-  Move,
-  PenLine,
-  ArrowUpDown,
-  FilePlus,
-  Smile,
-  Type,
-  Plus,
-  Trash2,
-  Heading1,
-  Heading2,
-  Heading3,
-  Bookmark,
-  Tag,
-  Image as ImageIcon,
-  Video,
-  Volume2,
-   Code,
-   ListTodo,
-   DollarSign,
-   Mic,
-   QrCode,
-   PlusSquare,
-    X,
-    Eye,
-    EyeOff,
-    LogIn,
-   User,
-   Search,
-   Bold,
-   Italic,
-   Underline,
-   Palette,
-   Highlighter,
-    Hexagon,
-    
-    Copy as CopyIcon,
-    ArrowRight,
-    ArrowUpRight,
-    ArrowRightCircle,
-    ArrowBigRight,
-    MoveRight,
-    Send,
-    SendHorizontal,
-    Check,
-    CheckCircle,
-    CheckCheck,
-    Ban,
-  } from "lucide-react";
-import logoUrl from "../assets/local/logo-k.webp";
-import { supabase } from "@/integrations/supabase/client";
-import { toast } from "sonner";
-import { mapAuthError } from "@/utils/auth-errors";
-const InsightsTab = lazy(() => import("@/components/InsightsTab").then(m => ({ default: m.InsightsTab })));
-const SubmissionsTab = lazy(() => import("@/components/SubmissionsTab").then(m => ({ default: m.SubmissionsTab })));
-import { BlockRenderer, INTERACTIVE_BLOCK_TYPES } from "@/components/BlockRenderer";
-
-import { ensureCameraBlockIds, withNewCameraBlockId, extractCameraQuestions } from "@/lib/camera-blocks";
 
 
 
@@ -4795,7 +4694,7 @@ function NovoChecklistPage() {
                                 className="w-full px-3 py-2 text-left text-sm text-neutral-700 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-700 flex items-center justify-between transition-colors"
                               >
                                 <div className="flex items-center gap-2.5">
-                                  <CopyIcon className="w-4 h-4" />
+                                  <Copy className="w-4 h-4" />
                                   Duplicar
                                 </div>
                                 <span className="text-[10px] text-neutral-400">Ctrl D</span>
