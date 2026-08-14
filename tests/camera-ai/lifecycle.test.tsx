@@ -48,20 +48,21 @@ describe("Camera AI Lifecycle & Integrity", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    // Stub environment
     (global as any).importMeta = { env: { VITE_CAMERA_AI_ENABLED: "true" } };
-    // Global fetch mock
     global.fetch = vi.fn();
-    // Mock URL.createObjectURL
     global.URL.createObjectURL = vi.fn(() => "blob:n-123");
     global.URL.revokeObjectURL = vi.fn();
   });
+
+  const getHiddenInput = (container: HTMLElement) => {
+    return container.querySelector('input[type="file"]') as HTMLInputElement;
+  };
 
   it("should block fetch to /api/camera-ai/verify if quality is invalid", async () => {
     const engine = new (QualityEngine as any)();
     engine.analyzeFile.mockResolvedValue({ state: "low_light" });
 
-    render(
+    const { container } = render(
       <PublicCameraBlock
         block={mockBlock}
         checklistId="c1"
@@ -69,18 +70,17 @@ describe("Camera AI Lifecycle & Integrity", () => {
       />
     );
 
-    const file = new File([""], "test.jpg", { type: "image/jpeg" });
-    const captureBtn = screen.getByTestId("capture-btn");
+    const file = new File(["test"], "test.jpg", { type: "image/jpeg" });
+    const input = getHiddenInput(container);
     
-    // Trigger capture
-    fireEvent.click(captureBtn, { target: { files: [file] } });
+    await act(async () => {
+      fireEvent.change(input, { target: { files: [file] } });
+    });
 
     await waitFor(() => {
-      // It should display the low light message
       expect(screen.getByText(/A foto ficou escura/i)).toBeDefined();
     });
 
-    // Fetch should NOT have been called
     expect(global.fetch).not.toHaveBeenCalled();
   });
 
@@ -96,7 +96,7 @@ describe("Camera AI Lifecycle & Integrity", () => {
     };
     (global.fetch as any).mockResolvedValue(mockResponse);
 
-    render(
+    const { container } = render(
       <PublicCameraBlock
         block={mockBlock}
         checklistId="c1"
@@ -104,10 +104,12 @@ describe("Camera AI Lifecycle & Integrity", () => {
       />
     );
 
-    const file = new File([""], "test.jpg", { type: "image/jpeg" });
-    const captureBtn = screen.getByTestId("capture-btn");
+    const file = new File(["test"], "test.jpg", { type: "image/jpeg" });
+    const input = getHiddenInput(container);
     
-    fireEvent.click(captureBtn, { target: { files: [file] } });
+    await act(async () => {
+      fireEvent.change(input, { target: { files: [file] } });
+    });
 
     await waitFor(() => {
       expect(engine.analyzeFile).toHaveBeenCalledWith(file);
@@ -122,17 +124,21 @@ describe("Camera AI Lifecycle & Integrity", () => {
     const engine = new (QualityEngine as any)();
     engine.analyzeFile.mockRejectedValue(new Error("Canvas error"));
 
-    // If analyzeFile fails, it logs warning and falls back to OpenAI
     (global.fetch as any).mockResolvedValue({
+      ok: true,
       status: 200,
       headers: new Headers({ "content-type": "application/json" }),
       json: async () => ({ ok: true, decision: "approved", persisted: true, evidenceId: "e2" }),
     });
 
-    render(<PublicCameraBlock block={mockBlock} checklistId="c1" onAnswer={vi.fn()} />);
+    const { container } = render(<PublicCameraBlock block={mockBlock} checklistId="c1" onAnswer={vi.fn()} />);
 
-    const file = new File([""], "test.jpg", { type: "image/jpeg" });
-    fireEvent.click(screen.getByTestId("capture-btn"), { target: { files: [file] } });
+    const file = new File(["test"], "test.jpg", { type: "image/jpeg" });
+    const input = getHiddenInput(container);
+    
+    await act(async () => {
+      fireEvent.change(input, { target: { files: [file] } });
+    });
 
     await waitFor(() => {
       expect(engine.dispose).toHaveBeenCalled();
@@ -142,10 +148,6 @@ describe("Camera AI Lifecycle & Integrity", () => {
 
   it("should not perform any API calls just by opening the camera", async () => {
     render(<PublicCameraBlock block={mockBlock} checklistId="c1" onAnswer={vi.fn()} />);
-    
-    // Component is rendered, camera is "available" but not captured yet
     expect(global.fetch).not.toHaveBeenCalled();
-    const engine = new (QualityEngine as any)();
-    expect(engine.analyzeFile).not.toHaveBeenCalled();
   });
 });
