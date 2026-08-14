@@ -66,10 +66,6 @@ describe("Camera AI Lifecycle & Integrity", () => {
     global.URL.revokeObjectURL = vi.fn();
   });
 
-  const getHiddenInput = (container: HTMLElement) => {
-    return container.querySelector('input[type="file"]');
-  };
-
   it("should block fetch to /api/camera-ai/verify if quality is invalid", async () => {
     const engine = new (QualityEngine as any)();
     engine.analyzeFile.mockResolvedValue({ state: "low_light" });
@@ -83,7 +79,7 @@ describe("Camera AI Lifecycle & Integrity", () => {
     );
 
     const file = new File(["test"], "test.jpg", { type: "image/jpeg" });
-    const input = getHiddenInput(container);
+    const input = container.querySelector('input[type="file"]');
     if (!input) throw new Error("Input not found");
     
     await act(async () => {
@@ -118,7 +114,7 @@ describe("Camera AI Lifecycle & Integrity", () => {
     );
 
     const file = new File(["test"], "test.jpg", { type: "image/jpeg" });
-    const input = getHiddenInput(container);
+    const input = container.querySelector('input[type="file"]');
     if (!input) throw new Error("Input not found");
     
     await act(async () => {
@@ -145,7 +141,7 @@ describe("Camera AI Lifecycle & Integrity", () => {
     const { container } = render(<PublicCameraBlock block={mockBlock} checklistId="c1" onAnswer={vi.fn()} />);
 
     const file = new File(["test"], "test.jpg", { type: "image/jpeg" });
-    const input = getHiddenInput(container);
+    const input = container.querySelector('input[type="file"]');
     if (!input) throw new Error("Input not found");
     
     await act(async () => {
