@@ -73,10 +73,11 @@ export const Route = createFileRoute('/api/camera-ai/verify')({
               const storagePath = `${checklistId}/${responseId}/${blockId}/${idempotencyKey}.${ext}`;
               
               try {
+                const uint8Array = new Uint8Array(buffer);
                 // 1. Storage Upload (Service Role via client.server)
                 const { error: uploadError } = await client.storage
                   .from('checklist-evidences')
-                  .upload(storagePath, buffer, {
+                  .upload(storagePath, uint8Array, {
                     contentType: mimeType,
                     upsert: true
                   });
