@@ -1,7 +1,21 @@
-import { CameraAIResponseSchema, type CameraAIResponse, type PublicCameraBlockData } from "./camera-ai/types";
+import {
+  CameraAIResponseSchema,
+  type CameraAIResponse,
+  type PublicCameraBlockData,
+} from "./camera-ai/types";
 import { compressImage } from "@/lib/compress-image";
 import { useState, useRef, useEffect, useCallback } from "react";
-import { Camera, RefreshCw, AlertCircle, CheckCircle2, Loader2, CameraIcon, RotateCcw, ImagePlus, AlertTriangle } from "lucide-react";
+import {
+  Camera,
+  RefreshCw,
+  AlertCircle,
+  CheckCircle2,
+  Loader2,
+  CameraIcon,
+  RotateCcw,
+  ImagePlus,
+  AlertTriangle,
+} from "lucide-react";
 import { TieckCamera } from "./TieckCamera";
 import { Button } from "./ui/button";
 import { Alert, AlertDescription } from "./ui/alert";
@@ -16,25 +30,37 @@ interface PublicCameraBlockProps {
   onAnswer?: (blockId: string, value: string) => void;
   onCameraActiveChange?: (active: boolean) => void;
   session?: { responseId: string; responseToken: string } | null;
-  ensureResponseSession: (options?: { forceNew?: boolean }) => Promise<{ responseId: string; responseToken: string; checklistId: string; createdAt: number } | null>;
+  ensureResponseSession: (options?: { forceNew?: boolean }) => Promise<{
+    responseId: string;
+    responseToken: string;
+    checklistId: string;
+    createdAt: number;
+  } | null>;
   language?: string;
 }
 
-type VerificationState = 
-  | "idle" 
-  | "capturing" 
-  | "preparing" 
-  | "analyzing" 
-  | "approved" 
-  | "retake" 
-  | "not_observable" 
-  | "technical_failure" 
-  | "rate_limited" 
-  | "uploading" 
+type VerificationState =
+  | "idle"
+  | "capturing"
+  | "preparing"
+  | "analyzing"
+  | "approved"
+  | "retake"
+  | "not_observable"
+  | "technical_failure"
+  | "rate_limited"
+  | "uploading"
   | "received"
   | "storage_failure";
 
-type FailureReason = "network_unknown" | "timeout_unknown" | "server_failed" | "processing" | "configuration" | "storage_failure" | "none";
+type FailureReason =
+  | "network_unknown"
+  | "timeout_unknown"
+  | "server_failed"
+  | "processing"
+  | "configuration"
+  | "storage_failure"
+  | "none";
 type AbortReason = "timeout" | "retake" | "close" | "unmount";
 
 export function PublicCameraBlock({
@@ -56,7 +82,7 @@ export function PublicCameraBlock({
   const [idempotencyKey, setIdempotencyKey] = useState<string | null>(null);
   const [failureReason, setFailureReason] = useState<FailureReason>("none");
   // removed retryAttempted from React state to control recovery via recoveryAttempt argument
-  
+
   const inFlightRef = useRef<boolean>(false);
   const abortControllerRef = useRef<AbortController | null>(null);
   const abortReasonRef = useRef<AbortReason | null>(null);
@@ -76,11 +102,15 @@ export function PublicCameraBlock({
 
   // Cleanup effect for requests
   useEffect(() => {
+    const currentSequence = requestSequenceRef;
+    const currentAbortController = abortControllerRef;
+    const currentAbortReason = abortReasonRef;
+
     return () => {
-      requestSequenceRef.current++;
-      if (abortControllerRef.current) {
-        abortReasonRef.current = "unmount";
-        abortControllerRef.current.abort();
+      currentSequence.current++;
+      if (currentAbortController.current) {
+        currentAbortReason.current = "unmount";
+        currentAbortController.current.abort();
       }
     };
   }, []);
@@ -92,21 +122,24 @@ export function PublicCameraBlock({
       const engine = new QualityEngine();
       try {
         const quality = await engine.analyzeFile(file);
-        
+
         // Photography doesn't have temporal motion analysis.
-        // We override "moving" to "ready" if all other metrics are fine, 
+        // We override "moving" to "ready" if all other metrics are fine,
         // since motion score on a single frame comparison is irrelevant here.
         const effectiveState = quality.state === "moving" ? "ready" : quality.state;
-        
+
         if (effectiveState !== "ready") {
           const messages: Record<string, string> = {
             low_light: "A foto ficou escura. Procure mais iluminação e tente novamente.",
-            overexposed: "Há luz excessiva na imagem. Evite apontar diretamente para a fonte de luz.",
+            overexposed:
+              "Há luz excessiva na imagem. Evite apontar diretamente para a fonte de luz.",
             blurry: "A foto ficou pouco nítida. Segure o aparelho com firmeza e tente novamente.",
-            unavailable: "A imagem capturada não possui resolução ou qualidade suficiente."
+            unavailable: "A imagem capturada não possui resolução ou qualidade suficiente.",
           };
-          
-          setErrorMsg(messages[effectiveState] || "A qualidade da foto não é suficiente. Tente novamente.");
+
+          setErrorMsg(
+            messages[effectiveState] || "A qualidade da foto não é suficiente. Tente novamente.",
+          );
           setState("retake");
           return;
         }
@@ -116,7 +149,6 @@ export function PublicCameraBlock({
     } catch (err) {
       console.warn("[PublicCameraBlock] Local quality check failed, falling back to OpenAI:", err);
     }
-
 
     // 1. Limpeza de resposta anterior de verdade
     if (onAnswer) {
@@ -134,7 +166,7 @@ export function PublicCameraBlock({
     const newPreview = URL.createObjectURL(file);
     setPreview(newPreview);
     setCapturedFile(file);
-    
+
     const newIdempotencyKey = crypto.randomUUID();
     setIdempotencyKey(newIdempotencyKey);
     setFailureReason("none");
@@ -143,26 +175,28 @@ export function PublicCameraBlock({
     void processVerification(file, newIdempotencyKey, requestSequenceRef.current);
   };
 
-
   const processVerification = async (
-    file: File, 
-    key: string, 
-    sequence: number, 
-    options?: { sessionOverride?: { responseId: string; responseToken: string }; recoveryAttempt?: number }
+    file: File,
+    key: string,
+    sequence: number,
+    options?: {
+      sessionOverride?: { responseId: string; responseToken: string };
+      recoveryAttempt?: number;
+    },
   ) => {
     const recoveryAttempt = options?.recoveryAttempt ?? 0;
     const isRetry = recoveryAttempt > 0;
     // Double-click protection: if we're already processing THIS exact capture, ignore.
     if (inFlightRef.current && key === idempotencyKey && !isRetry) return;
-    
+
     setErrorMsg(null);
     setEvidence(null);
 
     // Closure to check if this request is still the active one
     const isCurrent = () => sequence === requestSequenceRef.current;
 
-    let activeSession = options?.sessionOverride ?? session ?? (await ensureResponseSession());
-    
+    const activeSession = options?.sessionOverride ?? session ?? (await ensureResponseSession());
+
     if (!isCurrent()) return;
 
     if (!activeSession) {
@@ -171,7 +205,6 @@ export function PublicCameraBlock({
       setState("technical_failure");
       return;
     }
-
 
     if (!isAIEnabled) {
       setState("technical_failure");
@@ -217,14 +250,14 @@ export function PublicCameraBlock({
       const response = await fetch("/api/camera-ai/verify", {
         method: "POST",
         body: formData,
-        signal: controller.signal
+        signal: controller.signal,
       });
 
       if (timeoutId) {
         clearTimeout(timeoutId);
         timeoutId = null;
       }
-      
+
       if (!isCurrent()) return;
 
       const contentType = response.headers.get("content-type");
@@ -235,14 +268,15 @@ export function PublicCameraBlock({
         return;
       }
 
-      const data: any = await response.json();
-      
+      const data =
+        (await response.json()) /* eslint-disable-line @typescript-eslint/no-explicit-any */ as any;
+
       if (response.status === 429) {
         setState("rate_limited");
         return;
       }
 
-      if (data.code === 'storage_failure') {
+      if (data.code === "storage_failure") {
         setState("storage_failure");
         setFailureReason("storage_failure");
         setErrorMsg(data.message || "A foto foi aprovada. Não conseguimos salvá-la ainda.");
@@ -252,25 +286,28 @@ export function PublicCameraBlock({
       if (response.status === 409) {
         setState("technical_failure");
         setFailureReason("processing");
-        setErrorMsg(data.message || "A foto ainda está sendo processada. Tente novamente em instantes.");
+        setErrorMsg(
+          data.message || "A foto ainda está sendo processada. Tente novamente em instantes.",
+        );
         return;
       }
 
       // Tratamento de Sessão Expirada ou Divergente
       if (response.status === 401 || response.status === 403) {
-        const canRecover = recoveryAttempt === 0 && (data.code === 'unauthorized' || data.code === 'id_mismatch');
-        
+        const canRecover =
+          recoveryAttempt === 0 && (data.code === "unauthorized" || data.code === "id_mismatch");
+
         if (canRecover && isCurrent()) {
           setState("preparing");
           const newSession = await ensureResponseSession({ forceNew: true });
           if (newSession && isCurrent()) {
-            return await processVerification(file, key, sequence, { 
-              sessionOverride: newSession, 
-              recoveryAttempt: 1 
+            return await processVerification(file, key, sequence, {
+              sessionOverride: newSession,
+              recoveryAttempt: 1,
             });
           }
         }
-        
+
         setState("technical_failure");
         setFailureReason("configuration");
         const codeMsg = data.requestId ? ` (Código de suporte: ${data.requestId})` : "";
@@ -297,7 +334,9 @@ export function PublicCameraBlock({
         if (code === "camera_ai_disabled") {
           setErrorMsg("A verificação inteligente está temporariamente indisponível." + codeMsg);
         } else {
-          setErrorMsg((data.message || "Servidor em manutenção ou configuração ausente.") + codeMsg);
+          setErrorMsg(
+            (data.message || "Servidor em manutenção ou configuração ausente.") + codeMsg,
+          );
         }
         return;
       }
@@ -337,16 +376,19 @@ export function PublicCameraBlock({
         }
 
         if (!isCurrent()) return;
-        
+
         if (onAnswer) {
-          onAnswer(block.id, JSON.stringify({
-            type: 'camera',
-            evidenceId: result.evidenceId,
-            aiEnabled: true,
-            decision: 'approved',
-            canContinue: true,
-            evidence: result.evidence || ''
-          }));
+          onAnswer(
+            block.id,
+            JSON.stringify({
+              type: "camera",
+              evidenceId: result.evidenceId,
+              aiEnabled: true,
+              decision: "approved",
+              canContinue: true,
+              evidence: result.evidence || "",
+            }),
+          );
         }
         setEvidence(result.evidence || null);
         setState("approved");
@@ -362,12 +404,11 @@ export function PublicCameraBlock({
         setState("technical_failure");
         setFailureReason("server_failed");
       }
-
     } catch (err: unknown) {
       if (timeoutId) window.clearTimeout(timeoutId);
-      
+
       const isAbort = err instanceof DOMException && err.name === "AbortError";
-      
+
       if (isAbort) {
         if (!isCurrent()) return;
         if (abortReasonRef.current === "timeout") {
@@ -416,7 +457,9 @@ export function PublicCameraBlock({
       // Regras de retry:
       // network_unknown, timeout_unknown, processing, storage_failure, server_failed -> Reutiliza mesma foto e chave
       // para garantir idempotência atômica no backend e evitar múltiplas cobranças/análises
-      void processVerification(capturedFile, idempotencyKey, requestSequenceRef.current, { recoveryAttempt: 0 });
+      void processVerification(capturedFile, idempotencyKey, requestSequenceRef.current, {
+        recoveryAttempt: 0,
+      });
     }
   };
 
@@ -431,7 +474,6 @@ export function PublicCameraBlock({
     );
   }
 
-
   return (
     <div className="w-full space-y-4">
       {state === "idle" && (
@@ -443,100 +485,147 @@ export function PublicCameraBlock({
         >
           <CameraIcon className="w-6 h-6 mb-1 group-hover:scale-110 transition-transform" />
           <span className="font-semibold">{title || block.title || "Adicionar foto"}</span>
-          {block.description && <span className="text-[10px] opacity-70 px-4 line-clamp-1">{block.description}</span>}
+          {block.description && (
+            <span className="text-[10px] opacity-70 px-4 line-clamp-1">{block.description}</span>
+          )}
         </Button>
       )}
 
-      {(["preparing", "analyzing", "approved", "retake", "not_observable", "technical_failure", "rate_limited", "uploading", "received", "storage_failure"].includes(state)) && preview && (
-        <div className={cn(
-          "relative aspect-[4/3] rounded-2xl overflow-hidden border-2 transition-colors duration-500",
-          state === "approved" ? "border-green-500 shadow-lg shadow-green-100" : 
-          (state === "retake" || state === "not_observable") ? "border-amber-500 shadow-lg shadow-amber-100" : 
-          (state === "technical_failure" || state === "storage_failure") ? "border-red-500" : "border-neutral-200"
-        )}>
-          
-
-          <img src={preview} alt="Capture preview" className="w-full h-full object-cover" />
-
-          
-          {state === "analyzing" && (
-            <div className="absolute inset-0 z-10">
-              <div className="w-full h-0.5 bg-[#FF007F] shadow-[0_0_15px_#FF007F] absolute animate-[scan_2s_ease-in-out_infinite]" />
-              <div className="absolute inset-0 bg-[#FF007F]/5 animate-pulse" />
-            </div>
-          )}
-
-          <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/20 p-6 text-center">
-            {state === "preparing" && (
-              <div className="bg-white/90 backdrop-blur-sm rounded-2xl p-4 flex items-center gap-3 shadow-xl">
-                <Loader2 className="w-5 h-5 animate-spin text-neutral-600" />
-                <span className="text-sm font-bold text-neutral-800">Preparando foto...</span>
-              </div>
+      {[
+        "preparing",
+        "analyzing",
+        "approved",
+        "retake",
+        "not_observable",
+        "technical_failure",
+        "rate_limited",
+        "uploading",
+        "received",
+        "storage_failure",
+      ].includes(state) &&
+        preview && (
+          <div
+            className={cn(
+              "relative aspect-[4/3] rounded-2xl overflow-hidden border-2 transition-colors duration-500",
+              state === "approved"
+                ? "border-green-500 shadow-lg shadow-green-100"
+                : state === "retake" || state === "not_observable"
+                  ? "border-amber-500 shadow-lg shadow-amber-100"
+                  : state === "technical_failure" || state === "storage_failure"
+                    ? "border-red-500"
+                    : "border-neutral-200",
             )}
-            
-            {(state === "analyzing" || (state === "preparing" && failureReason === "storage_failure")) && (
-              <div className="bg-white/90 backdrop-blur-sm rounded-2xl p-4 flex items-center gap-3 shadow-xl">
-                <Loader2 className="w-5 h-5 animate-spin text-[#FF007F]" />
-                <span className="text-sm font-bold text-neutral-800">
-                  {state === "preparing" || failureReason === "storage_failure" ? "Salvando foto..." : "Verificando a foto..."}
-                </span>
-              </div>
-            )}
+          >
+            <img src={preview} alt="Capture preview" className="w-full h-full object-cover" />
 
-            {state === "uploading" && (
-              <div className="bg-white/90 backdrop-blur-sm rounded-2xl p-4 flex items-center gap-3 shadow-xl">
-                <Loader2 className="w-5 h-5 animate-spin text-blue-600" />
-                <span className="text-sm font-bold text-neutral-800">Salvando evidência...</span>
+            {state === "analyzing" && (
+              <div className="absolute inset-0 z-10">
+                <div className="w-full h-0.5 bg-[#FF007F] shadow-[0_0_15px_#FF007F] absolute animate-[scan_2s_ease-in-out_infinite]" />
+                <div className="absolute inset-0 bg-[#FF007F]/5 animate-pulse" />
               </div>
             )}
 
-            {state === "approved" && (
-              <div className="mt-auto w-full bg-white/95 backdrop-blur-sm rounded-xl p-4 shadow-xl border-t-4 border-green-500 animate-in slide-in-from-bottom-4 duration-300">
-                <div className="flex items-center gap-2 mb-1">
-                  <CheckCircle2 className="w-5 h-5 text-green-600" />
-                  <span className="text-sm font-bold text-green-900">Foto aprovada</span>
+            <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/20 p-6 text-center">
+              {state === "preparing" && (
+                <div className="bg-white/90 backdrop-blur-sm rounded-2xl p-4 flex items-center gap-3 shadow-xl">
+                  <Loader2 className="w-5 h-5 animate-spin text-neutral-600" />
+                  <span className="text-sm font-bold text-neutral-800">Preparando foto...</span>
                 </div>
-                {evidence && <p className="text-[11px] text-neutral-700 leading-relaxed text-left">{evidence}</p>}
-                <Button variant="ghost" size="sm" onClick={openCamera} className="w-full mt-2 h-8 text-xs text-neutral-500 hover:bg-neutral-100">
-                  <RotateCcw className="w-3 h-3 mr-2" />
-                  Trocar foto
-                </Button>
-              </div>
-            )}
+              )}
 
-            {(state === "retake" || state === "not_observable") && (
-              <div className="mt-auto w-full bg-white/95 backdrop-blur-sm rounded-xl p-4 shadow-xl border-t-4 border-amber-500 animate-in slide-in-from-bottom-4 duration-300">
-                <div className="flex items-center gap-2 mb-1">
-                  <AlertTriangle className="w-5 h-5 text-amber-600" />
-                  <span className="text-sm font-bold text-amber-900">
-                    {state === "retake" ? "Tire outra foto" : "Não foi possível confirmar"}
+              {(state === "analyzing" ||
+                (state === "preparing" && failureReason === "storage_failure")) && (
+                <div className="bg-white/90 backdrop-blur-sm rounded-2xl p-4 flex items-center gap-3 shadow-xl">
+                  <Loader2 className="w-5 h-5 animate-spin text-[#FF007F]" />
+                  <span className="text-sm font-bold text-neutral-800">
+                    {state === "preparing" || failureReason === "storage_failure"
+                      ? "Salvando foto..."
+                      : "Verificando a foto..."}
                   </span>
                 </div>
-                {errorMsg && <p className="text-[11px] text-neutral-700 leading-relaxed text-left mb-3">{errorMsg}</p>}
-                {evidence && <p className="text-[10px] text-neutral-500 italic text-left mb-3">"{evidence}"</p>}
-                <Button onClick={openCamera} className="w-full h-10 bg-amber-600 hover:bg-amber-700 text-white font-bold">
-                  <CameraIcon className="w-4 h-4 mr-2" />
-                  Tirar outra foto
-                </Button>
-              </div>
-            )}
-            
-            {state === "received" && (
-              <div className="mt-auto w-full bg-blue-50/95 backdrop-blur-sm rounded-xl p-4 shadow-xl border-t-4 border-blue-500">
-                <div className="flex items-center gap-2 mb-1">
-                  <CheckCircle2 className="w-5 h-5 text-blue-600" />
-                  <span className="text-sm font-bold text-blue-900">Foto recebida</span>
+              )}
+
+              {state === "uploading" && (
+                <div className="bg-white/90 backdrop-blur-sm rounded-2xl p-4 flex items-center gap-3 shadow-xl">
+                  <Loader2 className="w-5 h-5 animate-spin text-blue-600" />
+                  <span className="text-sm font-bold text-neutral-800">Salvando evidência...</span>
                 </div>
-                <p className="text-[10px] text-blue-700 text-left mb-2">A verificação inteligente ainda não está ativada.</p>
-                <Button variant="ghost" size="sm" onClick={openCamera} className="w-full h-8 text-xs text-blue-700 hover:bg-blue-100">
-                  <RotateCcw className="w-3 h-3 mr-2" />
-                  Trocar foto
-                </Button>
-              </div>
-            )}
+              )}
+
+              {state === "approved" && (
+                <div className="mt-auto w-full bg-white/95 backdrop-blur-sm rounded-xl p-4 shadow-xl border-t-4 border-green-500 animate-in slide-in-from-bottom-4 duration-300">
+                  <div className="flex items-center gap-2 mb-1">
+                    <CheckCircle2 className="w-5 h-5 text-green-600" />
+                    <span className="text-sm font-bold text-green-900">Foto aprovada</span>
+                  </div>
+                  {evidence && (
+                    <p className="text-[11px] text-neutral-700 leading-relaxed text-left">
+                      {evidence}
+                    </p>
+                  )}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={openCamera}
+                    className="w-full mt-2 h-8 text-xs text-neutral-500 hover:bg-neutral-100"
+                  >
+                    <RotateCcw className="w-3 h-3 mr-2" />
+                    Trocar foto
+                  </Button>
+                </div>
+              )}
+
+              {(state === "retake" || state === "not_observable") && (
+                <div className="mt-auto w-full bg-white/95 backdrop-blur-sm rounded-xl p-4 shadow-xl border-t-4 border-amber-500 animate-in slide-in-from-bottom-4 duration-300">
+                  <div className="flex items-center gap-2 mb-1">
+                    <AlertTriangle className="w-5 h-5 text-amber-600" />
+                    <span className="text-sm font-bold text-amber-900">
+                      {state === "retake" ? "Tire outra foto" : "Não foi possível confirmar"}
+                    </span>
+                  </div>
+                  {errorMsg && (
+                    <p className="text-[11px] text-neutral-700 leading-relaxed text-left mb-3">
+                      {errorMsg}
+                    </p>
+                  )}
+                  {evidence && (
+                    <p className="text-[10px] text-neutral-500 italic text-left mb-3">
+                      "{evidence}"
+                    </p>
+                  )}
+                  <Button
+                    onClick={openCamera}
+                    className="w-full h-10 bg-amber-600 hover:bg-amber-700 text-white font-bold"
+                  >
+                    <CameraIcon className="w-4 h-4 mr-2" />
+                    Tirar outra foto
+                  </Button>
+                </div>
+              )}
+
+              {state === "received" && (
+                <div className="mt-auto w-full bg-blue-50/95 backdrop-blur-sm rounded-xl p-4 shadow-xl border-t-4 border-blue-500">
+                  <div className="flex items-center gap-2 mb-1">
+                    <CheckCircle2 className="w-5 h-5 text-blue-600" />
+                    <span className="text-sm font-bold text-blue-900">Foto recebida</span>
+                  </div>
+                  <p className="text-[10px] text-blue-700 text-left mb-2">
+                    A verificação inteligente ainda não está ativada.
+                  </p>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={openCamera}
+                    className="w-full h-8 text-xs text-blue-700 hover:bg-blue-100"
+                  >
+                    <RotateCcw className="w-3 h-3 mr-2" />
+                    Trocar foto
+                  </Button>
+                </div>
+              )}
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
       {(state === "technical_failure" || state === "storage_failure") && (
         <Alert variant="destructive" className="border-red-200 bg-red-50">
@@ -547,11 +636,22 @@ export function PublicCameraBlock({
             </span>
             <div className="flex gap-2">
               {failureReason !== "configuration" && (
-                <Button variant="outline" size="sm" onClick={retryCurrentPhoto} disabled={inFlightRef.current} className="bg-white border-red-200 text-red-700 hover:bg-red-100">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={retryCurrentPhoto}
+                  disabled={inFlightRef.current}
+                  className="bg-white border-red-200 text-red-700 hover:bg-red-100"
+                >
                   {state === "storage_failure" ? "Tentar salvar novamente" : "Tentar novamente"}
                 </Button>
               )}
-              <Button variant="ghost" size="sm" onClick={openCamera} className="text-red-700 underline">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={openCamera}
+                className="text-red-700 underline"
+              >
                 Tirar outra foto
               </Button>
             </div>
