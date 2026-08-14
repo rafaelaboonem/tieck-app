@@ -34,7 +34,7 @@ type VerificationState =
   | "received"
   | "storage_failure";
 
-type FailureReason = "network_unknown" | "timeout_unknown" | "server_failed" | "processing" | "configuration" | "none";
+type FailureReason = "network_unknown" | "timeout_unknown" | "server_failed" | "processing" | "configuration" | "storage_failure" | "none";
 type AbortReason = "timeout" | "retake" | "close" | "unmount";
 
 export function PublicCameraBlock({
