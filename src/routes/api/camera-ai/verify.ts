@@ -65,6 +65,59 @@ export const Route = createFileRoute('/api/camera-ai/verify')({
                 p_idempotency_key: idempotencyKey
               });
             },
+            persistEvidence: async ({ checklistId, responseId, blockId, idempotencyKey, buffer, mimeType }) => {
+              const client = createServerSupabaseClient();
+              if (!client) throw new Error('Supabase client failed');
+
+              const ext = mimeType.split('/')[1] || 'jpg';
+              const storagePath = `${checklistId}/${responseId}/${blockId}/${idempotencyKey}.${ext}`;
+              
+              try {
+                // 1. Storage Upload (Service Role via client.server)
+                const { error: uploadError } = await client.storage
+                  .from('checklist-evidences')
+                  .upload(storagePath, buffer, {
+                    contentType: mimeType,
+                    upsert: true
+                  });
+
+                if (uploadError) {
+                  // If it's a conflict but we can't be sure, we treat it as error for safety
+                  // But if it already exists, we might recover.
+                  if ((uploadError as any).status !== 409) {
+                    console.error('[CameraAI] Storage upload failed:', uploadError);
+                    return { evidenceId: null, error: uploadError };
+                  }
+                }
+
+                // 2. Database Record (idempotent via storage_path UNIQUE)
+                const { data: evidence, error: dbError } = await client
+                  .from('checklist_evidences')
+                  .upsert({
+                    checklist_id: checklistId,
+                    response_id: responseId,
+                    block_id: blockId,
+                    storage_path: storagePath,
+                    mime_type: mimeType,
+                    size_bytes: buffer.byteLength,
+                    source: 'camera_ai_v4'
+                  }, { onConflict: 'storage_path' })
+                  .select('id')
+                  .single();
+
+                if (dbError) {
+                  console.error('[CameraAI] Evidence DB record failed:', dbError);
+                  // Cleanup object if DB record failed and it wasn't a replay
+                  await client.storage.from('checklist-evidences').remove([storagePath]);
+                  return { evidenceId: null, error: dbError };
+                }
+
+                return { evidenceId: evidence.id, error: null };
+              } catch (e) {
+                console.error('[CameraAI] Persistence exception:', e);
+                return { evidenceId: null, error: e };
+              }
+            },
             hitRateLimit: async (responseId: string) => {
               const client = createServerSupabaseClient();
               if (!client) throw new Error('Supabase client failed');
@@ -106,6 +159,7 @@ export const Route = createFileRoute('/api/camera-ai/verify')({
                   decision: params.decision,
                   code: params.code,
                   evidence: params.evidence,
+                  evidence_id: params.evidenceId,
                   model: params.model,
                   duration_ms: params.durationMs,
                   updated_at: params.at.toISOString(),
