@@ -133,7 +133,7 @@ export const Route = createFileRoute('/api/camera-ai/verify')({
 
                 if (dbError) {
                   console.error(`[CameraAI] Evidence DB record failed:`, {
-                    requestId,
+                    requestId: deps.requestId,
                     step: 'evidence_db_upsert',
                     code: dbError.code,
                     details: dbError.message?.includes('checklist_evidences_source_chk') ? 'checklist_evidences_source_chk' : undefined
