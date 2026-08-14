@@ -71,7 +71,7 @@ describe('Camera AI Persistence & Replay', () => {
     expect(body.persisted).toBe(true);
     expect(deps.persistEvidence).toHaveBeenCalled();
     expect(deps.analyzeImage).toHaveBeenCalledTimes(1);
-    expect(deps.markCompleted).toHaveBeenCalled();
+    expect(deps.attachEvidence).toHaveBeenCalled();
   });
 
   it('foto rejeitada -> nenhum upload é realizado', async () => {

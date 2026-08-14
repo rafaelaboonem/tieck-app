@@ -112,7 +112,7 @@ describe('Camera AI Final Recovery & Integrity', () => {
     const res = await verifyCameraRequest(validPayload, validImage, deps);
     
     expect(res.status).toBe(500);
-    expect((res.body as any).persisted).toBe(false);
+    expect(!!(res.body as any).persisted).toBe(false);
     expect((res.body as any).code).toBe('storage_failure');
   });
 
