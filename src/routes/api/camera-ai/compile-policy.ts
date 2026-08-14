@@ -47,42 +47,45 @@ export const Route = createFileRoute('/api/camera-ai/compile-policy')({
           const client = createServerSupabaseClient();
           if (!client) throw new Error('Supabase client failed');
 
-          // 1. Get current user from auth header
           const authHeader = request.headers.get('Authorization');
           if (!authHeader) return Response.json({ ok: false, code: 'unauthorized' }, { status: 401 });
           
           const { data: { user }, error: authError } = await client.auth.getUser(authHeader.replace('Bearer ', ''));
           if (authError || !user) return Response.json({ ok: false, code: 'unauthorized' }, { status: 401 });
 
-          // 2. Fetch checklist and verify ownership/access
           const { data: checklist, error: chkError } = await client
             .from('checklists')
-            .select('blocks, workspace_id, owner_id')
+            .select('blocks, workspace_id, user_id')
             .eq('id', checklistId)
             .single();
 
           if (chkError || !checklist) return Response.json({ ok: false, code: 'not_found' }, { status: 404 });
           
-          // REAL AUTHORIZATION: Check if user is owner or member of the workspace
-          let isAuthorized = checklist.owner_id === user.id;
+          let isAuthorized = checklist.user_id === user.id;
           
           if (!isAuthorized && checklist.workspace_id) {
             const { data: member } = await client
               .from('workspace_members')
-              .select('id')
+              .select('status, role')
               .eq('workspace_id', checklist.workspace_id)
               .eq('user_id', user.id)
               .maybeSingle();
             
-            if (member) isAuthorized = true;
+            if (member && member.status === 'active' && (member.role === 'owner' || member.role === 'admin' || member.role === 'member')) {
+              isAuthorized = true;
+            }
           }
 
           if (!isAuthorized) {
             return Response.json({ ok: false, code: 'forbidden' }, { status: 403 });
           }
           
-          const blocks = checklist.blocks as any[];
-          const block = blocks.find(b => b.id === blockId);
+          const blocks = checklist.blocks;
+          if (!Array.isArray(blocks)) {
+            return Response.json({ ok: false, code: 'invalid_checklist_format' }, { status: 400 });
+          }
+
+          const block = blocks.find((b: any) => b && typeof b === 'object' && b.id === blockId);
           if (!block || block.type !== 'camera') {
             return Response.json({ ok: false, code: 'invalid_block' }, { status: 400 });
           }
@@ -94,12 +97,16 @@ export const Route = createFileRoute('/api/camera-ai/compile-policy')({
 
           const questionHash = createHash('sha256').update(question).digest('hex');
 
-          // 3. Cache Check
-          if (block.cameraAiPolicy?.questionHash === questionHash && block.cameraAiPolicy?.version === 1) {
-            return Response.json({ ok: true, policy: block.cameraAiPolicy });
+          if (block.cameraAiPolicy) {
+            const cachedPolicyResult = CameraVerificationPolicyV1Schema.safeParse(block.cameraAiPolicy);
+            if (cachedPolicyResult.success) {
+              const cached = cachedPolicyResult.data;
+              if (cached.version === 1 && cached.questionHash === questionHash) {
+                return Response.json({ ok: true, policy: cached });
+              }
+            }
           }
 
-          // 4. OpenAI Generation
           const openai = new OpenAI({ apiKey });
           const response = await openai.responses.parse({
             model: "gpt-4o-mini",
@@ -115,7 +122,6 @@ export const Route = createFileRoute('/api/camera-ai/compile-policy')({
           const generated = response.output_parsed;
           if (!generated) throw new Error('OpenAI parse failed');
 
-          // 5. Canonical Validation & Enrichment
           const finalPolicyData: CameraVerificationPolicyV1 = {
             ...generated,
             version: 1,
@@ -125,15 +131,15 @@ export const Route = createFileRoute('/api/camera-ai/compile-policy')({
 
           const finalValidation = CameraVerificationPolicyV1Schema.safeParse(finalPolicyData);
           if (!finalValidation.success) {
-            console.error('[CompilePolicy] Final validation failed:', finalValidation.error);
+            console.error('[CompilePolicy] Final validation failed');
             throw new Error('Generated policy failed final validation');
           }
 
           return Response.json({ ok: true, policy: finalValidation.data });
 
-        } catch (error: any) {
-          console.error('[CompilePolicy] Failed:', error);
-          return Response.json({ ok: false, code: 'technical_failure', message: error.message }, { status: 500 });
+        } catch (error: unknown) {
+          console.error('[CompilePolicy] Technical failure occurred');
+          return Response.json({ ok: false, code: 'technical_failure' }, { status: 500 });
         }
       }
     }

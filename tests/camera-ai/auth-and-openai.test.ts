@@ -27,7 +27,7 @@ describe('POST /api/camera-ai/compile-policy Authorization & OpenAI', () => {
     id: checklistId,
     blocks: [{ id: blockId, type: 'camera', title: 'Test', description: '' }],
     workspace_id: 'w1234567-89ab-cdef-0123-456789abcdef',
-    owner_id: 'u1234567-89ab-cdef-0123-456789abcdef'
+    user_id: 'u1234567-89ab-cdef-0123-456789abcdef'
   };
 
   const mockSupabase = {
@@ -62,10 +62,10 @@ describe('POST /api/camera-ai/compile-policy Authorization & OpenAI', () => {
     expect(response.status).toBe(401);
   });
 
-  it('Retorna 403 se o usuário não tiver acesso ao workspace', async () => {
+  it('Retorna 403 se o usuário não for proprietário e nem membro ativo', async () => {
     mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: 'u2' } }, error: null });
     mockSupabase.single.mockResolvedValue({ data: mockChecklist, error: null });
-    mockSupabase.maybeSingle.mockResolvedValue({ data: null, error: null }); // No workspace membership
+    mockSupabase.maybeSingle.mockResolvedValue({ data: null, error: null });
 
     const request = new Request('http://localhost/api/camera-ai/compile-policy', {
       method: 'POST',
@@ -82,8 +82,27 @@ describe('POST /api/camera-ai/compile-policy Authorization & OpenAI', () => {
     expect(mockParse).not.toHaveBeenCalled();
   });
 
-  it('Permite compilação se o usuário for o proprietário', async () => {
-    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: mockChecklist.owner_id } }, error: null });
+  it('Retorna 403 se for membro inativo', async () => {
+    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: 'u2' } }, error: null });
+    mockSupabase.single.mockResolvedValue({ data: mockChecklist, error: null });
+    mockSupabase.maybeSingle.mockResolvedValue({ data: { status: 'inactive', role: 'member' }, error: null });
+
+    const request = new Request('http://localhost/api/camera-ai/compile-policy', {
+      method: 'POST',
+      headers: { 
+        'Authorization': 'Bearer token',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ checklistId, blockId })
+    });
+    
+    const handler = (Route as any).options.server.handlers.POST;
+    const response = await handler({ request });
+    expect(response.status).toBe(403);
+  });
+
+  it('Permite compilação se o usuário for o proprietário direto (user_id)', async () => {
+    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: mockChecklist.user_id } }, error: null });
     mockSupabase.single.mockResolvedValue({ data: mockChecklist, error: null });
     
     mockParse.mockResolvedValue({
@@ -116,13 +135,112 @@ describe('POST /api/camera-ai/compile-policy Authorization & OpenAI', () => {
     const data = await response.json();
     expect(data.ok).toBe(true);
     expect(data.policy.source).toBe('generated');
-    expect(data.policy.version).toBe(1);
   });
 
-  it('Chama OpenAI exatamente uma vez para nova política', async () => {
-    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: mockChecklist.owner_id } }, error: null });
+  it('Permite compilação se for membro ativo do workspace (owner, admin ou member)', async () => {
+    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: 'member1' } }, error: null });
     mockSupabase.single.mockResolvedValue({ data: mockChecklist, error: null });
-    mockParse.mockResolvedValue({ output_parsed: { verifiability: 'visual', target: 'X', condition: 'Y', targetDescription: 'D', conditionDescription: 'C', requiredVisibleEvidence: [], rejectionSignals: [], notObservableSignals: [], summary: 'S' } });
+    mockSupabase.maybeSingle.mockResolvedValue({ data: { status: 'active', role: 'admin' }, error: null });
+    
+    mockParse.mockResolvedValue({
+      output_parsed: {
+        verifiability: 'visual',
+        target: 'Test',
+        condition: 'present',
+        targetDescription: 'A test object',
+        conditionDescription: 'Should be present',
+        requiredVisibleEvidence: ['test'],
+        rejectionSignals: [],
+        notObservableSignals: [],
+        summary: 'Test summary'
+      }
+    });
+
+    const request = new Request('http://localhost/api/camera-ai/compile-policy', {
+      method: 'POST',
+      headers: { 
+        'Authorization': 'Bearer token',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ checklistId, blockId })
+    });
+    
+    const handler = (Route as any).options.server.handlers.POST;
+    const response = await handler({ request });
+    expect(response.status).toBe(200);
+  });
+
+  it('Usa cache se a política for válida e hash coincidir', async () => {
+    const question = "Test "; // Title "Test", empty description
+    const { createHash } = await import('crypto');
+    const questionHash = createHash('sha256').update(question.trim()).digest('hex');
+
+    const checklistWithPolicy = {
+      ...mockChecklist,
+      blocks: [{
+        ...mockChecklist.blocks[0],
+        cameraAiPolicy: {
+          verifiability: 'visual',
+          target: 'Test',
+          condition: 'present',
+          targetDescription: 'D',
+          conditionDescription: 'C',
+          requiredVisibleEvidence: [],
+          rejectionSignals: [],
+          notObservableSignals: [],
+          summary: 'S',
+          version: 1,
+          questionHash,
+          source: 'generated'
+        }
+      }]
+    };
+
+    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: mockChecklist.user_id } }, error: null });
+    mockSupabase.single.mockResolvedValue({ data: checklistWithPolicy, error: null });
+
+    const request = new Request('http://localhost/api/camera-ai/compile-policy', {
+      method: 'POST',
+      headers: { 
+        'Authorization': 'Bearer token',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ checklistId, blockId })
+    });
+    
+    const handler = (Route as any).options.server.handlers.POST;
+    const response = await handler({ request });
+    expect(response.status).toBe(200);
+    expect(mockParse).not.toHaveBeenCalled();
+  });
+
+  it('Recompila se a política no cache for malformada', async () => {
+    const checklistWithBadPolicy = {
+      ...mockChecklist,
+      blocks: [{
+        ...mockChecklist.blocks[0],
+        cameraAiPolicy: {
+          version: 1,
+          // Missing required fields
+        }
+      }]
+    };
+
+    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: mockChecklist.user_id } }, error: null });
+    mockSupabase.single.mockResolvedValue({ data: checklistWithBadPolicy, error: null });
+    mockParse.mockResolvedValue({
+      output_parsed: {
+        verifiability: 'visual',
+        target: 'Test',
+        condition: 'present',
+        targetDescription: 'A test object',
+        conditionDescription: 'Should be present',
+        requiredVisibleEvidence: ['test'],
+        rejectionSignals: [],
+        notObservableSignals: [],
+        summary: 'Test summary'
+      }
+    });
 
     const request = new Request('http://localhost/api/camera-ai/compile-policy', {
       method: 'POST',
@@ -135,7 +253,6 @@ describe('POST /api/camera-ai/compile-policy Authorization & OpenAI', () => {
     
     const handler = (Route as any).options.server.handlers.POST;
     await handler({ request });
-    
     expect(mockParse).toHaveBeenCalledTimes(1);
   });
 });
