@@ -144,6 +144,80 @@ describe('Camera AI Server Runtime', () => {
       const res = await verifyCameraRequest(validPayload, validImage, deps);
       expect(res.status).toBe(200);
       expect(deps.markCompleted).toHaveBeenCalled();
+      expect((res.body as any).decision).toBe('approved');
+    });
+
+    it('objeto completamente diferente (target_visible=false) resulta em retake', async () => {
+      (deps.analyzeImage as MockedFunction<typeof deps.analyzeImage>).mockResolvedValue({ 
+        confidence: 0.95, 
+        target_visible: false, 
+        condition_observable: true, 
+        condition_met: true, 
+        image_quality: 'usable', 
+        visible_evidence: 'Outro objeto visível', 
+        user_message: 'retake' 
+      });
+      const res = await verifyCameraRequest(validPayload, validImage, deps);
+      expect((res.body as any).decision).toBe('retake');
+      expect((res.body as any).message).toContain('não foi identificado');
+    });
+
+    it('alvo ausente resulta em retake', async () => {
+      (deps.analyzeImage as MockedFunction<typeof deps.analyzeImage>).mockResolvedValue({ 
+        confidence: 0.95, 
+        target_visible: false, 
+        condition_observable: false, 
+        condition_met: false, 
+        image_quality: 'usable', 
+        visible_evidence: 'Cenário vazio', 
+        user_message: 'retake' 
+      });
+      const res = await verifyCameraRequest(validPayload, validImage, deps);
+      expect((res.body as any).decision).toBe('retake');
+    });
+
+    it('condição não observável resulta em not_observable', async () => {
+      (deps.analyzeImage as MockedFunction<typeof deps.analyzeImage>).mockResolvedValue({ 
+        confidence: 0.95, 
+        target_visible: true, 
+        condition_observable: false, 
+        condition_met: false, 
+        image_quality: 'usable', 
+        visible_evidence: 'Objeto visível mas condição obstruída', 
+        user_message: 'not_observable' 
+      });
+      const res = await verifyCameraRequest(validPayload, validImage, deps);
+      expect((res.body as any).decision).toBe('not_observable');
+    });
+
+    it('condição descumprida resulta em retake', async () => {
+      (deps.analyzeImage as MockedFunction<typeof deps.analyzeImage>).mockResolvedValue({ 
+        confidence: 0.95, 
+        target_visible: true, 
+        condition_observable: true, 
+        condition_met: false, 
+        image_quality: 'usable', 
+        visible_evidence: 'Objeto visível mas sujo', 
+        user_message: 'retake' 
+      });
+      const res = await verifyCameraRequest(validPayload, validImage, deps);
+      expect((res.body as any).decision).toBe('retake');
+      expect((res.body as any).message).toContain('não foi atendida');
+    });
+
+    it('foto escura/desfocada/cortada resulta em retake', async () => {
+      (deps.analyzeImage as MockedFunction<typeof deps.analyzeImage>).mockResolvedValue({ 
+        confidence: 0.95, 
+        target_visible: true, 
+        condition_observable: true, 
+        condition_met: true, 
+        image_quality: 'dark', 
+        visible_evidence: 'Escuro', 
+        user_message: 'retake' 
+      });
+      const res = await verifyCameraRequest(validPayload, validImage, deps);
+      expect((res.body as any).decision).toBe('retake');
+      expect((res.body as any).message).toContain('escura');
     });
 
     it('markCompleted retornando zero linhas resulta 500', async () => {
@@ -166,12 +240,6 @@ describe('Camera AI Server Runtime', () => {
       });
       await verifyCameraRequest(validPayload, validImage, deps);
       expect(deps.analyzeImage).toHaveBeenCalledWith('Pergunta Real', expect.anything(), expect.anything());
-    });
-
-    it('UUID de checklistId inválido falha no schema', async () => {
-      const payload: unknown = { ...validPayload, checklistId: 'not-a-uuid' };
-      // O tanstack start chama o schema antes do handler, mas aqui testamos o handler recebendo payload já validado tipadamente.
-      // O teste de schema abaixo já cobre a validação.
     });
   });
 

@@ -24,13 +24,28 @@ export function evaluateGate(analysis: CameraVerification): VerificationResult {
     };
   }
 
-  if (!analysis.target_visible || analysis.image_quality !== "usable" || analysis.confidence < 0.90 || hasSpeculativeTerms) {
+  // Rejeição conservadora (Retake) se:
+  // - Alvo não visível
+  // - Condição não cumprida (mas observável)
+  // - Qualidade ruim
+  // - Baixa confiança
+  // - Termos especulativos
+  if (
+    !analysis.target_visible || 
+    !analysis.condition_met ||
+    analysis.image_quality !== "usable" || 
+    analysis.confidence < 0.90 || 
+    hasSpeculativeTerms
+  ) {
     let message = 'É necessário tirar outra foto.';
     let code = 'retake_required';
 
     if (analysis.image_quality === 'dark') message = 'A foto está muito escura.';
     if (analysis.image_quality === 'blurry') message = 'A foto está borrada.';
-    if (hasSpeculativeTerms) message = 'A foto não é conclusiva.';
+    if (analysis.image_quality === 'cropped') message = 'O objeto está cortado na foto.';
+    if (hasSpeculativeTerms) message = 'A foto não é conclusiva (evidência especulativa).';
+    if (!analysis.target_visible) message = 'O objeto solicitado não foi identificado na foto.';
+    if (analysis.condition_met === false && analysis.condition_observable === true) message = 'A condição solicitada não foi atendida.';
 
     return {
       ok: true,
