@@ -17,7 +17,7 @@ interface PublicCameraBlockProps {
   onAnswer?: (blockId: string, value: string) => void;
   onCameraActiveChange?: (active: boolean) => void;
   session?: { responseId: string; responseToken: string } | null;
-  ensureResponseSession: () => Promise<{ responseId: string; responseToken: string } | null>;
+  ensureResponseSession: (options?: { forceNew?: boolean }) => Promise<{ responseId: string; responseToken: string; checklistId: string; createdAt: number } | null>;
   language?: string;
 }
 
