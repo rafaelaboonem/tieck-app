@@ -27,6 +27,7 @@ import { Route as CIdRouteImport } from './routes/c.$id'
 import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
 import { Route as UnidadesUnitIdOperacaoRouteImport } from './routes/unidades.$unitId.operacao'
 import { Route as ApiCameraAiVerifyRouteImport } from './routes/api/camera-ai/verify'
+import { Route as ApiCameraAiSignedUrlRouteImport } from './routes/api/camera-ai/signed-url'
 import { Route as ApiCameraAiCompilePolicyRouteImport } from './routes/api/camera-ai/compile-policy'
 
 const PainelRoute = PainelRouteImport.update({
@@ -119,6 +120,11 @@ const ApiCameraAiVerifyRoute = ApiCameraAiVerifyRouteImport.update({
   path: '/api/camera-ai/verify',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiCameraAiSignedUrlRoute = ApiCameraAiSignedUrlRouteImport.update({
+  id: '/api/camera-ai/signed-url',
+  path: '/api/camera-ai/signed-url',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiCameraAiCompilePolicyRoute =
   ApiCameraAiCompilePolicyRouteImport.update({
     id: '/api/camera-ai/compile-policy',
@@ -144,6 +150,7 @@ export interface FileRoutesByFullPath {
   '/auth/callback': typeof AuthCallbackRoute
   '/c/$id': typeof CIdRoute
   '/api/camera-ai/compile-policy': typeof ApiCameraAiCompilePolicyRoute
+  '/api/camera-ai/signed-url': typeof ApiCameraAiSignedUrlRoute
   '/api/camera-ai/verify': typeof ApiCameraAiVerifyRoute
   '/unidades/$unitId/operacao': typeof UnidadesUnitIdOperacaoRoute
 }
@@ -165,6 +172,7 @@ export interface FileRoutesByTo {
   '/auth/callback': typeof AuthCallbackRoute
   '/c/$id': typeof CIdRoute
   '/api/camera-ai/compile-policy': typeof ApiCameraAiCompilePolicyRoute
+  '/api/camera-ai/signed-url': typeof ApiCameraAiSignedUrlRoute
   '/api/camera-ai/verify': typeof ApiCameraAiVerifyRoute
   '/unidades/$unitId/operacao': typeof UnidadesUnitIdOperacaoRoute
 }
@@ -187,6 +195,7 @@ export interface FileRoutesById {
   '/auth/callback': typeof AuthCallbackRoute
   '/c/$id': typeof CIdRoute
   '/api/camera-ai/compile-policy': typeof ApiCameraAiCompilePolicyRoute
+  '/api/camera-ai/signed-url': typeof ApiCameraAiSignedUrlRoute
   '/api/camera-ai/verify': typeof ApiCameraAiVerifyRoute
   '/unidades/$unitId/operacao': typeof UnidadesUnitIdOperacaoRoute
 }
@@ -210,6 +219,7 @@ export interface FileRouteTypes {
     | '/auth/callback'
     | '/c/$id'
     | '/api/camera-ai/compile-policy'
+    | '/api/camera-ai/signed-url'
     | '/api/camera-ai/verify'
     | '/unidades/$unitId/operacao'
   fileRoutesByTo: FileRoutesByTo
@@ -231,6 +241,7 @@ export interface FileRouteTypes {
     | '/auth/callback'
     | '/c/$id'
     | '/api/camera-ai/compile-policy'
+    | '/api/camera-ai/signed-url'
     | '/api/camera-ai/verify'
     | '/unidades/$unitId/operacao'
   id:
@@ -252,6 +263,7 @@ export interface FileRouteTypes {
     | '/auth/callback'
     | '/c/$id'
     | '/api/camera-ai/compile-policy'
+    | '/api/camera-ai/signed-url'
     | '/api/camera-ai/verify'
     | '/unidades/$unitId/operacao'
   fileRoutesById: FileRoutesById
@@ -274,6 +286,7 @@ export interface RootRouteChildren {
   AuthCallbackRoute: typeof AuthCallbackRoute
   CIdRoute: typeof CIdRoute
   ApiCameraAiCompilePolicyRoute: typeof ApiCameraAiCompilePolicyRoute
+  ApiCameraAiSignedUrlRoute: typeof ApiCameraAiSignedUrlRoute
   ApiCameraAiVerifyRoute: typeof ApiCameraAiVerifyRoute
   UnidadesUnitIdOperacaoRoute: typeof UnidadesUnitIdOperacaoRoute
 }
@@ -406,6 +419,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiCameraAiVerifyRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/camera-ai/signed-url': {
+      id: '/api/camera-ai/signed-url'
+      path: '/api/camera-ai/signed-url'
+      fullPath: '/api/camera-ai/signed-url'
+      preLoaderRoute: typeof ApiCameraAiSignedUrlRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/camera-ai/compile-policy': {
       id: '/api/camera-ai/compile-policy'
       path: '/api/camera-ai/compile-policy'
@@ -434,6 +454,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthCallbackRoute: AuthCallbackRoute,
   CIdRoute: CIdRoute,
   ApiCameraAiCompilePolicyRoute: ApiCameraAiCompilePolicyRoute,
+  ApiCameraAiSignedUrlRoute: ApiCameraAiSignedUrlRoute,
   ApiCameraAiVerifyRoute: ApiCameraAiVerifyRoute,
   UnidadesUnitIdOperacaoRoute: UnidadesUnitIdOperacaoRoute,
 }
