@@ -328,7 +328,7 @@ export async function verifyCameraRequest(
     if (pError || !pId) {
       await deps.markCompleted({
         responseId: session.response_id,
-        block_id: payload.blockId,
+        blockId: payload.blockId,
         idempotencyKey: payload.idempotencyKey,
         decision: 'approved',
         code: 'storage_pending',
