@@ -172,7 +172,24 @@ export async function verifyCameraRequest(
 
   const question = (String(block.title || '') + ' ' + String(block.description || '')).trim();
   const policy = (block as any).cameraAiPolicy;
-  const isPolicyValid = policy && policy.version === 1 && policy.questionHash === createHash('sha256').update(question).digest('hex');
+  
+  // Fase 3: Integrity check
+  const expectedHash = createHash('sha256').update(question).digest('hex');
+  const isPolicyValid = policy && 
+                       policy.version === 1 && 
+                       policy.questionHash === expectedHash;
+
+  if (!isPolicyValid) {
+    return { 
+      status: 400, 
+      body: { 
+        ok: false, 
+        code: 'checklist_update_required', 
+        message: 'A pergunta ou critérios da câmera foram alterados. Por favor, recarregue a página.',
+        requestId
+      } 
+    };
+  }
 
 
   // 7 & 8. Replay & Atomic Claim
