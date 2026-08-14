@@ -68,6 +68,12 @@ export interface VerifyDependencies {
     durationMs: number;
     at: Date;
   }) => Promise<{ data: { id: string } | null; error: unknown }>;
+  attachEvidence: (params: {
+    responseId: string;
+    blockId: string;
+    idempotencyKey: string;
+    evidenceId: string;
+  }) => Promise<{ data: { confirmed_evidence_id: string }[] | null; error: unknown }>;
   isConfigured: () => boolean;
   persistEvidence: (params: {
     checklistId: string;
@@ -180,11 +186,10 @@ export async function verifyCameraRequest(
 
   const claim = claimData[0];
 
-  // Replay Storage-Pending Approved Attempt
+  // Replay Storage-Pending Approved Attempt (completed+approved+!evidenceId OR failed+storage_failure)
   const isStoragePending = 
-    claim.claim_status === 'completed' && 
-    claim.existing_decision === 'approved' && 
-    !claim.existing_evidence_id;
+    (claim.claim_status === 'completed' && claim.existing_decision === 'approved' && !claim.existing_evidence_id) ||
+    (claim.claim_status === 'failed' && claim.existing_code === 'storage_failure');
 
   if (isStoragePending) {
     // 12. Persistence Replay (No OpenAI, No Rate Limit)
@@ -198,7 +203,6 @@ export async function verifyCameraRequest(
     });
 
     if (pError || !pId) {
-      // Stay in storage_pending state
       return {
         status: 500,
         body: {
@@ -210,19 +214,27 @@ export async function verifyCameraRequest(
       };
     }
 
-    // 13. Decision Update (Mark as truly completed)
-    await deps.markCompleted({
+    // 13. Decision Update (Atomic Attachment)
+    const { data: attachData, error: attachError } = await deps.attachEvidence({
       responseId: session.response_id,
       blockId: payload.blockId,
       idempotencyKey: payload.idempotencyKey,
-      decision: 'approved',
-      code: 'verified',
-      evidence: claim.existing_evidence,
-      evidenceId: pId,
-      model: deps.model,
-      durationMs: 0,
-      at: deps.now()
+      evidenceId: pId
     });
+
+    const confirmedId = attachData?.[0]?.confirmed_evidence_id;
+
+    if (attachError || !confirmedId) {
+      return {
+        status: 500,
+        body: {
+          ok: false,
+          code: 'storage_failure',
+          message: 'Foto salva, mas falha ao vincular ao checklist.',
+          requestId
+        }
+      };
+    }
 
     return {
       status: 200,
@@ -232,7 +244,7 @@ export async function verifyCameraRequest(
         code: 'verified',
         message: 'Foto persistida com sucesso.',
         evidence: claim.existing_evidence,
-        evidenceId: pId,
+        evidenceId: confirmedId,
         persisted: true,
         requestId
       }
@@ -265,12 +277,6 @@ export async function verifyCameraRequest(
   }
 
   if (claim.claim_status !== 'acquired') {
-    // If it failed before, but we are here, treat it based on existing_code
-    if (claim.claim_status === 'failed' && claim.existing_code === 'storage_failure') {
-      // This should have been converted by migration, but handle it just in case
-      // Or if it just happened in this session
-    }
-    
     return { 
       status: 500, 
       body: { ok: false, code: 'technical_failure', message: 'Falha técnica ao iniciar verificação.', requestId } 
@@ -378,13 +384,20 @@ export async function verifyCameraRequest(
     };
   }
 
-  // 14. Sanitized Response
+  // 14. Sanitized Response (Ensure evidenceId is confirmed)
+  if (result.decision === 'approved' && !evidenceId) {
+     return { 
+      status: 500, 
+      body: { ok: false, code: 'storage_failure', message: 'Foto aprovada, mas falha ao salvar.', requestId } 
+    };
+  }
+
   return { 
     status: 200, 
     body: { 
       ...result, 
       evidenceId, 
-      persisted: result.decision === 'approved', 
+      persisted: result.decision === 'approved' && !!evidenceId, 
       requestId 
     } 
   };
