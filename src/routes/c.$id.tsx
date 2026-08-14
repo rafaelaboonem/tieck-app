@@ -486,13 +486,17 @@ function PublicChecklistPage() {
     // Bloqueia envio se alguma foto ainda está em análise ou terminou com
     // canContinue === false (por exemplo, revisão exigida pelo backend).
     const blockingCamera = blocks.find((b: any) => {
-      if (b.type !== "camera") return false;
+      if (b.type !== "camera" || b.required === false) return false;
       const ans = answers[b.id];
-      if (!ans || typeof ans !== "object") return false;
-      if (!ans.analysisEnabled) return false;
-      const a = ans.analysis;
-      if (!a) return true; // ainda sem resultado — não deixa enviar
-      return a.canContinue === false;
+      // If it's a JSON response from PublicCameraBlock
+      if (ans && typeof ans === "string" && ans.startsWith('{')) {
+        try {
+          const parsed = JSON.parse(ans);
+          return !parsed.evidenceId || parsed.decision !== 'approved';
+        } catch { return true; }
+      }
+      // Legacy or missing
+      return !ans;
     });
     if (blockingCamera) {
       toast.error("Aguarde a análise das fotos ou envie uma nova foto para prosseguir.");

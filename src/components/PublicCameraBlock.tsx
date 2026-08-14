@@ -34,7 +34,7 @@ type VerificationState =
   | "received"
   | "storage_failure";
 
-type FailureReason = "network_unknown" | "timeout_unknown" | "server_failed" | "processing" | "configuration" | "none";
+type FailureReason = "network_unknown" | "timeout_unknown" | "server_failed" | "processing" | "configuration" | "storage_failure" | "none";
 type AbortReason = "timeout" | "retake" | "close" | "unmount";
 
 export function PublicCameraBlock({
@@ -212,7 +212,8 @@ export function PublicCameraBlock({
 
       if (data.code === 'storage_failure') {
         setState("storage_failure");
-        setErrorMsg(data.message || "Foto aprovada, mas falha ao salvar no servidor.");
+        setFailureReason("storage_failure");
+        setErrorMsg(data.message || "A foto foi aprovada. Não conseguimos salvá-la ainda.");
         return;
       }
 
@@ -420,12 +421,12 @@ export function PublicCameraBlock({
         </Button>
       )}
 
-      {(["preparing", "analyzing", "approved", "retake", "not_observable", "technical_failure", "rate_limited", "uploading", "received"].includes(state)) && preview && (
+      {(["preparing", "analyzing", "approved", "retake", "not_observable", "technical_failure", "rate_limited", "uploading", "received", "storage_failure"].includes(state)) && preview && (
         <div className={cn(
           "relative aspect-[4/3] rounded-2xl overflow-hidden border-2 transition-colors duration-500",
           state === "approved" ? "border-green-500 shadow-lg shadow-green-100" : 
           (state === "retake" || state === "not_observable") ? "border-amber-500 shadow-lg shadow-amber-100" : 
-          state === "technical_failure" ? "border-red-500" : "border-neutral-200"
+          (state === "technical_failure" || state === "storage_failure") ? "border-red-500" : "border-neutral-200"
         )}>
           
 
@@ -447,10 +448,12 @@ export function PublicCameraBlock({
               </div>
             )}
             
-            {state === "analyzing" && (
+            {(state === "analyzing" || (state === "preparing" && failureReason === "storage_failure")) && (
               <div className="bg-white/90 backdrop-blur-sm rounded-2xl p-4 flex items-center gap-3 shadow-xl">
                 <Loader2 className="w-5 h-5 animate-spin text-[#FF007F]" />
-                <span className="text-sm font-bold text-neutral-800">Verificando a foto...</span>
+                <span className="text-sm font-bold text-neutral-800">
+                  {failureReason === "storage_failure" ? "Salvando foto..." : "Verificando a foto..."}
+                </span>
               </div>
             )}
 
