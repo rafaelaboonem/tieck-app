@@ -48,12 +48,12 @@ describe('Camera AI Submission Finalization', () => {
 
     // Segunda vez
     const { data: secondData, error: secondError } = await (supabase.rpc as any)('finalize_public_response', {
-      p_call_token: token, // Propositalmente errado para ver se o erro mudou? Não, use o certo
       p_response_token: token,
       p_checklist_id: checklistId,
       p_answers: { step: 2 }
     });
 
+    if (secondError) console.error('Second finalize error:', secondError);
     expect(secondError).toBeNull();
     expect(secondData[0].already_submitted).toBe(true);
     expect(secondData[0].response_id).toBe(id);
