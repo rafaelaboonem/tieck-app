@@ -55,12 +55,13 @@ export function PublicCameraBlock({
   const [capturedFile, setCapturedFile] = useState<File | null>(null);
   const [idempotencyKey, setIdempotencyKey] = useState<string | null>(null);
   const [failureReason, setFailureReason] = useState<FailureReason>("none");
-  const [retryAttempted, setRetryAttempted] = useState<boolean>(false);
+  // removed retryAttempted from React state to control recovery via recoveryAttempt argument
   
   const inFlightRef = useRef<boolean>(false);
   const abortControllerRef = useRef<AbortController | null>(null);
   const abortReasonRef = useRef<AbortReason | null>(null);
   const requestSequenceRef = useRef<number>(0);
+  const recoveryInProgressRef = useRef<boolean>(false);
 
   const isAIEnabled = import.meta.env.VITE_CAMERA_AI_ENABLED === "true";
 
@@ -105,13 +106,20 @@ export function PublicCameraBlock({
     const newIdempotencyKey = crypto.randomUUID();
     setIdempotencyKey(newIdempotencyKey);
     setFailureReason("none");
-    setRetryAttempted(false);
+    recoveryInProgressRef.current = false;
 
     void processVerification(file, newIdempotencyKey, requestSequenceRef.current);
   };
 
 
-  const processVerification = async (file: File, key: string, sequence: number, isRetry = false) => {
+  const processVerification = async (
+    file: File, 
+    key: string, 
+    sequence: number, 
+    options?: { sessionOverride?: { responseId: string; responseToken: string }; recoveryAttempt?: number }
+  ) => {
+    const recoveryAttempt = options?.recoveryAttempt ?? 0;
+    const isRetry = recoveryAttempt > 0;
     // Double-click protection: if we're already processing THIS exact capture, ignore.
     if (inFlightRef.current && key === idempotencyKey && !isRetry) return;
     
@@ -121,7 +129,7 @@ export function PublicCameraBlock({
     // Closure to check if this request is still the active one
     const isCurrent = () => sequence === requestSequenceRef.current;
 
-    let activeSession = session ?? (await ensureResponseSession());
+    let activeSession = options?.sessionOverride ?? session ?? (await ensureResponseSession());
     
     if (!isCurrent()) return;
 
@@ -233,19 +241,23 @@ export function PublicCameraBlock({
 
       // Tratamento de Sessão Expirada ou Divergente
       if (response.status === 401 || response.status === 403) {
-        if (!retryAttempted && isCurrent()) {
-          setRetryAttempted(true);
+        const canRecover = recoveryAttempt === 0 && (data.code === 'unauthorized' || data.code === 'id_mismatch');
+        
+        if (canRecover && isCurrent()) {
           setState("preparing");
           const newSession = await ensureResponseSession({ forceNew: true });
           if (newSession && isCurrent()) {
-            void processVerification(file, key, sequence, true);
-            return;
+            return await processVerification(file, key, sequence, { 
+              sessionOverride: newSession, 
+              recoveryAttempt: 1 
+            });
           }
         }
         
         setState("technical_failure");
         setFailureReason("configuration");
-        setErrorMsg(data.message || "Sessão inválida. Recarregue a página.");
+        const codeMsg = data.requestId ? ` (Código de suporte: ${data.requestId})` : "";
+        setErrorMsg((data.message || "Sessão inválida. Recarregue a página.") + codeMsg);
         return;
       }
 
@@ -254,7 +266,8 @@ export function PublicCameraBlock({
         if (code === "invalid_block") {
           setState("technical_failure");
           setFailureReason("configuration");
-          setErrorMsg("Este checklist foi atualizado. Recarregue a página.");
+          const codeMsg = data.requestId ? ` (Código de suporte: ${data.requestId})` : "";
+          setErrorMsg("Este checklist foi atualizado. Recarregue a página." + codeMsg);
           return;
         }
       }
@@ -264,9 +277,8 @@ export function PublicCameraBlock({
         setFailureReason("configuration");
         const code = data?.code;
         if (code === "camera_ai_disabled") {
-          setErrorMsg("A verificação inteligente está temporariamente indisponível.");
-        } else {
-          setErrorMsg(data.message || "Servidor em manutenção ou configuração ausente.");
+          const codeMsg = data.requestId ? ` (Código de suporte: ${data.requestId})` : "";
+          setErrorMsg((data.message || "Servidor em manutenção ou configuração ausente.") + codeMsg);
         }
         return;
       }
@@ -274,7 +286,8 @@ export function PublicCameraBlock({
       if (response.status >= 500) {
         setState("technical_failure");
         setFailureReason("server_failed");
-        setErrorMsg(data.message || "O servidor encontrou um erro. Tente novamente.");
+        const codeMsg = data.requestId ? ` (Código de suporte: ${data.requestId})` : "";
+        setErrorMsg((data.message || "O servidor encontrou um erro. Tente novamente.") + codeMsg);
         return;
       }
 
@@ -282,7 +295,8 @@ export function PublicCameraBlock({
       if (!parsed.success) {
         setState("technical_failure");
         setFailureReason("server_failed");
-        setErrorMsg("Resposta do servidor em formato inválido.");
+        const codeMsg = data.requestId ? ` (Código de suporte: ${data.requestId})` : "";
+        setErrorMsg("Resposta do servidor em formato inválido." + codeMsg);
         return;
       }
 
@@ -290,7 +304,8 @@ export function PublicCameraBlock({
       if (!result.ok) {
         setState("technical_failure");
         setFailureReason("server_failed");
-        setErrorMsg(result.message || "Falha na verificação.");
+        const codeMsg = data.requestId ? ` (Código de suporte: ${data.requestId})` : "";
+        setErrorMsg((result.message || "Falha na verificação.") + codeMsg);
         return;
       }
 
@@ -388,7 +403,7 @@ export function PublicCameraBlock({
         setIdempotencyKey(keyToUse);
       }
       
-      void processVerification(capturedFile, keyToUse, requestSequenceRef.current);
+      void processVerification(capturedFile, keyToUse, requestSequenceRef.current, { recoveryAttempt: 0 });
     }
   };
 
