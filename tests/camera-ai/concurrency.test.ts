@@ -12,7 +12,8 @@ describe('Camera AI Storage Concurrency & Cleanup', () => {
     responseToken: 'token-1',
     idempotencyKey: '00000000-0000-0000-0000-000000000000'
   };
-  const validImage = { buffer: new Uint8Array([0x00]).buffer, type: 'image/jpeg' };
+  // valid JPEG magic bytes: 0xFF 0xD8 0xFF 0xDB
+  const validImage = { buffer: new Uint8Array([0xff, 0xd8, 0xff, 0xdb, 0x00, 0x00]).buffer, type: 'image/jpeg' };
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -44,7 +45,6 @@ describe('Camera AI Storage Concurrency & Cleanup', () => {
   it('E. Corrida no Storage: upload retorna 409, falha no banco -> retorna storage_failure', async () => {
     deps.persistEvidence = vi.fn().mockResolvedValue({ evidenceId: null, error: 'DB Error after conflict' });
     const res = await verifyCameraRequest(validPayload, validImage, deps);
-    // Note: status will be 500 from the handler logic when persistEvidence fails
     expect(res.status).toBe(500);
     expect((res.body as any).code).toBe('storage_failure');
   });
