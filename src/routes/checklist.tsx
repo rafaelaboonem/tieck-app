@@ -4096,39 +4096,74 @@ function NovoChecklistPage() {
                   </div>
                    );
                  }
-                 if (block.type === "camera") {
-                   const urls = block.dataUrls || ((block as any).dataUrl ? [(block as any).dataUrl] : []);
-                   const isActive = activeBlockId === block.id;
-                   const allowMultiple = (block as any).allowMultiple === true;
-                   const maxPhotos = Math.max(1, Math.min(20, (block as any).maxPhotos ?? 5));
+                  if (block.type === "camera") {
+                    const urls = block.dataUrls || ((block as any).dataUrl ? [(block as any).dataUrl] : []);
+                    const isActive = activeBlockId === block.id;
+                    const allowMultiple = (block as any).allowMultiple === true;
+                    const maxPhotos = Math.max(1, Math.min(20, (block as any).maxPhotos ?? 5));
                     const camTitle = String((block as any).title || (block as any).subtitle || "");
                     const camDescription = String((block as any).description ?? "");
-                     const camRequired = (block as any).required !== false;
-                    const camGuidance = String((block as any).captureGuidance ?? "");
-                    const camOrientation = ((block as any).orientation as "any" | "portrait" | "landscape" | undefined) ?? "any";
-                    const camPreCapture = ((block as any).preCaptureMessage as string | null | undefined) ?? "";
-                    const camFraming = ((block as any).framingHint as string | null | undefined) ?? "";
-                    const camDistance = ((block as any).distanceHint as string | null | undefined) ?? "";
-                    const camLighting = ((block as any).lightingHint as string | null | undefined) ?? "";
-                      type VisionOnAnomaly = "allow_continue" | "require_resubmit" | "block_completion" | "manual_review";
+                    const camRequired = (block as any).required !== false;
 
-                     const normalizeOnAnomaly = (v: unknown): VisionOnAnomaly => {
-                       switch (v) {
-                         case "allow_continue":
-                         case "require_resubmit":
-                         case "block_completion":
-                         case "manual_review":
-                           return v;
-                         case "warn":
-                           return "allow_continue";
-                         case "block":
-                           return "block_completion";
-                         default:
-                           return "manual_review";
-                       }
-                     };
-                    // Camera AI V2: análise semântica desativada na baseline neutra.
-                    const visionBadge: { label: string; tone: "off" | "warn" | "active" } | null = null;
+                    const policy = (block as any).cameraAiPolicy;
+                    const [isCompiling, setIsCompiling] = useState(false);
+                    const compileTimeoutRef = useRef<any>(null);
+
+                    const triggerCompile = async (checklistId: string, blockId: string) => {
+                      if (isCompiling) return;
+                      setIsCompiling(true);
+                      try {
+                        const token = (await supabase.auth.getSession()).data.session?.access_token;
+                        if (!token) throw new Error('No token');
+                        
+                        const res = await fetch('/api/camera-ai/compile-policy', {
+                          method: 'POST',
+                          headers: { 
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}`
+                          },
+                          body: JSON.stringify({ checklistId, blockId })
+                        });
+                        const data = await res.json();
+                        if (data.ok && data.policy) {
+                          updateBlock(blockId, { cameraAiPolicy: data.policy } as any);
+                        }
+                      } catch (err) {
+                        console.error('Failed to compile policy:', err);
+                      } finally {
+                        setIsCompiling(false);
+                      }
+                    };
+
+                    useEffect(() => {
+                      if (!isActive || !currentChecklistId) return;
+                      const question = (camTitle + ' ' + camDescription).trim();
+                      if (!question) return;
+                      
+                      const hash = Array.from(new TextEncoder().encode(question))
+                        .map(b => b.toString(16).padStart(2, '0'))
+                        .join(''); 
+                      // Note: We use a simple browser-side check to avoid calling too often, 
+                      // but the real hash check is on the server.
+                      
+                      if (policy?.questionHash === hash) return;
+
+                      if (compileTimeoutRef.current) clearTimeout(compileTimeoutRef.current);
+                      compileTimeoutRef.current = setTimeout(() => {
+                        triggerCompile(currentChecklistId, block.id);
+                      }, 2000);
+
+                      return () => clearTimeout(compileTimeoutRef.current);
+                    }, [camTitle, camDescription, isActive, currentChecklistId]);
+
+                    const visionBadge = policy?.verifiability === 'not_visual' 
+                      ? { label: "Não verificável por IA", tone: "warn" as const }
+                      : policy?.verifiability === 'partially_visual'
+                      ? { label: "Verificação parcial", tone: "warn" as const }
+                      : policy
+                      ? { label: "Verificação por IA ativa", tone: "active" as const }
+                      : null;
+
 
                    return (
                      <div
@@ -4188,6 +4223,20 @@ function NovoChecklistPage() {
                                 <p className="text-xs text-neutral-500 mt-0.5 line-clamp-2">{camDescription}</p>
                               )}
                               <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
+                                {visionBadge && (
+                                  <div className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
+                                    visionBadge.tone === 'active' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
+                                  }`}>
+                                    <Sparkles className="w-2.5 h-2.5" />
+                                    {visionBadge.label}
+                                  </div>
+                                )}
+                                {isCompiling && (
+                                  <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-blue-100 text-blue-700 animate-pulse">
+                                    <Loader2 className="w-2.5 h-2.5 animate-spin" />
+                                    Gerando política...
+                                  </div>
+                                )}
                               </div>
 
                             </div>
@@ -4258,9 +4307,93 @@ function NovoChecklistPage() {
                               </div>
 
 
+                              {policy && (
+                                <div className="space-y-3 pt-1">
+                                  <div className="p-3 rounded-lg bg-blue-50/50 border border-blue-100">
+                                    <h4 className="text-[11px] font-bold text-blue-900 uppercase tracking-wider mb-1">O que será verificado</h4>
+                                    <p className="text-xs text-blue-800 leading-relaxed">{policy.summary}</p>
+                                  </div>
 
-                              {/* Regras da captura */}
-                              <div className="flex flex-wrap items-center gap-4">
+                                  {policy.verifiability === 'not_visual' && (
+                                    <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 flex gap-2">
+                                      <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                                      <p className="text-xs text-amber-800">
+                                        Esta pergunta não pode ser comprovada por uma foto. Use outro tipo de bloco ou reformule a pergunta.
+                                      </p>
+                                    </div>
+                                  )}
+
+                                  {policy.verifiability === 'partially_visual' && (
+                                    <div className="p-3 rounded-lg bg-blue-50 border border-blue-200 flex gap-2">
+                                      <Info className="w-4 h-4 text-blue-600 shrink-0" />
+                                      <p className="text-xs text-blue-800">
+                                        A foto consegue verificar apenas parte desta condição. Revise o resumo antes de publicar.
+                                      </p>
+                                    </div>
+                                  )}
+
+                                  <Collapsible>
+                                    <CollapsibleTrigger className="flex items-center gap-2 text-[11px] font-bold text-neutral-500 uppercase tracking-wider hover:text-neutral-900 transition-colors w-full text-left">
+                                      <ChevronDown className="w-3 h-3" />
+                                      Configuração Avançada
+                                    </CollapsibleTrigger>
+                                    <CollapsibleContent className="pt-3 space-y-4">
+                                      <div className="space-y-2">
+                                        <label className="block text-[10px] font-bold text-neutral-400 uppercase tracking-wider">Evidência necessária</label>
+                                        <div className="space-y-1.5">
+                                          {(policy.requiredEvidence || []).map((item: string, idx: number) => (
+                                            <input
+                                              key={idx}
+                                              type="text"
+                                              value={item}
+                                              onChange={(e) => {
+                                                const next = [...policy.requiredEvidence];
+                                                next[idx] = e.target.value;
+                                                updateBlock(block.id, { cameraAiPolicy: { ...policy, requiredEvidence: next, source: 'owner_edited' } } as any);
+                                              }}
+                                              className="w-full px-2 py-1.5 text-xs border border-neutral-200 rounded bg-white outline-none focus:border-neutral-400"
+                                            />
+                                          ))}
+                                        </div>
+                                      </div>
+                                      <div className="space-y-2">
+                                        <label className="block text-[10px] font-bold text-neutral-400 uppercase tracking-wider">Rejeitar quando</label>
+                                        <div className="space-y-1.5">
+                                          {(policy.rejectionSignals || []).map((item: string, idx: number) => (
+                                            <input
+                                              key={idx}
+                                              type="text"
+                                              value={item}
+                                              onChange={(e) => {
+                                                const next = [...policy.rejectionSignals];
+                                                next[idx] = e.target.value;
+                                                updateBlock(block.id, { cameraAiPolicy: { ...policy, rejectionSignals: next, source: 'owner_edited' } } as any);
+                                              }}
+                                              className="w-full px-2 py-1.5 text-xs border border-neutral-200 rounded bg-white outline-none focus:border-neutral-400"
+                                            />
+                                          ))}
+                                        </div>
+                                      </div>
+                                      <div className="grid grid-cols-2 gap-4">
+                                        <div className="space-y-1.5">
+                                          <label className="block text-[10px] font-bold text-neutral-400 uppercase tracking-wider">Modo</label>
+                                          <div className="px-2 py-1.5 text-xs bg-neutral-100 rounded text-neutral-600 border border-neutral-200">Automático</div>
+                                        </div>
+                                        <div className="space-y-1.5">
+                                          <label className="block text-[10px] font-bold text-neutral-400 uppercase tracking-wider">Nível de Rigor</label>
+                                          <div className="px-2 py-1.5 text-xs bg-neutral-100 rounded text-neutral-600 border border-neutral-200">Padrão</div>
+                                        </div>
+                                      </div>
+                                      <div className="space-y-1.5">
+                                        <label className="block text-[10px] font-bold text-neutral-400 uppercase tracking-wider">Em caso de dúvida</label>
+                                        <div className="px-2 py-1.5 text-xs bg-neutral-100 rounded text-neutral-600 border border-neutral-200">Exigir outra foto</div>
+                                      </div>
+                                    </CollapsibleContent>
+                                  </Collapsible>
+                                </div>
+                              )}
+
+                              <div className="flex flex-wrap items-center gap-4 pt-2">
                                 <label className="flex items-center gap-2 text-xs font-medium text-neutral-700 cursor-pointer select-none">
                                   <Switch
                                     checked={camRequired}
