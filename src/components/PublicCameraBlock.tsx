@@ -276,8 +276,10 @@ export function PublicCameraBlock({
         setState("technical_failure");
         setFailureReason("configuration");
         const code = data?.code;
+        const codeMsg = data.requestId ? ` (Código de suporte: ${data.requestId})` : "";
         if (code === "camera_ai_disabled") {
-          const codeMsg = data.requestId ? ` (Código de suporte: ${data.requestId})` : "";
+          setErrorMsg("A verificação inteligente está temporariamente indisponível." + codeMsg);
+        } else {
           setErrorMsg((data.message || "Servidor em manutenção ou configuração ausente.") + codeMsg);
         }
         return;
