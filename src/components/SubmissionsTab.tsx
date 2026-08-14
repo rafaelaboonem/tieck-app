@@ -485,9 +485,10 @@ function EvidenceCard({
       try {
         const { data, error } = await supabase
           .from('checklist_evidences')
-          .select('id, storage_path, status')
+          .select('id, storage_path')
           .eq('id', evidenceId)
           .maybeSingle();
+
 
         
         if (error) throw error;
