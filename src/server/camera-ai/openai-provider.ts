@@ -46,7 +46,7 @@ export async function analyzeImage(
             {
               type: "input_image",
               image_url: `data:${mimeType};base64,${base64Image}`,
-              detail: "low"
+              detail: "high"
             }
           ]
         }
