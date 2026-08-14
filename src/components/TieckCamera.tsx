@@ -68,6 +68,10 @@ export function TieckCamera({ open, title, allowGallery = false, onClose, onCapt
       setReady(false); 
       setQualityResult(null);
       setLastStates([]);
+      if (qualityEngineRef.current) {
+        qualityEngineRef.current.dispose();
+        qualityEngineRef.current = null;
+      }
     }
   }, [open]);
 
@@ -146,12 +150,6 @@ export function TieckCamera({ open, title, allowGallery = false, onClose, onCapt
     }
 
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    
-    // Final high-quality check before proceeding
-    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    // Reuse quality engine for one final check on the high-res capture if needed, 
-    // but the engine is tuned for small frames. 
-    // For now, we rely on the continuous feedback being 'ready'.
     
     const blob = await new Promise<Blob | null>((r) => canvas.toBlob((b) => r(b), "image/jpeg", 0.9));
     if (!blob) {
