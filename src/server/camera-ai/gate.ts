@@ -1,76 +1,80 @@
 import { CameraVerification, Decision, VerificationResult } from './schema';
 
-const SPECULATIVE_TERMS = ["parece", "provavelmente", "talvez", "aparenta", "suponho", "possivelmente"];
-
 export function evaluateGate(analysis: CameraVerification): VerificationResult {
-  const evidence = analysis.visible_evidence.toLowerCase();
-  const hasSpeculativeTerms = SPECULATIVE_TERMS.some(term => evidence.includes(term));
-
   const isApproved = 
     analysis.target_visible === true &&
+    analysis.target_identity_confidence >= 0.90 &&
     analysis.condition_observable === true &&
     analysis.condition_met === true &&
-    analysis.image_quality === "usable" &&
-    analysis.confidence >= 0.90 &&
-    !hasSpeculativeTerms;
+    analysis.image_quality_usable === true &&
+    analysis.positive_visible_evidence.length > 0 &&
+    analysis.contradictions.length === 0 &&
+    analysis.overall_confidence >= 0.90;
 
   if (isApproved) {
     return {
       ok: true,
       decision: 'approved',
       code: 'verified',
-      message: 'Foto verificada com sucesso.',
-      evidence: analysis.visible_evidence.substring(0, 200)
+      message: analysis.user_message || 'Foto verificada com sucesso.',
+      evidence: analysis.positive_visible_evidence.join(', ').substring(0, 500)
     };
   }
 
-  // Rejeição conservadora (Retake) se:
-  // - Alvo não visível
-  // - Condição não cumprida (mas observável)
-  // - Qualidade ruim
-  // - Baixa confiança
-  // - Termos especulativos
-  if (
-    !analysis.target_visible || 
-    (analysis.condition_met === false && analysis.condition_observable === true) ||
-    analysis.image_quality !== "usable" || 
-    analysis.confidence < 0.90 || 
-    hasSpeculativeTerms
-  ) {
-    let message = 'É necessário tirar outra foto.';
-    let code = 'retake_required';
+  // Mapeamento Fail-Closed
+  let code = 'retake_required';
+  let message = analysis.user_message || 'É necessário tirar outra foto.';
 
-    if (analysis.image_quality === 'dark') message = 'A foto está muito escura.';
-    if (analysis.image_quality === 'blurry') message = 'A foto está borrada.';
-    if (analysis.image_quality === 'cropped') message = 'O objeto está cortado na foto.';
-    if (hasSpeculativeTerms) message = 'A foto não é conclusiva (evidência especulativa).';
-    if (!analysis.target_visible) message = 'O objeto solicitado não foi identificado na foto.';
-    if (analysis.condition_met === false && analysis.condition_observable === true) message = 'A condição solicitada não foi atendida.';
-
+  // Objeto ausente ou incorreto
+  if (!analysis.target_visible || analysis.target_identity_confidence < 0.90) {
     return {
       ok: true,
       decision: 'retake',
-      code,
-      message,
-      evidence: analysis.visible_evidence.substring(0, 200)
+      code: 'target_missing',
+      message: analysis.user_message || 'O objeto solicitado não foi identificado na foto.',
+      evidence: analysis.negative_visible_evidence.join(', ')
     };
   }
 
-  if (!analysis.condition_observable) {
+  // Qualidade insuficiente
+  if (!analysis.image_quality_usable) {
+    return {
+      ok: true,
+      decision: 'retake',
+      code: 'quality_failure',
+      message: analysis.user_message || 'A qualidade da foto não é suficiente. Procure iluminação e nitidez.',
+      evidence: analysis.negative_visible_evidence.join(', ')
+    };
+  }
+
+  // Condição não observável ou impossível de verificar
+  if (!analysis.condition_observable || analysis.contradictions.length > 0 || analysis.positive_visible_evidence.length === 0) {
     return {
       ok: true,
       decision: 'not_observable',
       code: 'not_observable',
-      message: 'A condição não pôde ser observada.',
-      evidence: analysis.visible_evidence.substring(0, 200)
+      message: analysis.user_message || 'Não foi possível confirmar a condição. Tente mostrar o item completo.',
+      evidence: [...analysis.negative_visible_evidence, ...analysis.contradictions].join(', ')
     };
   }
 
+  // Condição visivelmente não atendida
+  if (analysis.condition_met === false) {
+    return {
+      ok: true,
+      decision: 'retake',
+      code: 'condition_not_met',
+      message: analysis.user_message || 'A condição solicitada não foi atendida.',
+      evidence: analysis.negative_visible_evidence.join(', ')
+    };
+  }
+
+  // Fallback para Retake (Baixa confiança ou outros motivos)
   return {
     ok: true,
     decision: 'retake',
     code: 'uncertain',
-    message: 'Não foi possível verificar a foto.',
-    evidence: analysis.visible_evidence.substring(0, 200)
+    message: analysis.user_message || 'A foto não é conclusiva. Tente novamente.',
+    evidence: analysis.overall_confidence.toString()
   };
 }

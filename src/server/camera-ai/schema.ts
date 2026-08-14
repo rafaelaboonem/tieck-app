@@ -2,11 +2,14 @@ import { z } from 'zod';
 
 export const CameraVerificationSchema = z.object({
   target_visible: z.boolean(),
+  target_identity_confidence: z.number().min(0).max(1),
   condition_observable: z.boolean(),
   condition_met: z.boolean(),
-  image_quality: z.enum(["usable", "dark", "blurry", "cropped", "unusable"]),
-  confidence: z.number().min(0).max(1),
-  visible_evidence: z.string().min(1),
+  image_quality_usable: z.boolean(),
+  positive_visible_evidence: z.array(z.string()),
+  negative_visible_evidence: z.array(z.string()),
+  contradictions: z.array(z.string()),
+  overall_confidence: z.number().min(0).max(1),
   user_message: z.string().min(1)
 });
 
@@ -47,9 +50,13 @@ export const CameraVerificationPolicyV1Schema = z.object({
   verifiability: z.enum(["visual", "partially_visual", "not_visual"]),
   target: z.string(),
   condition: z.string(),
-  requiredEvidence: z.array(z.string()).max(5),
+  targetDescription: z.string().optional(),
+  conditionDescription: z.string().optional(),
+  requiredVisibleEvidence: z.array(z.string()).max(5),
   rejectionSignals: z.array(z.string()).max(5),
-  unverifiableWhen: z.array(z.string()).max(5),
+  notObservableSignals: z.array(z.string()).max(5),
+  unverifiableWhen: z.array(z.string()).max(5).optional(), // Legacy compat
+  requiredEvidence: z.array(z.string()).max(5).optional(), // Legacy compat
   summary: z.string(),
   source: z.enum(["generated", "owner_edited"]),
 });

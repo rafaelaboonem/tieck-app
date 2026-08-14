@@ -30,7 +30,24 @@ describe('Camera AI Final Recovery & Integrity', () => {
           workspace_id: 'w123',
           status: 'in_progress',
           published_content: { 
-            blocks: [{ id: 'blk-1', type: 'camera', title: 'Test' }] 
+            blocks: [{ 
+              id: 'blk-1', 
+              type: 'camera', 
+              title: 'Test',
+              description: '',
+              cameraAiPolicy: {
+                version: 1,
+                questionHash: '532eaabd9574880dbf76b9b8cc00832c20a6ec113d682299550d7a6e0f345e25', // hash of "Test"
+                verifiability: 'visual',
+                target: 'Test',
+                condition: 'present',
+                summary: 'test',
+                source: 'generated',
+                requiredVisibleEvidence: [],
+                rejectionSignals: [],
+                notObservableSignals: []
+              }
+            }] 
           } 
         } satisfies PublicSession], 
         error: null 
@@ -49,12 +66,15 @@ describe('Camera AI Final Recovery & Integrity', () => {
       }),
       hitRateLimit: vi.fn().mockResolvedValue({ data: [{ allowed: true }], error: null }),
       analyzeImage: vi.fn().mockResolvedValue({ 
-        confidence: 0.95, 
-        target_visible: true, 
-        condition_observable: true, 
-        condition_met: true, 
-        image_quality: 'usable', 
-        visible_evidence: 'approved', 
+        target_visible: true,
+        target_identity_confidence: 0.95,
+        condition_observable: true,
+        condition_met: true,
+        image_quality_usable: true,
+        positive_visible_evidence: ['approved'],
+        negative_visible_evidence: [],
+        contradictions: [],
+        overall_confidence: 0.95,
         user_message: 'approved' 
       } satisfies CameraVerification),
       markFailed: vi.fn().mockResolvedValue({ data: {}, error: null }),
@@ -85,9 +105,17 @@ describe('Camera AI Final Recovery & Integrity', () => {
 
   it('B. Rejeição (retake): acquired -> markCompleted exatamente 1 vez, 0 persistEvidence', async () => {
     (deps.analyzeImage as MockedFunction<any>).mockResolvedValue({ 
-      confidence: 0.95, target_visible: false, condition_observable: true, condition_met: true,
-      image_quality: 'usable', visible_evidence: 'wrong', user_message: 'retake'
-    });
+      target_visible: false,
+      target_identity_confidence: 0.5,
+      condition_observable: true,
+      condition_met: true,
+      image_quality_usable: true,
+      positive_visible_evidence: [],
+      negative_visible_evidence: ['wrong'],
+      contradictions: [],
+      overall_confidence: 0.95,
+      user_message: 'retake'
+    } satisfies CameraVerification);
     
     const res = await verifyCameraRequest(validPayload, validImage, deps);
     
@@ -100,9 +128,17 @@ describe('Camera AI Final Recovery & Integrity', () => {
 
   it('C. Rejeição (not_observable): acquired -> markCompleted exatamente 1 vez', async () => {
     (deps.analyzeImage as MockedFunction<any>).mockResolvedValue({ 
-      confidence: 0.95, target_visible: true, condition_observable: false, condition_met: true,
-      image_quality: 'usable', visible_evidence: 'obstructed', user_message: 'not_observable'
-    });
+      target_visible: true,
+      target_identity_confidence: 0.95,
+      condition_observable: false,
+      condition_met: true,
+      image_quality_usable: true,
+      positive_visible_evidence: [],
+      negative_visible_evidence: [],
+      contradictions: ['obstructed'],
+      overall_confidence: 0.95,
+      user_message: 'not_observable'
+    } satisfies CameraVerification);
     
     const res = await verifyCameraRequest(validPayload, validImage, deps);
     

@@ -317,11 +317,11 @@ export function PublicCameraBlock({
 
       if (response.status === 404) {
         const code = data?.code;
-        if (code === "invalid_block") {
+        if (code === "invalid_block" || code === "checklist_update_required") {
           setState("technical_failure");
           setFailureReason("configuration");
           const codeMsg = data.requestId ? ` (Código de suporte: ${data.requestId})` : "";
-          setErrorMsg("Este checklist foi atualizado. Recarregue a página." + codeMsg);
+          setErrorMsg((data.message || "Este checklist foi atualizado. Recarregue a página.") + codeMsg);
           return;
         }
       }
@@ -351,6 +351,8 @@ export function PublicCameraBlock({
 
       const parsed = CameraAIResponseSchema.safeParse(data);
       if (!parsed.success) {
+        // HACK: Temporary log for schema mismatch debugging
+        console.error("[CameraAI] Schema parse failed:", parsed.error);
         setState("technical_failure");
         setFailureReason("server_failed");
         const codeMsg = data.requestId ? ` (Código de suporte: ${data.requestId})` : "";

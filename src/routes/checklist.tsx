@@ -338,8 +338,8 @@ function CameraBlockEditor({
     ? { label: "Não verificável por IA", tone: "warn" as const }
     : policy?.verifiability === 'partially_visual'
     ? { label: "Verificação parcial", tone: "warn" as const }
-    : policy
-    ? { label: "Verificação por IA ativa", tone: "active" as const }
+    : policy && policy.version === 1
+    ? { label: "IA V3: Semântica Ativa", tone: "active" as const }
     : null;
 
   return (
