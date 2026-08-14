@@ -1,5 +1,4 @@
 import { CameraAIResponseSchema, type CameraAIResponse, type PublicCameraBlockData } from "./camera-ai/types";
-import { uploadCameraEvidence } from "./camera-ai/upload";
 import { compressImage } from "@/lib/compress-image";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { Camera, RefreshCw, AlertCircle, CheckCircle2, Loader2, CameraIcon, RotateCcw, ImagePlus, AlertTriangle } from "lucide-react";
@@ -32,7 +31,8 @@ type VerificationState =
   | "technical_failure" 
   | "rate_limited" 
   | "uploading" 
-  | "received";
+  | "received"
+  | "storage_failure";
 
 type FailureReason = "network_unknown" | "timeout_unknown" | "server_failed" | "processing" | "configuration" | "none";
 type AbortReason = "timeout" | "retake" | "close" | "unmount";
@@ -142,31 +142,9 @@ export function PublicCameraBlock({
 
 
     if (!isAIEnabled) {
-      setState("uploading");
-      try {
-        let fileToUpload = file;
-        if (file.size > 400_000) {
-          const compressed = await compressImage(file);
-          if (compressed) fileToUpload = compressed;
-        }
-        
-        const url = await uploadCameraEvidence({
-          file: fileToUpload,
-          checklistId,
-          blockId: block.id,
-        });
-
-        if (!isCurrent()) return;
-        
-        if (onAnswer) onAnswer(block.id, url);
-        setState("received");
-      } catch (err: unknown) {
-        if (!isCurrent()) return;
-        console.error("Upload error:", err);
-        setErrorMsg("Erro ao enviar foto.");
-        setFailureReason("network_unknown");
-        setState("technical_failure");
-      }
+      setState("technical_failure");
+      setFailureReason("configuration");
+      setErrorMsg("A verificação inteligente está desativada no momento.");
       return;
     }
 
@@ -229,6 +207,12 @@ export function PublicCameraBlock({
       
       if (response.status === 429) {
         setState("rate_limited");
+        return;
+      }
+
+      if (data.code === 'storage_failure') {
+        setState("storage_failure");
+        setErrorMsg(data.message || "Foto aprovada, mas falha ao salvar no servidor.");
         return;
       }
 
@@ -312,27 +296,27 @@ export function PublicCameraBlock({
       }
 
       if (result.decision === "approved") {
-        setState("uploading");
-        try {
-          const url = await uploadCameraEvidence({
-            file: fileToVerify,
-            checklistId,
-            blockId: block.id,
-          });
-
-          if (!isCurrent()) return;
-          
-          if (onAnswer) onAnswer(block.id, url);
-          setEvidence(result.evidence || null);
-          setState("approved");
-        } catch (uploadErr) {
-          if (!isCurrent()) return;
-          console.error("Upload error after approval:", uploadErr);
+        if (!result.persisted || !result.evidenceId) {
           setState("technical_failure");
-          setFailureReason("network_unknown");
-          setErrorMsg("Foto aprovada, mas falha ao salvar no servidor.");
-          if (onAnswer) onAnswer(block.id, "");
+          setFailureReason("server_failed");
+          setErrorMsg("Foto aprovada, mas a persistência falhou no servidor.");
+          return;
         }
+
+        if (!isCurrent()) return;
+        
+        if (onAnswer) {
+          onAnswer(block.id, JSON.stringify({
+            type: 'camera',
+            evidenceId: result.evidenceId,
+            aiEnabled: true,
+            decision: 'approved',
+            canContinue: true,
+            evidence: result.evidence || ''
+          }));
+        }
+        setEvidence(result.evidence || null);
+        setState("approved");
       } else if (result.decision === "retake") {
         setState("retake");
         setErrorMsg(result.message || "Tire outra foto.");
@@ -397,7 +381,7 @@ export function PublicCameraBlock({
   const retryCurrentPhoto = () => {
     if (capturedFile && idempotencyKey) {
       // Regras de retry:
-      // network_unknown, timeout_unknown, processing -> Reutiliza mesma chave
+      // network_unknown, timeout_unknown, processing, storage_failure -> Reutiliza mesma chave
       // server_failed -> Nova chave
       let keyToUse = idempotencyKey;
       if (failureReason === "server_failed") {
@@ -525,7 +509,7 @@ export function PublicCameraBlock({
         </div>
       )}
 
-      {state === "technical_failure" && (
+      {(state === "technical_failure" || state === "storage_failure") && (
         <Alert variant="destructive" className="border-red-200 bg-red-50">
           <AlertCircle className="h-4 w-4 text-red-600" />
           <AlertDescription className="flex flex-col gap-3 w-full">
@@ -535,7 +519,7 @@ export function PublicCameraBlock({
             <div className="flex gap-2">
               {failureReason !== "configuration" && (
                 <Button variant="outline" size="sm" onClick={retryCurrentPhoto} disabled={inFlightRef.current} className="bg-white border-red-200 text-red-700 hover:bg-red-100">
-                  Tentar novamente
+                  {state === "storage_failure" ? "Tentar salvar novamente" : "Tentar novamente"}
                 </Button>
               )}
               <Button variant="ghost" size="sm" onClick={openCamera} className="text-red-700 underline">

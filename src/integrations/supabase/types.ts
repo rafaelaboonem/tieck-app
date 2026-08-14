@@ -23,6 +23,7 @@ export type Database = {
           decision: string | null
           duration_ms: number | null
           evidence: string | null
+          evidence_id: string | null
           id: string
           idempotency_key: string
           model: string | null
@@ -39,6 +40,7 @@ export type Database = {
           decision?: string | null
           duration_ms?: number | null
           evidence?: string | null
+          evidence_id?: string | null
           id?: string
           idempotency_key: string
           model?: string | null
@@ -55,6 +57,7 @@ export type Database = {
           decision?: string | null
           duration_ms?: number | null
           evidence?: string | null
+          evidence_id?: string | null
           id?: string
           idempotency_key?: string
           model?: string | null
@@ -64,6 +67,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "camera_ai_attempts_evidence_id_fkey"
+            columns: ["evidence_id"]
+            isOneToOne: false
+            referencedRelation: "checklist_evidences"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "camera_ai_attempts_response_id_fkey"
             columns: ["response_id"]
