@@ -85,7 +85,26 @@ describe('POST /api/camera-ai/compile-policy Authorization & OpenAI', () => {
   it('Retorna 403 se for membro inativo', async () => {
     mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: 'u2' } }, error: null });
     mockSupabase.single.mockResolvedValue({ data: mockChecklist, error: null });
-    mockSupabase.maybeSingle.mockResolvedValue({ data: { status: 'inactive', role: 'member' }, error: null });
+    mockSupabase.maybeSingle.mockResolvedValue({ data: { status: 'inactive', role: 'admin' }, error: null });
+
+    const request = new Request('http://localhost/api/camera-ai/compile-policy', {
+      method: 'POST',
+      headers: { 
+        'Authorization': 'Bearer token',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ checklistId, blockId })
+    });
+    
+    const handler = (Route as any).options.server.handlers.POST;
+    const response = await handler({ request });
+    expect(response.status).toBe(403);
+  });
+
+  it('Retorna 403 se for membro viewer', async () => {
+    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: 'u2' } }, error: null });
+    mockSupabase.single.mockResolvedValue({ data: mockChecklist, error: null });
+    mockSupabase.maybeSingle.mockResolvedValue({ data: { status: 'active', role: 'viewer' }, error: null });
 
     const request = new Request('http://localhost/api/camera-ai/compile-policy', {
       method: 'POST',
@@ -135,10 +154,11 @@ describe('POST /api/camera-ai/compile-policy Authorization & OpenAI', () => {
     const data = await response.json();
     expect(data.ok).toBe(true);
     expect(data.policy.source).toBe('generated');
+    expect(mockParse).toHaveBeenCalledTimes(1);
   });
 
-  it('Permite compilação se for membro ativo do workspace (owner, admin ou member)', async () => {
-    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: 'member1' } }, error: null });
+  it('Permite compilação se for membro ativo admin', async () => {
+    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: 'admin1' } }, error: null });
     mockSupabase.single.mockResolvedValue({ data: mockChecklist, error: null });
     mockSupabase.maybeSingle.mockResolvedValue({ data: { status: 'active', role: 'admin' }, error: null });
     
@@ -168,10 +188,45 @@ describe('POST /api/camera-ai/compile-policy Authorization & OpenAI', () => {
     const handler = (Route as any).options.server.handlers.POST;
     const response = await handler({ request });
     expect(response.status).toBe(200);
+    expect(mockParse).toHaveBeenCalledTimes(1);
+  });
+
+  it('Permite compilação se for membro ativo editor', async () => {
+    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: 'editor1' } }, error: null });
+    mockSupabase.single.mockResolvedValue({ data: mockChecklist, error: null });
+    mockSupabase.maybeSingle.mockResolvedValue({ data: { status: 'active', role: 'editor' }, error: null });
+    
+    mockParse.mockResolvedValue({
+      output_parsed: {
+        verifiability: 'visual',
+        target: 'Test',
+        condition: 'present',
+        targetDescription: 'A test object',
+        conditionDescription: 'Should be present',
+        requiredVisibleEvidence: ['test'],
+        rejectionSignals: [],
+        notObservableSignals: [],
+        summary: 'Test summary'
+      }
+    });
+
+    const request = new Request('http://localhost/api/camera-ai/compile-policy', {
+      method: 'POST',
+      headers: { 
+        'Authorization': 'Bearer token',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ checklistId, blockId })
+    });
+    
+    const handler = (Route as any).options.server.handlers.POST;
+    const response = await handler({ request });
+    expect(response.status).toBe(200);
+    expect(mockParse).toHaveBeenCalledTimes(1);
   });
 
   it('Usa cache se a política for válida e hash coincidir', async () => {
-    const question = "Test "; // Title "Test", empty description
+    const question = "Test"; // Title "Test", empty description
     const { createHash } = await import('crypto');
     const questionHash = createHash('sha256').update(question.trim()).digest('hex');
 
@@ -212,6 +267,62 @@ describe('POST /api/camera-ai/compile-policy Authorization & OpenAI', () => {
     const response = await handler({ request });
     expect(response.status).toBe(200);
     expect(mockParse).not.toHaveBeenCalled();
+  });
+
+  it('Ignora cache e chama OpenAI se o hash divergir', async () => {
+    const question = "Test";
+    const { createHash } = await import('crypto');
+    const wrongHash = createHash('sha256').update("Wrong Question").digest('hex');
+
+    const checklistWithPolicy = {
+      ...mockChecklist,
+      blocks: [{
+        ...mockChecklist.blocks[0],
+        cameraAiPolicy: {
+          verifiability: 'visual',
+          target: 'Test',
+          condition: 'present',
+          targetDescription: 'D',
+          conditionDescription: 'C',
+          requiredVisibleEvidence: [],
+          rejectionSignals: [],
+          notObservableSignals: [],
+          summary: 'S',
+          version: 1,
+          questionHash: wrongHash,
+          source: 'generated'
+        }
+      }]
+    };
+
+    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: mockChecklist.user_id } }, error: null });
+    mockSupabase.single.mockResolvedValue({ data: checklistWithPolicy, error: null });
+    mockParse.mockResolvedValue({
+      output_parsed: {
+        verifiability: 'visual',
+        target: 'Test',
+        condition: 'present',
+        targetDescription: 'A test object',
+        conditionDescription: 'Should be present',
+        requiredVisibleEvidence: ['test'],
+        rejectionSignals: [],
+        notObservableSignals: [],
+        summary: 'Test summary'
+      }
+    });
+
+    const request = new Request('http://localhost/api/camera-ai/compile-policy', {
+      method: 'POST',
+      headers: { 
+        'Authorization': 'Bearer token',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ checklistId, blockId })
+    });
+    
+    const handler = (Route as any).options.server.handlers.POST;
+    await handler({ request });
+    expect(mockParse).toHaveBeenCalledTimes(1);
   });
 
   it('Recompila se a política no cache for malformada', async () => {
