@@ -99,9 +99,11 @@ export const Route = createFileRoute('/api/camera-ai/verify')({
                     response_id: responseId,
                     block_id: blockId,
                     storage_path: storagePath,
-                    mime_type: mimeType,
-                    size_bytes: buffer.byteLength,
-                    source: 'camera_ai_v4'
+                    mime_type: mime_type,
+                    size_bytes: uint8Array.byteLength,
+                    source: 'camera_ai_openai',
+                    origin_bucket: 'checklist-evidences',
+                    uploaded: true
                   }, { onConflict: 'storage_path' })
                   .select('id')
                   .single();
