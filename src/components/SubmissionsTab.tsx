@@ -483,6 +483,7 @@ function EvidenceCard({
   const attempt = useMemo(() => attempts.find(a => a.evidence_id === evidenceId), [attempts, evidenceId]);
   
   useEffect(() => {
+    let isMounted = true;
     async function load() {
       try {
         const { data, error } = await supabase
@@ -490,23 +491,23 @@ function EvidenceCard({
           .select('id, storage_path')
           .eq('id', evidenceId)
           .maybeSingle();
-
-
         
         if (error) throw error;
-        if (data) {
+        if (data && isMounted) {
           setEvidence(data);
           const url = await getEvidenceSignedUrl(data.storage_path);
-          setSignedUrl(url);
+          if (isMounted) setSignedUrl(url);
         }
       } catch (err) {
         console.error('Failed to load evidence details:', err);
       } finally {
-        setLoading(false);
+        if (isMounted) setLoading(false);
       }
     }
     load();
+    return () => { isMounted = false; };
   }, [evidenceId]);
+
 
   const isApproved = attempt?.status === 'completed' && attempt?.decision === 'approved';
   const isRejected = attempt?.status === 'completed' && attempt?.decision === 'rejected';
