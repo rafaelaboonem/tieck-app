@@ -50,6 +50,7 @@ describe('POST /api/camera-ai/compile-policy Authorization & OpenAI', () => {
   it('Retorna 401 se não houver token', async () => {
     const request = new Request('http://localhost/api/camera-ai/compile-policy', {
       method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ checklistId: 'c1', blockId: 'b1' })
     });
     
@@ -65,7 +66,10 @@ describe('POST /api/camera-ai/compile-policy Authorization & OpenAI', () => {
 
     const request = new Request('http://localhost/api/camera-ai/compile-policy', {
       method: 'POST',
-      headers: { 'Authorization': 'Bearer token' },
+      headers: { 
+        'Authorization': 'Bearer token',
+        'Content-Type': 'application/json'
+      },
       body: JSON.stringify({ checklistId: 'c1', blockId: 'b1' })
     });
     
@@ -95,7 +99,10 @@ describe('POST /api/camera-ai/compile-policy Authorization & OpenAI', () => {
 
     const request = new Request('http://localhost/api/camera-ai/compile-policy', {
       method: 'POST',
-      headers: { 'Authorization': 'Bearer token' },
+      headers: { 
+        'Authorization': 'Bearer token',
+        'Content-Type': 'application/json'
+      },
       body: JSON.stringify({ checklistId: 'c1', blockId: 'b1' })
     });
     
@@ -116,7 +123,10 @@ describe('POST /api/camera-ai/compile-policy Authorization & OpenAI', () => {
 
     const request = new Request('http://localhost/api/camera-ai/compile-policy', {
       method: 'POST',
-      headers: { 'Authorization': 'Bearer token' },
+      headers: { 
+        'Authorization': 'Bearer token',
+        'Content-Type': 'application/json'
+      },
       body: JSON.stringify({ checklistId: 'c1', blockId: 'b1' })
     });
     
