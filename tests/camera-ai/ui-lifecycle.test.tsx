@@ -80,13 +80,16 @@ describe("TieckCamera UI & Engine Lifecycle", () => {
     // Initial state check
     expect(screen.getByText(/Iniciando/i)).toBeDefined();
 
-    // Trigger analysis cycles
+    // Trigger analysis cycles manually and advance timers
     await act(async () => {
       vi.advanceTimersByTime(800);
+      // Wait for any pending promises in the analyze() loop
+      await Promise.resolve();
     });
 
     await act(async () => {
       vi.advanceTimersByTime(800);
+      await Promise.resolve();
     });
 
     // Verify UI updates
@@ -122,6 +125,7 @@ describe("TieckCamera UI & Engine Lifecycle", () => {
 
     await act(async () => {
       vi.advanceTimersByTime(800);
+      await Promise.resolve();
     });
 
     expect(engine.analyzeFrame).toHaveBeenCalled();

@@ -24,6 +24,18 @@ vi.mock("@/integrations/supabase/client", () => ({
   },
 }));
 
+// Mock Contexts
+vi.mock("@/contexts/CameraSessionContext", () => ({
+  useCameraSession: () => ({
+    stream: { getVideoTracks: () => [] },
+    granted: true,
+    denied: false,
+    acquire: vi.fn().mockResolvedValue({}),
+    switchFacing: vi.fn(),
+  }),
+  isRestrictedWebView: () => false,
+}));
+
 // Mock the quality engine
 vi.mock("@/lib/camera-quality/engine", () => {
   const mockEngine = {
@@ -73,7 +85,6 @@ describe("Camera AI Lifecycle & Integrity", () => {
     const file = new File(["test"], "test.jpg", { type: "image/jpeg" });
     const input = getHiddenInput(container);
     
-    // Simulating file selection
     fireEvent.change(input, { target: { files: [file] } });
 
     await waitFor(() => {
@@ -110,9 +121,6 @@ describe("Camera AI Lifecycle & Integrity", () => {
 
     await waitFor(() => {
       expect(engine.analyzeFile).toHaveBeenCalled();
-    });
-
-    await waitFor(() => {
       expect(global.fetch).toHaveBeenCalledTimes(1);
     });
   });
