@@ -217,7 +217,7 @@ export function PublicCameraBlock({
         return;
       }
 
-      const data: unknown = await response.json();
+      const data: any = await response.json();
       
       if (response.status === 429) {
         setState("rate_limited");
@@ -227,18 +227,46 @@ export function PublicCameraBlock({
       if (response.status === 409) {
         setState("technical_failure");
         setFailureReason("processing");
-        setErrorMsg("A foto ainda está sendo processada. Tente novamente em instantes.");
+        setErrorMsg(data.message || "A foto ainda está sendo processada. Tente novamente em instantes.");
         return;
+      }
+
+      // Tratamento de Sessão Expirada ou Divergente
+      if (response.status === 401 || response.status === 403) {
+        if (!retryAttempted && isCurrent()) {
+          setRetryAttempted(true);
+          setState("preparing");
+          const newSession = await ensureResponseSession({ forceNew: true });
+          if (newSession && isCurrent()) {
+            void processVerification(file, key, sequence, true);
+            return;
+          }
+        }
+        
+        setState("technical_failure");
+        setFailureReason("configuration");
+        setErrorMsg(data.message || "Sessão inválida. Recarregue a página.");
+        return;
+      }
+
+      if (response.status === 404) {
+        const code = data?.code;
+        if (code === "invalid_block") {
+          setState("technical_failure");
+          setFailureReason("configuration");
+          setErrorMsg("Este checklist foi atualizado. Recarregue a página.");
+          return;
+        }
       }
 
       if (response.status === 503) {
         setState("technical_failure");
         setFailureReason("configuration");
-        const code = (data as { code?: string })?.code;
+        const code = data?.code;
         if (code === "camera_ai_disabled") {
           setErrorMsg("A verificação inteligente está temporariamente indisponível.");
         } else {
-          setErrorMsg("Servidor em manutenção ou configuração ausente.");
+          setErrorMsg(data.message || "Servidor em manutenção ou configuração ausente.");
         }
         return;
       }
@@ -246,7 +274,7 @@ export function PublicCameraBlock({
       if (response.status >= 500) {
         setState("technical_failure");
         setFailureReason("server_failed");
-        setErrorMsg("O servidor encontrou um erro. Tente novamente.");
+        setErrorMsg(data.message || "O servidor encontrou um erro. Tente novamente.");
         return;
       }
 
