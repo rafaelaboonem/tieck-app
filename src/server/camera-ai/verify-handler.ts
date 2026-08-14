@@ -50,6 +50,7 @@ export interface RateLimitResult {
 export interface VerifyDependencies {
   mode: string;
   model: string;
+  requestId?: string;
   now: () => Date;
   resolveSession: (token: string) => Promise<{ data: PublicSession[] | null; error: unknown }>;
   claimAttempt: (params: { responseId: string; blockId: string; idempotencyKey: string }) => Promise<{ data: ClaimResult[] | null; error: unknown }>;

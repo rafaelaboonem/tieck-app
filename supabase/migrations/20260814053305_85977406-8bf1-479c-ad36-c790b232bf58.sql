@@ -1,0 +1,1 @@
+ALTER TABLE public.checklist_evidences DROP CONSTRAINT IF EXISTS checklist_evidences_source_chk; ALTER TABLE public.checklist_evidences ADD CONSTRAINT checklist_evidences_source_chk CHECK (source IN ('live', 'legacy_migrated', 'legacy_unmapped', 'camera_ai_openai'));

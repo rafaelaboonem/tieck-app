@@ -46,9 +46,12 @@ export const Route = createFileRoute('/api/camera-ai/verify')({
 
           const buffer = await file.arrayBuffer();
           
+          const requestId = Math.random().toString(36).substring(7);
+
           const deps: VerifyDependencies = {
             mode,
             model,
+            requestId,
             now: () => new Date(),
             isConfigured: () => true,
             resolveSession: async (token: string) => {
@@ -129,7 +132,12 @@ export const Route = createFileRoute('/api/camera-ai/verify')({
                   .single();
 
                 if (dbError) {
-                  console.error(`[CameraAI] Evidence DB record failed:`, dbError);
+                  console.error(`[CameraAI] Evidence DB record failed:`, {
+                    requestId: deps.requestId,
+                    step: 'evidence_db_upsert',
+                    code: dbError.code,
+                    details: dbError.message?.includes('checklist_evidences_source_chk') ? 'checklist_evidences_source_chk' : undefined
+                  });
                   // ONLY cleanup if we were the ones who successfully uploaded it just now
                   if (createdThisRequest) {
                     await client.storage.from('checklist-evidences').remove([storagePath]);
