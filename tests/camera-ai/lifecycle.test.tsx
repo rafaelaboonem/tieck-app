@@ -74,12 +74,11 @@ describe("Camera AI Lifecycle & Integrity", () => {
 
     const file = new File(["test"], "test.jpg", { type: "image/jpeg" });
     const input = container.querySelector('input[type="file"]');
+    
     if (input) {
-      await act(async () => {
-        fireEvent.change(input, { target: { files: [file] } });
-      });
+      fireEvent.change(input, { target: { files: [file] } });
       await waitFor(() => {
-        expect(screen.getByText(/A foto ficou escura/i)).toBeDefined();
+        expect(screen.getByText(/foto ficou escura/i)).toBeDefined();
       });
     }
     expect(global.fetch).not.toHaveBeenCalled();
@@ -88,20 +87,21 @@ describe("Camera AI Lifecycle & Integrity", () => {
   it("should allow fetch if quality is ready", async () => {
     const engine = new (QualityEngine as any)();
     engine.analyzeFile.mockResolvedValue({ state: "ready" });
-    (global.fetch as any).mockResolvedValue({
+    
+    const mockResponse = {
       ok: true,
       status: 200,
       headers: new Headers({ "content-type": "application/json" }),
       json: async () => ({ ok: true, decision: "approved", persisted: true, evidenceId: "e1" }),
-    });
+    };
+    (global.fetch as any).mockResolvedValue(mockResponse);
 
     const { container } = render(<PublicCameraBlock block={mockBlock} checklistId="c1" onAnswer={vi.fn()} />);
     const file = new File(["test"], "test.jpg", { type: "image/jpeg" });
     const input = container.querySelector('input[type="file"]');
+    
     if (input) {
-      await act(async () => {
-        fireEvent.change(input, { target: { files: [file] } });
-      });
+      fireEvent.change(input, { target: { files: [file] } });
       await waitFor(() => {
         expect(global.fetch).toHaveBeenCalled();
       });
