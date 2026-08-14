@@ -1,7 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { CompilePolicyPayloadSchema, CameraVerificationPolicyV1Schema } from '@/server/camera-ai/schema';
 import OpenAI from 'openai';
-import { zodTextFormat } from "openai/helpers/zod";
+import { zodResponseFormat } from "openai/helpers/zod";
 import { createServerSupabaseClient } from '@/integrations/supabase/client.server';
 import { createHash } from 'crypto';
 
@@ -85,18 +85,16 @@ export const Route = createFileRoute('/api/camera-ai/compile-policy')({
 
           // 4. OpenAI Generation
           const openai = new OpenAI({ apiKey });
-          const response = await openai.responses.parse({
+          const response = await openai.beta.chat.completions.parse({
             model: "gpt-4o-mini",
-            input: [
-              { role: "system", content: [{ type: "input_text", text: POLICY_GENERATION_PROMPT }] },
-              { role: "user", content: [{ type: "input_text", text: `PERGUNTA: "${question}"` }] }
+            messages: [
+              { role: "system", content: POLICY_GENERATION_PROMPT },
+              { role: "user", content: `PERGUNTA: "${question}"` }
             ],
-            text: {
-              format: zodTextFormat(CameraVerificationPolicyV1Schema, "camera_verification_policy")
-            }
+            response_format: zodResponseFormat(CameraVerificationPolicyV1Schema, "camera_verification_policy")
           });
 
-          const policy = response.output_parsed;
+          const policy = response.choices[0].message.parsed;
           if (!policy) throw new Error('OpenAI parse failed');
 
           // Inject version and hash
