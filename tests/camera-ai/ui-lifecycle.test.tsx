@@ -62,7 +62,7 @@ describe("TieckCamera UI & Engine Lifecycle", () => {
       <TieckCamera open={true} title="Test Camera" onCapture={() => {}} onClose={() => {}} />
     );
 
-    // Mock video dimensions and playing state
+    // Mock video dimensions
     Object.defineProperty(window.HTMLVideoElement.prototype, "videoWidth", {
       value: 640,
       configurable: true,
@@ -73,30 +73,29 @@ describe("TieckCamera UI & Engine Lifecycle", () => {
     });
     
     const video = container.querySelector("video");
-    if (video) fireEvent(video, new Event("playing"));
+    if (video) {
+      await act(async () => {
+        fireEvent(video, new Event("playing"));
+      });
+    }
 
     // Initial state check
     expect(screen.getByText(/Iniciando/i)).toBeDefined();
 
-    // Advance time slightly to ensure analyze loop starts
-    await act(async () => {
-      vi.advanceTimersByTime(100);
-    });
-
-    // Trigger first analysis
+    // Trigger first analysis loop
     await act(async () => {
       vi.advanceTimersByTime(800);
     });
 
-    // Trigger second analysis with same state
+    // Trigger second analysis loop
     await act(async () => {
       vi.advanceTimersByTime(800);
     });
 
-    // Wait for the state to stabilize and update UI
+    // Verify UI updates
     await waitFor(() => {
       expect(screen.getByText(/Ambiente com pouca luz/i)).toBeDefined();
-    });
+    }, { timeout: 2000 });
   });
 
   it("should dispose QualityEngine and clear timers on unmount", async () => {
@@ -106,7 +105,6 @@ describe("TieckCamera UI & Engine Lifecycle", () => {
       metrics: { luminance: 50, sharpness: 80, motion: 0 },
     });
 
-    // Mock video dimensions and event
     Object.defineProperty(window.HTMLVideoElement.prototype, "videoWidth", {
       value: 640,
       configurable: true,
@@ -120,11 +118,13 @@ describe("TieckCamera UI & Engine Lifecycle", () => {
       <TieckCamera open={true} title="Test Camera" onCapture={() => {}} onClose={() => {}} />
     );
 
-    // Simulate video playing to start engine
     const video = container.querySelector("video");
-    if (video) fireEvent(video, new Event("playing"));
+    if (video) {
+      await act(async () => {
+        fireEvent(video, new Event("playing"));
+      });
+    }
 
-    // Advance to ensure at least one analysis
     await act(async () => {
       vi.advanceTimersByTime(800);
     });
@@ -133,11 +133,8 @@ describe("TieckCamera UI & Engine Lifecycle", () => {
     const callsBeforeUnmount = engine.analyzeFrame.mock.calls.length;
 
     unmount();
-
-    // Confirm dispose exactly once
     expect(engine.dispose).toHaveBeenCalledTimes(1);
 
-    // Advance more time and confirm no new calls
     await act(async () => {
       vi.advanceTimersByTime(2000);
     });

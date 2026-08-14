@@ -55,6 +55,7 @@ describe("Camera AI Lifecycle & Integrity", () => {
   });
 
   const getHiddenInput = (container: HTMLElement) => {
+    // PublicCameraBlock renders the capture-btn label/button which triggers a hidden file input
     return container.querySelector('input[type="file"]') as HTMLInputElement;
   };
 
@@ -72,9 +73,11 @@ describe("Camera AI Lifecycle & Integrity", () => {
 
     const file = new File(["test"], "test.jpg", { type: "image/jpeg" });
     const input = getHiddenInput(container);
+    if (!input) throw new Error("Input not found");
     
-    // Simulating file selection
-    fireEvent.change(input, { target: { files: [file] } });
+    await act(async () => {
+      fireEvent.change(input, { target: { files: [file] } });
+    });
 
     await waitFor(() => {
       expect(screen.getByText(/A foto ficou escura/i)).toBeDefined();
@@ -105,8 +108,11 @@ describe("Camera AI Lifecycle & Integrity", () => {
 
     const file = new File(["test"], "test.jpg", { type: "image/jpeg" });
     const input = getHiddenInput(container);
+    if (!input) throw new Error("Input not found");
     
-    fireEvent.change(input, { target: { files: [file] } });
+    await act(async () => {
+      fireEvent.change(input, { target: { files: [file] } });
+    });
 
     await waitFor(() => {
       expect(engine.analyzeFile).toHaveBeenCalled();
@@ -132,8 +138,11 @@ describe("Camera AI Lifecycle & Integrity", () => {
 
     const file = new File(["test"], "test.jpg", { type: "image/jpeg" });
     const input = getHiddenInput(container);
+    if (!input) throw new Error("Input not found");
     
-    fireEvent.change(input, { target: { files: [file] } });
+    await act(async () => {
+      fireEvent.change(input, { target: { files: [file] } });
+    });
 
     await waitFor(() => {
       expect(engine.dispose).toHaveBeenCalled();
