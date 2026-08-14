@@ -43,6 +43,8 @@ describe('Camera AI Server Runtime', () => {
       } satisfies CameraVerification),
       markFailed: vi.fn().mockResolvedValue({ data: {}, error: null }),
       markCompleted: vi.fn().mockResolvedValue({ data: { id: 'attempt-1' }, error: null }),
+      persistEvidence: vi.fn().mockResolvedValue({ evidenceId: 'ev-1', error: null }),
+      isConfigured: vi.fn().mockReturnValue(true),
     };
   });
 
