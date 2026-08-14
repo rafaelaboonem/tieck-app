@@ -40,6 +40,9 @@ describe('POST /api/camera-ai/compile-policy Authorization & OpenAI', () => {
 
    beforeEach(async () => {
      vi.clearAllMocks();
+     process.env['OPENAI_API_KEY'] = 'test-key';
+     process.env['SUPABASE_URL'] = 'test-url';
+     process.env['SUPABASE_SERVICE_ROLE_KEY'] = 'test-key';
      const { createServerSupabaseClient } = await import('@/integrations/supabase/client.server');
      (createServerSupabaseClient as any).mockReturnValue(mockSupabase);
    });
