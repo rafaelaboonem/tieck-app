@@ -181,37 +181,67 @@ function PublicChecklistPage() {
   // Uma resposta é criada UMA ÚNICA VEZ por checklist/aba, no primeiro upload
   // ou no envio final (o que ocorrer antes). Persistida em sessionStorage,
   // então uploads seguintes e o submit reutilizam o mesmo responseId/token.
-  const responseSessionKey = (): string => {
-    const cid = checklist?.id || id;
-    return `tieck_response_session_${cid}`;
+  const responseSessionKey = (cid?: string): string => {
+    const checklistUuid = cid || checklist?.id || id;
+    return `tieck_response_session_${checklistUuid}`;
   };
-  const readResponseSession = (): { responseId: string; responseToken: string } | null => {
+
+  const readResponseSession = (cid?: string): { responseId: string; responseToken: string; checklistId: string; createdAt: number } | null => {
     try {
-      const raw = sessionStorage.getItem(responseSessionKey());
+      const key = responseSessionKey(cid);
+      const raw = sessionStorage.getItem(key);
       if (!raw) return null;
       const parsed = JSON.parse(raw);
-      if (parsed?.responseId && parsed?.responseToken) return parsed;
-      return null;
+      
+      if (!parsed?.responseId || !parsed?.responseToken || !parsed?.checklistId || !parsed?.createdAt) {
+        return null;
+      }
+
+      // 1. Não reutilize sessão com checklistId diferente
+      const currentChecklistId = cid || checklist?.id || id;
+      if (parsed.checklistId !== currentChecklistId) {
+        return null;
+      }
+
+      // 2. Considere a sessão local vencida após 23 horas
+      const isExpired = Date.now() - parsed.createdAt > 23 * 60 * 60 * 1000;
+      if (isExpired) {
+        return null;
+      }
+
+      return parsed;
     } catch { return null; }
   };
-  const clearResponseSession = () => {
-    try { sessionStorage.removeItem(responseSessionKey()); } catch { /* noop */ }
+
+  const clearResponseSession = (cid?: string) => {
+    try { 
+      sessionStorage.removeItem(responseSessionKey(cid)); 
+    } catch { /* noop */ }
   };
-  // Serializa criações concorrentes (dois uploads clicados quase juntos).
-  const responseSessionPromise = useRef<Promise<{ responseId: string; responseToken: string } | null> | null>(null);
-  const ensureResponseSession = async (): Promise<{ responseId: string; responseToken: string } | null> => {
-    const existing = readResponseSession();
-    if (existing) return existing;
+
+  const responseSessionPromise = useRef<Promise<{ responseId: string; responseToken: string; checklistId: string; createdAt: number } | null> | null>(null);
+
+  const ensureResponseSession = async (options?: { forceNew?: boolean }): Promise<{ responseId: string; responseToken: string; checklistId: string; createdAt: number } | null> => {
+    const currentChecklistId = checklist?.id || id;
+    
+    if (options?.forceNew) {
+      clearResponseSession(currentChecklistId);
+    } else {
+      const existing = readResponseSession(currentChecklistId);
+      if (existing) return existing;
+    }
+
     if (responseSessionPromise.current) return responseSessionPromise.current;
-    const checklistUuid = checklist?.id || id;
+
     let visitorId = localStorage.getItem("tieck_visitor_id");
     if (!visitorId) {
       visitorId = crypto.randomUUID();
       localStorage.setItem("tieck_visitor_id", visitorId);
     }
+
     responseSessionPromise.current = (async () => {
       const { data, error } = await (supabase.rpc as any)("create_public_response", {
-        p_checklist_id: checklistUuid,
+        p_checklist_id: currentChecklistId,
         p_visitor_id: visitorId
       });
 
@@ -222,11 +252,16 @@ function PublicChecklistPage() {
       const respData = (data as any)[0];
       const session = { 
         responseId: respData.response_id as string, 
-        responseToken: respData.response_token as string 
+        responseToken: respData.response_token as string,
+        checklistId: currentChecklistId,
+        createdAt: Date.now()
       };
-      try { sessionStorage.setItem(responseSessionKey(), JSON.stringify(session)); } catch { /* noop */ }
+      try { 
+        sessionStorage.setItem(responseSessionKey(currentChecklistId), JSON.stringify(session)); 
+      } catch { /* noop */ }
       return session;
     })();
+
     try {
       return await responseSessionPromise.current;
     } finally {
