@@ -1,4 +1,5 @@
 import { VerifyPayload, Decision, VerificationResult, PublishedBlock, CameraVerification } from './schema';
+import { createHash } from 'crypto';
 import { validateImageBuffer } from './image-validation';
 import { evaluateGate } from './gate';
 
@@ -55,7 +56,7 @@ export interface VerifyDependencies {
   resolveSession: (token: string) => Promise<{ data: PublicSession[] | null; error: unknown }>;
   claimAttempt: (params: { responseId: string; blockId: string; idempotencyKey: string }) => Promise<{ data: ClaimResult[] | null; error: unknown }>;
   hitRateLimit: (responseId: string) => Promise<{ data: RateLimitResult[] | null; error: unknown }>;
-  analyzeImage: (question: string, buffer: ArrayBuffer, mimeType: string) => Promise<CameraVerification>;
+  analyzeImage: (question: string, buffer: ArrayBuffer, mimeType: string, policy?: any) => Promise<CameraVerification>;
   markFailed: (params: { responseId: string; blockId: string; idempotencyKey: string; code: string }) => Promise<{ data: unknown; error: unknown }>;
   markCompleted: (params: {
     responseId: string;
@@ -170,6 +171,9 @@ export async function verifyCameraRequest(
   }
 
   const question = (String(block.title || '') + ' ' + String(block.description || '')).trim();
+  const policy = (block as any).cameraAiPolicy;
+  const isPolicyValid = policy && policy.version === 1 && policy.questionHash === createHash('sha256').update(question).digest('hex');
+
 
   // 7 & 8. Replay & Atomic Claim
   const { data: claimData, error: claimError } = await deps.claimAttempt({
@@ -303,7 +307,7 @@ export async function verifyCameraRequest(
   const startTime = deps.now().getTime();
   let analysis: CameraVerification;
   try {
-    analysis = await deps.analyzeImage(question, imageFile.buffer, mimeType);
+    analysis = await deps.analyzeImage(question, imageFile.buffer, mimeType, isPolicyValid ? policy : undefined);
   } catch (aiError) {
     await deps.markFailed({
       responseId: session.response_id,

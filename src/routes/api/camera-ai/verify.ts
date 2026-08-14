@@ -161,9 +161,9 @@ export const Route = createFileRoute('/api/camera-ai/verify')({
                 p_limit: 10
               });
             },
-            analyzeImage: async (question: string, buffer: ArrayBuffer, mimeType: string) => {
+            analyzeImage: async (question: string, buffer: ArrayBuffer, mimeType: string, policy?: any) => {
               const openaiClient = new OpenAI({ apiKey });
-              return analyzeImage(openaiClient, model, question, buffer, mimeType);
+              return analyzeImage(openaiClient, model, question, buffer, mimeType, 20000, policy);
             },
             markFailed: async ({ responseId, blockId, idempotencyKey, code }: { responseId: string; blockId: string; idempotencyKey: string; code: string }) => {
               const client = createServerSupabaseClient();
