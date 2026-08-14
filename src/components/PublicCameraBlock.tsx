@@ -382,15 +382,9 @@ export function PublicCameraBlock({
   const retryCurrentPhoto = () => {
     if (capturedFile && idempotencyKey) {
       // Regras de retry:
-      // network_unknown, timeout_unknown, processing, storage_failure -> Reutiliza mesma chave
-      // server_failed -> Nova chave
-      let keyToUse = idempotencyKey;
-      if (failureReason === "server_failed") {
-        keyToUse = crypto.randomUUID();
-        setIdempotencyKey(keyToUse);
-      }
-      
-      void processVerification(capturedFile, keyToUse, requestSequenceRef.current, { recoveryAttempt: 0 });
+      // network_unknown, timeout_unknown, processing, storage_failure, server_failed -> Reutiliza mesma foto e chave
+      // para garantir idempotência atômica no backend e evitar múltiplas cobranças/análises
+      void processVerification(capturedFile, idempotencyKey, requestSequenceRef.current, { recoveryAttempt: 0 });
     }
   };
 
