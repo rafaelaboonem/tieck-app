@@ -1,12 +1,14 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { CheckCircle2, Clock, Inbox, ChevronDown, ChevronRight, FileText, Trash2, ChevronLeft, X, Lock, Sparkles, RefreshCcw, Images, Brain, Undo2, Loader2, Info } from "lucide-react";
+import { CheckCircle2, Clock, Inbox, ChevronDown, ChevronRight, FileText, Trash2, ChevronLeft, X, Lock, Sparkles, RefreshCcw, Images, Brain, Undo2, Loader2, Info, Eye } from "lucide-react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogTitle, DialogDescription, DialogFooter, DialogHeader } from "@/components/ui/dialog";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { CompareTab } from "./CompareTab";
+import { getEvidenceSignedUrl } from "@/lib/evidence-signed-url";
+
 
 type ResponseRow = {
   id: string;
@@ -39,6 +41,14 @@ type CameraAIAttempt = {
   code: string;
   evidence_id: string;
 };
+
+type EvidenceData = {
+  id: string;
+  storage_path: string;
+  bucket_name?: string;
+  status?: string;
+};
+
 
 export function SubmissionsTab({
   checklistId,
@@ -245,12 +255,14 @@ export function SubmissionsTab({
   };
 
   const photoBadge = (s: { total: number; aiApproved: number; photoReceived: number; inconsistencies: number; rejected: number }) => {
-    if (s.total === 0) return { label: "Sem fotos", tone: "bg-neutral-100 text-neutral-500 border-neutral-200" };
-    if (s.aiApproved > 0) return { label: `${s.aiApproved} foto${s.aiApproved > 1 ? "s" : ""} aprovada${s.aiApproved > 1 ? "s" : ""} pela IA`, tone: "bg-emerald-50 text-emerald-700 border-emerald-200" };
-    if (s.rejected > 0) return { label: "Rejeitada pela IA", tone: "bg-red-50 text-red-700 border-red-200" };
-    if (s.inconsistencies > 0) return { label: "Verificação não localizada", tone: "bg-amber-50 text-amber-800 border-amber-200" };
-    return { label: `${s.total} foto${s.total > 1 ? "s" : ""} recebida${s.total > 1 ? "s" : ""}`, tone: "bg-neutral-50 text-neutral-600 border-neutral-200" };
+    if (s.total === 0) return { label: "Sem evidências", tone: "bg-neutral-100 text-neutral-500 border-neutral-200" };
+    const totalLabel = `${s.total} evidência${s.total > 1 ? "s" : ""}`;
+    
+    if (s.aiApproved > 0) return { label: totalLabel, tone: "bg-emerald-50 text-emerald-700 border-emerald-200" };
+    if (s.rejected > 0) return { label: totalLabel, tone: "bg-red-50 text-red-700 border-red-200" };
+    return { label: totalLabel, tone: "bg-neutral-50 text-neutral-600 border-neutral-200" };
   };
+
 
   const openLightbox = (images: string[], index: number, labels?: string[]) => {
     setLightbox({
@@ -266,70 +278,7 @@ export function SubmissionsTab({
 
     // New AI Verification Card
     if (typeof v === "object" && !Array.isArray(v) && typeof v.evidenceId === "string") {
-      const attempt = attempts.find(a => a.evidence_id === v.evidenceId);
-      const isApproved = attempt?.decision === 'approved';
-      const isRejected = attempt?.decision === 'rejected';
-
-      return (
-        <div className="flex flex-col gap-3 rounded-xl border border-neutral-200 bg-white p-3">
-          <div className="flex items-start gap-3">
-            <button
-              type="button"
-              onClick={() => openLightbox([v.url], 0, [blockLabel || ""])}
-              className="w-24 h-24 rounded-lg overflow-hidden border border-neutral-200 bg-neutral-100 flex-shrink-0"
-            >
-              <img src={v.url} alt="Foto" className="w-full h-full object-cover" />
-            </button>
-            <div className="flex-1 min-w-0 space-y-1.5">
-              <div className="flex flex-wrap items-center gap-1.5">
-                {attempt ? (
-                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[11px] font-medium ${
-                    isApproved ? "bg-emerald-50 text-emerald-700 border-emerald-200" : 
-                    isRejected ? "bg-red-50 text-red-700 border-red-200" :
-                    "bg-amber-50 text-amber-800 border-amber-200"
-                  }`}>
-                    {isApproved ? "Aprovada pela IA" : isRejected ? "Rejeitada pela IA" : "Verificação não localizada"}
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[11px] font-medium bg-neutral-50 text-neutral-500 border-neutral-200">
-                    Foto recebida
-                  </span>
-                )}
-              </div>
-              {attempt?.evidence && (
-                <p className="text-[11px] text-neutral-600 leading-relaxed line-clamp-3">
-                  {attempt.evidence}
-                </p>
-              )}
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => openLightbox([v.url], 0, [blockLabel || ""])}
-                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-medium bg-white border border-neutral-200 text-neutral-700 hover:bg-neutral-50 transition-colors"
-                >
-                  <FileText className="w-3.5 h-3.5" />
-                  Ampliar
-                </button>
-              </div>
-            </div>
-          </div>
-          
-          {attempt && (
-            <details className="group border-t border-neutral-100 pt-2">
-              <summary className="flex items-center gap-1.5 text-[10px] font-bold text-neutral-400 uppercase tracking-wider cursor-pointer hover:text-neutral-600 transition-colors list-none">
-                <Info className="w-3 h-3" />
-                Detalhes técnicos
-              </summary>
-              <div className="mt-2 space-y-1 text-[10px] text-neutral-500 bg-neutral-50/50 rounded-lg p-2">
-                <p><span className="font-semibold">Modelo:</span> {attempt.model}</p>
-                <p><span className="font-semibold">Duração:</span> {attempt.duration_ms}ms</p>
-                <p><span className="font-semibold">Data:</span> {formatDate(attempt.completed_at)}</p>
-                {attempt.code && <p><span className="font-semibold">Código:</span> {attempt.code}</p>}
-              </div>
-            </details>
-          )}
-        </div>
-      );
+      return <EvidenceCard evidenceId={v.evidenceId} blockLabel={blockLabel} attempts={attempts} openLightbox={openLightbox} />;
     }
 
     // Legacy or Standard File Array
@@ -342,11 +291,10 @@ export function SubmissionsTab({
               <div key={i} className="flex flex-col gap-2 p-2 rounded-xl border border-neutral-200 bg-white">
                 <button
                   onClick={() => openLightbox(images.map(img => img.url), i, images.map(() => blockLabel || ""))}
-                  className="w-20 h-20 rounded-lg overflow-hidden border border-neutral-200"
+                  className="w-20 h-20 rounded-lg overflow-hidden border border-neutral-200 bg-neutral-100"
                 >
                   <img src={f.url} alt="Preview" className="w-full h-full object-cover" />
                 </button>
-                <span className="text-[10px] text-neutral-500 text-center font-medium">Foto recebida</span>
               </div>
             ))}
           </div>
@@ -361,11 +309,10 @@ export function SubmissionsTab({
           <div className="flex flex-col gap-2 p-2 w-fit rounded-xl border border-neutral-200 bg-white">
             <button
               onClick={() => openLightbox([v.url], 0, [blockLabel || ""])}
-              className="w-20 h-20 rounded-lg overflow-hidden border border-neutral-200"
+              className="w-20 h-20 rounded-lg overflow-hidden border border-neutral-200 bg-neutral-100"
             >
               <img src={v.url} alt="Preview" className="w-full h-full object-cover" />
             </button>
-            <span className="text-[10px] text-neutral-500 text-center font-medium">Foto recebida</span>
           </div>
         );
       }
@@ -382,6 +329,7 @@ export function SubmissionsTab({
       </div>
     );
   };
+
 
   const showResponses = filter === "todos" || filter === "completo";
   const showPartials = filter === "todos" || filter === "parcial";
