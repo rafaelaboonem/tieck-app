@@ -1,6 +1,6 @@
-import { describe, it, expect, vi, beforeEach, MockedFunction } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { VerifyPayload } from '../../src/server/camera-ai/schema';
-import { verifyCameraRequest, VerifyDependencies, PublicSession, ClaimResult } from '../../src/server/camera-ai/verify-handler';
+import { verifyCameraRequest, VerifyDependencies, PublicSession } from '../../src/server/camera-ai/verify-handler';
 
 describe('Camera AI Storage Concurrency & Cleanup', () => {
   let deps: VerifyDependencies;
@@ -36,12 +36,12 @@ describe('Camera AI Storage Concurrency & Cleanup', () => {
       analyzeImage: vi.fn().mockResolvedValue({ decision: 'approved', confidence: 1, target_visible: true, condition_observable: true, condition_met: true, image_quality: 'usable', visible_evidence: 'ok', user_message: 'ok' }),
       markFailed: vi.fn().mockResolvedValue({ data: {}, error: null }),
       markCompleted: vi.fn().mockResolvedValue({ data: { id: 'a1' }, error: null }),
-      persistEvidence: vi.fn(),
-      attachEvidence: vi.fn(),
+      persistEvidence: vi.fn().mockResolvedValue({ evidenceId: 'ev-1', error: null }),
+      attachEvidence: vi.fn().mockResolvedValue({ data: [{ confirmed_evidence_id: 'ev-1' }], error: null }),
     };
   });
 
-  it('E. Corrida no Storage: upload retorna 409, falha no banco -> não retorna sucesso', async () => {
+  it('E. Corrida no Storage: upload retorna 409, falha no banco -> retorna storage_failure', async () => {
     deps.persistEvidence = vi.fn().mockResolvedValue({ evidenceId: null, error: 'DB Error after conflict' });
     const res = await verifyCameraRequest(validPayload, validImage, deps);
     expect(res.status).toBe(500);
