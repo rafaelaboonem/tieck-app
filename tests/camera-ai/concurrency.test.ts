@@ -44,6 +44,7 @@ describe('Camera AI Storage Concurrency & Cleanup', () => {
   it('E. Corrida no Storage: upload retorna 409, falha no banco -> retorna storage_failure', async () => {
     deps.persistEvidence = vi.fn().mockResolvedValue({ evidenceId: null, error: 'DB Error after conflict' });
     const res = await verifyCameraRequest(validPayload, validImage, deps);
+    // Note: status will be 500 from the handler logic when persistEvidence fails
     expect(res.status).toBe(500);
     expect((res.body as any).code).toBe('storage_failure');
   });
