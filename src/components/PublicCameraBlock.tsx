@@ -448,10 +448,12 @@ export function PublicCameraBlock({
               </div>
             )}
             
-            {state === "analyzing" && (
+            {(state === "analyzing" || (state === "preparing" && failureReason === "storage_failure")) && (
               <div className="bg-white/90 backdrop-blur-sm rounded-2xl p-4 flex items-center gap-3 shadow-xl">
                 <Loader2 className="w-5 h-5 animate-spin text-[#FF007F]" />
-                <span className="text-sm font-bold text-neutral-800">Verificando a foto...</span>
+                <span className="text-sm font-bold text-neutral-800">
+                  {failureReason === "storage_failure" ? "Salvando foto..." : "Verificando a foto..."}
+                </span>
               </div>
             )}
 
