@@ -6,6 +6,8 @@ export const CameraAIResponseSchema = z.object({
   code: z.string(),
   message: z.string().optional(),
   evidence: z.string().optional(),
+  evidenceId: z.string().uuid().optional(),
+  persisted: z.boolean().optional(),
 });
 
 export type CameraAIResponse = z.infer<typeof CameraAIResponseSchema>;

@@ -32,7 +32,8 @@ type VerificationState =
   | "technical_failure" 
   | "rate_limited" 
   | "uploading" 
-  | "received";
+  | "received"
+  | "storage_failure";
 
 type FailureReason = "network_unknown" | "timeout_unknown" | "server_failed" | "processing" | "configuration" | "none";
 type AbortReason = "timeout" | "retake" | "close" | "unmount";
@@ -232,6 +233,12 @@ export function PublicCameraBlock({
         return;
       }
 
+      if (data.code === 'storage_failure') {
+        setState("storage_failure");
+        setErrorMsg(data.message || "Foto aprovada, mas falha ao salvar no servidor.");
+        return;
+      }
+
       if (response.status === 409) {
         setState("technical_failure");
         setFailureReason("processing");
@@ -312,27 +319,27 @@ export function PublicCameraBlock({
       }
 
       if (result.decision === "approved") {
-        setState("uploading");
-        try {
-          const url = await uploadCameraEvidence({
-            file: fileToVerify,
-            checklistId,
-            blockId: block.id,
-          });
-
-          if (!isCurrent()) return;
-          
-          if (onAnswer) onAnswer(block.id, url);
-          setEvidence(result.evidence || null);
-          setState("approved");
-        } catch (uploadErr) {
-          if (!isCurrent()) return;
-          console.error("Upload error after approval:", uploadErr);
+        if (!result.persisted || !result.evidenceId) {
           setState("technical_failure");
-          setFailureReason("network_unknown");
-          setErrorMsg("Foto aprovada, mas falha ao salvar no servidor.");
-          if (onAnswer) onAnswer(block.id, "");
+          setFailureReason("server_failed");
+          setErrorMsg("Foto aprovada, mas a persistência falhou no servidor.");
+          return;
         }
+
+        if (!isCurrent()) return;
+        
+        if (onAnswer) {
+          onAnswer(block.id, JSON.stringify({
+            type: 'camera',
+            evidenceId: result.evidenceId,
+            aiEnabled: true,
+            decision: 'approved',
+            canContinue: true,
+            evidence: result.evidence || ''
+          }));
+        }
+        setEvidence(result.evidence || null);
+        setState("approved");
       } else if (result.decision === "retake") {
         setState("retake");
         setErrorMsg(result.message || "Tire outra foto.");
