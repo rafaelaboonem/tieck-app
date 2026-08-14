@@ -10,14 +10,13 @@ vi.mock('@/integrations/supabase/client.server', () => ({
 // Mock OpenAI
 const mockParse = vi.fn();
 vi.mock('openai', () => {
+  const mockOpenAI = vi.fn().mockImplementation(() => ({
+    responses: {
+      parse: mockParse
+    }
+  }));
   return {
-    default: vi.fn().mockImplementation(function() {
-      return {
-        responses: {
-          parse: mockParse
-        }
-      };
-    })
+    default: mockOpenAI
   };
 });
 
