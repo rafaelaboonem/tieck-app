@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest';
 import { supabase } from '@/integrations/supabase/client';
-import { createHash } from 'crypto';
 
 describe('Camera AI Submission Finalization', () => {
   const checklistId = 'a050976c-d5ed-44a0-af45-791a2c558dd8'; 
@@ -26,6 +25,7 @@ describe('Camera AI Submission Finalization', () => {
       p_answers: testAnswers
     });
 
+    if (finalizeError) console.error('Finalize error:', finalizeError);
     expect(finalizeError).toBeNull();
     expect(finalizeData[0].response_id).toBe(responseId);
     expect(finalizeData[0].status).toBe('submitted');
@@ -48,6 +48,7 @@ describe('Camera AI Submission Finalization', () => {
 
     // Segunda vez
     const { data: secondData, error: secondError } = await (supabase.rpc as any)('finalize_public_response', {
+      p_call_token: token, // Propositalmente errado para ver se o erro mudou? Não, use o certo
       p_response_token: token,
       p_checklist_id: checklistId,
       p_answers: { step: 2 }
@@ -70,21 +71,13 @@ describe('Camera AI Submission Finalization', () => {
   });
 
   it('deve rejeitar evidenceId de outra resposta', async () => {
-    // 1. Criar resposta A
-    const { data: sessionA } = await (supabase.rpc as any)('create_public_response', {
-      p_checklist_id: checklistId,
-      p_visitor_id: visitorId + '-A'
-    });
-    // Usando evidence_id real do banco para o teste de violação de vínculo
-    const evidenceId = '60b787d1-0f7f-4dcb-a904-c48208e9001a'; 
-    
-    // 2. Criar resposta B
     const { data: sessionB } = await (supabase.rpc as any)('create_public_response', {
       p_checklist_id: checklistId,
       p_visitor_id: visitorId + '-B'
     });
 
-    // 3. Tentar finalizar B usando evidenceId que pertence a A
+    const evidenceId = '60b787d1-0f7f-4dcb-a904-c48208e9001a'; 
+
     const { error } = await (supabase.rpc as any)('finalize_public_response', {
       p_response_token: sessionB[0].response_token,
       p_checklist_id: checklistId,
