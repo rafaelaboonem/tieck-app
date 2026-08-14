@@ -39,6 +39,7 @@ export const Route = createFileRoute('/api/camera-ai/compile-policy')({
           const body = await request.json();
           const validation = CompilePolicyPayloadSchema.safeParse(body);
           if (!validation.success) {
+            console.error('[CompilePolicy] Payload validation failed:', validation.error);
             return Response.json({ ok: false, code: 'invalid_payload' }, { status: 400 });
           }
 
