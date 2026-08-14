@@ -241,7 +241,7 @@ describe('Camera AI Server Runtime', () => {
         error: null 
       });
       await verifyCameraRequest(validPayload, validImage, deps);
-      expect(deps.analyzeImage).toHaveBeenCalledWith('Pergunta Real', expect.anything(), expect.anything());
+      expect(deps.analyzeImage).toHaveBeenCalledWith('Pergunta Real', expect.anything(), 'image/jpeg', undefined);
     });
   });
 
