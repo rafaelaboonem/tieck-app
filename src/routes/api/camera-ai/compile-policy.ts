@@ -10,16 +10,18 @@ Sua tarefa é ler uma pergunta de auditoria e extrair uma política estruturada 
 
 DIRETRIZES:
 1. VERIFICABILIDADE: 
-   - "visual": A pergunta pode ser 100% comprovada por uma foto (ex: "A pia está limpa?").
-   - "partially_visual": A foto prova parte, mas pode precisar de contexto (ex: "O estoque está organizado?").
-   - "not_visual": A pergunta é subjetiva ou invisível (ex: "O cliente foi bem atendido?").
+   - "visual": A pergunta pode ser 100% comprovada por uma foto.
+   - "partially_visual": A foto prova parte, mas pode precisar de contexto.
+   - "not_visual": A pergunta é subjetiva ou invisível.
 2. TARGET: O objeto principal a ser observado.
 3. CONDITION: O estado esperado do objeto.
-4. REQUIRED EVIDENCE: O que DEVE aparecer na foto para ser válida.
-5. REJECTION SIGNALS: O que invalida a foto imediatamente.
-6. SUMMARY: Um resumo de uma frase para o usuário final sobre o que será verificado.
-7. Mantenha os textos curtos, objetivos e em português brasileiro.
-8. Máximo de 5 itens por lista.`;
+4. TARGET DESCRIPTION: Descrição física detalhada do objeto solicitado.
+5. CONDITION DESCRIPTION: Descrição técnica do que constitui o cumprimento da condição.
+6. REQUIRED VISIBLE EVIDENCE: Lista de elementos que DEVEM aparecer na foto.
+7. REJECTION SIGNALS: Sinais visuais claros de que a condição NÃO foi atendida ou o objeto é incorreto.
+8. NOT OBSERVABLE SIGNALS: O que impediria a verificação (ex: reflexo, sombra, corte).
+9. SUMMARY: Um resumo de uma frase para o usuário final.
+10. Mantenha os textos curtos e em português brasileiro.`;
 
 export const Route = createFileRoute('/api/camera-ai/compile-policy')({
   server: {
@@ -109,7 +111,11 @@ export const Route = createFileRoute('/api/camera-ai/compile-policy')({
             ...policy,
             version: 1,
             questionHash,
-            source: 'generated'
+            source: 'generated',
+            // Map new fields for stability
+            requiredVisibleEvidence: policy.requiredVisibleEvidence || [],
+            rejectionSignals: policy.rejectionSignals || [],
+            notObservableSignals: policy.notObservableSignals || []
           };
 
           return Response.json({ ok: true, policy: finalPolicy });
