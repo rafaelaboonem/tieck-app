@@ -12,6 +12,26 @@ export interface PublicSession {
   };
 }
 
+/**
+ * Safely extracts blocks from published_content, supporting both canonical object 
+ * and legacy array formats.
+ */
+export function extractBlocksFromSnapshot(content: any): PublishedBlock[] {
+  if (!content) return [];
+  
+  // 1. Legacy/Buggy format: content is the array itself
+  if (Array.isArray(content)) {
+    return content as PublishedBlock[];
+  }
+  
+  // 2. Canonical format: { blocks: [...] }
+  if (content && typeof content === 'object' && Array.isArray(content.blocks)) {
+    return content.blocks as PublishedBlock[];
+  }
+  
+  return [];
+}
+
 export interface ClaimResult {
   claim_status: 'acquired' | 'processing' | 'completed' | 'failed';
   attempt_id: string;
@@ -117,7 +137,7 @@ export async function verifyCameraRequest(
     };
   }
 
-  const blocks: PublishedBlock[] = session.published_content?.blocks || [];
+  const blocks = extractBlocksFromSnapshot(session.published_content);
   const block = blocks.find((b) => b.id === payload.blockId);
 
   if (!block || block.type !== 'camera') {

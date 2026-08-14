@@ -2346,7 +2346,6 @@ export type Database = {
           custom_slug: string
           description: string
           id: string
-          published_at: string
           settings: Json
           short_slug: string
           title: string
