@@ -33,6 +33,19 @@ export const Route = createFileRoute('/api/team/invitations/resend')({
 
           const { workspaceId, invitationId } = result.data;
 
+          // Rate Limit check
+          const keyHash = createHash('sha256').update(`resend:${user.id}:${invitationId}`).digest('hex');
+          const { data: limitData, error: limitError } = await supabaseAdmin.rpc('hit_public_rate_limit', {
+            p_key_hash: keyHash,
+            p_action: 'workspace_invite_resend',
+            p_window_seconds: 600,
+            p_limit: 3
+          });
+          const allowed = !limitError && Array.isArray(limitData) && limitData[0]?.allowed === true;
+          if (!allowed) {
+            return new Response(JSON.stringify({ ok: false, code: 'rate_limit', requestId }), { status: 429 });
+          }
+
           const tokenValue = randomBytes(32).toString('hex');
           const tokenHash = createHash('sha256').update(tokenValue).digest('hex');
           const expiresAt = new Date();
@@ -47,7 +60,8 @@ export const Route = createFileRoute('/api/team/invitations/resend')({
           });
 
           if (rpcError) {
-            return new Response(JSON.stringify({ ok: false, code: 'rpc_error', message: rpcError.message, requestId }), { status: 400 });
+            const code = rpcError.message.includes('Forbidden') ? 'forbidden' : 'internal_error';
+            return new Response(JSON.stringify({ ok: false, code, requestId }), { status: code === 'forbidden' ? 403 : 400 });
           }
 
           const inviteLink = `${new URL(request.url).origin}/convite/${tokenValue}`;

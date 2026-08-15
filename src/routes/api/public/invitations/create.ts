@@ -15,7 +15,6 @@ export const Route = createFileRoute('/api/public/invitations/create')({
       POST: async ({ request }) => {
         const requestId = crypto.randomUUID();
         try {
-          // 1. Authenticate user via Bearer token
           const authHeader = request.headers.get('Authorization');
           if (!authHeader?.startsWith('Bearer ')) {
             return new Response(JSON.stringify({ ok: false, code: 'unauthorized', requestId }), { status: 401 });
@@ -27,7 +26,6 @@ export const Route = createFileRoute('/api/public/invitations/create')({
             return new Response(JSON.stringify({ ok: false, code: 'unauthorized', requestId }), { status: 401 });
           }
 
-          // 2. Parse and validate input
           const body = await request.json();
           const result = InviteSchema.safeParse(body);
           if (!result.success) {
@@ -35,41 +33,13 @@ export const Route = createFileRoute('/api/public/invitations/create')({
           }
           const { workspaceId, email, role } = result.data;
 
-          // 3. Authorization check (admin or owner)
-          // Use user_has_workspace_access with explicit role requirements
-          const { data: isAuthorized, error: roleError } = await supabaseAdmin.rpc('user_has_workspace_access', {
-            p_user_id: user.id,
-            p_workspace_id: workspaceId,
-            p_min_role: 'admin'
-          });
-
-          // Wait, the requirement says:
-          // Admin can invite editor/viewer.
-          // Owner can invite admin.
-          // We need to check if the user is owner if role == 'admin'.
-          const { data: workspace } = await supabaseAdmin
-            .from('workspaces')
-            .select('owner_id')
-            .eq('id', workspaceId)
-            .single();
-
-          const isOwner = workspace?.owner_id === user.id;
-          const isAdmin = isAuthorized === true;
-
-          if (role === 'admin' && !isOwner) {
-            return new Response(JSON.stringify({ ok: false, code: 'forbidden_role', requestId }), { status: 403 });
-          }
-          if (role !== 'admin' && !isAdmin && !isOwner) {
-            return new Response(JSON.stringify({ ok: false, code: 'forbidden', requestId }), { status: 403 });
-          }
-
-          // 4. Rate Limit
+          // Rate Limit check
           const keyHash = createHash('sha256').update(`invite:${user.id}:${workspaceId}`).digest('hex');
           const { data: limitData, error: limitError } = await supabaseAdmin.rpc('hit_public_rate_limit', {
             p_key_hash: keyHash,
             p_action: 'workspace_invite',
-            p_window_seconds: 3600, // 1 hour
-            p_limit: 20 // 20 invites per hour
+            p_window_seconds: 600, // 10 minutes
+            p_limit: 5 // fail-closed
           });
 
           const allowed = !limitError && Array.isArray(limitData) && limitData[0]?.allowed === true;
@@ -77,26 +47,13 @@ export const Route = createFileRoute('/api/public/invitations/create')({
             return new Response(JSON.stringify({ ok: false, code: 'rate_limit', requestId }), { status: 429 });
           }
 
-          // 5. Check if already active member
-          const { data: existingMember } = await supabaseAdmin
-            .from('workspace_members')
-            .select('id')
-            .eq('workspace_id', workspaceId)
-            .eq('email_normalized', email)
-            .eq('status', 'active')
-            .maybeSingle();
-
-          if (existingMember) {
-            return new Response(JSON.stringify({ ok: false, code: 'already_member', requestId }), { status: 400 });
-          }
-
-          // 6. Generate token and hash
+          // Generate token and hash
           const tokenValue = randomBytes(32).toString('hex');
           const tokenHash = createHash('sha256').update(tokenValue).digest('hex');
           const expiresAt = new Date();
           expiresAt.setDate(expiresAt.getDate() + 7);
 
-          // 7. Create invitation via atomic RPC (handles revocation of previous)
+          // Create invitation via atomic service RPC
           const { data: invitationId, error: inviteError } = await supabaseAdmin.rpc('create_workspace_invitation_safe', {
             p_workspace_id: workspaceId,
             p_invited_by: user.id,
@@ -107,18 +64,17 @@ export const Route = createFileRoute('/api/public/invitations/create')({
           });
 
           if (inviteError) {
-            console.error('[Invitation-Create] Database error:', inviteError);
-            return new Response(JSON.stringify({ ok: false, code: 'database_error', requestId }), { status: 500 });
+            console.error('[Invitation-Create] RPC error:', inviteError);
+            const errorCode = inviteError.message.includes('Forbidden') ? 'forbidden' : 'internal_error';
+            return new Response(JSON.stringify({ ok: false, code: errorCode, requestId }), { status: errorCode === 'forbidden' ? 403 : 500 });
           }
 
-          // 8. Envio de e-mail (Mock por enquanto, mas retornando link real)
-          // Implementação real usaria um serviço de e-mail aqui
           const inviteLink = `${new URL(request.url).origin}/convite/${tokenValue}`;
           
           return new Response(JSON.stringify({ 
             ok: true, 
             requestId,
-            emailSent: false, // Indica que o e-mail não foi enviado automaticamente (necessário copiar link)
+            emailSent: false,
             invitation: {
               id: invitationId,
               email,

@@ -18,19 +18,19 @@ export const updateMemberStatus = createServerFn({ method: "POST" })
     
     const authHeader = request.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
-      throw new Error('Unauthorized');
+      throw new Error('unauthorized');
     }
     const token = authHeader.split(' ')[1];
     const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
-    if (authError || !user) throw new Error('Unauthorized');
+    if (authError || !user) throw new Error('unauthorized');
 
-    // Admin/Owner check
+    // Admin/Owner check via service logic
     const { data: isAuthorized } = await supabaseAdmin.rpc('user_has_workspace_access', {
       p_user_id: user.id,
       p_workspace_id: data.workspaceId,
       p_min_role: 'admin'
     });
-    if (!isAuthorized) throw new Error('Forbidden');
+    if (!isAuthorized) throw new Error('forbidden');
 
     if (data.memberId) {
       const { error } = await supabaseAdmin.rpc('update_workspace_member_status', {
