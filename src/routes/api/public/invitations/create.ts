@@ -65,8 +65,13 @@ export const Route = createFileRoute('/api/public/invitations/create')({
 
           if (inviteError) {
             console.error('[Invitation-Create] RPC error:', inviteError);
-            const errorCode = inviteError.message.includes('Forbidden') ? 'forbidden' : 'internal_error';
-            return new Response(JSON.stringify({ ok: false, code: errorCode, requestId }), { status: errorCode === 'forbidden' ? 403 : 500 });
+            const msg = inviteError.message;
+            const errorCode = msg.includes('Forbidden') ? 'forbidden' : 
+                             msg.includes('Conflict') ? 'already_member' :
+                             'internal_error';
+            return new Response(JSON.stringify({ ok: false, code: errorCode, requestId }), { 
+              status: errorCode === 'forbidden' ? 403 : (errorCode === 'already_member' ? 409 : 500) 
+            });
           }
 
           const inviteLink = `${new URL(request.url).origin}/convite/${tokenValue}`;

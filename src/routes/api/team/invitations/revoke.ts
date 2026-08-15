@@ -32,31 +32,39 @@ export const Route = createFileRoute('/api/team/invitations/revoke')({
 
           const { workspaceId, invitationId } = result.data;
 
-          // Extra authorization for admin revocation
-          const { data: invitation } = await supabaseAdmin
+          // Perform revocation using the authenticated member access check
+          // We don't need to manually check owner/admin because the database RLS or a future RPC will handle it.
+          // For now, we use a service-role update but we must verify actor permissions.
+          
+          const { data: actorAccess } = await supabaseAdmin.rpc('user_has_workspace_access', {
+            p_workspace_id: workspaceId,
+            p_user_id: user.id,
+            p_min_role: 'admin'
+          });
+
+          if (!actorAccess) {
+            return new Response(JSON.stringify({ ok: false, code: 'forbidden', requestId }), { status: 403 });
+          }
+
+          // Fetch invitation to check if it's an admin invite (only owner can revoke)
+          const { data: invitation, error: fetchError } = await supabaseAdmin
             .from('workspace_invitations')
             .select('role')
             .eq('id', invitationId)
             .eq('workspace_id', workspaceId)
-            .single();
+            .maybeSingle();
+
+          if (fetchError || !invitation) {
+            return new Response(JSON.stringify({ ok: false, code: 'not_found', requestId }), { status: 404 });
+          }
 
           const { data: isOwner } = await supabaseAdmin.rpc('user_has_workspace_access', {
-            p_user_id: user.id,
             p_workspace_id: workspaceId,
+            p_user_id: user.id,
             p_min_role: 'owner'
           });
 
-          const { data: isAdmin } = await supabaseAdmin.rpc('user_has_workspace_access', {
-            p_user_id: user.id,
-            p_workspace_id: workspaceId,
-            p_min_role: 'admin'
-          });
-
-          if (!isAdmin && !isOwner) {
-            return new Response(JSON.stringify({ ok: false, code: 'forbidden', requestId }), { status: 403 });
-          }
-
-          if (invitation?.role === 'admin' && !isOwner) {
+          if (invitation.role === 'admin' && !isOwner) {
             return new Response(JSON.stringify({ ok: false, code: 'forbidden', requestId }), { status: 403 });
           }
 
@@ -64,9 +72,11 @@ export const Route = createFileRoute('/api/team/invitations/revoke')({
             .from('workspace_invitations')
             .update({ status: 'revoked', updated_at: new Date().toISOString() })
             .eq('id', invitationId)
-            .eq('workspace_id', workspaceId);
+            .eq('workspace_id', workspaceId)
+            .eq('status', 'pending');
 
           if (error) {
+            console.error('[Invitation-Revoke] Error:', error);
             return new Response(JSON.stringify({ ok: false, code: 'internal_error', requestId }), { status: 500 });
           }
 

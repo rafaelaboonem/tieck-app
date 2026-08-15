@@ -218,7 +218,13 @@ function TeamPage() {
       fetchTeamData();
     } catch (error: any) {
       console.error('Invite error:', error);
-      toast.error(`Falha ao convidar: ${error.message === 'rate_limit' ? 'Limite de convites excedido. Tente mais tarde.' : 'Erro interno'}`);
+      const msg = error.message;
+      const errorMap: Record<string, string> = {
+        rate_limit: 'Limite de convites excedido. Tente mais tarde.',
+        already_member: 'Este usuário já é membro deste workspace.',
+        forbidden: 'Você não tem permissão para convidar nesta função.'
+      };
+      toast.error(errorMap[msg] || 'Erro interno ao convidar');
     } finally {
       setInviting(false);
     }

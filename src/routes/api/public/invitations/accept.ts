@@ -34,7 +34,7 @@ export const Route = createFileRoute('/api/public/invitations/accept')({
           
           const tokenHash = createHash('sha256').update(result.data.token).digest('hex');
 
-          // 3. Call atomic RPC (internal service logic handles user id)
+          // 3. Call atomic RPC (internal service logic handles user id and email matching)
           const { data, error: rpcError } = await supabaseAdmin.rpc('accept_workspace_invitation_service', {
             p_token_hash: tokenHash,
             p_user_id: user.id
@@ -42,11 +42,16 @@ export const Route = createFileRoute('/api/public/invitations/accept')({
 
           if (rpcError) {
             console.error('[Invitation-Accept] RPC error:', rpcError);
-            const code = rpcError.message === 'invalid_token' ? 'invalid_token' : 'internal_error';
-            return new Response(JSON.stringify({ ok: false, code, requestId }), { status: code === 'invalid_token' ? 400 : 500 });
+            const rpcMsg = rpcError.message;
+            const code = rpcMsg === 'invalid_token' ? 'invalid_token' : 
+                         rpcMsg === 'email_mismatch' ? 'email_mismatch' : 
+                         'internal_error';
+            return new Response(JSON.stringify({ ok: false, code, requestId }), { 
+              status: code === 'internal_error' ? 500 : 400 
+            });
           }
 
-          const res = data as any;
+          const res = data as { ok: boolean; workspace_id: string; member_id: string };
           return new Response(JSON.stringify({ 
             ok: true, 
             workspaceId: res?.workspace_id,
