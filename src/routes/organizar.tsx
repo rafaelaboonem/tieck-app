@@ -809,7 +809,7 @@ function WorkspacePage() {
         const { error } = await supabase.rpc('update_checklist_assignments', {
           p_checklist_id: checklistId,
           p_workspace_id: currentWorkspace.id,
-          p_primary_member_id: undefined,
+          p_primary_member_id: null, // Corrected from undefined to null
           p_member_ids: []
         });
         
@@ -828,11 +828,13 @@ function WorkspacePage() {
         if (error) throw error;
         
         // Refresh assignments local state
-        const { data: newAssignments } = await supabase
+        const { data: newAssignments, error: fetchError } = await supabase
           .from('checklist_assignments')
           .select('*')
           .eq('checklist_id', checklistId);
         
+        if (fetchError) throw fetchError;
+
         setAssignments(prev => [
           ...prev.filter(a => a.checklist_id !== checklistId),
           ...(newAssignments || [])
@@ -844,6 +846,7 @@ function WorkspacePage() {
       toast.error("Erro ao atribuir membro: " + err.message);
     }
   };
+
 
 
   const handleDeleteChecklist = async () => {
