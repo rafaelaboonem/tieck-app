@@ -109,7 +109,8 @@ export const Route = createFileRoute('/api/camera-ai/test-verification')({
           if (!imgVal.valid) return Response.json({ ok: false, code: imgVal.code || 'invalid_image' }, { status: 400 });
 
           const { OpenAI } = await import('openai');
-          const openaiClient = new OpenAI({ apiKey, dangerouslyAllowBrowser: true });
+          const openaiClient = new OpenAI({ apiKey, dangerouslyAllowBrowser: process.env.NODE_ENV === 'test' });
+
 
 
           const analysis = await analyzeImage(openaiClient, process.env['OPENAI_VISION_MODEL'] || 'gpt-4o-mini', question, buffer, imgVal.mimeType || 'image/jpeg', 20000, policyValidation.data);
