@@ -357,9 +357,6 @@ function CameraBlockEditor({
   );
 }
 
-    </div>
-  );
-}
 
 function ChecklistPreview({
   blocks,
