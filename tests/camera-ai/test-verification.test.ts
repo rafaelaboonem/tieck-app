@@ -136,9 +136,11 @@ describe('POST /api/camera-ai/test-verification', () => {
 
     const request = createTestRequest({}, 'valid-token');
     const response = await getHandler()({ request });
-    expect(response.status).toBe(200);
     const body = await response.json();
+    if (response.status !== 200) console.log('DEBUG Body:', JSON.stringify(body));
+    expect(response.status).toBe(200);
     expect(body.ok).toBe(true);
+
     expect(body.decision).toBe('approved');
   });
 
