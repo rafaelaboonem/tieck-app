@@ -28,7 +28,7 @@ function TeamPage() {
     if (!currentWorkspace) return;
     setLoading(true);
     try {
-      const [membersRes, invitesRes] = await Promise.all([
+      const [membersRes, invitesRes, assignmentsRes] = await Promise.all([
         supabase
           .from('workspace_members')
           .select(`
@@ -38,9 +38,9 @@ function TeamPage() {
             created_at,
             user_id,
             email_normalized,
-            profiles:profiles (
+            profiles:profiles!inner (
               id,
-              full_name,
+              display_name,
               avatar_url
             )
           `)
@@ -49,7 +49,20 @@ function TeamPage() {
           .from('workspace_invitations')
           .select('*')
           .eq('workspace_id', currentWorkspace.id)
-          .eq('status', 'pending')
+          .eq('status', 'pending'),
+        supabase
+          .from('checklist_assignments')
+          .select(`
+            id,
+            checklist_id,
+            workspace_member_id,
+            is_primary,
+            checklists:checklists (
+              id,
+              title
+            )
+          `)
+          .eq('workspace_id', currentWorkspace.id)
       ]);
 
       if (membersRes.error) throw membersRes.error;
@@ -57,6 +70,7 @@ function TeamPage() {
 
       setMembers(membersRes.data || []);
       setInvitations(invitesRes.data || []);
+      setAssignments(assignmentsRes.data || []);
     } catch (error) {
       console.error('Error fetching team data:', error);
       toast.error('Erro ao carregar dados da equipe');
