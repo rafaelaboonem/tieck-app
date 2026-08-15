@@ -800,23 +800,20 @@ function WorkspacePage() {
     }
   };
 
-  const handleAssignMember = async (checklistId: string, userId: string | null) => {
+  const handleAssignMember = async (checklistId: string, memberId: string | null) => {
     try {
       if (!currentWorkspace) return;
 
-      const member = members.find(m => m.user_id === userId);
-      const memberId = member?.id;
-
       if (!memberId) {
-        // Remove primary assignment
+        // Remove assignments for this checklist
         const { error } = await supabase
           .from('checklist_assignments')
           .delete()
           .eq('checklist_id', checklistId)
-          .eq('is_primary', true);
+          .eq('workspace_id', currentWorkspace.id);
         
         if (error) throw error;
-        setAssignments(prev => prev.filter(a => !(a.checklist_id === checklistId && a.is_primary)));
+        setAssignments(prev => prev.filter(a => a.checklist_id !== checklistId));
         toast.success("Responsável removido");
       } else {
         // RPC handles atomic update
