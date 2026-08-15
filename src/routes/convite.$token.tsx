@@ -166,7 +166,7 @@ function InvitePage() {
     );
   }
 
-  const maskedEmail = invite.email_normalized.replace(/(.{2})(.*)(?=@)/, (gp1, gp2, gp3) => gp2 + "*".repeat(gp3.length));
+  const maskedEmail = invite.email_normalized.replace(/(.{2})(.*)(?=@)/, (_: string, gp2: string, gp3: string) => gp2 + "*".repeat(gp3.length));
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-neutral-50 px-4 py-12">
