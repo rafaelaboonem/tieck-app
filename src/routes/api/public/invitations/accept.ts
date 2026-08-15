@@ -42,22 +42,14 @@ export const Route = createFileRoute('/api/public/invitations/accept')({
 
           if (rpcError) {
             console.error('[Invitation-Accept] RPC error:', rpcError);
-            return new Response(JSON.stringify({ ok: false, code: 'internal_error', requestId }), { status: 500 });
+            const code = rpcError.message === 'invalid_token' ? 'invalid_token' : 'internal_error';
+            return new Response(JSON.stringify({ ok: false, code, requestId }), { status: code === 'invalid_token' ? 400 : 500 });
           }
 
-          const res = data?.[0];
-          if (!res || !res.success) {
-            return new Response(JSON.stringify({ 
-              ok: false, 
-              code: res?.error_code || 'invitation_failed', 
-              requestId 
-            }), { status: 400 });
-          }
-
+          const res = data as any;
           return new Response(JSON.stringify({ 
             ok: true, 
-            workspaceId: res.workspace_id,
-            memberId: res.member_id,
+            workspaceId: res?.workspace_id,
             requestId 
           }), { status: 200 });
 
