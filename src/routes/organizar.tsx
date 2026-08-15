@@ -800,6 +800,50 @@ function WorkspacePage() {
     }
   };
 
+  const handleAssignMember = async (checklistId: string, userId: string | null) => {
+    try {
+      if (!currentWorkspace) return;
+
+      if (!userId) {
+        // Remove primary assignment
+        const { error } = await supabase
+          .from('checklist_assignments')
+          .delete()
+          .eq('checklist_id', checklistId)
+          .eq('is_primary', true);
+        
+        if (error) throw error;
+        setAssignments(prev => prev.filter(a => !(a.checklist_id === checklistId && a.is_primary)));
+        toast.success("Responsável removido");
+      } else {
+        // RPC handles atomic update (delete old primary, insert new one)
+        const { data, error } = await supabase.rpc('update_checklist_assignments', {
+          p_checklist_id: checklistId,
+          p_workspace_id: currentWorkspace.id,
+          p_primary_user_id: userId
+        });
+
+        if (error) throw error;
+        
+        // Refresh assignments local state
+        const { data: newAssignments } = await supabase
+          .from('checklist_assignments')
+          .select('*')
+          .eq('checklist_id', checklistId);
+        
+        setAssignments(prev => [
+          ...prev.filter(a => a.checklist_id !== checklistId),
+          ...(newAssignments || [])
+        ]);
+        toast.success("Responsável atribuído");
+      }
+    } catch (err: any) {
+      console.error(err);
+      toast.error("Erro ao atribuir membro: " + err.message);
+    }
+  };
+
+
   const handleDeleteChecklist = async () => {
 
     if (!checklistToDelete) return;
