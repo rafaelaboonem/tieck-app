@@ -139,12 +139,23 @@ export function CameraSettingsPanel({
                     <Badge variant="secondary" className="bg-pink-100 text-pink-600 text-[10px]">Recomendado</Badge>
                   </div>
 
-                  <div className="flex items-center justify-between p-3 border border-neutral-100 rounded-xl opacity-50 bg-neutral-50">
+                   <div className="flex items-center justify-between p-3 border border-neutral-100 rounded-xl opacity-50 bg-neutral-50 cursor-not-allowed">
                     <div className="flex items-center gap-3">
                       <div className="w-4 h-4 rounded-full border-2 border-neutral-300" />
                       <div>
                         <p className="text-sm font-bold text-neutral-900">Comparar com referência</p>
                         <p className="text-[11px] text-neutral-500">Compara com fotos padrão.</p>
+                      </div>
+                    </div>
+                    <Badge variant="outline" className="text-[10px]">Em breve</Badge>
+                  </div>
+
+                  <div className="flex items-center justify-between p-3 border border-neutral-100 rounded-xl opacity-50 bg-neutral-50 cursor-not-allowed">
+                    <div className="flex items-center gap-3">
+                      <div className="w-4 h-4 rounded-full border-2 border-neutral-300" />
+                      <div>
+                        <p className="text-sm font-bold text-neutral-900">Múltiplas fotos</p>
+                        <p className="text-[11px] text-neutral-500">Exigir vários ângulos do mesmo objeto.</p>
                       </div>
                     </div>
                     <Badge variant="outline" className="text-[10px]">Em breve</Badge>
