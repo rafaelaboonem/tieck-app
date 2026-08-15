@@ -19,9 +19,14 @@ export const Route = createFileRoute('/api/public/invitations/inspect')({
             return new Response(JSON.stringify({ ok: false, code: 'invalid_request', requestId }), { status: 400 });
           }
 
+          // Token hash (64 hex characters)
+          if (!/^[0-9a-f]{64}$/.test(result.data.token)) {
+            return new Response(JSON.stringify({ ok: false, code: 'invalid_format', requestId }), { status: 400 });
+          }
+
           const tokenHash = createHash('sha256').update(result.data.token).digest('hex');
 
-          // Query invitation details securely (public route, but specific hash required)
+          // Query invitation details
           const { data: invitation, error } = await supabaseAdmin
             .from('workspace_invitations')
             .select(`
