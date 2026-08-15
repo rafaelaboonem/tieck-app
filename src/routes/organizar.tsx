@@ -1398,6 +1398,14 @@ function WorkspacePage() {
 
 
 
+                <div 
+                  onClick={() => setSelectedSubTab("Atribuições")}
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap group transition-colors cursor-pointer ${selectedSubTab === "Atribuições" ? "bg-neutral-100 text-neutral-700" : "hover:bg-neutral-50 text-neutral-500"}`}
+                >
+                  <Users className="w-4 h-4" />
+                  <span>Atribuições</span>
+                </div>
+
                 {categories.length < 4 && (
                   <button 
                     onClick={() => setIsCategoryModalOpen(true)}
