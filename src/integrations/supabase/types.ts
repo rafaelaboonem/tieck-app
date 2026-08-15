@@ -2425,6 +2425,15 @@ export type Database = {
       }
     }
     Functions: {
+      accept_workspace_invitation: {
+        Args: { p_token_hash: string; p_user_id: string }
+        Returns: {
+          error_code: string
+          member_id: string
+          success: boolean
+          workspace_id: string
+        }[]
+      }
       acquire_vision_lock: {
         Args: {
           p_operation: string
@@ -2603,6 +2612,15 @@ export type Database = {
           upload_token: string
           upload_token_expires_at: string
         }[]
+      }
+      update_checklist_assignments: {
+        Args: {
+          p_checklist_id: string
+          p_member_ids: string[]
+          p_primary_member_id: string
+          p_workspace_id: string
+        }
+        Returns: boolean
       }
       update_checklist_retention: {
         Args: {
