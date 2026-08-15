@@ -83,6 +83,7 @@ function TeamPage() {
   const [invitations, setInvitations] = useState<WorkspaceInvitationView[]>([]);
   const [assignments, setAssignments] = useState<ChecklistAssignmentView[]>([]);
   const [loading, setLoading] = useState(true);
+  const [currentUserRole, setCurrentUserRole] = useState<'owner' | 'admin' | 'editor' | 'viewer' | null>(null);
   
   // Modals state
   const [inviteModalOpen, setInviteModalOpen] = useState(false);
@@ -99,6 +100,25 @@ function TeamPage() {
     if (!currentWorkspace) return;
     setLoading(true);
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      // Determine current user role
+      const isOwner = currentWorkspace.owner_id === user.id;
+      if (isOwner) {
+        setCurrentUserRole('owner');
+      } else {
+        const { data: memberRoleData } = await supabase
+          .from('workspace_members')
+          .select('role')
+          .eq('workspace_id', currentWorkspace.id)
+          .eq('user_id', user.id)
+          .eq('status', 'active')
+          .maybeSingle();
+        
+        setCurrentUserRole(memberRoleData?.role as any || 'viewer');
+      }
+
       // 1. Fetch members
       const { data: membersData, error: membersError } = await supabase
         .from('workspace_members')
@@ -198,7 +218,7 @@ function TeamPage() {
       fetchTeamData();
     } catch (error: any) {
       console.error('Invite error:', error);
-      toast.error(`Falha ao convidar: ${error.message}`);
+      toast.error(`Falha ao convidar: ${error.message === 'rate_limit' ? 'Limite de convites excedido. Tente mais tarde.' : 'Erro interno'}`);
     } finally {
       setInviting(false);
     }
@@ -360,13 +380,15 @@ function TeamPage() {
                 Gerencie os membros e permissões do workspace <span className="font-semibold text-neutral-700">{currentWorkspace.name}</span>.
               </p>
             </div>
-            <Button 
-              className="bg-pink-500 hover:bg-pink-600 text-white gap-2"
-              onClick={() => setInviteModalOpen(true)}
-            >
-              <UserPlus className="w-4 h-4" />
-              Convidar
-            </Button>
+            {(currentUserRole === 'admin' || currentUserRole === 'owner') && (
+              <Button 
+                className="bg-pink-500 hover:bg-pink-600 text-white gap-2"
+                onClick={() => setInviteModalOpen(true)}
+              >
+                <UserPlus className="w-4 h-4" />
+                Convidar
+              </Button>
+            )}
           </div>
         </header>
 
@@ -434,7 +456,7 @@ function TeamPage() {
                             </span>
                           </td>
                           <td className="px-6 py-4 text-right">
-                            {!member.is_owner && (
+                            {!member.is_owner && (currentUserRole === 'owner' || (currentUserRole === 'admin' && member.role !== 'admin')) && (
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                   <Button variant="ghost" size="sm" className="h-8 w-8 p-0 hover:bg-neutral-100">
@@ -448,7 +470,9 @@ function TeamPage() {
                                     <DropdownMenuSubTrigger className="text-sm">Alterar permissão</DropdownMenuSubTrigger>
                                     <DropdownMenuPortal>
                                       <DropdownMenuSubContent>
-                                        <DropdownMenuItem onClick={() => handleChangeRole(member.id, 'admin')}>Administrador</DropdownMenuItem>
+                                        {currentUserRole === 'owner' && (
+                                          <DropdownMenuItem onClick={() => handleChangeRole(member.id, 'admin')}>Administrador</DropdownMenuItem>
+                                        )}
                                         <DropdownMenuItem onClick={() => handleChangeRole(member.id, 'editor')}>Editor</DropdownMenuItem>
                                         <DropdownMenuItem onClick={() => handleChangeRole(member.id, 'viewer')}>Visualizador</DropdownMenuItem>
                                       </DropdownMenuSubContent>

@@ -45,7 +45,8 @@ export const Route = createFileRoute('/api/team/members/update')({
 
           if (rpcError) {
             console.error('[Team-Update] RPC error:', rpcError);
-            return new Response(JSON.stringify({ ok: false, code: rpcError.code, message: rpcError.message, requestId }), { status: 400 });
+            const code = rpcError.message.includes('Forbidden') ? 'forbidden' : 'internal_error';
+            return new Response(JSON.stringify({ ok: false, code, requestId }), { status: code === 'forbidden' ? 403 : 400 });
           }
 
           return new Response(JSON.stringify({ ok: true, requestId }), { status: 200 });

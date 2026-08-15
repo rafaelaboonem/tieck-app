@@ -32,14 +32,31 @@ export const Route = createFileRoute('/api/team/invitations/revoke')({
 
           const { workspaceId, invitationId } = result.data;
 
-          // Admin check via standard query (or RPC)
-          const { data: isAuthorized } = await supabaseAdmin.rpc('user_has_workspace_access', {
+          // Extra authorization for admin revocation
+          const { data: invitation } = await supabaseAdmin
+            .from('workspace_invitations')
+            .select('role')
+            .eq('id', invitationId)
+            .eq('workspace_id', workspaceId)
+            .single();
+
+          const { data: isOwner } = await supabaseAdmin.rpc('user_has_workspace_access', {
+            p_user_id: user.id,
+            p_workspace_id: workspaceId,
+            p_min_role: 'owner'
+          });
+
+          const { data: isAdmin } = await supabaseAdmin.rpc('user_has_workspace_access', {
             p_user_id: user.id,
             p_workspace_id: workspaceId,
             p_min_role: 'admin'
           });
 
-          if (!isAuthorized) {
+          if (!isAdmin && !isOwner) {
+            return new Response(JSON.stringify({ ok: false, code: 'forbidden', requestId }), { status: 403 });
+          }
+
+          if (invitation?.role === 'admin' && !isOwner) {
             return new Response(JSON.stringify({ ok: false, code: 'forbidden', requestId }), { status: 403 });
           }
 
@@ -50,7 +67,7 @@ export const Route = createFileRoute('/api/team/invitations/revoke')({
             .eq('workspace_id', workspaceId);
 
           if (error) {
-            return new Response(JSON.stringify({ ok: false, code: 'database_error', requestId }), { status: 500 });
+            return new Response(JSON.stringify({ ok: false, code: 'internal_error', requestId }), { status: 500 });
           }
 
           return new Response(JSON.stringify({ ok: true, requestId }), { status: 200 });
