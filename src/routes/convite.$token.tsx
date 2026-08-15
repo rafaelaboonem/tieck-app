@@ -145,7 +145,7 @@ function InvitePage() {
     );
   }
 
-  const maskedEmail = invite.email;
+  const maskedEmail = invite?.email;
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-neutral-50 px-4 py-12">
@@ -167,10 +167,10 @@ function InvitePage() {
           <div className="bg-neutral-50 rounded-2xl p-6 border border-neutral-100 mb-8">
             <div className="flex items-center gap-4 mb-4 pb-4 border-b border-neutral-200/50">
               <div className="w-10 h-10 bg-neutral-200 rounded-lg flex items-center justify-center text-neutral-500 font-bold">
-                {invite.workspaceName?.[0] || 'W'}
+                {invite?.workspaceName?.[0] || 'W'}
               </div>
               <div>
-                <div className="text-sm font-bold text-neutral-900">{invite.workspaceName}</div>
+                <div className="text-sm font-bold text-neutral-900">{invite?.workspaceName}</div>
                 <div className="text-xs text-neutral-500">Workspace de Checklists</div>
               </div>
             </div>
@@ -179,7 +179,7 @@ function InvitePage() {
               <div className="flex items-center justify-between">
                 <span className="text-xs text-neutral-500 uppercase font-bold tracking-wider">Papel</span>
                 <span className="text-xs font-bold px-2.5 py-1 bg-pink-100 text-pink-600 rounded-full capitalize">
-                  {invite.role}
+                  {invite?.role}
                 </span>
               </div>
               <div className="flex items-center justify-between">
