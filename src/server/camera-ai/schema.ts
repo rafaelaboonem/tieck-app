@@ -56,8 +56,20 @@ export interface PublishedBlock {
   description?: string;
   required?: boolean;
   mode?: string;
+  instruction?: string;
   cameraAiPolicy?: CameraVerificationPolicyV1;
 }
+
+export interface CameraBlockPatch {
+  title?: string;
+  subtitle?: string;
+  description?: string;
+  instruction?: string;
+  required?: boolean;
+  mode?: string;
+  cameraAiPolicy?: CameraVerificationPolicyV1;
+}
+
 
 export interface VerificationResult {
   ok: boolean;

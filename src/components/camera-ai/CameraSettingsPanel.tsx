@@ -19,10 +19,11 @@ interface CameraSettingsPanelProps {
   block: PublishedBlock;
   isOpen: boolean;
   onClose: () => void;
-  onSave: (patch: any) => void;
+  onSave: (patch: CameraBlockPatch) => void;
   isCompiling: boolean;
   checklistId: string;
 }
+
 
 export function CameraSettingsPanel({ block, isOpen, onClose, onSave, isCompiling, checklistId }: CameraSettingsPanelProps) {
   const [draft, setDraft] = useState<CameraDraft>({
