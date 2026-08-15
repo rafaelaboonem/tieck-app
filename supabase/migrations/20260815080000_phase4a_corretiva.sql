@@ -108,3 +108,86 @@ BEGIN
     RETURN true;
 END;
 $$;
+
+-- 5. RPC de aceite de convite seguro (sem p_user_id vindo do cliente)
+CREATE OR REPLACE FUNCTION public.accept_workspace_invitation(
+    p_token_hash text
+)
+RETURNS TABLE (
+    success boolean,
+    workspace_id uuid,
+    member_id uuid,
+    error_code text
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, auth, pg_temp
+AS $$
+DECLARE
+    v_invitation record;
+    v_email text;
+    v_member_id uuid;
+    v_user_id uuid;
+BEGIN
+    v_user_id := auth.uid();
+    IF v_user_id IS NULL THEN
+        RETURN QUERY SELECT false, NULL::uuid, NULL::uuid, 'unauthorized'::text;
+        RETURN;
+    END IF;
+
+    -- 1. Find and lock invitation
+    SELECT * INTO v_invitation
+    FROM public.workspace_invitations
+    WHERE token_hash = p_token_hash
+      AND status = 'pending'
+      AND expires_at > now()
+    FOR UPDATE;
+
+    IF NOT FOUND THEN
+        RETURN QUERY SELECT false, NULL::uuid, NULL::uuid, 'invitation_invalid'::text;
+        RETURN;
+    END IF;
+
+    -- 2. Verify user email matches invitation
+    SELECT email INTO v_email FROM auth.users WHERE id = v_user_id;
+    
+    IF LOWER(TRIM(v_email)) != v_invitation.email_normalized THEN
+        RETURN QUERY SELECT false, v_invitation.workspace_id, NULL::uuid, 'email_mismatch'::text;
+        RETURN;
+    END IF;
+
+    -- 3. Upsert workspace member
+    INSERT INTO public.workspace_members (
+        workspace_id,
+        user_id,
+        email_normalized,
+        role,
+        status
+    ) VALUES (
+        v_invitation.workspace_id,
+        v_user_id,
+        v_invitation.email_normalized,
+        v_invitation.role,
+        'active'
+    )
+    ON CONFLICT (workspace_id, user_id) 
+    DO UPDATE SET 
+        role = EXCLUDED.role,
+        status = 'active',
+        updated_at = now()
+    RETURNING id INTO v_member_id;
+
+    -- 4. Mark invitation as accepted
+    UPDATE public.workspace_invitations
+    SET 
+        status = 'accepted',
+        accepted_by = v_user_id,
+        accepted_at = now(),
+        updated_at = now()
+    WHERE id = v_invitation.id;
+
+    RETURN QUERY SELECT true, v_invitation.workspace_id, v_member_id, NULL::text;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.accept_workspace_invitation(text) TO authenticated;

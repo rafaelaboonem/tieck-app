@@ -536,7 +536,7 @@ function WorkspacePage() {
                 avatar_url
               )
             `)
-            .eq('workspace_id', currentWorkspace.id)
+            .eq('workspace_id', currentWorkspace.id),
           supabase
             .from('checklist_assignments')
             .select('*')
