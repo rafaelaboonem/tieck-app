@@ -22,6 +22,11 @@ function isCameraBlock(b: unknown): b is PublishedBlock {
   return isRecord(b) && b.type === 'camera' && typeof b.id === 'string';
 }
 
+type TestVerificationResponse = 
+  | { ok: true; decision: VerificationResult['decision']; code: string; message: string; evidence: string; requestId: string }
+  | { ok: false; code: string; requestId: string };
+
+
 export const Route = createFileRoute('/api/camera-ai/test-verification')({
   server: {
     handlers: {
@@ -29,36 +34,38 @@ export const Route = createFileRoute('/api/camera-ai/test-verification')({
         const requestId = randomUUID();
         
         if (process.env['CAMERA_AI_MODE'] !== 'enabled') {
-          return Response.json({ ok: false, code: 'camera_ai_disabled', requestId } as VerificationResult, { status: 503 });
+          return Response.json({ ok: false, code: 'camera_ai_disabled', requestId }, { status: 503 });
         }
 
         const apiKey = process.env['OPENAI_API_KEY'];
         if (!apiKey) {
           console.error(`[CameraAI-Test] [${requestId}] Configuration missing: OPENAI_API_KEY`);
-          return Response.json({ ok: false, code: 'config_missing', requestId } as VerificationResult, { status: 503 });
+          return Response.json({ ok: false, code: 'config_missing', requestId }, { status: 503 });
+
         }
 
         const authHeader = request.headers.get("Authorization");
         if (!authHeader || !authHeader.startsWith('Bearer ')) {
-          return Response.json({ ok: false, code: 'unauthorized', requestId } as VerificationResult, { status: 401 });
+          return Response.json({ ok: false, code: 'unauthorized', requestId }, { status: 401 });
+
         }
         const token = authHeader.replace('Bearer ', '');
 
         const client = createServerSupabaseClient();
         if (!client) {
           console.error(`[CameraAI-Test] [${requestId}] Supabase client failure`);
-          return Response.json({ ok: false, code: 'config_missing', requestId } as VerificationResult, { status: 503 });
+          return Response.json({ ok: false, code: 'config_missing', requestId }, { status: 503 });
         }
 
         const { data: { user } } = await client.auth.getUser(token);
-        if (!user) return Response.json({ ok: false, code: 'unauthorized', requestId } as VerificationResult, { status: 401 });
+        if (!user) return Response.json({ ok: false, code: 'unauthorized', requestId }, { status: 401 });
 
         try {
           let formData: FormData;
           try {
             formData = await request.formData();
           } catch (e) {
-            return Response.json({ ok: false, code: 'invalid_form_data', requestId } as VerificationResult, { status: 400 });
+            return Response.json({ ok: false, code: 'invalid_form_data', requestId }, { status: 400 });
           }
 
           const validation = TestPayloadSchema.safeParse({
@@ -67,21 +74,20 @@ export const Route = createFileRoute('/api/camera-ai/test-verification')({
           });
           
           if (!validation.success) {
-            return Response.json({ ok: false, code: 'invalid_payload', requestId } as VerificationResult, { status: 400 });
+            return Response.json({ ok: false, code: 'invalid_payload', requestId }, { status: 400 });
           }
           
           const { checklistId, blockId } = validation.data;
           const candidate = formData.get('candidate');
           
-          if (!candidate) return Response.json({ ok: false, code: 'missing_image', requestId } as VerificationResult, { status: 400 });
+          if (!candidate) return Response.json({ ok: false, code: 'missing_image', requestId }, { status: 400 });
           
-          // Type-safe Blob detection
-          const isBlob = candidate && typeof candidate === 'object' && 'arrayBuffer' in candidate && typeof (candidate as any).arrayBuffer === 'function';
-          if (!isBlob) {
-            return Response.json({ ok: false, code: 'invalid_image_type', requestId } as VerificationResult, { status: 400 });
+          if (!(candidate instanceof Blob)) {
+            return Response.json({ ok: false, code: 'invalid_image_type', requestId }, { status: 400 });
           }
 
-          const blobCandidate = candidate as unknown as Blob;
+
+          const blobCandidate = candidate;
 
           const { data: checklist, error: chkError } = await client
             .from('checklists')
@@ -89,7 +95,7 @@ export const Route = createFileRoute('/api/camera-ai/test-verification')({
             .eq('id', checklistId)
             .single();
 
-          if (chkError || !checklist) return Response.json({ ok: false, code: 'not_found', requestId } as VerificationResult, { status: 404 });
+          if (chkError || !checklist) return Response.json({ ok: false, code: 'not_found', requestId }, { status: 404 });
           
           let isAuthorized = checklist.user_id === user.id;
           if (!isAuthorized && checklist.workspace_id) {
@@ -105,39 +111,46 @@ export const Route = createFileRoute('/api/camera-ai/test-verification')({
               isAuthorized = true;
             }
           }
-          if (!isAuthorized) return Response.json({ ok: false, code: 'forbidden', requestId } as VerificationResult, { status: 403 });
+          if (!isAuthorized) return Response.json({ ok: false, code: 'forbidden', requestId }, { status: 403 });
 
           const blocks = Array.isArray(checklist.blocks) ? checklist.blocks : [];
           const block = blocks.find((b: unknown) => isCameraBlock(b) && b.id === blockId);
-          if (!block || !isCameraBlock(block)) return Response.json({ ok: false, code: 'invalid_block', requestId } as VerificationResult, { status: 404 });
+          if (!block || !isCameraBlock(block)) return Response.json({ ok: false, code: 'invalid_block', requestId }, { status: 404 });
 
           const policy = block.cameraAiPolicy;
           const policyValidation = CameraVerificationPolicyV1Schema.safeParse(policy);
-          if (!policyValidation.success) return Response.json({ ok: false, code: 'invalid_policy', requestId } as VerificationResult, { status: 400 });
+          if (!policyValidation.success) return Response.json({ ok: false, code: 'invalid_policy', requestId }, { status: 400 });
 
           const question = (String(block.title || '') + ' ' + String(block.description || '')).trim();
           const expectedHash = createHash('sha256').update(question).digest('hex');
           if (policyValidation.data.questionHash !== expectedHash) {
-             return Response.json({ ok: false, code: 'checklist_update_required', requestId } as VerificationResult, { status: 400 });
+             return Response.json({ ok: false, code: 'checklist_update_required', requestId }, { status: 400 });
           }
+
 
           const buffer = await blobCandidate.arrayBuffer();
           const imgVal = await validateImageBuffer(buffer, blobCandidate.type);
-          if (!imgVal.valid) return Response.json({ ok: false, code: imgVal.code || 'invalid_image', requestId } as VerificationResult, { status: 400 });
+          if (!imgVal.valid) return Response.json({ ok: false, code: imgVal.code || 'invalid_image', requestId }, { status: 400 });
 
           // 1. Rate Limit
           const keyHash = createHash('sha256').update(user.id + ":" + checklistId).digest('hex');
-          const { data: limitOk, error: limitErr } = await client.rpc('hit_public_rate_limit', {
+          const { data: limitData, error: limitError } = await client.rpc('hit_public_rate_limit', {
             p_key_hash: keyHash,
             p_action: 'camera_ai_test',
             p_window_seconds: 600,
             p_limit: 10
           });
 
-          if (limitErr || !limitOk) {
-            console.log(`[CameraAI-Test] [${requestId}] Rate limit reached or failed`, { limitErr });
-            return Response.json({ ok: false, code: 'rate_limit', requestId } as VerificationResult, { status: 429 });
+          const allowed =
+            !limitError &&
+            Array.isArray(limitData) &&
+            limitData[0]?.allowed === true;
+
+          if (!allowed) {
+            console.log(`[CameraAI-Test] [${requestId}] Rate limit reached or failed`, { limitError });
+            return Response.json({ ok: false, code: 'rate_limit', requestId }, { status: 429 });
           }
+
 
           const { OpenAI } = await import('openai');
           const openaiClient = new OpenAI({ apiKey, dangerouslyAllowBrowser: process.env.NODE_ENV === 'test' });
@@ -154,11 +167,12 @@ export const Route = createFileRoute('/api/camera-ai/test-verification')({
           
           const result = evaluateGate(analysis);
 
-          return Response.json({ ...result, requestId });
+          return Response.json({ ok: true, decision: result.decision, code: result.code, message: result.message, evidence: result.evidence, requestId } as TestVerificationResponse);
         } catch (error: unknown) {
           console.error(`[CameraAI-Test] [${requestId}] Failure:`, error);
-          return Response.json({ ok: false, code: 'technical_failure', requestId } as VerificationResult, { status: 500 });
+          return Response.json({ ok: false, code: 'technical_failure', requestId }, { status: 500 });
         }
+
       }
     }
   }

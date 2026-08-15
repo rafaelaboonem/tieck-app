@@ -38,11 +38,15 @@ export function CameraVerificationTestDialog({ isOpen, onClose, blockId, checkli
     setPreviewUrl(null);
     setResult(null);
     setIsLoading(false);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
       abortControllerRef.current = null;
     }
   };
+
 
   useEffect(() => {
     if (!isOpen) reset();
