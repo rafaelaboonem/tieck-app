@@ -42,11 +42,14 @@ export const Route = createFileRoute('/api/camera-ai/test-verification')({
 
         try {
           const contentType = request.headers.get("content-type") || "";
-          if (!contentType.includes("multipart/form-data")) {
-             return Response.json({ ok: false, code: 'invalid_content_type', type: contentType }, { status: 400 });
+          
+          let formData: FormData;
+          try {
+            formData = await request.formData();
+          } catch (e) {
+            return Response.json({ ok: false, code: 'invalid_form_data', error: String(e) }, { status: 400 });
           }
 
-          const formData = await request.formData();
           const validation = TestPayloadSchema.safeParse({
             checklistId: formData.get('checklistId'),
             blockId: formData.get('blockId'),
@@ -56,9 +59,13 @@ export const Route = createFileRoute('/api/camera-ai/test-verification')({
           const { checklistId, blockId } = validation.data;
           const candidate = formData.get('candidate');
           if (!candidate) return Response.json({ ok: false, code: 'missing_image' }, { status: 400 });
-          if (!(candidate instanceof File) && !(candidate instanceof Blob)) {
+          
+          // Use any for duck typing to avoid TS environment issues with File/Blob
+          const isBlob = candidate && typeof (candidate as any).arrayBuffer === 'function';
+          if (!isBlob) {
             return Response.json({ ok: false, code: 'invalid_image_type', type: typeof candidate }, { status: 400 });
           }
+
 
 
           const { data: checklist, error: chkError } = await client
