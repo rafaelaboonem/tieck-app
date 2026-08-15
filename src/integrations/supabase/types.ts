@@ -2583,23 +2583,14 @@ export type Database = {
           user_id: string
         }[]
       }
-      has_role_in_workspace:
-        | {
-            Args: {
-              _min_role?: Database["public"]["Enums"]["app_role"]
-              _user_id: string
-              _workspace_id: string
-            }
-            Returns: boolean
-          }
-        | {
-            Args: {
-              p_min_role: string
-              p_user_id: string
-              p_workspace_id: string
-            }
-            Returns: boolean
-          }
+      has_role_in_workspace: {
+        Args: {
+          _min_role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+          _workspace_id: string
+        }
+        Returns: boolean
+      }
       hit_public_rate_limit: {
         Args: {
           p_action: string
