@@ -9,12 +9,12 @@ import {
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
-import { AlertCircle, Info, X, Loader2, Play } from "lucide-react";
-import { CameraVerificationPolicyV1 } from "@/server/camera-ai/schema";
+import { AlertCircle, X, Loader2, Play } from "lucide-react";
+import { CameraVerificationPolicyV1, PublishedBlock } from "@/server/camera-ai/schema";
 import { CameraVerificationTestDialog } from "./CameraVerificationTestDialog";
 
 interface CameraSettingsPanelProps {
-  block: any;
+  block: PublishedBlock;
   isOpen: boolean;
   onClose: () => void;
   onSave: (patch: any) => void;
