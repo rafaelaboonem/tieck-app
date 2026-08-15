@@ -564,12 +564,11 @@ function WorkspacePage() {
             .from('workspace_members')
             .select(`
               id,
+              role,
+              status,
+              created_at,
               user_id,
-              profiles:profiles!inner (
-                id,
-                display_name,
-                avatar_url
-              )
+              email_normalized
             `)
             .eq('workspace_id', currentWorkspace.id),
           supabase
@@ -578,7 +577,23 @@ function WorkspacePage() {
             .eq('workspace_id', currentWorkspace.id)
         ]);
 
-        if (!membersRes.error) setMembers(membersRes.error ? [] : membersRes.data);
+        if (!membersRes.error && membersRes.data) {
+          const userIds = membersRes.data.map(m => m.user_id).filter((id): id is string => !!id);
+          const { data: profilesData } = await supabase
+            .from('profiles')
+            .select('id, display_name, avatar_url')
+            .in('id', userIds);
+
+          const membersWithProfiles: WorkspaceMemberView[] = membersRes.data.map(member => ({
+            ...member,
+            user_id: member.user_id as string,
+            role: member.role as any,
+            status: member.status as any,
+            is_owner: currentWorkspace.owner_id === member.user_id,
+            profiles: profilesData?.find(p => p.id === member.user_id)
+          }));
+          setMembers(membersWithProfiles);
+        }
         if (!assignmentsRes.error) setAssignments(assignmentsRes.error ? [] : assignmentsRes.data);
 
       } catch (error) {
