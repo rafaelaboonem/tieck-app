@@ -352,6 +352,7 @@ function CameraBlockEditor({
         onClose={() => setActiveBlockId(null)}
         isCompiling={isCompiling}
         onSave={(patch) => updateBlock(block.id, patch)}
+        checklistId={currentChecklistId || ""}
       />
     </div>
   );

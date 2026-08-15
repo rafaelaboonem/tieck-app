@@ -19,6 +19,7 @@ interface CameraSettingsPanelProps {
   onClose: () => void;
   onSave: (patch: any) => void;
   isCompiling: boolean;
+  checklistId: string;
 }
 
 export function CameraSettingsPanel({
@@ -26,7 +27,8 @@ export function CameraSettingsPanel({
   isOpen,
   onClose,
   onSave,
-  isCompiling
+  isCompiling,
+  checklistId
 }: CameraSettingsPanelProps) {
   const [draft, setDraft] = useState({
     title: block.title || block.subtitle || "",
@@ -273,6 +275,7 @@ export function CameraSettingsPanel({
         onClose={() => setIsTestModalOpen(false)}
         policy={policy}
         blockId={block.id}
+        checklistId={checklistId}
       />
     </>
   );

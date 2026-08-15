@@ -299,13 +299,13 @@ export function CameraVerificationTestDialog({
                 "p-6 rounded-2xl border flex flex-col items-center text-center gap-4",
                 result.decision === 'approved' 
                   ? 'bg-green-50 border-green-100 text-green-800' 
-                  : result.decision === 'rejected'
+                  : result.decision === 'retake'
                   ? 'bg-amber-50 border-amber-100 text-amber-800'
                   : 'bg-neutral-50 border-neutral-100 text-neutral-800'
               )}>
                 {result.decision === 'approved' ? (
                   <CheckCircle2 className="w-12 h-12 text-green-500" />
-                ) : result.decision === 'rejected' ? (
+                ) : result.decision === 'retake' ? (
                   <AlertCircle className="w-12 h-12 text-amber-500" />
                 ) : (
                   <XCircle className="w-12 h-12 text-neutral-500" />
@@ -313,7 +313,7 @@ export function CameraVerificationTestDialog({
                 
                 <div>
                   <h4 className="text-lg font-bold">
-                    {result.decision === 'approved' ? 'Imagem Aprovada' : result.decision === 'rejected' ? 'Ação Necessária' : 'Não Observável'}
+                    {result.decision === 'approved' ? 'Imagem Aprovada' : result.decision === 'retake' ? 'Ação Necessária' : 'Não Observável'}
                   </h4>
                   <p className="text-sm opacity-90 mt-1">{result.message}</p>
                 </div>
