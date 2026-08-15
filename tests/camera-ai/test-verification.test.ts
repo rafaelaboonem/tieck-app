@@ -87,6 +87,8 @@ describe('POST /api/camera-ai/test-verification', () => {
 
 
     const headers: Record<string, string> = {};
+    const body = formData;
+
 
 
     if (token) headers['Authorization'] = `Bearer ${token}`;
@@ -94,7 +96,7 @@ describe('POST /api/camera-ai/test-verification', () => {
     return new Request('http://localhost/api/camera-ai/test-verification', {
       method: 'POST',
       headers,
-      body: formData
+      body
     });
   };
 
