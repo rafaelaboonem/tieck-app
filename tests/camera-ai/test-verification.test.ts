@@ -86,7 +86,10 @@ describe('POST /api/camera-ai/test-verification', () => {
     }
 
 
-    const headers: Record<string, string> = {};
+    const headers: Record<string, string> = {
+      'Content-Type': 'multipart/form-data'
+    };
+
     if (token) headers['Authorization'] = `Bearer ${token}`;
 
     return new Request('http://localhost/api/camera-ai/test-verification', {
