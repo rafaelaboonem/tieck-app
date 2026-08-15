@@ -49,6 +49,7 @@ export type WorkspaceMemberView = {
     display_name: string | null;
     avatar_url: string | null;
   };
+  is_owner?: boolean;
 };
 
 export type WorkspaceInvitationView = {
@@ -98,7 +99,7 @@ function TeamPage() {
       if (membersError) throw membersError;
 
       // 2. Fetch profiles for those members
-      const userIds = membersData.map(m => m.user_id).filter(Boolean);
+      const userIds = membersData.map(m => m.user_id).filter((id): id is string => !!id);
       const { data: profilesData } = await supabase
         .from('profiles')
         .select('id, display_name, avatar_url')
@@ -106,8 +107,10 @@ function TeamPage() {
 
       const membersWithProfiles: WorkspaceMemberView[] = membersData.map(member => ({
         ...member,
+        user_id: member.user_id as string,
         role: member.role as any,
         status: member.status as any,
+        is_owner: currentWorkspace.owner_id === member.user_id,
         profiles: profilesData?.find(p => p.id === member.user_id)
       }));
 
