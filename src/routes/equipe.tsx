@@ -249,14 +249,14 @@ function TeamPage() {
     fetchTeamData();
   }, [currentWorkspace?.id]);
 
-  const getRoleLabel = (role: string) => {
+  const getRoleLabel = (member: WorkspaceMemberView) => {
+    if (member.is_owner) return 'Proprietário';
     const roles: Record<string, string> = {
-      owner: 'Proprietário',
       admin: 'Administrador',
       editor: 'Editor',
       viewer: 'Visualizador'
     };
-    return roles[role] || role;
+    return roles[member.role] || member.role;
   };
 
   if (!currentWorkspace) return null;
