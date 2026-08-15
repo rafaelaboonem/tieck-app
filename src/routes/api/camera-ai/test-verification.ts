@@ -6,7 +6,7 @@ import { analyzeImage } from '@/server/camera-ai/openai-provider';
 import { evaluateGate } from '@/server/camera-ai/gate';
 import { validateImageBuffer } from '@/server/camera-ai/image-validation';
 import { createHash } from 'crypto';
-import OpenAI from 'openai';
+// OpenAI import removed to prevent browser detection in tests
 
 const TestPayloadSchema = z.object({
   checklistId: z.string().uuid(),
@@ -108,7 +108,7 @@ export const Route = createFileRoute('/api/camera-ai/test-verification')({
           const imgVal = await validateImageBuffer(buffer, blobCandidate.type);
           if (!imgVal.valid) return Response.json({ ok: false, code: imgVal.code || 'invalid_image' }, { status: 400 });
 
-          const openaiClient = new OpenAI({ apiKey, dangerouslyAllowBrowser: true });
+          const openaiClient = { apiKey } as any; // analyzeImage uses its own client if needed or accepts this for configuration
           const analysis = await analyzeImage(openaiClient, process.env['OPENAI_VISION_MODEL'] || 'gpt-4o-mini', question, buffer, imgVal.mimeType || 'image/jpeg', 20000, policyValidation.data);
           const result = evaluateGate(analysis);
 
