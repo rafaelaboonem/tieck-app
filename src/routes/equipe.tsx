@@ -328,21 +328,25 @@ function TeamPage() {
                           </td>
                           <td className="px-6 py-4">
                             <div className="flex items-center gap-1.5 text-sm text-neutral-600">
-                              {member.role === 'owner' ? (
+                              {member.is_owner ? (
                                 <ShieldCheck className="w-4 h-4 text-pink-500" />
                               ) : (
                                 <Shield className="w-4 h-4 text-neutral-400" />
                               )}
-                              {getRoleLabel(member.role)}
+                              {getRoleLabel(member)}
                             </div>
                           </td>
                           <td className="px-6 py-4">
-                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-50 text-green-700 border border-green-100">
-                              Ativo
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border ${
+                              member.status === 'active' 
+                                ? 'bg-green-50 text-green-700 border-green-100' 
+                                : 'bg-neutral-50 text-neutral-700 border-neutral-100'
+                            }`}>
+                              {member.status === 'active' ? 'Ativo' : 'Inativo'}
                             </span>
                           </td>
                           <td className="px-6 py-4 text-right">
-                            {member.role !== 'owner' && (
+                            {!member.is_owner && (
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                   <Button variant="ghost" size="sm" className="h-8 w-8 p-0 hover:bg-neutral-100">
@@ -350,8 +354,22 @@ function TeamPage() {
                                   </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end" className="w-48">
-                                  <DropdownMenuItem className="text-sm">Alterar permissão</DropdownMenuItem>
-                                  <DropdownMenuItem className="text-sm text-red-600 focus:text-red-600">
+                                  <DropdownMenuLabel className="text-xs font-bold text-neutral-500 uppercase">Ações</DropdownMenuLabel>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuSub>
+                                    <DropdownMenuSubTrigger className="text-sm">Alterar permissão</DropdownMenuSubTrigger>
+                                    <DropdownMenuPortal>
+                                      <DropdownMenuSubContent>
+                                        <DropdownMenuItem onClick={() => handleChangeRole(member.id, 'admin')}>Administrador</DropdownMenuItem>
+                                        <DropdownMenuItem onClick={() => handleChangeRole(member.id, 'editor')}>Editor</DropdownMenuItem>
+                                        <DropdownMenuItem onClick={() => handleChangeRole(member.id, 'viewer')}>Visualizador</DropdownMenuItem>
+                                      </DropdownMenuSubContent>
+                                    </DropdownMenuPortal>
+                                  </DropdownMenuSub>
+                                  <DropdownMenuItem 
+                                    className="text-sm text-red-600 focus:text-red-600"
+                                    onClick={() => setMemberToRemove(member)}
+                                  >
                                     <UserMinus className="w-4 h-4 mr-2" />
                                     Remover da equipe
                                   </DropdownMenuItem>
@@ -389,14 +407,19 @@ function TeamPage() {
                           <div>
                             <div className="text-sm font-semibold text-neutral-900">{invite.email_normalized}</div>
                             <div className="flex items-center gap-2 text-xs text-neutral-500 mt-0.5">
-                              <span className="px-1.5 py-0.5 rounded bg-neutral-100 font-medium">{getRoleLabel(invite.role)}</span>
+                              <span className="px-1.5 py-0.5 rounded bg-neutral-100 font-medium">{invite.role}</span>
                               <span>•</span>
                               <Clock className="w-3 h-3" />
                               <span>Expira em {new Date(invite.expires_at).toLocaleDateString()}</span>
                             </div>
                           </div>
                         </div>
-                        <Button variant="outline" size="sm" className="text-xs">
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          className="text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
+                          onClick={() => setInvitationToRevoke(invite)}
+                        >
                           Revogar
                         </Button>
                       </div>
