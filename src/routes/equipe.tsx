@@ -192,7 +192,7 @@ function TeamPage() {
     if (!currentWorkspace) return;
     setActionLoading(true);
     try {
-      await revokeInvitation({ workspaceId: currentWorkspace.id, invitationId: id });
+      await revokeInvitation({ data: { workspaceId: currentWorkspace.id, invitationId: id } });
       toast.success('Convite revogado');
       fetchTeamData();
     } catch (error) {
@@ -208,9 +208,11 @@ function TeamPage() {
     setActionLoading(true);
     try {
       await updateMemberStatus({ 
-        workspaceId: currentWorkspace.id, 
-        memberId: id, 
-        status: 'inactive' 
+        data: {
+          workspaceId: currentWorkspace.id, 
+          memberId: id, 
+          status: 'inactive' 
+        }
       });
       toast.success('Membro removido');
       fetchTeamData();
@@ -227,9 +229,11 @@ function TeamPage() {
     setActionLoading(true);
     try {
       await updateMemberStatus({ 
-        workspaceId: currentWorkspace.id, 
-        memberId: id, 
-        role: newRole 
+        data: {
+          workspaceId: currentWorkspace.id, 
+          memberId: id, 
+          role: newRole 
+        }
       });
       toast.success('Permissão atualizada');
       fetchTeamData();
