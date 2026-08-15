@@ -53,15 +53,21 @@ export const Route = createFileRoute('/api/public/invitations/inspect')({
           }
 
           // Return masked email and workspace details
-          const [userPart, domainPart] = invitation.email_normalized.split('@');
-          const maskedEmail = `${userPart.substring(0, 2)}***@${domainPart}`;
+          const emailParts = invitation.email_normalized.split('@');
+          const maskedEmail = emailParts.length === 2 
+            ? `${emailParts[0].substring(0, 2)}***@${emailParts[1]}`
+            : '***@***';
+
+          const workspace = invitation.workspace as unknown as { name: string };
 
           return new Response(JSON.stringify({
             ok: true,
             invitation: {
               email: maskedEmail,
               role: invitation.role,
-              workspaceName: (invitation.workspace as any)?.name
+              workspaceName: workspace?.name,
+              status: invitation.status,
+              expiresAt: invitation.expires_at
             },
             requestId
           }), { status: 200 });

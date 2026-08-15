@@ -8,75 +8,233 @@ import {
   DropdownMenu, 
   DropdownMenuContent, 
   DropdownMenuItem, 
-  DropdownMenuTrigger 
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+  DropdownMenuLabel
 } from '@/components/ui/dropdown-menu';
+import { 
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { 
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { updateMemberStatus, revokeInvitation } from '@/lib/team.functions';
 
 export const Route = createFileRoute('/equipe')({
   component: TeamPage,
 });
 
+export type WorkspaceMemberView = {
+  id: string;
+  role: 'admin' | 'editor' | 'viewer';
+  status: 'active' | 'inactive';
+  created_at: string;
+  user_id: string;
+  email_normalized: string;
+  profiles?: {
+    display_name: string | null;
+    avatar_url: string | null;
+  };
+};
+
+export type WorkspaceInvitationView = {
+  id: string;
+  email_normalized: string;
+  role: 'admin' | 'editor' | 'viewer';
+  status: 'pending' | 'accepted' | 'revoked';
+  expires_at: string;
+  created_at: string;
+};
+
 function TeamPage() {
   const { currentWorkspace } = useWorkspace();
-  const [members, setMembers] = useState<any[]>([]);
-  const [invitations, setInvitations] = useState<any[]>([]);
+  const [members, setMembers] = useState<WorkspaceMemberView[]>([]);
+  const [invitations, setInvitations] = useState<WorkspaceInvitationView[]>([]);
   const [assignments, setAssignments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  
+  // Modals state
+  const [inviteModalOpen, setInviteModalOpen] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteRole, setInviteRole] = useState<'admin' | 'editor' | 'viewer'>('viewer');
+  const [inviting, setInviting] = useState(false);
+  
+  const [memberToEdit, setMemberToEdit] = useState<WorkspaceMemberView | null>(null);
+  const [memberToRemove, setMemberToRemove] = useState<WorkspaceMemberView | null>(null);
+  const [invitationToRevoke, setInvitationToRevoke] = useState<WorkspaceInvitationView | null>(null);
+  const [actionLoading, setActionLoading] = useState(false);
 
   const fetchTeamData = async () => {
     if (!currentWorkspace) return;
     setLoading(true);
     try {
-      const [membersRes, invitesRes, assignmentsRes] = await Promise.all([
-        supabase
-          .from('workspace_members')
-          .select(`
-            id,
-            role,
-            status,
-            created_at,
-            user_id,
-            email_normalized,
-            profiles:profiles!inner (
-              id,
-              display_name,
-              avatar_url
-            )
-          `)
-          .eq('workspace_id', currentWorkspace.id),
-        supabase
-          .from('workspace_invitations')
-          .select('*')
-          .eq('workspace_id', currentWorkspace.id)
-          .eq('status', 'pending'),
-        supabase
-          .from('checklist_assignments')
-          .select(`
-            id,
-            checklist_id,
-            workspace_member_id,
-            is_primary,
-            checklists:checklists (
-              id,
-              title
-            )
-          `)
-          .eq('workspace_id', currentWorkspace.id)
-      ]);
+      // 1. Fetch members
+      const { data: membersData, error: membersError } = await supabase
+        .from('workspace_members')
+        .select(`
+          id,
+          role,
+          status,
+          created_at,
+          user_id,
+          email_normalized
+        `)
+        .eq('workspace_id', currentWorkspace.id);
 
-      if (membersRes.error) throw membersRes.error;
-      if (invitesRes.error) throw invitesRes.error;
+      if (membersError) throw membersError;
 
-      setMembers(membersRes.data || []);
-      setInvitations(invitesRes.data || []);
-      setAssignments(assignmentsRes.data || []);
+      // 2. Fetch profiles for those members
+      const userIds = membersData.map(m => m.user_id).filter(Boolean);
+      const { data: profilesData } = await supabase
+        .from('profiles')
+        .select('id, display_name, avatar_url')
+        .in('id', userIds);
+
+      const membersWithProfiles: WorkspaceMemberView[] = membersData.map(member => ({
+        ...member,
+        role: member.role as any,
+        status: member.status as any,
+        profiles: profilesData?.find(p => p.id === member.user_id)
+      }));
+
+      // 3. Fetch invitations
+      const { data: invitesData, error: invitesError } = await supabase
+        .from('workspace_invitations')
+        .select('*')
+        .eq('workspace_id', currentWorkspace.id)
+        .eq('status', 'pending');
+
+      if (invitesError) throw invitesError;
+
+      // 4. Fetch assignments
+      const { data: assignmentsData } = await supabase
+        .from('checklist_assignments')
+        .select(`
+          id,
+          checklist_id,
+          workspace_member_id,
+          is_primary,
+          checklists:checklists (
+            id,
+            title
+          )
+        `)
+        .eq('workspace_id', currentWorkspace.id);
+
+      setMembers(membersWithProfiles);
+      setInvitations(invitesData as WorkspaceInvitationView[]);
+      setAssignments(assignmentsData || []);
     } catch (error) {
       console.error('Error fetching team data:', error);
       toast.error('Erro ao carregar dados da equipe');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleInvite = async () => {
+    if (!currentWorkspace || !inviteEmail) return;
+    setInviting(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const response = await fetch('/api/public/invitations/create', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`
+        },
+        body: JSON.stringify({
+          workspaceId: currentWorkspace.id,
+          email: inviteEmail,
+          role: inviteRole
+        })
+      });
+
+      const result = await response.json();
+      if (!result.ok) throw new Error(result.code);
+
+      toast.success('Convite gerado com sucesso!');
+      if (result.invitation.link) {
+        // Fallback para quando o e-mail não é enviado
+        navigator.clipboard.writeText(result.invitation.link);
+        toast.info('Link de convite copiado para a área de transferência.');
+      }
+      
+      setInviteModalOpen(false);
+      setInviteEmail('');
+      fetchTeamData();
+    } catch (error: any) {
+      console.error('Invite error:', error);
+      toast.error(`Falha ao convidar: ${error.message}`);
+    } finally {
+      setInviting(false);
+    }
+  };
+
+  const handleRevoke = async (id: string) => {
+    if (!currentWorkspace) return;
+    setActionLoading(true);
+    try {
+      await revokeInvitation({ workspaceId: currentWorkspace.id, invitationId: id });
+      toast.success('Convite revogado');
+      fetchTeamData();
+    } catch (error) {
+      toast.error('Erro ao revogar convite');
+    } finally {
+      setActionLoading(false);
+      setInvitationToRevoke(null);
+    }
+  };
+
+  const handleRemoveMember = async (id: string) => {
+    if (!currentWorkspace) return;
+    setActionLoading(true);
+    try {
+      await updateMemberStatus({ 
+        workspaceId: currentWorkspace.id, 
+        memberId: id, 
+        status: 'inactive' 
+      });
+      toast.success('Membro removido');
+      fetchTeamData();
+    } catch (error) {
+      toast.error('Erro ao remover membro');
+    } finally {
+      setActionLoading(false);
+      setMemberToRemove(null);
+    }
+  };
+
+  const handleChangeRole = async (id: string, newRole: 'admin' | 'editor' | 'viewer') => {
+    if (!currentWorkspace) return;
+    setActionLoading(true);
+    try {
+      await updateMemberStatus({ 
+        workspaceId: currentWorkspace.id, 
+        memberId: id, 
+        role: newRole 
+      });
+      toast.success('Permissão atualizada');
+      fetchTeamData();
+    } catch (error) {
+      toast.error('Erro ao atualizar permissão');
+    } finally {
+      setActionLoading(false);
+      setMemberToEdit(null);
     }
   };
 
