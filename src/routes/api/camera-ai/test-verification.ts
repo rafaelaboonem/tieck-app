@@ -170,8 +170,12 @@ export const Route = createFileRoute('/api/camera-ai/test-verification')({
           return Response.json({ ok: true, decision: result.decision, code: result.code, message: result.message, evidence: result.evidence, requestId } as TestVerificationResponse);
         } catch (error: unknown) {
           console.error(`[CameraAI-Test] [${requestId}] Failure:`, error);
+          if (error instanceof z.ZodError) {
+             return Response.json({ ok: false, code: 'invalid_payload', details: error.format(), requestId }, { status: 400 });
+          }
           return Response.json({ ok: false, code: 'technical_failure', requestId }, { status: 500 });
         }
+
 
       }
     }
