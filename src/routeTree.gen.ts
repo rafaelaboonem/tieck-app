@@ -32,6 +32,7 @@ import { Route as ApiCameraAiVerifyRouteImport } from './routes/api/camera-ai/ve
 import { Route as ApiCameraAiTestVerificationRouteImport } from './routes/api/camera-ai/test-verification'
 import { Route as ApiCameraAiSignedUrlRouteImport } from './routes/api/camera-ai/signed-url'
 import { Route as ApiCameraAiCompilePolicyRouteImport } from './routes/api/camera-ai/compile-policy'
+import { Route as ApiPublicInvitationsInspectRouteImport } from './routes/api/public/invitations/inspect'
 import { Route as ApiPublicInvitationsCreateRouteImport } from './routes/api/public/invitations/create'
 import { Route as ApiPublicInvitationsAcceptRouteImport } from './routes/api/public/invitations/accept'
 
@@ -152,6 +153,12 @@ const ApiCameraAiCompilePolicyRoute =
     path: '/api/camera-ai/compile-policy',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicInvitationsInspectRoute =
+  ApiPublicInvitationsInspectRouteImport.update({
+    id: '/api/public/invitations/inspect',
+    path: '/api/public/invitations/inspect',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicInvitationsCreateRoute =
   ApiPublicInvitationsCreateRouteImport.update({
     id: '/api/public/invitations/create',
@@ -191,6 +198,7 @@ export interface FileRoutesByFullPath {
   '/unidades/$unitId/operacao': typeof UnidadesUnitIdOperacaoRoute
   '/api/public/invitations/accept': typeof ApiPublicInvitationsAcceptRoute
   '/api/public/invitations/create': typeof ApiPublicInvitationsCreateRoute
+  '/api/public/invitations/inspect': typeof ApiPublicInvitationsInspectRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -218,6 +226,7 @@ export interface FileRoutesByTo {
   '/unidades/$unitId/operacao': typeof UnidadesUnitIdOperacaoRoute
   '/api/public/invitations/accept': typeof ApiPublicInvitationsAcceptRoute
   '/api/public/invitations/create': typeof ApiPublicInvitationsCreateRoute
+  '/api/public/invitations/inspect': typeof ApiPublicInvitationsInspectRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -246,6 +255,7 @@ export interface FileRoutesById {
   '/unidades/$unitId/operacao': typeof UnidadesUnitIdOperacaoRoute
   '/api/public/invitations/accept': typeof ApiPublicInvitationsAcceptRoute
   '/api/public/invitations/create': typeof ApiPublicInvitationsCreateRoute
+  '/api/public/invitations/inspect': typeof ApiPublicInvitationsInspectRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -275,6 +285,7 @@ export interface FileRouteTypes {
     | '/unidades/$unitId/operacao'
     | '/api/public/invitations/accept'
     | '/api/public/invitations/create'
+    | '/api/public/invitations/inspect'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -302,6 +313,7 @@ export interface FileRouteTypes {
     | '/unidades/$unitId/operacao'
     | '/api/public/invitations/accept'
     | '/api/public/invitations/create'
+    | '/api/public/invitations/inspect'
   id:
     | '__root__'
     | '/'
@@ -329,6 +341,7 @@ export interface FileRouteTypes {
     | '/unidades/$unitId/operacao'
     | '/api/public/invitations/accept'
     | '/api/public/invitations/create'
+    | '/api/public/invitations/inspect'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -357,6 +370,7 @@ export interface RootRouteChildren {
   UnidadesUnitIdOperacaoRoute: typeof UnidadesUnitIdOperacaoRoute
   ApiPublicInvitationsAcceptRoute: typeof ApiPublicInvitationsAcceptRoute
   ApiPublicInvitationsCreateRoute: typeof ApiPublicInvitationsCreateRoute
+  ApiPublicInvitationsInspectRoute: typeof ApiPublicInvitationsInspectRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -522,6 +536,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiCameraAiCompilePolicyRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/invitations/inspect': {
+      id: '/api/public/invitations/inspect'
+      path: '/api/public/invitations/inspect'
+      fullPath: '/api/public/invitations/inspect'
+      preLoaderRoute: typeof ApiPublicInvitationsInspectRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/invitations/create': {
       id: '/api/public/invitations/create'
       path: '/api/public/invitations/create'
@@ -565,6 +586,7 @@ const rootRouteChildren: RootRouteChildren = {
   UnidadesUnitIdOperacaoRoute: UnidadesUnitIdOperacaoRoute,
   ApiPublicInvitationsAcceptRoute: ApiPublicInvitationsAcceptRoute,
   ApiPublicInvitationsCreateRoute: ApiPublicInvitationsCreateRoute,
+  ApiPublicInvitationsInspectRoute: ApiPublicInvitationsInspectRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
