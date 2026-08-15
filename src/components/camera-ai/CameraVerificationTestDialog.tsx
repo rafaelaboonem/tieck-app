@@ -103,8 +103,10 @@ export function CameraVerificationTestDialog({ isOpen, onClose, blockId, checkli
 
       setResult(await res.json());
       setStep("result");
-    } catch (err: any) {
-      if (err.name === 'AbortError') return;
+    } catch (err: unknown) {
+      if (err instanceof Error && err.name === 'AbortError') return;
+      
+      const errorKey = err instanceof Error ? err.message : "tech_failure";
       const messages: Record<string, string> = {
         "401": "Sessão expirada. Faça login novamente.",
         "403": "Você não tem permissão para testar este checklist.",
@@ -112,9 +114,10 @@ export function CameraVerificationTestDialog({ isOpen, onClose, blockId, checkli
         "policy_error": "Configuração da política inválida ou desatualizada.",
         "tech_failure": "Falha técnica ao processar a IA. Tente novamente."
       };
-      toast.error(messages[err.message] || messages["tech_failure"]);
+      toast.error(messages[errorKey] || messages["tech_failure"]);
       setStep("upload");
     } finally {
+
       setIsLoading(false);
       abortControllerRef.current = null;
     }
@@ -164,14 +167,37 @@ export function CameraVerificationTestDialog({ isOpen, onClose, blockId, checkli
           )}
           {step === "result" && result && (
             <div className="space-y-6">
-              <div className={cn("p-6 rounded-2xl border flex flex-col items-center text-center gap-4", result.decision === 'approved' ? 'bg-green-50 border-green-100 text-green-800' : 'bg-amber-50 border-amber-100 text-amber-800')}>
-                {result.decision === 'approved' ? <CheckCircle2 className="w-12 h-12 text-green-500" /> : <AlertCircle className="w-12 h-12 text-amber-500" />}
-                <h4 className="text-lg font-bold">{result.decision === 'approved' ? 'Imagem Aprovada' : 'Ação Necessária'}</h4>
+              <div className={cn(
+                "p-6 rounded-2xl border flex flex-col items-center text-center gap-4", 
+                result.decision === 'approved' ? 'bg-green-50 border-green-100 text-green-800' : 
+                result.decision === 'retake' ? 'bg-amber-50 border-amber-100 text-amber-800' :
+                'bg-neutral-50 border-neutral-100 text-neutral-800'
+              )}>
+                {result.decision === 'approved' ? <CheckCircle2 className="w-12 h-12 text-green-500" /> : 
+                 result.decision === 'retake' ? <AlertCircle className="w-12 h-12 text-amber-500" /> :
+                 <XCircle className="w-12 h-12 text-neutral-500" />}
+                
+                <h4 className="text-lg font-bold">
+                  {result.decision === 'approved' ? 'Imagem Aprovada' : 
+                   result.decision === 'retake' ? 'Exigir nova foto' : 
+                   'Não observável'}
+                </h4>
                 <p className="text-sm opacity-90">{result.message}</p>
               </div>
+
+              {result.evidence && (
+                <div className="space-y-2">
+                  <label className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider">Evidências observadas</label>
+                  <div className="p-4 rounded-xl bg-neutral-50 border border-neutral-100 text-xs text-neutral-600 leading-relaxed italic">
+                    {result.evidence}
+                  </div>
+                </div>
+              )}
+
               <button onClick={reset} className="w-full py-3 bg-neutral-900 text-white rounded-xl font-bold">Fazer novo teste</button>
             </div>
           )}
+
         </div>
       </DialogContent>
     </Dialog>
