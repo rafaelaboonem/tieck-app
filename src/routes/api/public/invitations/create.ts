@@ -96,35 +96,35 @@ export const Route = createFileRoute('/api/public/invitations/create')({
           const expiresAt = new Date();
           expiresAt.setDate(expiresAt.getDate() + 7);
 
-          // 7. Create invitation
-          const { error: inviteError } = await supabaseAdmin
-            .from('workspace_invitations')
-            .upsert({
-              workspace_id: workspaceId,
-              email_normalized: email,
-              role,
-              token_hash: tokenHash,
-              status: 'pending',
-              invited_by: user.id,
-              expires_at: expiresAt.toISOString()
-            }, { 
-              onConflict: 'workspace_id,email_normalized',
-              ignoreDuplicates: false // We want to overwrite existing pending invitation
-            });
+          // 7. Create invitation via atomic RPC (handles revocation of previous)
+          const { data: invitationId, error: inviteError } = await supabaseAdmin.rpc('create_workspace_invitation_safe', {
+            p_workspace_id: workspaceId,
+            p_invited_by: user.id,
+            p_email_normalized: email,
+            p_role: role,
+            p_token_hash: tokenHash,
+            p_expires_at: expiresAt.toISOString()
+          });
 
           if (inviteError) {
             console.error('[Invitation-Create] Database error:', inviteError);
             return new Response(JSON.stringify({ ok: false, code: 'database_error', requestId }), { status: 500 });
           }
 
-          // 8. Return success and token (for copy-link fallback)
+          // 8. Envio de e-mail (Mock por enquanto, mas retornando link real)
+          // Implementação real usaria um serviço de e-mail aqui
+          const inviteLink = `${new URL(request.url).origin}/convite/${tokenValue}`;
+          
           return new Response(JSON.stringify({ 
             ok: true, 
             requestId,
+            emailSent: false, // Indica que o e-mail não foi enviado automaticamente (necessário copiar link)
             invitation: {
+              id: invitationId,
               email,
               role,
               token: tokenValue,
+              link: inviteLink,
               expiresAt: expiresAt.toISOString()
             }
           }), { status: 200 });
