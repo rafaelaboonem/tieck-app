@@ -72,32 +72,31 @@ describe('POST /api/camera-ai/test-verification', () => {
     mockSupabase.rpc.mockResolvedValue({ data: [{ allowed: true, current_hits: 1 }], error: null });
   });
 
-
   const getHandler = () => (Route as any).options.server.handlers.POST;
 
   const createTestRequest = async (fields: Record<string, unknown> = {}, token?: string) => {
     const formData = new FormData();
-    formData.append('checklistId', fields.checklistId ?? checklistId);
-    formData.append('blockId', fields.blockId ?? blockId);
+    formData.append('checklistId', (fields.checklistId as string) ?? checklistId);
+    formData.append('blockId', (fields.blockId as string) ?? blockId);
     
     if (fields.candidate !== null) {
       const blob = new Blob(['test'], { type: 'image/jpeg' });
       formData.append('candidate', (fields.candidate as Blob) ?? blob, 'test.jpg');
     }
 
-
     const headers: Record<string, string> = {};
-    const body = formData;
-
-
-
     if (token) headers['Authorization'] = `Bearer ${token}`;
 
-    return new Request('http://localhost/api/camera-ai/test-verification', {
+    const request = new Request('http://localhost/api/camera-ai/test-verification', {
       method: 'POST',
       headers,
-      body
+      body: formData
     });
+
+    // Mocking request.formData directly to avoid parser issues in node/vitest environment
+    request.formData = async () => formData;
+
+    return request;
   };
 
   it('Retorna 503 se a IA estiver desativada', async () => {
@@ -159,7 +158,6 @@ describe('POST /api/camera-ai/test-verification', () => {
     // Simulate rate limit rejection (format: array of objects)
     mockSupabase.rpc.mockResolvedValue({ data: [{ allowed: false, current_hits: 11 }], error: null });
 
-
     const { validateImageBuffer } = await import('../../src/server/camera-ai/image-validation');
     (validateImageBuffer as any).mockResolvedValue({ valid: true, mimeType: 'image/jpeg' });
     
@@ -205,7 +203,6 @@ describe('POST /api/camera-ai/test-verification', () => {
     expect(response.status).toBe(429);
     expect(analyzeImage).not.toHaveBeenCalled();
   });
-
 
   it('Retorna 403 para membro ativo de outro workspace', async () => {
     mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: 'other-user' } }, error: null });
