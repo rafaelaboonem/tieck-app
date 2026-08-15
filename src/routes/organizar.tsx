@@ -1159,7 +1159,7 @@ function WorkspacePage() {
 
   const filteredChecklists = checklists.filter(c => 
     (c.title || "").toLowerCase().includes(searchQuery.toLowerCase()) &&
-    (c.view_type === selectedSubTab || (!c.view_type && (!selectedSubTab || selectedSubTab === "Tarefas")))
+    (selectedSubTab === "Atribuições" || c.view_type === selectedSubTab || (!c.view_type && (!selectedSubTab || selectedSubTab === "Tarefas")))
   );
 
 
