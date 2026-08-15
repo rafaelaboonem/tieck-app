@@ -104,8 +104,23 @@ import logoIcon from "../assets/local/logo-tieck.webp";
      useEffect(() => {
       const fetchData = async () => {
          if (user) {
-           // Owner-only model: no team members to count.
-           setMemberCount(0);
+            // Contagem real de membros ativos
+            if (currentWorkspace) {
+              const { count, error: countError } = await supabase
+                .from("workspace_members")
+                .select("*", { count: 'exact', head: true })
+                .eq("workspace_id", currentWorkspace.id)
+                .eq("status", "active");
+              
+              if (!countError && count !== null) {
+                setMemberCount(count);
+              } else {
+                setMemberCount(0);
+              }
+            } else {
+              setMemberCount(0);
+            }
+
 
            // Fetch profile
            const { data: profileData } = await supabase
@@ -318,6 +333,8 @@ import logoIcon from "../assets/local/logo-tieck.webp";
                     { icon: Settings, label: "Configurações", to: "/configuracoes" },
                     { icon: CreditCard, label: "Meu Plano", to: "/membros" },
                     { icon: Briefcase, label: "Espaço de Trabalho", to: "/organizar" },
+                    { icon: Users, label: "Equipe", to: "/equipe" },
+
                   ].map((item: NavItem) => {
                     const Icon = item.icon;
                     const isSearch = item.label === "Buscar";
@@ -635,10 +652,11 @@ import logoIcon from "../assets/local/logo-tieck.webp";
               )}
             </CommandGroup>
             <CommandGroup heading="Navegação">
-              <CommandItem onSelect={() => { navigate({ to: "/membros" }); setSearchOpen(false); }}>
+              <CommandItem onSelect={() => { navigate({ to: "/equipe" }); setSearchOpen(false); }}>
                 <Users className="mr-2 h-4 w-4" />
-                <span>Convidar membros</span>
+                <span>Equipe</span>
               </CommandItem>
+
               <CommandItem onSelect={() => { navigate({ to: "/configuracoes" }); setSearchOpen(false); }}>
                 <Share2 className="mr-2 h-4 w-4" />
                 <span>Compartilhar</span>

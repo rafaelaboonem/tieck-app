@@ -116,6 +116,9 @@ function SortableChecklistCard({
   onCopyLink,
   onDuplicate,
   accentColor,
+  assignments,
+  members,
+  onAssign,
 }: { 
   checklist: Checklist; 
   isSelected: boolean; 
@@ -129,7 +132,11 @@ function SortableChecklistCard({
   onCopyLink: () => void;
   onDuplicate: (item: Checklist) => void;
   accentColor: string;
+  assignments: any[];
+  members: any[];
+  onAssign: (checklistId: string, userId: string | null) => void;
 }) {
+
 
 
   const [isEditing, setIsEditing] = useState(false);
@@ -193,9 +200,68 @@ function SortableChecklistCard({
               onBlur={handleSave}
             />
           ) : (
-            <h4 className="text-[13px] font-medium text-neutral-800 line-clamp-2">{checklist.title || "Sem título"}</h4>
+            <div className="flex flex-col gap-1.5">
+              <h4 className="text-[13px] font-medium text-neutral-800 line-clamp-2">{checklist.title || "Sem título"}</h4>
+              <div className="flex items-center gap-2">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button 
+                      className="flex -space-x-1.5 p-0.5 hover:bg-neutral-50 rounded-full transition-all"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {assignments.filter(a => a.checklist_id === checklist.id).length > 0 ? (
+                        assignments
+                          .filter(a => a.checklist_id === checklist.id)
+                          .map(a => {
+                            const member = members.find(m => m.user_id === a.user_id);
+                            return (
+                              <div key={a.id} className="w-5 h-5 rounded-full border border-white bg-neutral-100 overflow-hidden flex items-center justify-center">
+                                {member?.profiles?.avatar_url ? (
+                                  <img src={member.profiles.avatar_url} alt="" className="w-full h-full object-cover" />
+                                ) : (
+                                  <UserIcon className="w-2.5 h-2.5 text-neutral-400" />
+                                )}
+                              </div>
+                            );
+                          })
+                      ) : (
+                        <div className="w-5 h-5 rounded-full border border-dashed border-neutral-300 bg-neutral-50 flex items-center justify-center hover:border-neutral-400 transition-colors">
+                          <UserPlus className="w-2.5 h-2.5 text-neutral-400" />
+                        </div>
+                      )}
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="w-56 bg-white border border-neutral-100 shadow-xl rounded-xl p-1">
+                    <div className="px-2 py-1.5 text-[10px] font-bold text-neutral-500 uppercase tracking-wider">Atribuir responsável</div>
+                    {members.map(member => {
+                      const isAssigned = assignments.some(a => a.checklist_id === checklist.id && a.user_id === member.user_id);
+                      return (
+                        <DropdownMenuItem 
+                          key={member.user_id} 
+                          className="flex items-center justify-between gap-2 text-xs hover:bg-neutral-50 rounded-lg py-2"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onAssign(checklist.id, isAssigned ? null : member.user_id);
+                          }}
+                        >
+                          <div className="flex items-center gap-2">
+                            <div className="w-6 h-6 rounded-full bg-neutral-100 overflow-hidden">
+                              {member.profiles?.avatar_url && <img src={member.profiles.avatar_url} className="w-full h-full object-cover" />}
+                            </div>
+                            <span className="truncate max-w-[120px]">{member.profiles?.full_name || 'Membro'}</span>
+                          </div>
+                          {isAssigned && <Check className="w-3.5 h-3.5 text-pink-500" />}
+                        </DropdownMenuItem>
+                      );
+                    })}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            </div>
           )}
         </div>
+
+
         
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -355,6 +421,9 @@ function WorkspacePage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [submissionCounts, setSubmissionCounts] = useState<Record<string, number>>({});
   const [isLoading, setIsLoading] = useState(true);
+  const [members, setMembers] = useState<any[]>([]);
+  const [assignments, setAssignments] = useState<any[]>([]);
+
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [hasCheckedOnboarding, setHasCheckedOnboarding] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -453,6 +522,30 @@ function WorkspacePage() {
         } else {
           setSubmissionCounts({});
         }
+
+        // Fetch members and assignments
+        const [membersRes, assignmentsRes] = await Promise.all([
+          supabase
+            .from('workspace_members')
+            .select(`
+              user_id,
+              profiles:profiles!workspace_members_user_id_fkey (
+                id,
+                full_name,
+                avatar_url
+              )
+            `)
+            .eq('workspace_id', currentWorkspace.id)
+            .eq('status', 'active'),
+          supabase
+            .from('checklist_assignments')
+            .select('*')
+            .in('checklist_id', (chks || []).map(c => c.id))
+        ]);
+
+        if (!membersRes.error) setMembers(membersRes.data || []);
+        if (!assignmentsRes.error) setAssignments(assignmentsRes.data || []);
+
       } catch (error) {
         console.error("Error fetching workspace data:", error);
       } finally {
@@ -706,6 +799,52 @@ function WorkspacePage() {
       toast.error("Erro ao atualizar: " + err.message);
     }
   };
+
+  const handleAssignMember = async (checklistId: string, userId: string | null) => {
+    try {
+      if (!currentWorkspace) return;
+
+      if (!userId) {
+        // Remove primary assignment
+        const { error } = await supabase
+          .from('checklist_assignments')
+          .delete()
+          .eq('checklist_id', checklistId)
+          .eq('is_primary', true);
+        
+        if (error) throw error;
+        setAssignments(prev => prev.filter(a => !(a.checklist_id === checklistId && a.is_primary)));
+        toast.success("Responsável removido");
+      } else {
+        // RPC handles atomic update (delete old primary, insert new one)
+        const { data, error } = await supabase.rpc('update_checklist_assignments', {
+          p_checklist_id: checklistId,
+          p_workspace_id: currentWorkspace.id,
+          p_primary_member_id: userId,
+          p_member_ids: [userId]
+        });
+
+
+        if (error) throw error;
+        
+        // Refresh assignments local state
+        const { data: newAssignments } = await supabase
+          .from('checklist_assignments')
+          .select('*')
+          .eq('checklist_id', checklistId);
+        
+        setAssignments(prev => [
+          ...prev.filter(a => a.checklist_id !== checklistId),
+          ...(newAssignments || [])
+        ]);
+        toast.success("Responsável atribuído");
+      }
+    } catch (err: any) {
+      console.error(err);
+      toast.error("Erro ao atribuir membro: " + err.message);
+    }
+  };
+
 
   const handleDeleteChecklist = async () => {
 
@@ -1430,8 +1569,13 @@ function WorkspacePage() {
                                 handleAddItem(item.category, `${item.title} (Cópia)`);
                               }}
                               accentColor={currentColor}
+                              assignments={assignments}
+                              members={members}
+                              onAssign={handleAssignMember}
                             />
                           ))}
+
+
                         </SortableContext>
                         
                         {isAddingItem?.category === categoryName && (
