@@ -8,70 +8,143 @@ import {
   DropdownMenu, 
   DropdownMenuContent, 
   DropdownMenuItem, 
-  DropdownMenuTrigger 
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+  DropdownMenuLabel,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuPortal,
+  DropdownMenuSubContent
 } from '@/components/ui/dropdown-menu';
+import { 
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { 
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { updateMemberStatus, revokeInvitation } from '@/lib/team.functions';
 
 export const Route = createFileRoute('/equipe')({
   component: TeamPage,
 });
 
+export type WorkspaceMemberView = {
+  id: string;
+  role: 'admin' | 'editor' | 'viewer';
+  status: 'active' | 'inactive';
+  created_at: string;
+  user_id: string;
+  email_normalized: string;
+  profiles?: {
+    display_name: string | null;
+    avatar_url: string | null;
+  };
+  is_owner?: boolean;
+};
+
+export type WorkspaceInvitationView = {
+  id: string;
+  email_normalized: string;
+  role: 'admin' | 'editor' | 'viewer';
+  status: 'pending' | 'accepted' | 'revoked';
+  expires_at: string;
+  created_at: string;
+};
+
 function TeamPage() {
   const { currentWorkspace } = useWorkspace();
-  const [members, setMembers] = useState<any[]>([]);
-  const [invitations, setInvitations] = useState<any[]>([]);
+  const [members, setMembers] = useState<WorkspaceMemberView[]>([]);
+  const [invitations, setInvitations] = useState<WorkspaceInvitationView[]>([]);
   const [assignments, setAssignments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  
+  // Modals state
+  const [inviteModalOpen, setInviteModalOpen] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteRole, setInviteRole] = useState<'admin' | 'editor' | 'viewer'>('viewer');
+  const [inviting, setInviting] = useState(false);
+  
+  const [memberToEdit, setMemberToEdit] = useState<WorkspaceMemberView | null>(null);
+  const [memberToRemove, setMemberToRemove] = useState<WorkspaceMemberView | null>(null);
+  const [invitationToRevoke, setInvitationToRevoke] = useState<WorkspaceInvitationView | null>(null);
+  const [actionLoading, setActionLoading] = useState(false);
 
   const fetchTeamData = async () => {
     if (!currentWorkspace) return;
     setLoading(true);
     try {
-      const [membersRes, invitesRes, assignmentsRes] = await Promise.all([
-        supabase
-          .from('workspace_members')
-          .select(`
-            id,
-            role,
-            status,
-            created_at,
-            user_id,
-            email_normalized,
-            profiles:profiles!inner (
-              id,
-              display_name,
-              avatar_url
-            )
-          `)
-          .eq('workspace_id', currentWorkspace.id),
-        supabase
-          .from('workspace_invitations')
-          .select('*')
-          .eq('workspace_id', currentWorkspace.id)
-          .eq('status', 'pending'),
-        supabase
-          .from('checklist_assignments')
-          .select(`
-            id,
-            checklist_id,
-            workspace_member_id,
-            is_primary,
-            checklists:checklists (
-              id,
-              title
-            )
-          `)
-          .eq('workspace_id', currentWorkspace.id)
-      ]);
+      // 1. Fetch members
+      const { data: membersData, error: membersError } = await supabase
+        .from('workspace_members')
+        .select(`
+          id,
+          role,
+          status,
+          created_at,
+          user_id,
+          email_normalized
+        `)
+        .eq('workspace_id', currentWorkspace.id);
 
-      if (membersRes.error) throw membersRes.error;
-      if (invitesRes.error) throw invitesRes.error;
+      if (membersError) throw membersError;
 
-      setMembers(membersRes.data || []);
-      setInvitations(invitesRes.data || []);
-      setAssignments(assignmentsRes.data || []);
+      // 2. Fetch profiles for those members
+      const userIds = membersData.map(m => m.user_id).filter((id): id is string => !!id);
+      const { data: profilesData } = await supabase
+        .from('profiles')
+        .select('id, display_name, avatar_url')
+        .in('id', userIds);
+
+      const membersWithProfiles: WorkspaceMemberView[] = membersData.map(member => ({
+        ...member,
+        user_id: member.user_id as string,
+        role: member.role as any,
+        status: member.status as any,
+        is_owner: currentWorkspace.owner_id === member.user_id,
+        profiles: profilesData?.find(p => p.id === member.user_id)
+      }));
+
+      // 3. Fetch invitations
+      const { data: invitesData, error: invitesError } = await supabase
+        .from('workspace_invitations')
+        .select('*')
+        .eq('workspace_id', currentWorkspace.id)
+        .eq('status', 'pending');
+
+      if (invitesError) throw invitesError;
+
+      // 4. Fetch assignments
+      const { data: assignmentsData } = await supabase
+        .from('checklist_assignments')
+        .select(`
+          id,
+          checklist_id,
+          workspace_member_id,
+          is_primary,
+          checklists:checklists (
+            id,
+            title
+          )
+        `)
+        .eq('workspace_id', currentWorkspace.id);
+
+      setMembers(membersWithProfiles);
+      setInvitations(invitesData as WorkspaceInvitationView[]);
+      setAssignments(assignmentsData || []);
     } catch (error) {
       console.error('Error fetching team data:', error);
       toast.error('Erro ao carregar dados da equipe');
@@ -80,18 +153,114 @@ function TeamPage() {
     }
   };
 
+  const handleInvite = async () => {
+    if (!currentWorkspace || !inviteEmail) return;
+    setInviting(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const response = await fetch('/api/public/invitations/create', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`
+        },
+        body: JSON.stringify({
+          workspaceId: currentWorkspace.id,
+          email: inviteEmail,
+          role: inviteRole
+        })
+      });
+
+      const result = await response.json();
+      if (!result.ok) throw new Error(result.code);
+
+      toast.success('Convite gerado com sucesso!');
+      if (result.invitation.link) {
+        // Fallback para quando o e-mail não é enviado
+        navigator.clipboard.writeText(result.invitation.link);
+        toast.info('Link de convite copiado para a área de transferência.');
+      }
+      
+      setInviteModalOpen(false);
+      setInviteEmail('');
+      fetchTeamData();
+    } catch (error: any) {
+      console.error('Invite error:', error);
+      toast.error(`Falha ao convidar: ${error.message}`);
+    } finally {
+      setInviting(false);
+    }
+  };
+
+  const handleRevoke = async (id: string) => {
+    if (!currentWorkspace) return;
+    setActionLoading(true);
+    try {
+      await revokeInvitation({ data: { workspaceId: currentWorkspace.id, invitationId: id } });
+      toast.success('Convite revogado');
+      fetchTeamData();
+    } catch (error) {
+      toast.error('Erro ao revogar convite');
+    } finally {
+      setActionLoading(false);
+      setInvitationToRevoke(null);
+    }
+  };
+
+  const handleRemoveMember = async (id: string) => {
+    if (!currentWorkspace) return;
+    setActionLoading(true);
+    try {
+      await updateMemberStatus({ 
+        data: {
+          workspaceId: currentWorkspace.id, 
+          memberId: id, 
+          status: 'inactive' 
+        }
+      });
+      toast.success('Membro removido');
+      fetchTeamData();
+    } catch (error) {
+      toast.error('Erro ao remover membro');
+    } finally {
+      setActionLoading(false);
+      setMemberToRemove(null);
+    }
+  };
+
+  const handleChangeRole = async (id: string, newRole: 'admin' | 'editor' | 'viewer') => {
+    if (!currentWorkspace) return;
+    setActionLoading(true);
+    try {
+      await updateMemberStatus({ 
+        data: {
+          workspaceId: currentWorkspace.id, 
+          memberId: id, 
+          role: newRole 
+        }
+      });
+      toast.success('Permissão atualizada');
+      fetchTeamData();
+    } catch (error) {
+      toast.error('Erro ao atualizar permissão');
+    } finally {
+      setActionLoading(false);
+      setMemberToEdit(null);
+    }
+  };
+
   useEffect(() => {
     fetchTeamData();
   }, [currentWorkspace?.id]);
 
-  const getRoleLabel = (role: string) => {
+  const getRoleLabel = (member: WorkspaceMemberView) => {
+    if (member.is_owner) return 'Proprietário';
     const roles: Record<string, string> = {
-      owner: 'Proprietário',
       admin: 'Administrador',
       editor: 'Editor',
       viewer: 'Visualizador'
     };
-    return roles[role] || role;
+    return roles[member.role] || member.role;
   };
 
   if (!currentWorkspace) return null;
@@ -110,7 +279,10 @@ function TeamPage() {
                 Gerencie os membros e permissões do workspace <span className="font-semibold text-neutral-700">{currentWorkspace.name}</span>.
               </p>
             </div>
-            <Button className="bg-pink-500 hover:bg-pink-600 text-white gap-2">
+            <Button 
+              className="bg-pink-500 hover:bg-pink-600 text-white gap-2"
+              onClick={() => setInviteModalOpen(true)}
+            >
               <UserPlus className="w-4 h-4" />
               Convidar
             </Button>
@@ -163,21 +335,25 @@ function TeamPage() {
                           </td>
                           <td className="px-6 py-4">
                             <div className="flex items-center gap-1.5 text-sm text-neutral-600">
-                              {member.role === 'owner' ? (
+                              {member.is_owner ? (
                                 <ShieldCheck className="w-4 h-4 text-pink-500" />
                               ) : (
                                 <Shield className="w-4 h-4 text-neutral-400" />
                               )}
-                              {getRoleLabel(member.role)}
+                              {getRoleLabel(member)}
                             </div>
                           </td>
                           <td className="px-6 py-4">
-                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-50 text-green-700 border border-green-100">
-                              Ativo
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border ${
+                              member.status === 'active' 
+                                ? 'bg-green-50 text-green-700 border-green-100' 
+                                : 'bg-neutral-50 text-neutral-700 border-neutral-100'
+                            }`}>
+                              {member.status === 'active' ? 'Ativo' : 'Inativo'}
                             </span>
                           </td>
                           <td className="px-6 py-4 text-right">
-                            {member.role !== 'owner' && (
+                            {!member.is_owner && (
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                   <Button variant="ghost" size="sm" className="h-8 w-8 p-0 hover:bg-neutral-100">
@@ -185,8 +361,22 @@ function TeamPage() {
                                   </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end" className="w-48">
-                                  <DropdownMenuItem className="text-sm">Alterar permissão</DropdownMenuItem>
-                                  <DropdownMenuItem className="text-sm text-red-600 focus:text-red-600">
+                                  <DropdownMenuLabel className="text-xs font-bold text-neutral-500 uppercase">Ações</DropdownMenuLabel>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuSub>
+                                    <DropdownMenuSubTrigger className="text-sm">Alterar permissão</DropdownMenuSubTrigger>
+                                    <DropdownMenuPortal>
+                                      <DropdownMenuSubContent>
+                                        <DropdownMenuItem onClick={() => handleChangeRole(member.id, 'admin')}>Administrador</DropdownMenuItem>
+                                        <DropdownMenuItem onClick={() => handleChangeRole(member.id, 'editor')}>Editor</DropdownMenuItem>
+                                        <DropdownMenuItem onClick={() => handleChangeRole(member.id, 'viewer')}>Visualizador</DropdownMenuItem>
+                                      </DropdownMenuSubContent>
+                                    </DropdownMenuPortal>
+                                  </DropdownMenuSub>
+                                  <DropdownMenuItem 
+                                    className="text-sm text-red-600 focus:text-red-600"
+                                    onClick={() => setMemberToRemove(member)}
+                                  >
                                     <UserMinus className="w-4 h-4 mr-2" />
                                     Remover da equipe
                                   </DropdownMenuItem>
@@ -209,7 +399,10 @@ function TeamPage() {
                     <p className="text-sm text-neutral-500 mt-1">
                       Convide novos membros para colaborar neste workspace.
                     </p>
-                    <Button className="mt-6 bg-white border border-neutral-200 text-neutral-700 hover:bg-neutral-50">
+                    <Button 
+                      className="mt-6 bg-white border border-neutral-200 text-neutral-700 hover:bg-neutral-50"
+                      onClick={() => setInviteModalOpen(true)}
+                    >
                       Enviar primeiro convite
                     </Button>
                   </div>
@@ -224,14 +417,19 @@ function TeamPage() {
                           <div>
                             <div className="text-sm font-semibold text-neutral-900">{invite.email_normalized}</div>
                             <div className="flex items-center gap-2 text-xs text-neutral-500 mt-0.5">
-                              <span className="px-1.5 py-0.5 rounded bg-neutral-100 font-medium">{getRoleLabel(invite.role)}</span>
+                              <span className="px-1.5 py-0.5 rounded bg-neutral-100 font-medium">{invite.role}</span>
                               <span>•</span>
                               <Clock className="w-3 h-3" />
                               <span>Expira em {new Date(invite.expires_at).toLocaleDateString()}</span>
                             </div>
                           </div>
                         </div>
-                        <Button variant="outline" size="sm" className="text-xs">
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          className="text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
+                          onClick={() => setInvitationToRevoke(invite)}
+                        >
                           Revogar
                         </Button>
                       </div>
@@ -301,6 +499,84 @@ function TeamPage() {
             </Tabs>
           </div>
         </main>
+        {/* Invite Dialog */}
+        <Dialog open={inviteModalOpen} onOpenChange={setInviteModalOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Convidar Membro</DialogTitle>
+              <DialogDescription>
+                Envie um convite para colaborar neste workspace.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="grid gap-2">
+                <Label htmlFor="email">E-mail</Label>
+                <Input 
+                  id="email" 
+                  type="email" 
+                  placeholder="exemplo@empresa.com"
+                  value={inviteEmail}
+                  onChange={(e) => setInviteEmail(e.target.value)}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="role">Função</Label>
+                <Select value={inviteRole} onValueChange={(v: any) => setInviteRole(v)}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="admin">Administrador</SelectItem>
+                    <SelectItem value="editor">Editor</SelectItem>
+                    <SelectItem value="viewer">Visualizador</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setInviteModalOpen(false)}>Cancelar</Button>
+              <Button onClick={handleInvite} disabled={inviting || !inviteEmail}>
+                {inviting ? 'Enviando...' : 'Convidar'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Revoke Invitation Dialog */}
+        <Dialog open={!!invitationToRevoke} onOpenChange={() => setInvitationToRevoke(null)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Revogar Convite</DialogTitle>
+              <DialogDescription>
+                Tem certeza que deseja revogar o convite para <strong>{invitationToRevoke?.email_normalized}</strong>?
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setInvitationToRevoke(null)}>Cancelar</Button>
+              <Button variant="destructive" onClick={() => invitationToRevoke && handleRevoke(invitationToRevoke.id)} disabled={actionLoading}>
+                {actionLoading ? 'Revogando...' : 'Revogar'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Remove Member Dialog */}
+        <Dialog open={!!memberToRemove} onOpenChange={() => setMemberToRemove(null)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Remover Membro</DialogTitle>
+              <DialogDescription>
+                Tem certeza que deseja remover <strong>{memberToRemove?.profiles?.display_name || memberToRemove?.email_normalized}</strong> da equipe?
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setMemberToRemove(null)}>Cancelar</Button>
+              <Button variant="destructive" onClick={() => memberToRemove && handleRemoveMember(memberToRemove.id)} disabled={actionLoading}>
+                {actionLoading ? 'Removendo...' : 'Remover'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </DashboardLayout>
   );

@@ -17,7 +17,13 @@ function InvitePage() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [accepting, setAccepting] = useState(false);
-  const [invite, setInvite] = useState<any>(null);
+  const [invite, setInvite] = useState<{
+    email: string;
+    role: string;
+    workspaceName: string;
+    status: string;
+    expiresAt: string;
+  } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [session, setSession] = useState<any>(null);
 
@@ -103,13 +109,6 @@ function InvitePage() {
     }
   };
 
-  const sha256 = async (str: string) => {
-    const buf = new TextEncoder().encode(str);
-    const hash = await crypto.subtle.digest('SHA-256', buf);
-    return Array.from(new Uint8Array(hash))
-      .map(b => b.toString(16).padStart(2, '0'))
-      .join('');
-  };
 
   if (loading) {
     return (
@@ -146,7 +145,7 @@ function InvitePage() {
     );
   }
 
-  const maskedEmail = invite.email;
+  const maskedEmail = invite?.email;
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-neutral-50 px-4 py-12">
@@ -168,10 +167,10 @@ function InvitePage() {
           <div className="bg-neutral-50 rounded-2xl p-6 border border-neutral-100 mb-8">
             <div className="flex items-center gap-4 mb-4 pb-4 border-b border-neutral-200/50">
               <div className="w-10 h-10 bg-neutral-200 rounded-lg flex items-center justify-center text-neutral-500 font-bold">
-                {invite.workspaceName?.[0] || 'W'}
+                {invite?.workspaceName?.[0] || 'W'}
               </div>
               <div>
-                <div className="text-sm font-bold text-neutral-900">{invite.workspaceName}</div>
+                <div className="text-sm font-bold text-neutral-900">{invite?.workspaceName}</div>
                 <div className="text-xs text-neutral-500">Workspace de Checklists</div>
               </div>
             </div>
@@ -180,7 +179,7 @@ function InvitePage() {
               <div className="flex items-center justify-between">
                 <span className="text-xs text-neutral-500 uppercase font-bold tracking-wider">Papel</span>
                 <span className="text-xs font-bold px-2.5 py-1 bg-pink-100 text-pink-600 rounded-full capitalize">
-                  {invite.role === 'owner' ? 'Proprietário' : invite.role}
+                  {invite?.role}
                 </span>
               </div>
               <div className="flex items-center justify-between">

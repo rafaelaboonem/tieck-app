@@ -11,7 +11,7 @@ import {
   LayoutTemplate, Files, ArrowLeft, ArrowRight, Star, MessageCircle,
   Calendar, User as UserIcon, ArrowUpDown, Maximize2, Rows,
   Edit2, Eye, Palette, Link as LinkIcon, Copy as CopyIcon2, Trash,
-  Smile, Briefcase, BookOpen, EyeOff
+  Smile, Briefcase, BookOpen, EyeOff, CheckCircle2, AlertCircle
 } from "lucide-react";
 
 
@@ -805,12 +805,13 @@ function WorkspacePage() {
       if (!currentWorkspace) return;
 
       if (!memberId) {
-        // Remove assignments for this checklist
-        const { error } = await supabase
-          .from('checklist_assignments')
-          .delete()
-          .eq('checklist_id', checklistId)
-          .eq('workspace_id', currentWorkspace.id);
+        // Use RPC to remove assignments atomically
+        const { error } = await supabase.rpc('update_checklist_assignments', {
+          p_checklist_id: checklistId,
+          p_workspace_id: currentWorkspace.id,
+          p_primary_member_id: undefined,
+          p_member_ids: []
+        });
         
         if (error) throw error;
         setAssignments(prev => prev.filter(a => a.checklist_id !== checklistId));
@@ -1158,7 +1159,7 @@ function WorkspacePage() {
 
   const filteredChecklists = checklists.filter(c => 
     (c.title || "").toLowerCase().includes(searchQuery.toLowerCase()) &&
-    (c.view_type === selectedSubTab || (!c.view_type && (!selectedSubTab || selectedSubTab === "Tarefas")))
+    (selectedSubTab === "Atribuições" || c.view_type === selectedSubTab || (!c.view_type && (!selectedSubTab || selectedSubTab === "Tarefas")))
   );
 
 
@@ -1397,6 +1398,14 @@ function WorkspacePage() {
 
 
 
+                <div 
+                  onClick={() => setSelectedSubTab("Atribuições")}
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap group transition-colors cursor-pointer ${selectedSubTab === "Atribuições" ? "bg-neutral-100 text-neutral-700" : "hover:bg-neutral-50 text-neutral-500"}`}
+                >
+                  <Users className="w-4 h-4" />
+                  <span>Atribuições</span>
+                </div>
+
                 {categories.length < 4 && (
                   <button 
                     onClick={() => setIsCategoryModalOpen(true)}
@@ -1430,15 +1439,130 @@ function WorkspacePage() {
               </div>
             </div>
 
-            {/* Board */}
-            <DndContext 
-              sensors={sensors}
-              collisionDetection={closestCenter}
-              onDragStart={handleDragStart}
-              onDragOver={handleDragOver}
-              onDragEnd={handleDragEnd}
-              modifiers={[restrictToWindowEdges]}
-            >
+            {/* Main Content */}
+            {selectedSubTab === "Atribuições" ? (
+              <div className="mt-4 border border-neutral-100 rounded-xl overflow-hidden shadow-sm bg-white overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead className="bg-neutral-50 border-b border-neutral-100">
+                    <tr>
+                      <th className="px-6 py-3 text-xs font-bold uppercase text-neutral-500 tracking-wider min-w-[200px]">Checklist</th>
+                      <th className="px-6 py-3 text-xs font-bold uppercase text-neutral-500 tracking-wider">Responsável</th>
+                      <th className="px-6 py-3 text-xs font-bold uppercase text-neutral-500 tracking-wider">Participantes</th>
+                      <th className="px-6 py-3 text-xs font-bold uppercase text-neutral-500 tracking-wider text-right">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-neutral-100">
+                    {checklists.length === 0 ? (
+                      <tr>
+                        <td colSpan={4} className="px-6 py-10 text-center text-neutral-500 text-sm">Nenhum checklist encontrado.</td>
+                      </tr>
+                    ) : (
+                      checklists.map((chk) => {
+                        const chkAssignments = assignments.filter(a => a.checklist_id === chk.id);
+                        const primary = chkAssignments.find(a => a.is_primary);
+                        const participants = chkAssignments.filter(a => !a.is_primary);
+                        
+                        return (
+                          <tr key={chk.id} className="hover:bg-neutral-50/50 transition-colors">
+                            <td className="px-6 py-4">
+                              <div className="flex flex-col gap-0.5">
+                                <span className="text-sm font-medium text-neutral-900">{chk.title || 'Sem título'}</span>
+                                <span className="text-[10px] text-neutral-400 uppercase font-bold">{chk.category || 'Tarefas'}</span>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4">
+                              {primary ? (() => {
+                                const member = members.find(m => m.id === primary.workspace_member_id);
+                                return (
+                                  <div className="flex items-center gap-2">
+                                    <div className="w-6 h-6 rounded-full bg-neutral-100 overflow-hidden border border-neutral-200 shrink-0">
+                                      {member?.profiles?.avatar_url && <img src={member.profiles.avatar_url} className="w-full h-full object-cover" />}
+                                    </div>
+                                    <span className="text-xs text-neutral-700 truncate max-w-[120px]">
+                                      {member?.profiles?.display_name || member?.email_normalized || 'Desconhecido'}
+                                    </span>
+                                  </div>
+                                );
+                              })() : (
+                                <span className="text-xs text-neutral-400 italic">Sem responsável</span>
+                              )}
+                            </td>
+                            <td className="px-6 py-4">
+                              <div className="flex -space-x-2">
+                                {participants.slice(0, 3).map(a => {
+                                  const member = members.find(m => m.id === a.workspace_member_id);
+                                  return (
+                                    <div key={a.id} className="w-6 h-6 rounded-full bg-white border border-neutral-200 overflow-hidden flex items-center justify-center shrink-0" title={member?.profiles?.display_name || ''}>
+                                      {member?.profiles?.avatar_url ? (
+                                        <img src={member.profiles.avatar_url} className="w-full h-full object-cover" />
+                                      ) : (
+                                        <UserIcon className="w-3 h-3 text-neutral-400" />
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                                {participants.length > 3 && (
+                                  <div className="w-6 h-6 rounded-full bg-neutral-100 border border-neutral-200 flex items-center justify-center shrink-0">
+                                    <span className="text-[10px] font-bold text-neutral-500">+{participants.length - 3}</span>
+                                  </div>
+                                )}
+                                {participants.length === 0 && <span className="text-xs text-neutral-400">-</span>}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 text-right">
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" size="sm" className="h-8 px-2 text-xs gap-1.5">
+                                    <Edit2 className="w-3.5 h-3.5" />
+                                    Atribuir
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="w-56 p-1">
+                                  <div className="px-2 py-1.5 text-[10px] font-bold text-neutral-400 uppercase tracking-wider">Responsável Principal</div>
+                                  {members.map(member => {
+                                    const isPrimary = primary?.workspace_member_id === member.id;
+                                    return (
+                                      <DropdownMenuItem 
+                                        key={member.id} 
+                                        className="flex items-center justify-between gap-2 text-xs py-2"
+                                        onClick={() => handleAssignMember(chk.id, isPrimary ? null : member.id)}
+                                      >
+                                        <div className="flex items-center gap-2">
+                                          <div className="w-5 h-5 rounded-full bg-neutral-100 overflow-hidden shrink-0">
+                                            {member.profiles?.avatar_url && <img src={member.profiles.avatar_url} className="w-full h-full object-cover" />}
+                                          </div>
+                                          <span className="truncate max-w-[120px]">{member.profiles?.display_name || 'Membro'}</span>
+                                        </div>
+                                        {isPrimary && <CheckCircle2 className="w-3.5 h-3.5 text-pink-500" />}
+                                      </DropdownMenuItem>
+                                    );
+                                  })}
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem 
+                                    className="text-xs text-red-600 focus:text-red-600"
+                                    onClick={() => handleAssignMember(chk.id, null)}
+                                  >
+                                    Remover todos
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <DndContext 
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragStart={handleDragStart}
+                onDragOver={handleDragOver}
+                onDragEnd={handleDragEnd}
+                modifiers={[restrictToWindowEdges]}
+              >
 
               <div className="flex gap-6 items-start overflow-x-auto overflow-y-hidden pb-4 no-scrollbar">
                 {[{ id: 'unassigned', name: 'Tarefas' }, ...categories].map((cat, idx) => {
@@ -1662,6 +1786,7 @@ function WorkspacePage() {
 
 
             </DndContext>
+            )}
 
           </div>
         </div>
