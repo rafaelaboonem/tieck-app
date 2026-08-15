@@ -1575,6 +1575,7 @@ function WorkspacePage() {
                             />
                           ))}
 
+
                         </SortableContext>
                         
                         {isAddingItem?.category === categoryName && (
