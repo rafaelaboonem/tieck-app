@@ -2539,9 +2539,9 @@ export type Database = {
       }
       create_workspace_invitation_safe: {
         Args: {
-          p_email: string
+          p_email_normalized: string
           p_expires_at: string
-          p_inviter_id: string
+          p_invited_by: string
           p_role: Database["public"]["Enums"]["app_role"]
           p_token_hash: string
           p_workspace_id: string
@@ -2622,12 +2622,12 @@ export type Database = {
       resend_workspace_invitation: {
         Args: {
           p_actor_id: string
+          p_expires_at: string
           p_invitation_id: string
-          p_new_expires_at: string
           p_new_token_hash: string
           p_workspace_id: string
         }
-        Returns: undefined
+        Returns: string
       }
       resolve_public_response: {
         Args: { p_token: string }
@@ -2673,11 +2673,11 @@ export type Database = {
             Args: {
               p_actor_id: string
               p_member_id: string
-              p_new_role: string
-              p_new_status: string
+              p_role?: string
+              p_status: string
               p_workspace_id: string
             }
-            Returns: undefined
+            Returns: boolean
           }
         | {
             Args: {
@@ -2691,7 +2691,7 @@ export type Database = {
       user_has_workspace_access:
         | {
             Args: {
-              p_min_role?: Database["public"]["Enums"]["app_role"]
+              p_min_role: Database["public"]["Enums"]["app_role"]
               p_user_id: string
               p_workspace_id: string
             }
