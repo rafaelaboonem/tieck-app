@@ -61,23 +61,34 @@ export const Route = createFileRoute('/api/camera-ai/test-verification')({
         if (!user) return Response.json({ ok: false, code: 'unauthorized', requestId }, { status: 401 });
 
         try {
+          const contentType = request.headers.get("content-type") || "";
+          if (!contentType.includes("multipart/form-data")) {
+            return Response.json({ ok: false, code: 'invalid_content_type', requestId }, { status: 400 });
+          }
+
           let formData: FormData;
           try {
             formData = await request.formData();
           } catch (e) {
+            console.error(`[CameraAI-Test] [${requestId}] FormData parse error:`, e);
             return Response.json({ ok: false, code: 'invalid_form_data', requestId }, { status: 400 });
           }
 
+          const checklistIdRaw = formData.get('checklistId');
+          const blockIdRaw = formData.get('blockId');
+
           const validation = TestPayloadSchema.safeParse({
-            checklistId: formData.get('checklistId'),
-            blockId: formData.get('blockId'),
+            checklistId: checklistIdRaw,
+            blockId: blockIdRaw,
           });
           
           if (!validation.success) {
+            console.error(`[CameraAI-Test] [${requestId}] Validation error:`, validation.error.format());
             return Response.json({ ok: false, code: 'invalid_payload', requestId }, { status: 400 });
           }
           
           const { checklistId, blockId } = validation.data;
+
           const candidate = formData.get('candidate');
           
           if (!candidate) return Response.json({ ok: false, code: 'missing_image', requestId }, { status: 400 });
