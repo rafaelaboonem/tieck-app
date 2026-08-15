@@ -222,6 +222,61 @@ export type Database = {
           },
         ]
       }
+      checklist_assignments: {
+        Row: {
+          checklist_id: string
+          created_at: string
+          created_by: string | null
+          id: string
+          is_primary: boolean
+          updated_at: string
+          workspace_id: string
+          workspace_member_id: string
+        }
+        Insert: {
+          checklist_id: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_primary?: boolean
+          updated_at?: string
+          workspace_id: string
+          workspace_member_id: string
+        }
+        Update: {
+          checklist_id?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_primary?: boolean
+          updated_at?: string
+          workspace_id?: string
+          workspace_member_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "checklist_assignments_checklist_id_fkey"
+            columns: ["checklist_id"]
+            isOneToOne: false
+            referencedRelation: "checklists"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "checklist_assignments_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "checklist_assignments_workspace_member_id_fkey"
+            columns: ["workspace_member_id"]
+            isOneToOne: false
+            referencedRelation: "workspace_members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       checklist_evidence_analyses: {
         Row: {
           analysis_token_hash: string
@@ -2036,6 +2091,103 @@ export type Database = {
           },
         ]
       }
+      workspace_invitations: {
+        Row: {
+          accepted_at: string | null
+          accepted_by: string | null
+          created_at: string
+          email_normalized: string
+          expires_at: string
+          id: string
+          invited_by: string | null
+          role: Database["public"]["Enums"]["app_role"]
+          status: Database["public"]["Enums"]["invitation_status"]
+          token_hash: string
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          accepted_at?: string | null
+          accepted_by?: string | null
+          created_at?: string
+          email_normalized: string
+          expires_at: string
+          id?: string
+          invited_by?: string | null
+          role?: Database["public"]["Enums"]["app_role"]
+          status?: Database["public"]["Enums"]["invitation_status"]
+          token_hash: string
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          accepted_at?: string | null
+          accepted_by?: string | null
+          created_at?: string
+          email_normalized?: string
+          expires_at?: string
+          id?: string
+          invited_by?: string | null
+          role?: Database["public"]["Enums"]["app_role"]
+          status?: Database["public"]["Enums"]["invitation_status"]
+          token_hash?: string
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workspace_invitations_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      workspace_members: {
+        Row: {
+          created_at: string
+          email_normalized: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          status: Database["public"]["Enums"]["member_status"]
+          updated_at: string
+          user_id: string | null
+          workspace_id: string
+          ws_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          email_normalized: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          status?: Database["public"]["Enums"]["member_status"]
+          updated_at?: string
+          user_id?: string | null
+          workspace_id: string
+          ws_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          email_normalized?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          status?: Database["public"]["Enums"]["member_status"]
+          updated_at?: string
+          user_id?: string | null
+          workspace_id?: string
+          ws_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workspace_members_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       workspace_tasks: {
         Row: {
           category_id: string | null
@@ -2394,6 +2546,14 @@ export type Database = {
           user_id: string
         }[]
       }
+      has_role_in_workspace: {
+        Args: {
+          _min_role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+          _workspace_id: string
+        }
+        Returns: boolean
+      }
       hit_public_rate_limit: {
         Args: {
           p_action: string
@@ -2451,6 +2611,10 @@ export type Database = {
           p_retention_days: number
         }
         Returns: undefined
+      }
+      user_has_workspace_access: {
+        Args: { _user_id: string; _workspace_id: string }
+        Returns: boolean
       }
       vision_lab_attempt_claim: {
         Args: {
@@ -2547,6 +2711,7 @@ export type Database = {
       }
     }
     Enums: {
+      app_role: "admin" | "editor" | "viewer"
       checklist_evidence_analysis_status:
         | "pending"
         | "processing"
@@ -2556,6 +2721,8 @@ export type Database = {
         | "failed"
       checklist_response_status: "in_progress" | "submitted"
       execution_status: "pending" | "done" | "late" | "skipped" | "cancelled"
+      invitation_status: "pending" | "accepted" | "revoked" | "expired"
+      member_status: "pending" | "active" | "inactive"
       task_weight: "comum" | "importante" | "critica"
     }
     CompositeTypes: {
@@ -2684,6 +2851,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      app_role: ["admin", "editor", "viewer"],
       checklist_evidence_analysis_status: [
         "pending",
         "processing",
@@ -2694,6 +2862,8 @@ export const Constants = {
       ],
       checklist_response_status: ["in_progress", "submitted"],
       execution_status: ["pending", "done", "late", "skipped", "cancelled"],
+      invitation_status: ["pending", "accepted", "revoked", "expired"],
+      member_status: ["pending", "active", "inactive"],
       task_weight: ["comum", "importante", "critica"],
     },
   },
