@@ -13,8 +13,8 @@ export const updateMemberStatus = createServerFn({ method: "POST" })
   .inputValidator((data) => MemberActionSchema.parse(data))
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import('@/integrations/supabase/client.server');
-    const { getWebRequest } = await import('@tanstack/react-start/server');
-    const request = getWebRequest()!;
+    const { getRequest } = await import('@tanstack/react-start/server');
+    const request = getRequest()!;
     
     const authHeader = request.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
@@ -49,8 +49,8 @@ export const revokeInvitation = createServerFn({ method: "POST" })
   .inputValidator((data) => z.object({ workspaceId: z.string().uuid(), invitationId: z.string().uuid() }).parse(data))
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import('@/integrations/supabase/client.server');
-    const { getWebRequest } = await import('@tanstack/react-start/server');
-    const request = getWebRequest()!;
+    const { getRequest } = await import('@tanstack/react-start/server');
+    const request = getRequest()!;
 
     const authHeader = request.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) throw new Error('Unauthorized');
