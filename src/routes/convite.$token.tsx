@@ -42,45 +42,25 @@ function InvitePage() {
   const fetchInvite = async () => {
     setLoading(true);
     try {
-      // O token real não está no banco, apenas o hash.
-      // Precisamos de um endpoint público para "espiar" o convite pelo hash
-      // Por agora, vamos tentar o aceite direto ou uma busca segura
-      const tokenHash = await sha256(token);
-      
-      const { data, error } = await supabase
-        .from('workspace_invitations')
-        .select(`
-          id,
-          role,
-          email_normalized,
-          status,
-          expires_at,
-          workspaces (
-            id,
-            name,
-            logo_url
-          )
-        `)
-        .eq('token_hash', tokenHash)
-        .maybeSingle();
+      const response = await fetch('/api/public/invitations/inspect', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ token })
+      });
 
-      if (error) throw error;
-      if (!data) {
-        setError("convite_inexistente");
+      const result = await response.json();
+
+      if (!result.ok) {
+        if (result.code === 'not_found') setError("convite_inexistente");
+        else if (result.code === 'already_processed') setError("convite_ja_aceito");
+        else if (result.code === 'expired') setError("convite_expirado");
+        else setError("convite_invalido");
         return;
       }
 
-      if (data.status !== 'pending') {
-        setError(data.status === 'accepted' ? 'convite_ja_aceito' : 'convite_invalido');
-        return;
-      }
-
-      if (new Date(data.expires_at) < new Date()) {
-        setError("convite_expirado");
-        return;
-      }
-
-      setInvite(data);
+      setInvite(result.invitation);
     } catch (err) {
       console.error("Erro ao buscar convite:", err);
       setError("erro_carregamento");
