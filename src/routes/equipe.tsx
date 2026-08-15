@@ -517,19 +517,10 @@ function TeamPage() {
                       </div>
                     ))}
 
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
-                          className="text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
-                          onClick={() => setInvitationToRevoke(invite)}
-                        >
-                          Revogar
-                        </Button>
-                      </div>
-                    ))}
                   </div>
                 )}
               </TabsContent>
+
 
               <TabsContent value="assignments">
                 <div className="border border-neutral-100 rounded-xl overflow-hidden shadow-sm bg-white">
