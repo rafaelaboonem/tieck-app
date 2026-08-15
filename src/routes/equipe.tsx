@@ -399,7 +399,10 @@ function TeamPage() {
                     <p className="text-sm text-neutral-500 mt-1">
                       Convide novos membros para colaborar neste workspace.
                     </p>
-                    <Button className="mt-6 bg-white border border-neutral-200 text-neutral-700 hover:bg-neutral-50">
+                    <Button 
+                      className="mt-6 bg-white border border-neutral-200 text-neutral-700 hover:bg-neutral-50"
+                      onClick={() => setInviteModalOpen(true)}
+                    >
                       Enviar primeiro convite
                     </Button>
                   </div>
