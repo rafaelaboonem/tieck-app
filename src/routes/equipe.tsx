@@ -207,7 +207,7 @@ function TeamPage() {
                             <Mail className="w-5 h-5 text-pink-500" />
                           </div>
                           <div>
-                            <div className="text-sm font-semibold text-neutral-900">{invite.email}</div>
+                            <div className="text-sm font-semibold text-neutral-900">{invite.email_normalized}</div>
                             <div className="flex items-center gap-2 text-xs text-neutral-500 mt-0.5">
                               <span className="px-1.5 py-0.5 rounded bg-neutral-100 font-medium">{getRoleLabel(invite.role)}</span>
                               <span>•</span>
