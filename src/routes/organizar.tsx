@@ -90,9 +90,16 @@ interface Checklist {
   is_published: boolean | null;
   updated_at: string;
   view_type?: string | null;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
+interface ChecklistAssignmentView {
+  id: string;
+  checklist_id: string;
+  workspace_member_id: string;
+  is_primary: boolean;
+  workspace_id: string;
+}
 
 interface Category {
   id: string;
@@ -119,6 +126,7 @@ function SortableChecklistCard({
   assignments,
   members,
   onAssign,
+  canManage,
 }: { 
   checklist: Checklist; 
   isSelected: boolean; 
@@ -132,9 +140,10 @@ function SortableChecklistCard({
   onCopyLink: () => void;
   onDuplicate: (item: Checklist) => void;
   accentColor: string;
-  assignments: any[];
-  members: any[];
+  assignments: ChecklistAssignmentView[];
+  members: WorkspaceMemberView[];
   onAssign: (checklistId: string, memberId: string | null) => void;
+  canManage: boolean;
 }) {
 
 
@@ -204,9 +213,9 @@ function SortableChecklistCard({
               <h4 className="text-[13px] font-medium text-neutral-800 line-clamp-2">{checklist.title || "Sem título"}</h4>
               <div className="flex items-center gap-2">
                 <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
+                  <DropdownMenuTrigger asChild disabled={!canManage}>
                     <button 
-                      className="flex -space-x-1.5 p-0.5 hover:bg-neutral-50 rounded-full transition-all"
+                      className={`flex -space-x-1.5 p-0.5 rounded-full transition-all ${canManage ? 'hover:bg-neutral-50' : 'cursor-default'}`}
                       onClick={(e) => e.stopPropagation()}
                     >
                       {assignments.filter(a => a.checklist_id === checklist.id).length > 0 ? (
@@ -225,36 +234,38 @@ function SortableChecklistCard({
                             );
                           })
                       ) : (
-                        <div className="w-5 h-5 rounded-full border border-dashed border-neutral-300 bg-neutral-50 flex items-center justify-center hover:border-neutral-400 transition-colors">
+                        <div className={`w-5 h-5 rounded-full border border-dashed border-neutral-300 bg-neutral-50 flex items-center justify-center ${canManage ? 'hover:border-neutral-400' : ''} transition-colors`}>
                           <UserPlus className="w-2.5 h-2.5 text-neutral-400" />
                         </div>
                       )}
                     </button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="start" className="w-56 bg-white border border-neutral-100 shadow-xl rounded-xl p-1">
-                    <div className="px-2 py-1.5 text-[10px] font-bold text-neutral-500 uppercase tracking-wider">Atribuir responsável</div>
-                    {members.map(member => {
-                      const isAssigned = assignments.some(a => a.checklist_id === checklist.id && a.workspace_member_id === member.id);
-                      return (
-                        <DropdownMenuItem 
-                          key={member.id} 
-                          className="flex items-center justify-between gap-2 text-xs hover:bg-neutral-50 rounded-lg py-2"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onAssign(checklist.id, isAssigned ? null : member.id);
-                          }}
-                        >
-                          <div className="flex items-center gap-2">
-                            <div className="w-6 h-6 rounded-full bg-neutral-100 overflow-hidden">
-                              {member.profiles?.avatar_url && <img src={member.profiles.avatar_url} className="w-full h-full object-cover" />}
+                  {canManage && (
+                    <DropdownMenuContent align="start" className="w-56 bg-white border border-neutral-100 shadow-xl rounded-xl p-1">
+                      <div className="px-2 py-1.5 text-[10px] font-bold text-neutral-500 uppercase tracking-wider">Atribuir responsável</div>
+                      {members.filter(m => m.status === 'active').map(member => {
+                        const isAssigned = assignments.some(a => a.checklist_id === checklist.id && a.workspace_member_id === member.id);
+                        return (
+                          <DropdownMenuItem 
+                            key={member.id} 
+                            className="flex items-center justify-between gap-2 text-xs hover:bg-neutral-50 rounded-lg py-2"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onAssign(checklist.id, isAssigned ? null : member.id);
+                            }}
+                          >
+                            <div className="flex items-center gap-2">
+                              <div className="w-6 h-6 rounded-full bg-neutral-100 overflow-hidden">
+                                {member.profiles?.avatar_url && <img src={member.profiles.avatar_url} className="w-full h-full object-cover" />}
+                              </div>
+                              <span className="truncate max-w-[120px]">{member.profiles?.display_name || 'Membro'}</span>
                             </div>
-                            <span className="truncate max-w-[120px]">{member.profiles?.display_name || 'Membro'}</span>
-                          </div>
-                          {isAssigned && <Check className="w-3.5 h-3.5 text-pink-500" />}
-                        </DropdownMenuItem>
-                      );
-                    })}
-                  </DropdownMenuContent>
+                            {isAssigned && <Check className="w-3.5 h-3.5 text-pink-500" />}
+                          </DropdownMenuItem>
+                        );
+                      })}
+                    </DropdownMenuContent>
+                  )}
                 </DropdownMenu>
               </div>
             </div>
@@ -421,8 +432,11 @@ function WorkspacePage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [submissionCounts, setSubmissionCounts] = useState<Record<string, number>>({});
   const [isLoading, setIsLoading] = useState(true);
-  const [members, setMembers] = useState<any[]>([]);
-  const [assignments, setAssignments] = useState<any[]>([]);
+  const [members, setMembers] = useState<WorkspaceMemberView[]>([]);
+  const [assignments, setAssignments] = useState<ChecklistAssignmentView[]>([]);
+  const [currentUserRole, setCurrentUserRole] = useState<'owner' | 'admin' | 'editor' | 'viewer' | null>(null);
+
+  const canManage = currentUserRole === 'owner' || currentUserRole === 'admin' || currentUserRole === 'editor';
 
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [hasCheckedOnboarding, setHasCheckedOnboarding] = useState(false);
