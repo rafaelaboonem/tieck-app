@@ -1,4 +1,4 @@
-import { Camera, Sparkles, Loader2 } from "lucide-react";
+import { Camera, Sparkles, Loader2, GripVertical } from "lucide-react";
 import { CameraVerificationPolicyV1, PublishedBlock } from "@/server/camera-ai/schema";
 import { cn } from "@/lib/utils";
 
@@ -43,7 +43,7 @@ export function CameraBlockCard({
       )}
     >
       <div className="flex items-center self-stretch mr-1 text-neutral-300 group-hover:text-neutral-400">
-        <div className="w-4 h-4 cursor-grab active:cursor-grabbing" />
+        <GripVertical className="w-4 h-4 cursor-grab active:cursor-grabbing" />
       </div>
 
       <div 
