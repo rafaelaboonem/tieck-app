@@ -1,4 +1,4 @@
-import { Camera, Sparkles, Loader2, MoreVertical, GripVertical } from "lucide-react";
+import { Camera, Sparkles, Loader2 } from "lucide-react";
 import { CameraVerificationPolicyV1, PublishedBlock } from "@/server/camera-ai/schema";
 import { cn } from "@/lib/utils";
 
@@ -21,21 +21,14 @@ export function CameraBlockCard({
   const title = block.title || block.subtitle || "Câmera";
   
   const getBadge = () => {
-    if (isCompiling) {
-      return { label: "Preparando verificação...", variant: "compiling" as const };
-    }
-    if (!policy) {
-      return { label: "Configuração pendente", variant: "pending" as const };
-    }
+    if (isCompiling) return { label: "Preparando verificação...", variant: "compiling" as const };
+    if (!policy) return { label: "Configuração pendente", variant: "pending" as const };
     
     switch (policy.verifiability) {
-      case 'not_visual':
-        return { label: "Não verificável somente por foto", variant: "not_visual" as const };
-      case 'partially_visual':
-        return { label: "Verificação parcial", variant: "partial" as const };
+      case 'not_visual': return { label: "Não verificável somente por foto", variant: "not_visual" as const };
+      case 'partially_visual': return { label: "Verificação parcial", variant: "partial" as const };
       case 'visual':
-      default:
-        return { label: "Verificação por IA", variant: "valid" as const };
+      default: return { label: "Verificação por IA", variant: "valid" as const };
     }
   };
 
@@ -50,7 +43,7 @@ export function CameraBlockCard({
       )}
     >
       <div className="flex items-center self-stretch mr-1 text-neutral-300 group-hover:text-neutral-400">
-        <GripVertical className="w-4 h-4 cursor-grab active:cursor-grabbing" />
+        <div className="w-4 h-4 cursor-grab active:cursor-grabbing" />
       </div>
 
       <div 
@@ -62,13 +55,7 @@ export function CameraBlockCard({
 
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-1">
-          <h3 
-            className="text-sm font-bold truncate"
-            style={{ color: textColor }}
-          >
-            {title}
-          </h3>
-          
+          <h3 className="text-sm font-bold truncate" style={{ color: textColor }}>{title}</h3>
           {badge && (
             <div className={cn(
               "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider",
@@ -77,33 +64,13 @@ export function CameraBlockCard({
               (badge.variant === 'partial' || badge.variant === 'not_visual') && "bg-amber-100 text-amber-700",
               badge.variant === 'pending' && "bg-neutral-100 text-neutral-600"
             )}>
-              {badge.variant === 'compiling' ? (
-                <Loader2 className="w-2.5 h-2.5 animate-spin" />
-              ) : (
-                <Sparkles className="w-2.5 h-2.5" />
-              )}
+              {badge.variant === 'compiling' ? <Loader2 className="w-2.5 h-2.5 animate-spin" /> : <Sparkles className="w-2.5 h-2.5" />}
               {badge.label}
             </div>
           )}
         </div>
-
-        {policy?.summary && (
-          <p className="text-[11px] text-neutral-500 line-clamp-1">
-            {policy.summary}
-          </p>
-        )}
+        {policy?.summary && <p className="text-[11px] text-neutral-500 line-clamp-1">{policy.summary}</p>}
       </div>
-
-      <button 
-        aria-label="Opções do bloco"
-        onClick={(e) => {
-          e.stopPropagation();
-          // TODO: Conectar ao menu de blocos padrão do editor
-        }}
-        className="p-1 rounded-md hover:bg-neutral-100 text-neutral-400 opacity-0 group-hover:opacity-100 transition-opacity"
-      >
-        <MoreVertical className="w-4 h-4" />
-      </button>
     </div>
   );
 }
