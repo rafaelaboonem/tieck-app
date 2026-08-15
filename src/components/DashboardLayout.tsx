@@ -104,8 +104,23 @@ import logoIcon from "../assets/local/logo-tieck.webp";
      useEffect(() => {
       const fetchData = async () => {
          if (user) {
-           // Owner-only model: no team members to count.
-           setMemberCount(0);
+            // Contagem real de membros ativos
+            if (currentWorkspace) {
+              const { count, error: countError } = await supabase
+                .from("workspace_members")
+                .select("*", { count: 'exact', head: true })
+                .eq("workspace_id", currentWorkspace.id)
+                .eq("status", "active");
+              
+              if (!countError && count !== null) {
+                setMemberCount(count);
+              } else {
+                setMemberCount(0);
+              }
+            } else {
+              setMemberCount(0);
+            }
+
 
            // Fetch profile
            const { data: profileData } = await supabase
