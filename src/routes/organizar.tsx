@@ -14,6 +14,7 @@ import {
   Smile, Briefcase, BookOpen, EyeOff, CheckCircle2, AlertCircle
 } from "lucide-react";
 import { WorkspaceMemberView } from "./equipe";
+import { Database } from "@/integrations/supabase/types";
 
 
 import { supabase } from "@/integrations/supabase/client";
@@ -882,9 +883,10 @@ function WorkspacePage() {
         toast.success("Responsável atribuído");
       }
       // Data is refreshed via state updates above, no need for fetchChecklists() call
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      toast.error("Erro ao atribuir membro: " + err.message);
+      const message = err instanceof Error ? err.message : 'Erro ao atribuir membro';
+      toast.error(message);
     }
   };
 
