@@ -116,6 +116,9 @@ function SortableChecklistCard({
   onCopyLink,
   onDuplicate,
   accentColor,
+  assignments,
+  members,
+  onAssign,
 }: { 
   checklist: Checklist; 
   isSelected: boolean; 
@@ -129,7 +132,11 @@ function SortableChecklistCard({
   onCopyLink: () => void;
   onDuplicate: (item: Checklist) => void;
   accentColor: string;
+  assignments: any[];
+  members: any[];
+  onAssign: (checklistId: string, userId: string | null) => void;
 }) {
+
 
 
   const [isEditing, setIsEditing] = useState(false);
