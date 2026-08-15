@@ -218,7 +218,7 @@ function TeamPage() {
       fetchTeamData();
     } catch (error: any) {
       console.error('Invite error:', error);
-      toast.error(`Falha ao convidar: ${error.message}`);
+      toast.error(`Falha ao convidar: ${error.message === 'rate_limit' ? 'Limite de convites excedido. Tente mais tarde.' : 'Erro interno'}`);
     } finally {
       setInviting(false);
     }

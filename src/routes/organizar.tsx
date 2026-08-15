@@ -13,6 +13,7 @@ import {
   Edit2, Eye, Palette, Link as LinkIcon, Copy as CopyIcon2, Trash,
   Smile, Briefcase, BookOpen, EyeOff, CheckCircle2, AlertCircle
 } from "lucide-react";
+import { WorkspaceMemberView } from "./equipe";
 
 
 import { supabase } from "@/integrations/supabase/client";
@@ -458,6 +459,26 @@ function WorkspacePage() {
   const [newCategoryName, setNewCategoryName] = useState("");
   const [checklistToDelete, setChecklistToDelete] = useState<Checklist | null>(null);
   const [isAddingItem, setIsAddingItem] = useState<{ category: string | null } | null>(null);
+
+  useEffect(() => {
+    const fetchUserRole = async () => {
+      if (!currentWorkspace || !user) return;
+      const isOwner = currentWorkspace.owner_id === user.id;
+      if (isOwner) {
+        setCurrentUserRole('owner');
+      } else {
+        const { data } = await supabase
+          .from('workspace_members')
+          .select('role')
+          .eq('workspace_id', currentWorkspace.id)
+          .eq('user_id', user.id)
+          .eq('status', 'active')
+          .maybeSingle();
+        setCurrentUserRole(data?.role as any || 'viewer');
+      }
+    };
+    fetchUserRole();
+  }, [currentWorkspace?.id, user?.id]);
   const [selectedSubTab, setSelectedSubTab] = useState("");
   const [newItemTitle, setNewItemTitle] = useState("");
   const [renamingCategoryId, setRenamingCategoryId] = useState<string | null>(null);
@@ -1713,6 +1734,7 @@ function WorkspacePage() {
                               assignments={assignments}
                               members={members}
                               onAssign={handleAssignMember}
+                              canManage={canManage}
                             />
                           ))}
 
