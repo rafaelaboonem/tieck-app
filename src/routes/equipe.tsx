@@ -37,11 +37,11 @@ function TeamPage() {
             status,
             created_at,
             user_id,
-            profiles:profiles!workspace_members_user_id_fkey (
+            email_normalized,
+            profiles:profiles (
               id,
               full_name,
-              avatar_url,
-              email
+              avatar_url
             )
           `)
           .eq('workspace_id', currentWorkspace.id),
