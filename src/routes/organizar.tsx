@@ -853,15 +853,12 @@ function WorkspacePage() {
   const handleAssignMember = async (checklistId: string, memberId: string | null) => {
     if (!currentWorkspace || !canManage) return;
     try {
-      const payload: any = {
+      const payload: Database['public']['Functions']['update_checklist_assignments']['Args'] = {
         p_workspace_id: currentWorkspace.id,
         p_checklist_id: checklistId,
-        p_member_ids: memberId ? [memberId] : []
+        p_member_ids: memberId ? [memberId] : [],
+        ...(memberId ? { p_primary_member_id: memberId } : {})
       };
-
-      if (memberId) {
-        payload.p_primary_member_id = memberId;
-      }
       
       const { error } = await supabase.rpc('update_checklist_assignments', payload);
 
