@@ -279,7 +279,10 @@ function TeamPage() {
                 Gerencie os membros e permissões do workspace <span className="font-semibold text-neutral-700">{currentWorkspace.name}</span>.
               </p>
             </div>
-            <Button className="bg-pink-500 hover:bg-pink-600 text-white gap-2">
+            <Button 
+              className="bg-pink-500 hover:bg-pink-600 text-white gap-2"
+              onClick={() => setInviteModalOpen(true)}
+            >
               <UserPlus className="w-4 h-4" />
               Convidar
             </Button>
