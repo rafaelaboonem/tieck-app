@@ -134,7 +134,7 @@ function SortableChecklistCard({
   accentColor: string;
   assignments: any[];
   members: any[];
-  onAssign: (checklistId: string, userId: string | null) => void;
+  onAssign: (checklistId: string, memberId: string | null) => void;
 }) {
 
 
@@ -213,7 +213,7 @@ function SortableChecklistCard({
                         assignments
                           .filter(a => a.checklist_id === checklist.id)
                           .map(a => {
-                            const member = members.find(m => m.user_id === a.user_id);
+                            const member = members.find(m => m.id === a.workspace_member_id);
                             return (
                               <div key={a.id} className="w-5 h-5 rounded-full border border-white bg-neutral-100 overflow-hidden flex items-center justify-center">
                                 {member?.profiles?.avatar_url ? (
@@ -234,21 +234,21 @@ function SortableChecklistCard({
                   <DropdownMenuContent align="start" className="w-56 bg-white border border-neutral-100 shadow-xl rounded-xl p-1">
                     <div className="px-2 py-1.5 text-[10px] font-bold text-neutral-500 uppercase tracking-wider">Atribuir responsável</div>
                     {members.map(member => {
-                      const isAssigned = assignments.some(a => a.checklist_id === checklist.id && a.user_id === member.user_id);
+                      const isAssigned = assignments.some(a => a.checklist_id === checklist.id && a.workspace_member_id === member.id);
                       return (
                         <DropdownMenuItem 
-                          key={member.user_id} 
+                          key={member.id} 
                           className="flex items-center justify-between gap-2 text-xs hover:bg-neutral-50 rounded-lg py-2"
                           onClick={(e) => {
                             e.stopPropagation();
-                            onAssign(checklist.id, isAssigned ? null : member.user_id);
+                            onAssign(checklist.id, isAssigned ? null : member.id);
                           }}
                         >
                           <div className="flex items-center gap-2">
                             <div className="w-6 h-6 rounded-full bg-neutral-100 overflow-hidden">
                               {member.profiles?.avatar_url && <img src={member.profiles.avatar_url} className="w-full h-full object-cover" />}
                             </div>
-                            <span className="truncate max-w-[120px]">{member.profiles?.full_name || 'Membro'}</span>
+                            <span className="truncate max-w-[120px]">{member.profiles?.display_name || 'Membro'}</span>
                           </div>
                           {isAssigned && <Check className="w-3.5 h-3.5 text-pink-500" />}
                         </DropdownMenuItem>
@@ -530,9 +530,9 @@ function WorkspacePage() {
             .select(`
               id,
               user_id,
-              profiles:profiles (
+              profiles:profiles!inner (
                 id,
-                full_name,
+                display_name,
                 avatar_url
               )
             `)
@@ -540,11 +540,11 @@ function WorkspacePage() {
           supabase
             .from('checklist_assignments')
             .select('*')
-            .in('checklist_id', (chks || []).map(c => c.id))
+            .eq('workspace_id', currentWorkspace.id)
         ]);
 
-        if (!membersRes.error) setMembers(membersRes.data || []);
-        if (!assignmentsRes.error) setAssignments(assignmentsRes.data || []);
+        if (!membersRes.error) setMembers(membersRes.error ? [] : membersRes.data);
+        if (!assignmentsRes.error) setAssignments(assignmentsRes.error ? [] : assignmentsRes.data);
 
       } catch (error) {
         console.error("Error fetching workspace data:", error);
@@ -800,23 +800,20 @@ function WorkspacePage() {
     }
   };
 
-  const handleAssignMember = async (checklistId: string, userId: string | null) => {
+  const handleAssignMember = async (checklistId: string, memberId: string | null) => {
     try {
       if (!currentWorkspace) return;
 
-      const member = members.find(m => m.user_id === userId);
-      const memberId = member?.id;
-
       if (!memberId) {
-        // Remove primary assignment
+        // Remove assignments for this checklist
         const { error } = await supabase
           .from('checklist_assignments')
           .delete()
           .eq('checklist_id', checklistId)
-          .eq('is_primary', true);
+          .eq('workspace_id', currentWorkspace.id);
         
         if (error) throw error;
-        setAssignments(prev => prev.filter(a => !(a.checklist_id === checklistId && a.is_primary)));
+        setAssignments(prev => prev.filter(a => a.checklist_id !== checklistId));
         toast.success("Responsável removido");
       } else {
         // RPC handles atomic update

@@ -42,45 +42,25 @@ function InvitePage() {
   const fetchInvite = async () => {
     setLoading(true);
     try {
-      // O token real não está no banco, apenas o hash.
-      // Precisamos de um endpoint público para "espiar" o convite pelo hash
-      // Por agora, vamos tentar o aceite direto ou uma busca segura
-      const tokenHash = await sha256(token);
-      
-      const { data, error } = await supabase
-        .from('workspace_invitations')
-        .select(`
-          id,
-          role,
-          email_normalized,
-          status,
-          expires_at,
-          workspaces (
-            id,
-            name,
-            logo_url
-          )
-        `)
-        .eq('token_hash', tokenHash)
-        .maybeSingle();
+      const response = await fetch('/api/public/invitations/inspect', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ token })
+      });
 
-      if (error) throw error;
-      if (!data) {
-        setError("convite_inexistente");
+      const result = await response.json();
+
+      if (!result.ok) {
+        if (result.code === 'not_found') setError("convite_inexistente");
+        else if (result.code === 'already_processed') setError("convite_ja_aceito");
+        else if (result.code === 'expired') setError("convite_expirado");
+        else setError("convite_invalido");
         return;
       }
 
-      if (data.status !== 'pending') {
-        setError(data.status === 'accepted' ? 'convite_ja_aceito' : 'convite_invalido');
-        return;
-      }
-
-      if (new Date(data.expires_at) < new Date()) {
-        setError("convite_expirado");
-        return;
-      }
-
-      setInvite(data);
+      setInvite(result.invitation);
     } catch (err) {
       console.error("Erro ao buscar convite:", err);
       setError("erro_carregamento");
@@ -166,7 +146,7 @@ function InvitePage() {
     );
   }
 
-  const maskedEmail = invite.email_normalized.replace(/(.{2})(.*)(?=@)/, (_: string, gp2: string, gp3: string) => gp2 + "*".repeat(gp3.length));
+  const maskedEmail = invite.email;
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-neutral-50 px-4 py-12">
@@ -187,15 +167,11 @@ function InvitePage() {
 
           <div className="bg-neutral-50 rounded-2xl p-6 border border-neutral-100 mb-8">
             <div className="flex items-center gap-4 mb-4 pb-4 border-b border-neutral-200/50">
-              {invite.workspaces?.logo_url ? (
-                <img src={invite.workspaces.logo_url} className="w-10 h-10 rounded-lg object-cover" alt="" />
-              ) : (
-                <div className="w-10 h-10 bg-neutral-200 rounded-lg flex items-center justify-center text-neutral-500 font-bold">
-                  {invite.workspaces?.name?.[0]}
-                </div>
-              )}
+              <div className="w-10 h-10 bg-neutral-200 rounded-lg flex items-center justify-center text-neutral-500 font-bold">
+                {invite.workspaceName?.[0] || 'W'}
+              </div>
               <div>
-                <div className="text-sm font-bold text-neutral-900">{invite.workspaces?.name}</div>
+                <div className="text-sm font-bold text-neutral-900">{invite.workspaceName}</div>
                 <div className="text-xs text-neutral-500">Workspace de Checklists</div>
               </div>
             </div>

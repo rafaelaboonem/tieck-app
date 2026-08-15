@@ -22,13 +22,14 @@ function TeamPage() {
   const { currentWorkspace } = useWorkspace();
   const [members, setMembers] = useState<any[]>([]);
   const [invitations, setInvitations] = useState<any[]>([]);
+  const [assignments, setAssignments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchTeamData = async () => {
     if (!currentWorkspace) return;
     setLoading(true);
     try {
-      const [membersRes, invitesRes] = await Promise.all([
+      const [membersRes, invitesRes, assignmentsRes] = await Promise.all([
         supabase
           .from('workspace_members')
           .select(`
@@ -38,9 +39,9 @@ function TeamPage() {
             created_at,
             user_id,
             email_normalized,
-            profiles:profiles (
+            profiles:profiles!inner (
               id,
-              full_name,
+              display_name,
               avatar_url
             )
           `)
@@ -49,7 +50,20 @@ function TeamPage() {
           .from('workspace_invitations')
           .select('*')
           .eq('workspace_id', currentWorkspace.id)
-          .eq('status', 'pending')
+          .eq('status', 'pending'),
+        supabase
+          .from('checklist_assignments')
+          .select(`
+            id,
+            checklist_id,
+            workspace_member_id,
+            is_primary,
+            checklists:checklists (
+              id,
+              title
+            )
+          `)
+          .eq('workspace_id', currentWorkspace.id)
       ]);
 
       if (membersRes.error) throw membersRes.error;
@@ -57,6 +71,7 @@ function TeamPage() {
 
       setMembers(membersRes.data || []);
       setInvitations(invitesRes.data || []);
+      setAssignments(assignmentsRes.data || []);
     } catch (error) {
       console.error('Error fetching team data:', error);
       toast.error('Erro ao carregar dados da equipe');
@@ -113,7 +128,7 @@ function TeamPage() {
                   Convites Pendentes ({invitations.length})
                 </TabsTrigger>
                 <TabsTrigger value="assignments" className="data-[state=active]:bg-white data-[state=active]:shadow-sm px-6 py-2">
-                  Atribuições
+                  Atribuições ({assignments.length})
                 </TabsTrigger>
               </TabsList>
 
@@ -141,7 +156,7 @@ function TeamPage() {
                                 )}
                               </div>
                               <div>
-                                <div className="text-sm font-semibold text-neutral-900">{member.profiles?.full_name || 'Usuário'}</div>
+                                <div className="text-sm font-semibold text-neutral-900">{member.profiles?.display_name || 'Usuário'}</div>
                                 <div className="text-xs text-neutral-500">{member.email_normalized}</div>
                               </div>
                             </div>
@@ -226,12 +241,61 @@ function TeamPage() {
               </TabsContent>
 
               <TabsContent value="assignments">
-                <div className="py-20 text-center bg-neutral-50 rounded-2xl border border-neutral-100">
-                  <Clock className="w-12 h-12 text-neutral-200 mx-auto mb-4" />
-                  <h3 className="text-lg font-semibold text-neutral-900">Em desenvolvimento</h3>
-                  <p className="text-sm text-neutral-500 mt-1 max-w-xs mx-auto">
-                    A visualização detalhada de atribuições por checklist está sendo preparada.
-                  </p>
+                <div className="border border-neutral-100 rounded-xl overflow-hidden shadow-sm bg-white">
+                  <table className="w-full text-left border-collapse">
+                    <thead className="bg-neutral-50 border-b border-neutral-100">
+                      <tr>
+                        <th className="px-6 py-3 text-xs font-bold uppercase text-neutral-500 tracking-wider">Checklist</th>
+                        <th className="px-6 py-3 text-xs font-bold uppercase text-neutral-500 tracking-wider">Membro Atribuído</th>
+                        <th className="px-6 py-3 text-xs font-bold uppercase text-neutral-500 tracking-wider">Tipo</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-neutral-100">
+                      {assignments.length === 0 ? (
+                        <tr>
+                          <td colSpan={3} className="px-6 py-10 text-center text-neutral-500 text-sm">
+                            Nenhuma atribuição encontrada.
+                          </td>
+                        </tr>
+                      ) : (
+                        assignments.map((assignment) => {
+                          const member = members.find(m => m.id === assignment.workspace_member_id);
+                          return (
+                            <tr key={assignment.id} className="hover:bg-neutral-50/50 transition-colors">
+                              <td className="px-6 py-4">
+                                <div className="text-sm font-medium text-neutral-900">
+                                  {(assignment.checklists as any)?.title || 'Checklist sem título'}
+                                </div>
+                              </td>
+                              <td className="px-6 py-4">
+                                <div className="flex items-center gap-2">
+                                  <div className="w-6 h-6 rounded-full bg-neutral-100 flex items-center justify-center overflow-hidden border border-neutral-200">
+                                    {member?.profiles?.avatar_url ? (
+                                      <img src={member.profiles.avatar_url} alt="" className="w-full h-full object-cover" />
+                                    ) : (
+                                      <Users className="w-3 h-3 text-neutral-400" />
+                                    )}
+                                  </div>
+                                  <span className="text-sm text-neutral-700">
+                                    {member?.profiles?.display_name || member?.email_normalized || 'Desconhecido'}
+                                  </span>
+                                </div>
+                              </td>
+                              <td className="px-6 py-4">
+                                {assignment.is_primary ? (
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-pink-50 text-pink-600 border border-pink-100">
+                                    Responsável Principal
+                                  </span>
+                                ) : (
+                                  <span className="text-xs text-neutral-500">Colaborador</span>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
                 </div>
               </TabsContent>
             </Tabs>

@@ -36,11 +36,11 @@ export const Route = createFileRoute('/api/public/invitations/create')({
           const { workspaceId, email, role } = result.data;
 
           // 3. Authorization check (admin or owner)
-          // We use the RPC defined in the migration
-          const { data: isAuthorized, error: roleError } = await supabaseAdmin.rpc('has_role_in_workspace', {
-            _user_id: user.id,
-            _workspace_id: workspaceId,
-            _min_role: role === 'admin' ? 'admin' : 'admin' // Only owner can invite admin, but for now we follow the requirement: Admin can invite editor/viewer, Owner can invite admin.
+          // Use user_has_workspace_access with explicit role requirements
+          const { data: isAuthorized, error: roleError } = await supabaseAdmin.rpc('user_has_workspace_access', {
+            p_user_id: user.id,
+            p_workspace_id: workspaceId,
+            p_min_role: 'admin'
           });
 
           // Wait, the requirement says:
