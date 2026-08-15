@@ -30,6 +30,8 @@ import { Route as ApiCameraAiVerifyRouteImport } from './routes/api/camera-ai/ve
 import { Route as ApiCameraAiTestVerificationRouteImport } from './routes/api/camera-ai/test-verification'
 import { Route as ApiCameraAiSignedUrlRouteImport } from './routes/api/camera-ai/signed-url'
 import { Route as ApiCameraAiCompilePolicyRouteImport } from './routes/api/camera-ai/compile-policy'
+import { Route as ApiPublicInvitationsCreateRouteImport } from './routes/api/public/invitations/create'
+import { Route as ApiPublicInvitationsAcceptRouteImport } from './routes/api/public/invitations/accept'
 
 const PainelRoute = PainelRouteImport.update({
   id: '/painel',
@@ -138,6 +140,18 @@ const ApiCameraAiCompilePolicyRoute =
     path: '/api/camera-ai/compile-policy',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicInvitationsCreateRoute =
+  ApiPublicInvitationsCreateRouteImport.update({
+    id: '/api/public/invitations/create',
+    path: '/api/public/invitations/create',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiPublicInvitationsAcceptRoute =
+  ApiPublicInvitationsAcceptRouteImport.update({
+    id: '/api/public/invitations/accept',
+    path: '/api/public/invitations/accept',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -161,6 +175,8 @@ export interface FileRoutesByFullPath {
   '/api/camera-ai/test-verification': typeof ApiCameraAiTestVerificationRoute
   '/api/camera-ai/verify': typeof ApiCameraAiVerifyRoute
   '/unidades/$unitId/operacao': typeof UnidadesUnitIdOperacaoRoute
+  '/api/public/invitations/accept': typeof ApiPublicInvitationsAcceptRoute
+  '/api/public/invitations/create': typeof ApiPublicInvitationsCreateRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -184,6 +200,8 @@ export interface FileRoutesByTo {
   '/api/camera-ai/test-verification': typeof ApiCameraAiTestVerificationRoute
   '/api/camera-ai/verify': typeof ApiCameraAiVerifyRoute
   '/unidades/$unitId/operacao': typeof UnidadesUnitIdOperacaoRoute
+  '/api/public/invitations/accept': typeof ApiPublicInvitationsAcceptRoute
+  '/api/public/invitations/create': typeof ApiPublicInvitationsCreateRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -208,6 +226,8 @@ export interface FileRoutesById {
   '/api/camera-ai/test-verification': typeof ApiCameraAiTestVerificationRoute
   '/api/camera-ai/verify': typeof ApiCameraAiVerifyRoute
   '/unidades/$unitId/operacao': typeof UnidadesUnitIdOperacaoRoute
+  '/api/public/invitations/accept': typeof ApiPublicInvitationsAcceptRoute
+  '/api/public/invitations/create': typeof ApiPublicInvitationsCreateRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -233,6 +253,8 @@ export interface FileRouteTypes {
     | '/api/camera-ai/test-verification'
     | '/api/camera-ai/verify'
     | '/unidades/$unitId/operacao'
+    | '/api/public/invitations/accept'
+    | '/api/public/invitations/create'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -256,6 +278,8 @@ export interface FileRouteTypes {
     | '/api/camera-ai/test-verification'
     | '/api/camera-ai/verify'
     | '/unidades/$unitId/operacao'
+    | '/api/public/invitations/accept'
+    | '/api/public/invitations/create'
   id:
     | '__root__'
     | '/'
@@ -279,6 +303,8 @@ export interface FileRouteTypes {
     | '/api/camera-ai/test-verification'
     | '/api/camera-ai/verify'
     | '/unidades/$unitId/operacao'
+    | '/api/public/invitations/accept'
+    | '/api/public/invitations/create'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -303,6 +329,8 @@ export interface RootRouteChildren {
   ApiCameraAiTestVerificationRoute: typeof ApiCameraAiTestVerificationRoute
   ApiCameraAiVerifyRoute: typeof ApiCameraAiVerifyRoute
   UnidadesUnitIdOperacaoRoute: typeof UnidadesUnitIdOperacaoRoute
+  ApiPublicInvitationsAcceptRoute: typeof ApiPublicInvitationsAcceptRoute
+  ApiPublicInvitationsCreateRoute: typeof ApiPublicInvitationsCreateRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -454,6 +482,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiCameraAiCompilePolicyRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/invitations/create': {
+      id: '/api/public/invitations/create'
+      path: '/api/public/invitations/create'
+      fullPath: '/api/public/invitations/create'
+      preLoaderRoute: typeof ApiPublicInvitationsCreateRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/invitations/accept': {
+      id: '/api/public/invitations/accept'
+      path: '/api/public/invitations/accept'
+      fullPath: '/api/public/invitations/accept'
+      preLoaderRoute: typeof ApiPublicInvitationsAcceptRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -479,6 +521,8 @@ const rootRouteChildren: RootRouteChildren = {
   ApiCameraAiTestVerificationRoute: ApiCameraAiTestVerificationRoute,
   ApiCameraAiVerifyRoute: ApiCameraAiVerifyRoute,
   UnidadesUnitIdOperacaoRoute: UnidadesUnitIdOperacaoRoute,
+  ApiPublicInvitationsAcceptRoute: ApiPublicInvitationsAcceptRoute,
+  ApiPublicInvitationsCreateRoute: ApiPublicInvitationsCreateRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
