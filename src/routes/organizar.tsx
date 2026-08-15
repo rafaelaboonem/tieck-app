@@ -884,7 +884,7 @@ function WorkspacePage() {
         ]);
         toast.success("Responsável atribuído");
       }
-      fetchChecklists();
+      // Data is refreshed via state updates above, no need for fetchChecklists() call
     } catch (err: any) {
       console.error(err);
       toast.error("Erro ao atribuir membro: " + err.message);
