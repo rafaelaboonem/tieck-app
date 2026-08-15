@@ -256,10 +256,10 @@ function SortableChecklistCard({
                     })}
                   </DropdownMenuContent>
                 </DropdownMenu>
-              </div>
             </div>
-
+          )}
         </div>
+
         
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
