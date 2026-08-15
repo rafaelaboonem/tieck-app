@@ -4,7 +4,7 @@ import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { AlertCircle, Loader2, Play } from "lucide-react";
-import { CameraVerificationPolicyV1, PublishedBlock } from "@/server/camera-ai/schema";
+import { CameraVerificationPolicyV1, PublishedBlock, CameraBlockPatch } from "@/server/camera-ai/schema";
 import { CameraVerificationTestDialog } from "./CameraVerificationTestDialog";
 
 interface CameraDraft {
@@ -33,6 +33,20 @@ export function CameraSettingsPanel({ block, isOpen, onClose, onSave, isCompilin
     mode: block.mode || 'auto',
     policy: block.cameraAiPolicy as CameraVerificationPolicyV1 | undefined
   });
+
+  useEffect(() => {
+    if (isOpen) {
+      setDraft({
+        title: block.title || block.subtitle || "",
+        description: block.description || "",
+        required: block.required !== false,
+        mode: block.mode || 'auto',
+        policy: block.cameraAiPolicy as CameraVerificationPolicyV1 | undefined
+      });
+      setHasChanges(false);
+    }
+  }, [isOpen, block]);
+
   
   const [isTestModalOpen, setIsTestModalOpen] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
@@ -103,6 +117,17 @@ export function CameraSettingsPanel({ block, isOpen, onClose, onSave, isCompilin
                 />
               </div>
 
+              <div className="space-y-2">
+                <label className="text-sm font-bold text-neutral-900">Instrução complementar <span className="text-neutral-400 font-normal">(opcional)</span></label>
+                <textarea
+                  value={draft.description}
+                  placeholder="Ex.: Certifique-se de que a logo esteja visível."
+                  onChange={(e) => handleFieldChange('description', e.target.value)}
+                  className="w-full px-3 py-2 text-sm border border-neutral-200 rounded-lg outline-none min-h-[80px] resize-none"
+                />
+              </div>
+
+
               <div className="space-y-3">
                 <label className="text-sm font-bold text-neutral-900">Modo de verificação</label>
                 <div className="grid grid-cols-1 gap-3">
@@ -110,9 +135,13 @@ export function CameraSettingsPanel({ block, isOpen, onClose, onSave, isCompilin
                     <div className="flex items-center gap-3">
                       <div className="w-4 h-4 rounded-full border-4 border-pink-500" />
                       <div>
-                        <p className="text-sm font-bold text-neutral-900">Automático</p>
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-bold text-neutral-900">Automático</p>
+                          <Badge className="bg-pink-100 text-pink-700 hover:bg-pink-100 text-[9px] h-4 px-1 border-none font-bold uppercase tracking-tight">Recomendado</Badge>
+                        </div>
                         <p className="text-[11px] text-neutral-500">A IA analisa e aprova em segundos.</p>
                       </div>
+
                     </div>
                   </div>
                    <div className="flex items-center justify-between p-3 border border-neutral-100 rounded-xl opacity-50 bg-neutral-50">
@@ -190,6 +219,22 @@ export function CameraSettingsPanel({ block, isOpen, onClose, onSave, isCompilin
                       ))}
                     </div>
                   </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <label className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider">Nível de rigor</label>
+                      <div className="w-full px-3 py-2 text-xs border border-neutral-100 bg-neutral-50 rounded-lg text-neutral-600 font-medium cursor-default">
+                        Padrão
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider">Em caso de dúvida</label>
+                      <div className="w-full px-3 py-2 text-xs border border-neutral-100 bg-neutral-50 rounded-lg text-neutral-600 font-medium cursor-default">
+                        Exigir outra foto
+                      </div>
+                    </div>
+                  </div>
+
                 </AccordionContent>
 
               </AccordionItem>
@@ -209,9 +254,19 @@ export function CameraSettingsPanel({ block, isOpen, onClose, onSave, isCompilin
 
           <div className="sticky bottom-0 bg-white pt-6 pb-2 border-t flex flex-col gap-3">
             <button onClick={handleSave} disabled={!hasChanges} className="w-full py-3 bg-pink-500 text-white rounded-xl font-bold text-sm disabled:opacity-50">Salvar bloco</button>
-            <button onClick={() => setIsTestModalOpen(true)} className="w-full py-3 bg-white text-neutral-700 border rounded-xl font-bold text-sm flex items-center justify-center gap-2">
-              <Play className="w-3.5 h-3.5 fill-current" /> Testar verificação
+            <button 
+              onClick={() => setIsTestModalOpen(true)} 
+              disabled={hasChanges || isCompiling}
+              className="w-full py-3 bg-white text-neutral-700 border rounded-xl font-bold text-sm flex flex-col items-center justify-center gap-0.5 disabled:opacity-50"
+            >
+              <div className="flex items-center gap-2">
+                <Play className="w-3.5 h-3.5 fill-current" /> Testar verificação
+              </div>
+              {(hasChanges || isCompiling) && (
+                <span className="text-[10px] text-neutral-400 font-normal italic">Salve as alterações antes de testar</span>
+              )}
             </button>
+
           </div>
         </SheetContent>
       </Sheet>
