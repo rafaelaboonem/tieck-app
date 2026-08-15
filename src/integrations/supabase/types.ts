@@ -2155,6 +2155,7 @@ export type Database = {
           user_id: string | null
           workspace_id: string
           ws_id: string | null
+          ws_id_legado: string | null
         }
         Insert: {
           created_at?: string
@@ -2166,6 +2167,7 @@ export type Database = {
           user_id?: string | null
           workspace_id: string
           ws_id?: string | null
+          ws_id_legado?: string | null
         }
         Update: {
           created_at?: string
@@ -2177,6 +2179,7 @@ export type Database = {
           user_id?: string | null
           workspace_id?: string
           ws_id?: string | null
+          ws_id_legado?: string | null
         }
         Relationships: [
           {
@@ -2425,15 +2428,25 @@ export type Database = {
       }
     }
     Functions: {
-      accept_workspace_invitation: {
-        Args: { p_token_hash: string; p_user_id: string }
-        Returns: {
-          error_code: string
-          member_id: string
-          success: boolean
-          workspace_id: string
-        }[]
-      }
+      accept_workspace_invitation:
+        | {
+            Args: { p_token_hash: string }
+            Returns: {
+              error_code: string
+              member_id: string
+              success: boolean
+              workspace_id: string
+            }[]
+          }
+        | {
+            Args: { p_token_hash: string; p_user_id: string }
+            Returns: {
+              error_code: string
+              member_id: string
+              success: boolean
+              workspace_id: string
+            }[]
+          }
       acquire_vision_lock: {
         Args: {
           p_operation: string
@@ -2557,7 +2570,7 @@ export type Database = {
       }
       has_role_in_workspace: {
         Args: {
-          _min_role: Database["public"]["Enums"]["app_role"]
+          _min_role?: Database["public"]["Enums"]["app_role"]
           _user_id: string
           _workspace_id: string
         }
@@ -2617,7 +2630,7 @@ export type Database = {
         Args: {
           p_checklist_id: string
           p_member_ids: string[]
-          p_primary_member_id: string
+          p_primary_member_id?: string
           p_workspace_id: string
         }
         Returns: boolean

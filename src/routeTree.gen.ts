@@ -24,6 +24,7 @@ import { Route as CadastroRouteImport } from './routes/cadastro'
 import { Route as CadastrarRouteImport } from './routes/cadastrar'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ConviteTokenRouteImport } from './routes/convite.$token'
 import { Route as CIdRouteImport } from './routes/c.$id'
 import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
 import { Route as UnidadesUnitIdOperacaoRouteImport } from './routes/unidades.$unitId.operacao'
@@ -109,6 +110,11 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ConviteTokenRoute = ConviteTokenRouteImport.update({
+  id: '/convite/$token',
+  path: '/convite/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const CIdRoute = CIdRouteImport.update({
   id: '/c/$id',
   path: '/c/$id',
@@ -177,6 +183,7 @@ export interface FileRoutesByFullPath {
   '/painel': typeof PainelRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/c/$id': typeof CIdRoute
+  '/convite/$token': typeof ConviteTokenRoute
   '/api/camera-ai/compile-policy': typeof ApiCameraAiCompilePolicyRoute
   '/api/camera-ai/signed-url': typeof ApiCameraAiSignedUrlRoute
   '/api/camera-ai/test-verification': typeof ApiCameraAiTestVerificationRoute
@@ -203,6 +210,7 @@ export interface FileRoutesByTo {
   '/painel': typeof PainelRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/c/$id': typeof CIdRoute
+  '/convite/$token': typeof ConviteTokenRoute
   '/api/camera-ai/compile-policy': typeof ApiCameraAiCompilePolicyRoute
   '/api/camera-ai/signed-url': typeof ApiCameraAiSignedUrlRoute
   '/api/camera-ai/test-verification': typeof ApiCameraAiTestVerificationRoute
@@ -230,6 +238,7 @@ export interface FileRoutesById {
   '/painel': typeof PainelRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/c/$id': typeof CIdRoute
+  '/convite/$token': typeof ConviteTokenRoute
   '/api/camera-ai/compile-policy': typeof ApiCameraAiCompilePolicyRoute
   '/api/camera-ai/signed-url': typeof ApiCameraAiSignedUrlRoute
   '/api/camera-ai/test-verification': typeof ApiCameraAiTestVerificationRoute
@@ -258,6 +267,7 @@ export interface FileRouteTypes {
     | '/painel'
     | '/auth/callback'
     | '/c/$id'
+    | '/convite/$token'
     | '/api/camera-ai/compile-policy'
     | '/api/camera-ai/signed-url'
     | '/api/camera-ai/test-verification'
@@ -284,6 +294,7 @@ export interface FileRouteTypes {
     | '/painel'
     | '/auth/callback'
     | '/c/$id'
+    | '/convite/$token'
     | '/api/camera-ai/compile-policy'
     | '/api/camera-ai/signed-url'
     | '/api/camera-ai/test-verification'
@@ -310,6 +321,7 @@ export interface FileRouteTypes {
     | '/painel'
     | '/auth/callback'
     | '/c/$id'
+    | '/convite/$token'
     | '/api/camera-ai/compile-policy'
     | '/api/camera-ai/signed-url'
     | '/api/camera-ai/test-verification'
@@ -337,6 +349,7 @@ export interface RootRouteChildren {
   PainelRoute: typeof PainelRoute
   AuthCallbackRoute: typeof AuthCallbackRoute
   CIdRoute: typeof CIdRoute
+  ConviteTokenRoute: typeof ConviteTokenRoute
   ApiCameraAiCompilePolicyRoute: typeof ApiCameraAiCompilePolicyRoute
   ApiCameraAiSignedUrlRoute: typeof ApiCameraAiSignedUrlRoute
   ApiCameraAiTestVerificationRoute: typeof ApiCameraAiTestVerificationRoute
@@ -453,6 +466,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/convite/$token': {
+      id: '/convite/$token'
+      path: '/convite/$token'
+      fullPath: '/convite/$token'
+      preLoaderRoute: typeof ConviteTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/c/$id': {
       id: '/c/$id'
       path: '/c/$id'
@@ -537,6 +557,7 @@ const rootRouteChildren: RootRouteChildren = {
   PainelRoute: PainelRoute,
   AuthCallbackRoute: AuthCallbackRoute,
   CIdRoute: CIdRoute,
+  ConviteTokenRoute: ConviteTokenRoute,
   ApiCameraAiCompilePolicyRoute: ApiCameraAiCompilePolicyRoute,
   ApiCameraAiSignedUrlRoute: ApiCameraAiSignedUrlRoute,
   ApiCameraAiTestVerificationRoute: ApiCameraAiTestVerificationRoute,
