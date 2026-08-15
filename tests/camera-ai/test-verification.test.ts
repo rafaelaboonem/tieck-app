@@ -82,8 +82,9 @@ describe('POST /api/camera-ai/test-verification', () => {
     
     if (fields.candidate !== null) {
       const blob = new Blob(['test'], { type: 'image/jpeg' });
-      formData.append('candidate', fields.candidate ?? blob, 'test.jpg');
+      formData.append('candidate', (fields.candidate as Blob) ?? blob, 'test.jpg');
     }
+
 
     const headers: Record<string, string> = {};
     if (token) headers['Authorization'] = `Bearer ${token}`;
