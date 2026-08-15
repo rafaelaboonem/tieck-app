@@ -252,6 +252,9 @@ function CameraBlockPreview({ textColor, blockId }: { textColor?: string; blockI
 
 import { CameraVerificationPolicyV1 } from "@/server/camera-ai/schema";
 
+import { CameraBlockCard } from "@/components/camera-ai/CameraBlockCard";
+import { CameraSettingsPanel } from "@/components/camera-ai/CameraSettingsPanel";
+
 function CameraBlockEditor({ 
   block, 
   isActive, 
@@ -273,13 +276,8 @@ function CameraBlockEditor({
 }) {
   const [isCompiling, setIsCompiling] = useState(false);
   const compileTimeoutRef = useRef<any>(null);
-  
-  const urls = block.dataUrls || (block.dataUrl ? [block.dataUrl] : []);
-  const allowMultiple = block.allowMultiple === true;
-  const maxPhotos = Math.max(1, Math.min(20, block.maxPhotos ?? 5));
   const camTitle = String(block.title || block.subtitle || "");
   const camDescription = String(block.description ?? "");
-  const camRequired = block.required !== false;
   const policy = block.cameraAiPolicy as CameraVerificationPolicyV1 | undefined;
 
   const triggerCompile = async (checklistId: string, blockId: string) => {
@@ -309,14 +307,10 @@ function CameraBlockEditor({
   };
 
   useEffect(() => {
-    if (!isActive || !currentChecklistId) return;
+    if (!currentChecklistId) return;
     
     const checkHash = async () => {
-      const question = (camTitle + ' ' + camDescription).trim();
-      if (!question) return;
-      
       const hash = await hashQuestion(camTitle, camDescription);
-      
       if (policy?.questionHash === hash) return;
 
       if (compileTimeoutRef.current) clearTimeout(compileTimeoutRef.current);
@@ -326,23 +320,13 @@ function CameraBlockEditor({
     };
 
     checkHash();
-
     return () => clearTimeout(compileTimeoutRef.current);
-  }, [camTitle, camDescription, isActive, currentChecklistId, policy?.questionHash]);
-
-  const visionBadge = policy?.verifiability === 'not_visual' 
-    ? { label: "Não verificável por IA", tone: "warn" as const }
-    : policy?.verifiability === 'partially_visual'
-    ? { label: "Verificação parcial", tone: "warn" as const }
-    : policy && policy.version === 1
-    ? { label: "IA V3: Semântica Ativa", tone: "active" as const }
-    : null;
+  }, [camTitle, camDescription, currentChecklistId, policy?.questionHash]);
 
   return (
     <div
       ref={(el) => { if (el) textareaRefs.current[block.id] = el as any; }}
       tabIndex={0}
-      onFocus={() => setActiveBlockId(block.id)}
       onKeyDown={(e) => {
         if (e.key === "Backspace") {
           const isInput = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement;
@@ -354,229 +338,25 @@ function CameraBlockEditor({
       }}
       className="group w-full outline-none"
     >
-      <div
-        className={`flex items-start gap-3 w-full border border-neutral-200 rounded-xl px-4 py-3 bg-white hover:bg-neutral-50 transition-all relative group/camera-card shadow-sm`}
-        onMouseDown={(e) => {
-          if ((e.target as HTMLElement).closest('button')) return;
-          (e.currentTarget as any).__wasActive = isActive;
-        }}
-        onClick={(e) => {
-          e.stopPropagation();
-          if ((e.target as HTMLElement).closest('button')) return;
-          const wasActive = (e.currentTarget as any).__wasActive;
-          if (wasActive) {
-            setActiveBlockId(null);
-            (textareaRefs.current[block.id] as any)?.blur?.();
-          } else {
-            setActiveBlockId(block.id);
-          }
-        }}
-      >
-        <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 mt-0.5" style={{ backgroundColor: `${textColor}1A` }}>
-          <Camera className="w-5 h-5" style={{ color: textColor }} />
-        </div>
-        
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <input
-              type="text"
-              value={camTitle}
-              placeholder="Câmera"
-              onClick={(e) => e.stopPropagation()}
-              onFocus={() => setActiveBlockId(block.id)}
-              onChange={(e) => updateBlock(block.id, { title: e.target.value, subtitle: e.target.value })}
-              className="flex-1 min-w-0 text-sm font-bold bg-transparent border-none outline-none placeholder:text-neutral-400"
-              style={{ color: textColor }}
-            />
-            {allowMultiple && (
-              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-neutral-100 text-neutral-500 uppercase tracking-wider">
-                até {maxPhotos}
-              </span>
-            )}
-          </div>
-          {camDescription && (
-            <p className="text-xs text-neutral-500 mt-0.5 line-clamp-2">{camDescription}</p>
-          )}
-          <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
-            {visionBadge && (
-              <div className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
-                visionBadge.tone === 'active' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
-              }`}>
-                <Sparkles className="w-2.5 h-2.5" />
-                {visionBadge.label}
-              </div>
-            )}
-            {isCompiling && (
-              <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-blue-100 text-blue-700 animate-pulse">
-                <Loader2 className="w-2.5 h-2.5 animate-spin" />
-                Gerando política...
-              </div>
-            )}
-          </div>
-        </div>
+      <CameraBlockCard
+        block={block}
+        isActive={isActive}
+        isCompiling={isCompiling}
+        textColor={textColor}
+        onSelect={() => setActiveBlockId(block.id)}
+      />
 
-        {urls.length > 0 && (
-          <div className="flex -space-x-2 overflow-hidden mr-2">
-            {urls.slice(0, 3).map((url: string, i: number) => (
-              <div key={i} className="relative w-8 h-8 rounded-full border-2 border-white overflow-hidden bg-neutral-100 shadow-sm shrink-0 group/thumb">
-                <img src={url} className="w-full h-full object-cover" alt={`Preview ${i}`} />
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    const newUrls = urls.filter((_: any, idx: number) => idx !== i);
-                    updateBlock(block.id, { dataUrls: newUrls, dataUrl: newUrls[0] || null });
-                  }}
-                  className="absolute inset-0 bg-black/60 opacity-0 group-hover/thumb:opacity-100 flex items-center justify-center transition-opacity"
-                >
-                  <Trash2 className="w-3 h-3 text-white" />
-                </button>
-              </div>
-            ))}
-            {urls.length > 3 && (
-              <div className="w-8 h-8 rounded-full border-2 border-white bg-neutral-100 flex items-center justify-center text-[10px] font-bold text-neutral-500 shadow-sm shrink-0">
-                +{urls.length - 3}
-              </div>
-            )}
-          </div>
-        )}
-        <Settings
-          className={`w-4 h-4 text-neutral-400 shrink-0 mt-1 transition-opacity ${isActive ? 'opacity-100' : 'opacity-0 group-hover/camera-card:opacity-100'}`}
-          aria-hidden="true"
-        />
-      </div>
-      {isActive && (
-        <div
-          className="mt-2 rounded-lg border border-neutral-200 bg-neutral-50/60"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <div className="flex items-center justify-between px-4 py-2.5 border-b border-neutral-200/70">
-            <span className="text-xs font-semibold text-neutral-800 tracking-wide">
-              Configurar câmera
-            </span>
-          </div>
+      <CameraSettingsPanel
+        block={block}
+        isOpen={isActive}
+        onClose={() => setActiveBlockId(null)}
+        isCompiling={isCompiling}
+        onSave={(patch) => updateBlock(block.id, patch)}
+      />
+    </div>
+  );
+}
 
-          <div className="px-4 py-3 space-y-4">
-            <div className="space-y-2">
-              <label className="block text-[11px] font-semibold text-neutral-500 uppercase tracking-wider">
-                Pergunta
-              </label>
-              <input
-                type="text"
-                value={camTitle}
-                placeholder="Ex.: Foto da bancada"
-                onChange={(e) => updateBlock(block.id, { title: e.target.value, subtitle: e.target.value })}
-                className="w-full px-2.5 py-1.5 text-sm border border-neutral-200 rounded-md bg-white outline-none focus:border-neutral-400"
-              />
-              <label className="block text-[11px] font-semibold text-neutral-500 uppercase tracking-wider pt-1">
-                Descrição
-              </label>
-              <textarea
-                value={camDescription}
-                placeholder="Detalhes ou contexto para o respondente."
-                onChange={(e) => updateBlock(block.id, { description: e.target.value })}
-                rows={2}
-                className="w-full px-2.5 py-1.5 text-sm border border-neutral-200 rounded-md bg-white outline-none focus:border-neutral-400 resize-y"
-              />
-            </div>
-
-            {policy && (
-              <div className="space-y-3 pt-1">
-                <div className="p-3 rounded-lg bg-blue-50/50 border border-blue-100">
-                  <h4 className="text-[11px] font-bold text-blue-900 uppercase tracking-wider mb-1">O que será verificado</h4>
-                  <p className="text-xs text-blue-800 leading-relaxed">{policy.summary}</p>
-                </div>
-
-                {policy.verifiability === 'not_visual' && (
-                  <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 flex gap-2">
-                    <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
-                    <p className="text-xs text-amber-800">
-                      Esta pergunta não pode ser comprovada por uma foto. Use outro tipo de bloco ou reformule a pergunta.
-                    </p>
-                  </div>
-                )}
-
-                {policy.verifiability === 'partially_visual' && (
-                  <div className="p-3 rounded-lg bg-blue-50 border border-blue-200 flex gap-2">
-                    <Info className="w-4 h-4 text-blue-600 shrink-0" />
-                    <p className="text-xs text-blue-800">
-                      A foto consegue verificar apenas parte desta condição. Revise o resumo antes de publicar.
-                    </p>
-                  </div>
-                )}
-
-                <Collapsible>
-                  <CollapsibleTrigger className="flex items-center gap-2 text-[11px] font-bold text-neutral-500 uppercase tracking-wider hover:text-neutral-900 transition-colors w-full text-left">
-                    <ChevronDown className="w-3 h-3" />
-                    Configuração Avançada
-                  </CollapsibleTrigger>
-                  <CollapsibleContent className="pt-3 space-y-4">
-                    <div className="space-y-2">
-                      <label className="block text-[10px] font-bold text-neutral-400 uppercase tracking-wider">Evidência necessária</label>
-                      <div className="space-y-1.5">
-                        {(policy.requiredVisibleEvidence || []).map((item: string, idx: number) => (
-                          <input
-                            key={idx}
-                            type="text"
-                            value={item}
-                            onChange={(e) => {
-                              const next = [...policy.requiredVisibleEvidence];
-                              next[idx] = e.target.value;
-                              updateBlock(block.id, { cameraAiPolicy: { ...policy, requiredVisibleEvidence: next, source: 'owner_edited' } });
-                            }}
-                            className="w-full px-2 py-1.5 text-xs border border-neutral-200 rounded bg-white outline-none focus:border-neutral-400"
-                          />
-                        ))}
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <label className="block text-[10px] font-bold text-neutral-400 uppercase tracking-wider">Rejeitar quando</label>
-                      <div className="space-y-1.5">
-                        {(policy.rejectionSignals || []).map((item: string, idx: number) => (
-                          <input
-                            key={idx}
-                            type="text"
-                            value={item}
-                            onChange={(e) => {
-                              const next = [...policy.rejectionSignals];
-                              next[idx] = e.target.value;
-                              updateBlock(block.id, { cameraAiPolicy: { ...policy, rejectionSignals: next, source: 'owner_edited' } });
-                            }}
-                            className="w-full px-2 py-1.5 text-xs border border-neutral-200 rounded bg-white outline-none focus:border-neutral-400"
-                          />
-                        ))}
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-1.5">
-                        <label className="block text-[10px] font-bold text-neutral-400 uppercase tracking-wider">Modo</label>
-                        <div className="px-2 py-1.5 text-xs bg-neutral-100 rounded text-neutral-600 border border-neutral-200">Automático</div>
-                      </div>
-                      <div className="space-y-1.5">
-                        <label className="block text-[10px] font-bold text-neutral-400 uppercase tracking-wider">Nível de Rigor</label>
-                        <div className="px-2 py-1.5 text-xs bg-neutral-100 rounded text-neutral-600 border border-neutral-200">Padrão</div>
-                      </div>
-                    </div>
-                    <div className="space-y-1.5">
-                      <label className="block text-[10px] font-bold text-neutral-400 uppercase tracking-wider">Em caso de dúvida</label>
-                      <div className="px-2 py-1.5 text-xs bg-neutral-100 rounded text-neutral-600 border border-neutral-200">Exigir outra foto</div>
-                    </div>
-                  </CollapsibleContent>
-                </Collapsible>
-              </div>
-            )}
-
-            <div className="flex flex-wrap items-center gap-4 pt-2">
-              <label className="flex items-center gap-2 text-xs font-medium text-neutral-700 cursor-pointer select-none">
-                <Switch
-                  checked={camRequired}
-                  onCheckedChange={(checked) => updateBlock(block.id, { required: checked })}
-                />
-                <span>Foto obrigatória</span>
-              </label>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
