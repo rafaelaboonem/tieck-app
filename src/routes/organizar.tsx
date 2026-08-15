@@ -456,6 +456,30 @@ function WorkspacePage() {
         } else {
           setSubmissionCounts({});
         }
+
+        // Fetch members and assignments
+        const [membersRes, assignmentsRes] = await Promise.all([
+          supabase
+            .from('workspace_members')
+            .select(`
+              user_id,
+              profiles:profiles!workspace_members_user_id_fkey (
+                id,
+                full_name,
+                avatar_url
+              )
+            `)
+            .eq('workspace_id', currentWorkspace.id)
+            .eq('status', 'active'),
+          supabase
+            .from('checklist_assignments')
+            .select('*')
+            .in('checklist_id', (chks || []).map(c => c.id))
+        ]);
+
+        if (!membersRes.error) setMembers(membersRes.data || []);
+        if (!assignmentsRes.error) setAssignments(assignmentsRes.data || []);
+
       } catch (error) {
         console.error("Error fetching workspace data:", error);
       } finally {
