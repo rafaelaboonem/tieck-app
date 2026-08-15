@@ -27,6 +27,7 @@ export const updateMemberStatus = createServerFn({ method: "POST" })
     if (data.memberId) {
       const { error } = await supabaseAdmin.rpc('update_workspace_member_status', {
         p_workspace_id: data.workspaceId,
+        p_actor_id: user.id,
         p_member_id: data.memberId,
         p_status: data.status || 'active',
         p_role: data.role
