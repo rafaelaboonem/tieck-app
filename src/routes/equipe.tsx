@@ -493,6 +493,84 @@ function TeamPage() {
             </Tabs>
           </div>
         </main>
+        {/* Invite Dialog */}
+        <Dialog open={inviteModalOpen} onOpenChange={setInviteModalOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Convidar Membro</DialogTitle>
+              <DialogDescription>
+                Envie um convite para colaborar neste workspace.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="grid gap-2">
+                <Label htmlFor="email">E-mail</Label>
+                <Input 
+                  id="email" 
+                  type="email" 
+                  placeholder="exemplo@empresa.com"
+                  value={inviteEmail}
+                  onChange={(e) => setInviteEmail(e.target.value)}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="role">Função</Label>
+                <Select value={inviteRole} onValueChange={(v: any) => setInviteRole(v)}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="admin">Administrador</SelectItem>
+                    <SelectItem value="editor">Editor</SelectItem>
+                    <SelectItem value="viewer">Visualizador</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setInviteModalOpen(false)}>Cancelar</Button>
+              <Button onClick={handleInvite} disabled={inviting || !inviteEmail}>
+                {inviting ? 'Enviando...' : 'Convidar'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Revoke Invitation Dialog */}
+        <Dialog open={!!invitationToRevoke} onOpenChange={() => setInvitationToRevoke(null)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Revogar Convite</DialogTitle>
+              <DialogDescription>
+                Tem certeza que deseja revogar o convite para <strong>{invitationToRevoke?.email_normalized}</strong>?
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setInvitationToRevoke(null)}>Cancelar</Button>
+              <Button variant="destructive" onClick={() => invitationToRevoke && handleRevoke(invitationToRevoke.id)} disabled={actionLoading}>
+                {actionLoading ? 'Revogando...' : 'Revogar'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Remove Member Dialog */}
+        <Dialog open={!!memberToRemove} onOpenChange={() => setMemberToRemove(null)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Remover Membro</DialogTitle>
+              <DialogDescription>
+                Tem certeza que deseja remover <strong>{memberToRemove?.profiles?.display_name || memberToRemove?.email_normalized}</strong> da equipe?
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setMemberToRemove(null)}>Cancelar</Button>
+              <Button variant="destructive" onClick={() => memberToRemove && handleRemoveMember(memberToRemove.id)} disabled={actionLoading}>
+                {actionLoading ? 'Removendo...' : 'Remover'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </DashboardLayout>
   );
