@@ -32,6 +32,9 @@ import { Route as ApiCameraAiVerifyRouteImport } from './routes/api/camera-ai/ve
 import { Route as ApiCameraAiTestVerificationRouteImport } from './routes/api/camera-ai/test-verification'
 import { Route as ApiCameraAiSignedUrlRouteImport } from './routes/api/camera-ai/signed-url'
 import { Route as ApiCameraAiCompilePolicyRouteImport } from './routes/api/camera-ai/compile-policy'
+import { Route as ApiTeamMembersUpdateRouteImport } from './routes/api/team/members/update'
+import { Route as ApiTeamInvitationsRevokeRouteImport } from './routes/api/team/invitations/revoke'
+import { Route as ApiTeamInvitationsResendRouteImport } from './routes/api/team/invitations/resend'
 import { Route as ApiPublicInvitationsInspectRouteImport } from './routes/api/public/invitations/inspect'
 import { Route as ApiPublicInvitationsCreateRouteImport } from './routes/api/public/invitations/create'
 import { Route as ApiPublicInvitationsAcceptRouteImport } from './routes/api/public/invitations/accept'
@@ -153,6 +156,23 @@ const ApiCameraAiCompilePolicyRoute =
     path: '/api/camera-ai/compile-policy',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiTeamMembersUpdateRoute = ApiTeamMembersUpdateRouteImport.update({
+  id: '/api/team/members/update',
+  path: '/api/team/members/update',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiTeamInvitationsRevokeRoute =
+  ApiTeamInvitationsRevokeRouteImport.update({
+    id: '/api/team/invitations/revoke',
+    path: '/api/team/invitations/revoke',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiTeamInvitationsResendRoute =
+  ApiTeamInvitationsResendRouteImport.update({
+    id: '/api/team/invitations/resend',
+    path: '/api/team/invitations/resend',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicInvitationsInspectRoute =
   ApiPublicInvitationsInspectRouteImport.update({
     id: '/api/public/invitations/inspect',
@@ -199,6 +219,9 @@ export interface FileRoutesByFullPath {
   '/api/public/invitations/accept': typeof ApiPublicInvitationsAcceptRoute
   '/api/public/invitations/create': typeof ApiPublicInvitationsCreateRoute
   '/api/public/invitations/inspect': typeof ApiPublicInvitationsInspectRoute
+  '/api/team/invitations/resend': typeof ApiTeamInvitationsResendRoute
+  '/api/team/invitations/revoke': typeof ApiTeamInvitationsRevokeRoute
+  '/api/team/members/update': typeof ApiTeamMembersUpdateRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -227,6 +250,9 @@ export interface FileRoutesByTo {
   '/api/public/invitations/accept': typeof ApiPublicInvitationsAcceptRoute
   '/api/public/invitations/create': typeof ApiPublicInvitationsCreateRoute
   '/api/public/invitations/inspect': typeof ApiPublicInvitationsInspectRoute
+  '/api/team/invitations/resend': typeof ApiTeamInvitationsResendRoute
+  '/api/team/invitations/revoke': typeof ApiTeamInvitationsRevokeRoute
+  '/api/team/members/update': typeof ApiTeamMembersUpdateRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -256,6 +282,9 @@ export interface FileRoutesById {
   '/api/public/invitations/accept': typeof ApiPublicInvitationsAcceptRoute
   '/api/public/invitations/create': typeof ApiPublicInvitationsCreateRoute
   '/api/public/invitations/inspect': typeof ApiPublicInvitationsInspectRoute
+  '/api/team/invitations/resend': typeof ApiTeamInvitationsResendRoute
+  '/api/team/invitations/revoke': typeof ApiTeamInvitationsRevokeRoute
+  '/api/team/members/update': typeof ApiTeamMembersUpdateRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -286,6 +315,9 @@ export interface FileRouteTypes {
     | '/api/public/invitations/accept'
     | '/api/public/invitations/create'
     | '/api/public/invitations/inspect'
+    | '/api/team/invitations/resend'
+    | '/api/team/invitations/revoke'
+    | '/api/team/members/update'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -314,6 +346,9 @@ export interface FileRouteTypes {
     | '/api/public/invitations/accept'
     | '/api/public/invitations/create'
     | '/api/public/invitations/inspect'
+    | '/api/team/invitations/resend'
+    | '/api/team/invitations/revoke'
+    | '/api/team/members/update'
   id:
     | '__root__'
     | '/'
@@ -342,6 +377,9 @@ export interface FileRouteTypes {
     | '/api/public/invitations/accept'
     | '/api/public/invitations/create'
     | '/api/public/invitations/inspect'
+    | '/api/team/invitations/resend'
+    | '/api/team/invitations/revoke'
+    | '/api/team/members/update'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -371,6 +409,9 @@ export interface RootRouteChildren {
   ApiPublicInvitationsAcceptRoute: typeof ApiPublicInvitationsAcceptRoute
   ApiPublicInvitationsCreateRoute: typeof ApiPublicInvitationsCreateRoute
   ApiPublicInvitationsInspectRoute: typeof ApiPublicInvitationsInspectRoute
+  ApiTeamInvitationsResendRoute: typeof ApiTeamInvitationsResendRoute
+  ApiTeamInvitationsRevokeRoute: typeof ApiTeamInvitationsRevokeRoute
+  ApiTeamMembersUpdateRoute: typeof ApiTeamMembersUpdateRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -536,6 +577,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiCameraAiCompilePolicyRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/team/members/update': {
+      id: '/api/team/members/update'
+      path: '/api/team/members/update'
+      fullPath: '/api/team/members/update'
+      preLoaderRoute: typeof ApiTeamMembersUpdateRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/team/invitations/revoke': {
+      id: '/api/team/invitations/revoke'
+      path: '/api/team/invitations/revoke'
+      fullPath: '/api/team/invitations/revoke'
+      preLoaderRoute: typeof ApiTeamInvitationsRevokeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/team/invitations/resend': {
+      id: '/api/team/invitations/resend'
+      path: '/api/team/invitations/resend'
+      fullPath: '/api/team/invitations/resend'
+      preLoaderRoute: typeof ApiTeamInvitationsResendRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/invitations/inspect': {
       id: '/api/public/invitations/inspect'
       path: '/api/public/invitations/inspect'
@@ -587,6 +649,9 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicInvitationsAcceptRoute: ApiPublicInvitationsAcceptRoute,
   ApiPublicInvitationsCreateRoute: ApiPublicInvitationsCreateRoute,
   ApiPublicInvitationsInspectRoute: ApiPublicInvitationsInspectRoute,
+  ApiTeamInvitationsResendRoute: ApiTeamInvitationsResendRoute,
+  ApiTeamInvitationsRevokeRoute: ApiTeamInvitationsRevokeRoute,
+  ApiTeamMembersUpdateRoute: ApiTeamMembersUpdateRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

@@ -1,7 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { DashboardLayout } from '@/components/DashboardLayout';
-import { Users, UserPlus, Shield, Mail, Clock, MoreHorizontal, ShieldCheck, UserMinus } from 'lucide-react';
+import { Users, UserPlus, Shield, Mail, Clock, MoreHorizontal, ShieldCheck, UserMinus, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
@@ -36,7 +36,7 @@ import {
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { updateMemberStatus, revokeInvitation } from '@/lib/team.functions';
+
 
 export const Route = createFileRoute('/equipe')({
   component: TeamPage,
@@ -196,14 +196,62 @@ function TeamPage() {
     if (!currentWorkspace) return;
     setActionLoading(true);
     try {
-      await revokeInvitation({ data: { workspaceId: currentWorkspace.id, invitationId: id } });
+      const { data: { session } } = await supabase.auth.getSession();
+      const response = await fetch('/api/team/invitations/revoke', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`
+        },
+        body: JSON.stringify({
+          workspaceId: currentWorkspace.id,
+          invitationId: id
+        })
+      });
+
+      const result = await response.json();
+      if (!result.ok) throw new Error(result.code);
+
       toast.success('Convite revogado');
       fetchTeamData();
-    } catch (error) {
-      toast.error('Erro ao revogar convite');
+    } catch (error: any) {
+      toast.error(`Erro ao revogar convite: ${error.message}`);
     } finally {
       setActionLoading(false);
       setInvitationToRevoke(null);
+    }
+  };
+
+  const handleResend = async (id: string) => {
+    if (!currentWorkspace) return;
+    setActionLoading(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const response = await fetch('/api/team/invitations/resend', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`
+        },
+        body: JSON.stringify({
+          workspaceId: currentWorkspace.id,
+          invitationId: id
+        })
+      });
+
+      const result = await response.json();
+      if (!result.ok) throw new Error(result.code);
+
+      toast.success('Convite reenviado!');
+      if (result.invitation.link) {
+        navigator.clipboard.writeText(result.invitation.link);
+        toast.info('Novo link copiado para a área de transferência.');
+      }
+      fetchTeamData();
+    } catch (error: any) {
+      toast.error(`Erro ao reenviar convite: ${error.message}`);
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -211,17 +259,27 @@ function TeamPage() {
     if (!currentWorkspace) return;
     setActionLoading(true);
     try {
-      await updateMemberStatus({ 
-        data: {
-          workspaceId: currentWorkspace.id, 
-          memberId: id, 
-          status: 'inactive' 
-        }
+      const { data: { session } } = await supabase.auth.getSession();
+      const response = await fetch('/api/team/members/update', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`
+        },
+        body: JSON.stringify({
+          workspaceId: currentWorkspace.id,
+          memberId: id,
+          status: 'inactive'
+        })
       });
+
+      const result = await response.json();
+      if (!result.ok) throw new Error(result.code);
+
       toast.success('Membro removido');
       fetchTeamData();
-    } catch (error) {
-      toast.error('Erro ao remover membro');
+    } catch (error: any) {
+      toast.error(`Erro ao remover membro: ${error.message}`);
     } finally {
       setActionLoading(false);
       setMemberToRemove(null);
@@ -232,22 +290,33 @@ function TeamPage() {
     if (!currentWorkspace) return;
     setActionLoading(true);
     try {
-      await updateMemberStatus({ 
-        data: {
-          workspaceId: currentWorkspace.id, 
-          memberId: id, 
-          role: newRole 
-        }
+      const { data: { session } } = await supabase.auth.getSession();
+      const response = await fetch('/api/team/members/update', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`
+        },
+        body: JSON.stringify({
+          workspaceId: currentWorkspace.id,
+          memberId: id,
+          role: newRole
+        })
       });
+
+      const result = await response.json();
+      if (!result.ok) throw new Error(result.code);
+
       toast.success('Permissão atualizada');
       fetchTeamData();
-    } catch (error) {
-      toast.error('Erro ao atualizar permissão');
+    } catch (error: any) {
+      toast.error(`Erro ao atualizar permissão: ${error.message}`);
     } finally {
       setActionLoading(false);
       setMemberToEdit(null);
     }
   };
+
 
   useEffect(() => {
     fetchTeamData();
@@ -424,6 +493,30 @@ function TeamPage() {
                             </div>
                           </div>
                         </div>
+                        <div className="flex items-center gap-2">
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="text-neutral-500"
+                            onClick={() => handleResend(invite.id)}
+                            disabled={actionLoading}
+                          >
+                            <RefreshCw className={`w-4 h-4 mr-2 ${actionLoading ? 'animate-spin' : ''}`} />
+                            Reenviar
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="text-red-500 hover:text-red-600 hover:bg-red-50"
+                            onClick={() => setInvitationToRevoke(invite)}
+                            disabled={actionLoading}
+                          >
+                            Revogar
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+
                         <Button 
                           variant="outline" 
                           size="sm" 
