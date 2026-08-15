@@ -61,11 +61,6 @@ export const Route = createFileRoute('/api/camera-ai/test-verification')({
         if (!user) return Response.json({ ok: false, code: 'unauthorized', requestId }, { status: 401 });
 
         try {
-          const contentType = request.headers.get("content-type") || "";
-          if (!contentType.includes("multipart/form-data")) {
-            return Response.json({ ok: false, code: 'invalid_content_type', requestId }, { status: 400 });
-          }
-
           let formData: FormData;
           try {
             formData = await request.formData();
@@ -73,6 +68,7 @@ export const Route = createFileRoute('/api/camera-ai/test-verification')({
             console.error(`[CameraAI-Test] [${requestId}] FormData parse error:`, e);
             return Response.json({ ok: false, code: 'invalid_form_data', requestId }, { status: 400 });
           }
+
 
           const checklistIdRaw = formData.get('checklistId');
           const blockIdRaw = formData.get('blockId');
