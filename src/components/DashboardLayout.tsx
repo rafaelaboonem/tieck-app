@@ -652,10 +652,11 @@ import logoIcon from "../assets/local/logo-tieck.webp";
               )}
             </CommandGroup>
             <CommandGroup heading="Navegação">
-              <CommandItem onSelect={() => { navigate({ to: "/membros" }); setSearchOpen(false); }}>
+              <CommandItem onSelect={() => { navigate({ to: "/equipe" }); setSearchOpen(false); }}>
                 <Users className="mr-2 h-4 w-4" />
-                <span>Convidar membros</span>
+                <span>Equipe</span>
               </CommandItem>
+
               <CommandItem onSelect={() => { navigate({ to: "/configuracoes" }); setSearchOpen(false); }}>
                 <Share2 className="mr-2 h-4 w-4" />
                 <span>Compartilhar</span>
