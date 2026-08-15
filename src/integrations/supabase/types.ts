@@ -2449,12 +2449,7 @@ export type Database = {
           }
       accept_workspace_invitation_service: {
         Args: { p_token_hash: string; p_user_id: string }
-        Returns: {
-          error_code: string
-          member_id: string
-          success: boolean
-          workspace_id: string
-        }[]
+        Returns: Json
       }
       acquire_vision_lock: {
         Args: {
@@ -2544,9 +2539,9 @@ export type Database = {
       }
       create_workspace_invitation_safe: {
         Args: {
-          p_email_normalized: string
+          p_email: string
           p_expires_at: string
-          p_invited_by: string
+          p_inviter_id: string
           p_role: Database["public"]["Enums"]["app_role"]
           p_token_hash: string
           p_workspace_id: string
@@ -2627,12 +2622,12 @@ export type Database = {
       resend_workspace_invitation: {
         Args: {
           p_actor_id: string
-          p_expires_at: string
           p_invitation_id: string
+          p_new_expires_at: string
           p_new_token_hash: string
           p_workspace_id: string
         }
-        Returns: string
+        Returns: undefined
       }
       resolve_public_response: {
         Args: { p_token: string }
@@ -2678,11 +2673,11 @@ export type Database = {
             Args: {
               p_actor_id: string
               p_member_id: string
-              p_role?: string
-              p_status: string
+              p_new_role: string
+              p_new_status: string
               p_workspace_id: string
             }
-            Returns: boolean
+            Returns: undefined
           }
         | {
             Args: {
