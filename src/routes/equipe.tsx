@@ -42,7 +42,7 @@ export const Route = createFileRoute('/equipe')({
   component: TeamPage,
 });
 
-export type WorkspaceMemberView = {
+export interface WorkspaceMemberView {
   id: string;
   role: 'admin' | 'editor' | 'viewer';
   status: 'active' | 'inactive';
@@ -54,22 +54,34 @@ export type WorkspaceMemberView = {
     avatar_url: string | null;
   };
   is_owner?: boolean;
-};
+}
 
-export type WorkspaceInvitationView = {
+export interface WorkspaceInvitationView {
   id: string;
   email_normalized: string;
   role: 'admin' | 'editor' | 'viewer';
   status: 'pending' | 'accepted' | 'revoked';
   expires_at: string;
   created_at: string;
-};
+}
+
+export interface ChecklistAssignmentView {
+  id: string;
+  checklist_id: string;
+  workspace_member_id: string;
+  is_primary: boolean;
+  checklists: {
+    id: string;
+    title: string | null;
+  } | null;
+}
+
 
 function TeamPage() {
   const { currentWorkspace } = useWorkspace();
   const [members, setMembers] = useState<WorkspaceMemberView[]>([]);
   const [invitations, setInvitations] = useState<WorkspaceInvitationView[]>([]);
-  const [assignments, setAssignments] = useState<any[]>([]);
+  const [assignments, setAssignments] = useState<ChecklistAssignmentView[]>([]);
   const [loading, setLoading] = useState(true);
   
   // Modals state
@@ -546,7 +558,7 @@ function TeamPage() {
                             <tr key={assignment.id} className="hover:bg-neutral-50/50 transition-colors">
                               <td className="px-6 py-4">
                                 <div className="text-sm font-medium text-neutral-900">
-                                  {(assignment.checklists as any)?.title || 'Checklist sem título'}
+                                  {assignment.checklists?.title || 'Checklist sem título'}
                                 </div>
                               </td>
                               <td className="px-6 py-4">

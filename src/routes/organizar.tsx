@@ -809,9 +809,10 @@ function WorkspacePage() {
         const { error } = await supabase.rpc('update_checklist_assignments', {
           p_checklist_id: checklistId,
           p_workspace_id: currentWorkspace.id,
-          p_primary_member_id: null, // Corrected from undefined to null
+          p_primary_member_id: undefined, // Type requires string | undefined
           p_member_ids: []
         });
+
         
         if (error) throw error;
         setAssignments(prev => prev.filter(a => a.checklist_id !== checklistId));

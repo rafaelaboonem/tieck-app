@@ -25,7 +25,7 @@ function InvitePage() {
     expiresAt: string;
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [session, setSession] = useState<any>(null);
+  const [session, setSession] = useState<import("@supabase/supabase-js").Session | null>(null);
 
   useEffect(() => {
     const checkAuth = async () => {
