@@ -57,7 +57,8 @@ describe('POST /api/camera-ai/test-verification', () => {
     select: vi.fn().mockReturnThis(),
     eq: vi.fn().mockReturnThis(),
     single: vi.fn(),
-    maybeSingle: vi.fn()
+    maybeSingle: vi.fn(),
+    rpc: vi.fn()
   };
 
   beforeEach(async () => {
@@ -66,6 +67,9 @@ describe('POST /api/camera-ai/test-verification', () => {
     process.env['OPENAI_API_KEY'] = 'test-key';
     const { createServerSupabaseClient } = await import('@/integrations/supabase/client.server');
     (createServerSupabaseClient as any).mockReturnValue(mockSupabase);
+    
+    // Default rate limit mock: allowed
+    mockSupabase.rpc.mockResolvedValue({ data: true, error: null });
   });
 
   const getHandler = () => (Route as any).options.server.handlers.POST;
@@ -76,7 +80,6 @@ describe('POST /api/camera-ai/test-verification', () => {
     formData.append('blockId', fields.blockId ?? blockId);
     
     if (fields.candidate !== null) {
-      // Use a real File/Blob for Vitest environment
       const blob = new Blob(['test'], { type: 'image/jpeg' });
       formData.append('candidate', fields.candidate ?? blob, 'test.jpg');
     }
@@ -84,7 +87,6 @@ describe('POST /api/camera-ai/test-verification', () => {
     const headers: Record<string, string> = {};
     if (token) headers['Authorization'] = `Bearer ${token}`;
 
-    // IMPORTANT: Let the Request constructor handle the boundary
     return new Request('http://localhost/api/camera-ai/test-verification', {
       method: 'POST',
       headers,
@@ -139,9 +141,30 @@ describe('POST /api/camera-ai/test-verification', () => {
     const response = await getHandler()({ request });
     const body = await response.json();
     
-    if (response.status !== 200) console.log('DEBUG 200 Test Failure:', JSON.stringify(body));
     expect(response.status).toBe(200);
     expect(body.ok).toBe(true);
+    expect(mockSupabase.rpc).toHaveBeenCalledWith('hit_public_rate_limit', expect.anything());
+  });
+
+  it('Retorna 429 quando atinge o rate limit e não chama OpenAI', async () => {
+    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: userId } }, error: null });
+    mockSupabase.single.mockResolvedValue({ data: mockChecklist, error: null });
+    
+    // Simulate rate limit rejection
+    mockSupabase.rpc.mockResolvedValue({ data: false, error: null });
+
+    const { validateImageBuffer } = await import('../../src/server/camera-ai/image-validation');
+    (validateImageBuffer as any).mockResolvedValue({ valid: true, mimeType: 'image/jpeg' });
+    
+    const { analyzeImage } = await import('../../src/server/camera-ai/openai-provider');
+
+    const request = await createTestRequest({}, 'valid-token');
+    const response = await getHandler()({ request });
+    const body = await response.json();
+    
+    expect(response.status).toBe(429);
+    expect(body.code).toBe('rate_limit');
+    expect(analyzeImage).not.toHaveBeenCalled();
   });
 
   it('Retorna 403 para membro ativo de outro workspace', async () => {
