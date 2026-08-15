@@ -355,6 +355,9 @@ function WorkspacePage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [submissionCounts, setSubmissionCounts] = useState<Record<string, number>>({});
   const [isLoading, setIsLoading] = useState(true);
+  const [members, setMembers] = useState<any[]>([]);
+  const [assignments, setAssignments] = useState<any[]>([]);
+
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [hasCheckedOnboarding, setHasCheckedOnboarding] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
