@@ -88,6 +88,7 @@ describe('POST /api/camera-ai/test-verification', () => {
       headers,
       body: formData
     });
+
   };
 
   it('Retorna 503 se a IA estiver desativada', async () => {

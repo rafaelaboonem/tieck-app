@@ -41,16 +41,25 @@ export const Route = createFileRoute('/api/camera-ai/test-verification')({
         if (!user) return Response.json({ ok: false, code: 'unauthorized' }, { status: 401 });
 
         try {
+          const contentType = request.headers.get("content-type") || "";
+          if (!contentType.includes("multipart/form-data")) {
+             return Response.json({ ok: false, code: 'invalid_content_type', type: contentType }, { status: 400 });
+          }
+
           const formData = await request.formData();
           const validation = TestPayloadSchema.safeParse({
             checklistId: formData.get('checklistId'),
             blockId: formData.get('blockId'),
           });
-          if (!validation.success) return Response.json({ ok: false, code: 'invalid_payload' }, { status: 400 });
+          if (!validation.success) return Response.json({ ok: false, code: 'invalid_payload', errors: validation.error.format() }, { status: 400 });
           
           const { checklistId, blockId } = validation.data;
           const candidate = formData.get('candidate');
-          if (!candidate || !(candidate instanceof File)) return Response.json({ ok: false, code: 'missing_image' }, { status: 400 });
+          if (!candidate) return Response.json({ ok: false, code: 'missing_image' }, { status: 400 });
+          if (!(candidate instanceof File) && !(candidate instanceof Blob)) {
+            return Response.json({ ok: false, code: 'invalid_image_type', type: typeof candidate }, { status: 400 });
+          }
+
 
           const { data: checklist, error: chkError } = await client
             .from('checklists')
