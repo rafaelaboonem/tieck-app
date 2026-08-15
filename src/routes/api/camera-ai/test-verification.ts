@@ -101,8 +101,10 @@ export const Route = createFileRoute('/api/camera-ai/test-verification')({
           return Response.json({ ...result, requestId: Math.random().toString(36).substring(7) });
         } catch (error) {
           console.error('[CameraAI-Test] Technical failure:', error);
-          return Response.json({ ok: false, code: 'technical_failure' }, { status: 500 });
+          const message = error instanceof Error ? error.message : 'Unknown';
+          return Response.json({ ok: false, code: 'technical_failure', debug: message }, { status: 500 });
         }
+
       }
     }
   }
