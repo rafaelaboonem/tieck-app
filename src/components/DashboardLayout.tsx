@@ -109,8 +109,7 @@ import logoIcon from "../assets/local/logo-tieck.webp";
               const { count, error: countError } = await supabase
                 .from("workspace_members")
                 .select("*", { count: 'exact', head: true })
-                .eq("workspace_id", currentWorkspace.id)
-                .eq("status", "active");
+                .eq("workspace_id", currentWorkspace.id);
               
               if (!countError && count !== null) {
                 setMemberCount(count);
