@@ -208,9 +208,12 @@ function TeamPage() {
 
       toast.success('Convite gerado com sucesso!');
       if (result.invitation.link) {
-        // Fallback para quando o e-mail não é enviado
-        navigator.clipboard.writeText(result.invitation.link);
-        toast.info('Link de convite copiado para a área de transferência.');
+        try {
+          await navigator.clipboard.writeText(result.invitation.link);
+          toast.info('Link de convite copiado para a área de transferência.');
+        } catch (err) {
+          console.warn('Clipboard access denied');
+        }
       }
       
       setInviteModalOpen(false);
@@ -282,8 +285,12 @@ function TeamPage() {
 
       toast.success('Convite reenviado!');
       if (result.invitation.link) {
-        navigator.clipboard.writeText(result.invitation.link);
-        toast.info('Novo link copiado para a área de transferência.');
+        try {
+          await navigator.clipboard.writeText(result.invitation.link);
+          toast.info('Novo link copiado para a área de transferência.');
+        } catch (err) {
+          console.warn('Clipboard access denied');
+        }
       }
       fetchTeamData();
     } catch (error: any) {
