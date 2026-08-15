@@ -142,7 +142,7 @@ function TeamPage() {
                               </div>
                               <div>
                                 <div className="text-sm font-semibold text-neutral-900">{member.profiles?.full_name || 'Usuário'}</div>
-                                <div className="text-xs text-neutral-500">{member.profiles?.email}</div>
+                                <div className="text-xs text-neutral-500">{member.email_normalized}</div>
                               </div>
                             </div>
                           </td>
