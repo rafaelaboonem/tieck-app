@@ -2447,6 +2447,15 @@ export type Database = {
               workspace_id: string
             }[]
           }
+      accept_workspace_invitation_service: {
+        Args: { p_token_hash: string; p_user_id: string }
+        Returns: {
+          error_code: string
+          member_id: string
+          success: boolean
+          workspace_id: string
+        }[]
+      }
       acquire_vision_lock: {
         Args: {
           p_operation: string
@@ -2643,10 +2652,19 @@ export type Database = {
         }
         Returns: undefined
       }
-      user_has_workspace_access: {
-        Args: { _user_id: string; _workspace_id: string }
-        Returns: boolean
-      }
+      user_has_workspace_access:
+        | {
+            Args: { _user_id: string; _workspace_id: string }
+            Returns: boolean
+          }
+        | {
+            Args: {
+              p_min_role?: Database["public"]["Enums"]["app_role"]
+              p_user_id: string
+              p_workspace_id: string
+            }
+            Returns: boolean
+          }
       vision_lab_attempt_claim: {
         Args: {
           p_attempt_id: string
@@ -2742,7 +2760,7 @@ export type Database = {
       }
     }
     Enums: {
-      app_role: "admin" | "editor" | "viewer"
+      app_role: "owner" | "admin" | "editor" | "viewer"
       checklist_evidence_analysis_status:
         | "pending"
         | "processing"
@@ -2882,7 +2900,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["admin", "editor", "viewer"],
+      app_role: ["owner", "admin", "editor", "viewer"],
       checklist_evidence_analysis_status: [
         "pending",
         "processing",
