@@ -200,8 +200,65 @@ function SortableChecklistCard({
               onBlur={handleSave}
             />
           ) : (
-            <h4 className="text-[13px] font-medium text-neutral-800 line-clamp-2">{checklist.title || "Sem título"}</h4>
-          )}
+            <div className="flex flex-col gap-1.5">
+              <h4 className="text-[13px] font-medium text-neutral-800 line-clamp-2">{checklist.title || "Sem título"}</h4>
+              <div className="flex items-center gap-2">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button 
+                      className="flex -space-x-1.5 p-0.5 hover:bg-neutral-50 rounded-full transition-all"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {assignments.filter(a => a.checklist_id === checklist.id).length > 0 ? (
+                        assignments
+                          .filter(a => a.checklist_id === checklist.id)
+                          .map(a => {
+                            const member = members.find(m => m.user_id === a.user_id);
+                            return (
+                              <div key={a.id} className="w-5 h-5 rounded-full border border-white bg-neutral-100 overflow-hidden flex items-center justify-center">
+                                {member?.profiles?.avatar_url ? (
+                                  <img src={member.profiles.avatar_url} alt="" className="w-full h-full object-cover" />
+                                ) : (
+                                  <UserIcon className="w-2.5 h-2.5 text-neutral-400" />
+                                )}
+                              </div>
+                            );
+                          })
+                      ) : (
+                        <div className="w-5 h-5 rounded-full border border-dashed border-neutral-300 bg-neutral-50 flex items-center justify-center hover:border-neutral-400 transition-colors">
+                          <UserPlus className="w-2.5 h-2.5 text-neutral-400" />
+                        </div>
+                      )}
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="w-56 bg-white border border-neutral-100 shadow-xl rounded-xl p-1">
+                    <div className="px-2 py-1.5 text-[10px] font-bold text-neutral-500 uppercase tracking-wider">Atribuir responsável</div>
+                    {members.map(member => {
+                      const isAssigned = assignments.some(a => a.checklist_id === checklist.id && a.user_id === member.user_id);
+                      return (
+                        <DropdownMenuItem 
+                          key={member.user_id} 
+                          className="flex items-center justify-between gap-2 text-xs hover:bg-neutral-50 rounded-lg py-2"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onAssign(checklist.id, isAssigned ? null : member.user_id);
+                          }}
+                        >
+                          <div className="flex items-center gap-2">
+                            <div className="w-6 h-6 rounded-full bg-neutral-100 overflow-hidden">
+                              {member.profiles?.avatar_url && <img src={member.profiles.avatar_url} className="w-full h-full object-cover" />}
+                            </div>
+                            <span className="truncate max-w-[120px]">{member.profiles?.full_name || 'Membro'}</span>
+                          </div>
+                          {isAssigned && <Check className="w-3.5 h-3.5 text-pink-500" />}
+                        </DropdownMenuItem>
+                      );
+                    })}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            </div>
+
         </div>
         
         <DropdownMenu>
