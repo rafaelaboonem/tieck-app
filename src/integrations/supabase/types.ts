@@ -2624,6 +2624,16 @@ export type Database = {
       }
       publish_checklist: { Args: { p_checklist_id: string }; Returns: Json }
       release_vision_lock: { Args: { p_lock_key: string }; Returns: undefined }
+      resend_workspace_invitation: {
+        Args: {
+          p_actor_id: string
+          p_expires_at: string
+          p_invitation_id: string
+          p_new_token_hash: string
+          p_workspace_id: string
+        }
+        Returns: string
+      }
       resolve_public_response: {
         Args: { p_token: string }
         Returns: {
@@ -2663,15 +2673,26 @@ export type Database = {
         }
         Returns: undefined
       }
-      update_workspace_member_status: {
-        Args: {
-          p_member_id: string
-          p_role?: string
-          p_status: string
-          p_workspace_id: string
-        }
-        Returns: boolean
-      }
+      update_workspace_member_status:
+        | {
+            Args: {
+              p_actor_id: string
+              p_member_id: string
+              p_role?: string
+              p_status: string
+              p_workspace_id: string
+            }
+            Returns: boolean
+          }
+        | {
+            Args: {
+              p_member_id: string
+              p_role?: string
+              p_status: string
+              p_workspace_id: string
+            }
+            Returns: boolean
+          }
       user_has_workspace_access:
         | {
             Args: {
