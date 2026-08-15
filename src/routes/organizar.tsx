@@ -1567,8 +1567,12 @@ function WorkspacePage() {
                                 handleAddItem(item.category, `${item.title} (Cópia)`);
                               }}
                               accentColor={currentColor}
+                              assignments={assignments}
+                              members={members}
+                              onAssign={handleAssignMember}
                             />
                           ))}
+
                         </SortableContext>
                         
                         {isAddingItem?.category === categoryName && (
