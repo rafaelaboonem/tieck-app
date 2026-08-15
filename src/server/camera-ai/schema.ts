@@ -26,25 +26,6 @@ export type VerifyPayload = z.infer<typeof VerifyPayloadSchema>;
 
 export type Decision = 'approved' | 'retake' | 'not_observable' | 'technical_failure';
 
-export interface PublishedBlock {
-  id: string;
-  type: string;
-  title?: string;
-  description?: string;
-  cameraAiPolicy?: CameraVerificationPolicyV1;
-}
-
-export interface VerificationResult {
-  ok: boolean;
-  decision: Decision;
-  code: string;
-  message: string;
-  evidence?: string;
-  requestId?: string;
-  evidenceId?: string;
-  persisted?: boolean;
-}
-
 export const PolicyGenerationSchema = z.object({
   verifiability: z.enum(["visual", "partially_visual", "not_visual"]),
   target: z.string(),
@@ -66,6 +47,28 @@ export const CameraVerificationPolicyV1Schema = PolicyGenerationSchema.extend({
 });
 
 export type CameraVerificationPolicyV1 = z.infer<typeof CameraVerificationPolicyV1Schema>;
+
+export interface PublishedBlock {
+  id: string;
+  type: string;
+  title?: string;
+  subtitle?: string;
+  description?: string;
+  required?: boolean;
+  mode?: string;
+  cameraAiPolicy?: CameraVerificationPolicyV1;
+}
+
+export interface VerificationResult {
+  ok: boolean;
+  decision: Decision;
+  code: string;
+  message: string;
+  evidence?: string;
+  requestId?: string;
+  evidenceId?: string;
+  persisted?: boolean;
+}
 
 export const CompilePolicyPayloadSchema = z.object({
   checklistId: z.string().uuid(),

@@ -1,9 +1,9 @@
 import { Camera, Sparkles, Loader2, MoreVertical, GripVertical } from "lucide-react";
-import { CameraVerificationPolicyV1 } from "@/server/camera-ai/schema";
+import { CameraVerificationPolicyV1, PublishedBlock } from "@/server/camera-ai/schema";
 import { cn } from "@/lib/utils";
 
 interface CameraBlockCardProps {
-  block: any;
+  block: PublishedBlock;
   isActive: boolean;
   isCompiling: boolean;
   textColor: string;
@@ -94,7 +94,14 @@ export function CameraBlockCard({
         )}
       </div>
 
-      <button className="p-1 rounded-md hover:bg-neutral-100 text-neutral-400 opacity-0 group-hover:opacity-100 transition-opacity">
+      <button 
+        aria-label="Opções do bloco"
+        onClick={(e) => {
+          e.stopPropagation();
+          // TODO: Conectar ao menu de blocos padrão do editor
+        }}
+        className="p-1 rounded-md hover:bg-neutral-100 text-neutral-400 opacity-0 group-hover:opacity-100 transition-opacity"
+      >
         <MoreVertical className="w-4 h-4" />
       </button>
     </div>

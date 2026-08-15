@@ -9,16 +9,17 @@ import {
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
-import { AlertCircle, Info, X, Loader2, Play } from "lucide-react";
-import { CameraVerificationPolicyV1 } from "@/server/camera-ai/schema";
+import { AlertCircle, X, Loader2, Play } from "lucide-react";
+import { CameraVerificationPolicyV1, PublishedBlock } from "@/server/camera-ai/schema";
 import { CameraVerificationTestDialog } from "./CameraVerificationTestDialog";
 
 interface CameraSettingsPanelProps {
-  block: any;
+  block: PublishedBlock;
   isOpen: boolean;
   onClose: () => void;
   onSave: (patch: any) => void;
   isCompiling: boolean;
+  checklistId: string;
 }
 
 export function CameraSettingsPanel({
@@ -26,7 +27,8 @@ export function CameraSettingsPanel({
   isOpen,
   onClose,
   onSave,
-  isCompiling
+  isCompiling,
+  checklistId
 }: CameraSettingsPanelProps) {
   const [draft, setDraft] = useState({
     title: block.title || block.subtitle || "",
@@ -137,12 +139,23 @@ export function CameraSettingsPanel({
                     <Badge variant="secondary" className="bg-pink-100 text-pink-600 text-[10px]">Recomendado</Badge>
                   </div>
 
-                  <div className="flex items-center justify-between p-3 border border-neutral-100 rounded-xl opacity-50 bg-neutral-50">
+                   <div className="flex items-center justify-between p-3 border border-neutral-100 rounded-xl opacity-50 bg-neutral-50 cursor-not-allowed">
                     <div className="flex items-center gap-3">
                       <div className="w-4 h-4 rounded-full border-2 border-neutral-300" />
                       <div>
                         <p className="text-sm font-bold text-neutral-900">Comparar com referência</p>
                         <p className="text-[11px] text-neutral-500">Compara com fotos padrão.</p>
+                      </div>
+                    </div>
+                    <Badge variant="outline" className="text-[10px]">Em breve</Badge>
+                  </div>
+
+                  <div className="flex items-center justify-between p-3 border border-neutral-100 rounded-xl opacity-50 bg-neutral-50 cursor-not-allowed">
+                    <div className="flex items-center gap-3">
+                      <div className="w-4 h-4 rounded-full border-2 border-neutral-300" />
+                      <div>
+                        <p className="text-sm font-bold text-neutral-900">Múltiplas fotos</p>
+                        <p className="text-[11px] text-neutral-500">Exigir vários ângulos do mesmo objeto.</p>
                       </div>
                     </div>
                     <Badge variant="outline" className="text-[10px]">Em breve</Badge>
@@ -273,6 +286,7 @@ export function CameraSettingsPanel({
         onClose={() => setIsTestModalOpen(false)}
         policy={policy}
         blockId={block.id}
+        checklistId={checklistId}
       />
     </>
   );

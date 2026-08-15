@@ -6,16 +6,27 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { Camera, Upload, Play, X, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
-import { CameraVerificationPolicyV1 } from "@/server/camera-ai/schema";
+import { Camera, Upload, Play, Loader2, CheckCircle2, AlertCircle, XCircle } from "lucide-react";
+import { CameraVerificationPolicyV1, Decision } from "@/server/camera-ai/schema";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
+
+interface TestResponse {
+  ok: boolean;
+  decision: Decision;
+  code: string;
+  message: string;
+  evidence: string;
+  requestId: string;
+}
 
 interface CameraVerificationTestDialogProps {
   isOpen: boolean;
   onClose: () => void;
   policy?: CameraVerificationPolicyV1;
   blockId: string;
+  checklistId: string;
 }
 
 export function CameraVerificationTestDialog({
@@ -23,26 +34,37 @@ export function CameraVerificationTestDialog({
   onClose,
   policy,
   blockId,
+  checklistId,
 }: CameraVerificationTestDialogProps) {
   const [step, setStep] = useState<"upload" | "preview" | "analyzing" | "result">("upload");
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [result, setResult] = useState<any>(null);
+  const [result, setResult] = useState<TestResponse | null>(null);
   const [isCapturing, setIsCapturing] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   const reset = () => {
     stopCamera();
     setStep("upload");
     setFile(null);
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
     setPreviewUrl(null);
     setResult(null);
+    setIsLoading(false);
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
   };
 
   useEffect(() => {
-    if (!isOpen) reset();
+    if (!isOpen) {
+      reset();
+    }
   }, [isOpen]);
 
   const stopCamera = () => {
@@ -55,7 +77,9 @@ export function CameraVerificationTestDialog({
 
   const startCamera = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        video: { facingMode: "environment", width: 1280, height: 720 } 
+      });
       streamRef.current = stream;
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
@@ -79,7 +103,8 @@ export function CameraVerificationTestDialog({
       if (blob) {
         const file = new File([blob], "test-capture.jpg", { type: "image/jpeg" });
         setFile(file);
-        setPreviewUrl(URL.createObjectURL(file));
+        const url = URL.createObjectURL(file);
+        setPreviewUrl(url);
         setStep("preview");
         stopCamera();
       }
@@ -89,56 +114,90 @@ export function CameraVerificationTestDialog({
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
     if (selectedFile) {
+      if (selectedFile.size > 5 * 1024 * 1024) {
+        toast.error("A imagem deve ter no máximo 5MB.");
+        return;
+      }
+      if (!selectedFile.type.startsWith("image/")) {
+        toast.error("Por favor, selecione uma imagem válida.");
+        return;
+      }
       setFile(selectedFile);
-      setPreviewUrl(URL.createObjectURL(selectedFile));
+      const url = URL.createObjectURL(selectedFile);
+      setPreviewUrl(url);
       setStep("preview");
     }
   };
 
   const runTest = async () => {
-    if (!file) return;
+    if (!file || isLoading) return;
+    setIsLoading(true);
     setStep("analyzing");
+    
+    abortControllerRef.current = new AbortController();
+
     try {
       const session = await supabase.auth.getSession();
       const token = session.data.session?.access_token;
+      if (!token) throw new Error("401");
 
-      // Usando FormData para simular o upload real
       const formData = new FormData();
-      formData.append("image", file);
-      // O endpoint real espera o blockId para recuperar a política do snapshot ou banco
-      // Para o teste, podemos ter um endpoint específico ou usar o verify atual com uma flag de teste
-      // Mas a regra diz: "não modificar /api/camera-ai/verify".
-      // Então usaremos o verify atual, mas ele criaria uma tentativa real.
-      // A instrução diz: "Se for necessária uma rota autenticada de teste, ela deve ser apenas um adaptador fino para o mecanismo existente".
-      // Vou assumir que por enquanto usamos o mecanismo de verificação passando os dados necessários.
-      
-      // Nota: Como não posso mudar o backend neste passo (só interface),
-      // o teste usará o endpoint de verificação padrão, mas cientes de que é um teste.
-      const res = await fetch("/api/camera-ai/verify", {
+      formData.append("candidate", file);
+      formData.append("checklistId", checklistId);
+      formData.append("blockId", blockId);
+
+      const res = await fetch("/api/camera-ai/test-verification", {
         method: "POST",
         headers: {
           "Authorization": `Bearer ${token}`,
-          "x-tieck-request-type": "test-verification"
         },
         body: formData,
+        signal: abortControllerRef.current.signal,
       });
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        if (res.status === 401) throw new Error("401");
+        if (res.status === 403) throw new Error("403");
+        if (res.status === 429) throw new Error("429");
+        if (errorData.code === "invalid_policy" || errorData.code === "checklist_update_required") throw new Error("policy_error");
+        throw new Error("tech_failure");
+      }
 
       const data = await res.json();
       setResult(data);
       setStep("result");
-    } catch (err) {
-      toast.error("Erro ao processar análise.");
+    } catch (err: any) {
+      if (err.name === 'AbortError') return;
+
+      const messages: Record<string, string> = {
+        "401": "Sessão expirada. Faça login novamente.",
+        "403": "Você não tem permissão para testar este checklist.",
+        "429": "Limite de testes atingido. Tente novamente em 10 minutos.",
+        "policy_error": "Configuração da política inválida ou desatualizada.",
+        "tech_failure": "Falha técnica ao processar a IA. Tente novamente."
+      };
+
+      toast.error(messages[err.message] || messages["tech_failure"]);
       setStep("preview");
+    } finally {
+      setIsLoading(false);
+      abortControllerRef.current = null;
     }
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+    <Dialog open={isOpen} onOpenChange={(open) => {
+      if (!open) {
+        if (isLoading && !confirm("Deseja cancelar o teste em andamento?")) return;
+        onClose();
+      }
+    }}>
       <DialogContent className="sm:max-w-[480px]">
         <DialogHeader>
           <DialogTitle>Testar verificação</DialogTitle>
           <DialogDescription>
-            Este teste executa uma análise de IA e pode gerar consumo.
+            Simule como a IA analisa esta pergunta em tempo real.
           </DialogDescription>
         </DialogHeader>
 
@@ -174,9 +233,9 @@ export function CameraVerificationTestDialog({
             </div>
           )}
 
-          {(step === "preview" || (step === "analyzing" && !result)) && (
+          {(step === "preview" || step === "analyzing") && (
             <div className="space-y-6">
-              <div className="relative aspect-video bg-neutral-900 rounded-2xl overflow-hidden shadow-inner">
+              <div className="relative aspect-video bg-neutral-900 rounded-2xl overflow-hidden shadow-inner border border-neutral-200">
                 {isCapturing ? (
                   <video
                     ref={videoRef}
@@ -198,7 +257,7 @@ export function CameraVerificationTestDialog({
                   <div className="absolute inset-0 bg-black/60 backdrop-blur-sm flex flex-col items-center justify-center text-white p-6 text-center">
                     <Loader2 className="w-10 h-10 animate-spin mb-4 text-pink-400" />
                     <p className="font-bold">Analisando imagem...</p>
-                    <p className="text-xs text-white/70 mt-1">A IA está verificando os critérios estabelecidos.</p>
+                    <p className="text-xs text-white/70 mt-1">Isso pode levar alguns segundos.</p>
                   </div>
                 )}
               </div>
@@ -208,22 +267,24 @@ export function CameraVerificationTestDialog({
                   {isCapturing ? (
                     <button
                       onClick={capturePhoto}
-                      className="flex-1 py-3 bg-pink-500 text-white rounded-xl font-bold shadow-lg shadow-pink-200"
+                      className="flex-1 py-3 bg-pink-500 text-white rounded-xl font-bold shadow-lg shadow-pink-200 transition-transform active:scale-[0.98]"
                     >
                       Capturar
                     </button>
                   ) : (
                     <button
                       onClick={runTest}
-                      className="flex-1 py-3 bg-pink-500 text-white rounded-xl font-bold shadow-lg shadow-pink-200 flex items-center justify-center gap-2"
+                      disabled={isLoading}
+                      className="flex-1 py-3 bg-pink-500 text-white rounded-xl font-bold shadow-lg shadow-pink-200 flex items-center justify-center gap-2 transition-transform active:scale-[0.98] disabled:opacity-50"
                     >
-                      <Play className="w-4 h-4 fill-current" />
+                      {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4 fill-current" />}
                       Executar teste
                     </button>
                   )}
                   <button
                     onClick={reset}
-                    className="px-6 py-3 border border-neutral-200 rounded-xl font-bold text-neutral-600 hover:bg-neutral-50"
+                    disabled={isLoading}
+                    className="px-6 py-3 border border-neutral-200 rounded-xl font-bold text-neutral-600 hover:bg-neutral-50 transition-all disabled:opacity-50"
                   >
                     Tentar outra
                   </button>
@@ -234,20 +295,25 @@ export function CameraVerificationTestDialog({
 
           {step === "result" && result && (
             <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-              <div className={`p-6 rounded-2xl border flex flex-col items-center text-center gap-4 ${
+              <div className={cn(
+                "p-6 rounded-2xl border flex flex-col items-center text-center gap-4",
                 result.decision === 'approved' 
                   ? 'bg-green-50 border-green-100 text-green-800' 
-                  : 'bg-amber-50 border-amber-100 text-amber-800'
-              }`}>
+                  : result.decision === 'retake'
+                  ? 'bg-amber-50 border-amber-100 text-amber-800'
+                  : 'bg-neutral-50 border-neutral-100 text-neutral-800'
+              )}>
                 {result.decision === 'approved' ? (
                   <CheckCircle2 className="w-12 h-12 text-green-500" />
-                ) : (
+                ) : result.decision === 'retake' ? (
                   <AlertCircle className="w-12 h-12 text-amber-500" />
+                ) : (
+                  <XCircle className="w-12 h-12 text-neutral-500" />
                 )}
                 
                 <div>
                   <h4 className="text-lg font-bold">
-                    {result.decision === 'approved' ? 'Imagem Aprovada' : 'Ação Necessária'}
+                    {result.decision === 'approved' ? 'Imagem Aprovada' : result.decision === 'retake' ? 'Ação Necessária' : 'Não Observável'}
                   </h4>
                   <p className="text-sm opacity-90 mt-1">{result.message}</p>
                 </div>
@@ -258,18 +324,29 @@ export function CameraVerificationTestDialog({
                   <label className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider">
                     Evidências observadas
                   </label>
-                  <div className="p-4 bg-neutral-50 rounded-xl border border-neutral-200 text-xs leading-relaxed text-neutral-700">
+                  <div className="p-4 bg-neutral-50 rounded-xl border border-neutral-200 text-xs leading-relaxed text-neutral-700 whitespace-pre-wrap">
                     {result.evidence}
                   </div>
                 </div>
               )}
 
-              <button
-                onClick={reset}
-                className="w-full py-3 bg-neutral-900 text-white rounded-xl font-bold text-sm shadow-lg hover:bg-neutral-800 transition-all"
-              >
-                Fazer novo teste
-              </button>
+              <div className="flex gap-2">
+                 <button
+                  onClick={reset}
+                  className="flex-1 py-3 bg-neutral-900 text-white rounded-xl font-bold text-sm shadow-lg hover:bg-neutral-800 transition-all"
+                >
+                  Fazer novo teste
+                </button>
+                <div className="px-4 py-3 bg-neutral-100 text-neutral-400 rounded-xl flex items-center justify-center text-[10px] font-mono">
+                  ID: {result.requestId}
+                </div>
+              </div>
+              
+              {result.decision !== 'approved' && (
+                <p className="text-[11px] text-neutral-400 text-center italic">
+                  Dica: Tente enquadrar melhor o objeto e garanta boa iluminação.
+                </p>
+              )}
             </div>
           )}
         </div>
