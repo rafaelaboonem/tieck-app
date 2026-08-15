@@ -126,8 +126,9 @@ export const Route = createFileRoute('/api/camera-ai/test-verification')({
 
           const result = evaluateGate(analysis);
 
+          // We return the result directly; result includes the top-level fields needed.
+          // evaluateGate returns VerificationResult (ok, decision, code, message, evidence)
           return Response.json({
-            ok: true,
             ...result,
             requestId: Math.random().toString(36).substring(7)
           });

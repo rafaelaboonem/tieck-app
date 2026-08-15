@@ -30,7 +30,10 @@ export interface PublishedBlock {
   id: string;
   type: string;
   title?: string;
+  subtitle?: string;
   description?: string;
+  required?: boolean;
+  mode?: string;
   cameraAiPolicy?: CameraVerificationPolicyV1;
 }
 
