@@ -11,7 +11,7 @@ import {
   LayoutTemplate, Files, ArrowLeft, ArrowRight, Star, MessageCircle,
   Calendar, User as UserIcon, ArrowUpDown, Maximize2, Rows,
   Edit2, Eye, Palette, Link as LinkIcon, Copy as CopyIcon2, Trash,
-  Smile, Briefcase, BookOpen, EyeOff
+  Smile, Briefcase, BookOpen, EyeOff, CheckCircle2, AlertCircle
 } from "lucide-react";
 
 
