@@ -152,11 +152,59 @@ export function CameraSettingsPanel({ block, isOpen, onClose, onSave, isCompilin
               <AccordionItem value="advanced" className="border-none">
                 <AccordionTrigger className="text-sm font-bold py-2 hover:no-underline text-neutral-900">Configuração avançada</AccordionTrigger>
                 <AccordionContent className="pt-4 space-y-6">
-                  {/* ... fields ... */}
+                  <div className="space-y-2">
+                    <label className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider">Evidência necessária</label>
+                    <div className="space-y-2">
+                      {(draft.policy?.requiredVisibleEvidence || []).map((item: string, idx: number) => (
+                        <input
+                          key={idx}
+                          type="text"
+                          value={item}
+                          onChange={(e) => {
+                            const next = [...(draft.policy?.requiredVisibleEvidence || [])];
+                            next[idx] = e.target.value;
+                            handlePolicyChange({ requiredVisibleEvidence: next });
+                          }}
+                          className="w-full px-3 py-2 text-xs border border-neutral-200 rounded-lg focus:ring-1 focus:ring-neutral-400 outline-none"
+                        />
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider">Rejeitar quando</label>
+                    <div className="space-y-2">
+                      {(draft.policy?.rejectionSignals || []).map((item: string, idx: number) => (
+                        <input
+                          key={idx}
+                          type="text"
+                          value={item}
+                          onChange={(e) => {
+                            const next = [...(draft.policy?.rejectionSignals || [])];
+                            next[idx] = e.target.value;
+                            handlePolicyChange({ rejectionSignals: next });
+                          }}
+                          className="w-full px-3 py-2 text-xs border border-neutral-200 rounded-lg focus:ring-1 focus:ring-neutral-400 outline-none"
+                        />
+                      ))}
+                    </div>
+                  </div>
                 </AccordionContent>
+
               </AccordionItem>
             </Accordion>
+            <div className="flex items-center justify-between p-4 border rounded-xl bg-neutral-50/50">
+              <div className="space-y-0.5">
+                <p className="text-sm font-bold text-neutral-900">Foto obrigatória</p>
+                <p className="text-[11px] text-neutral-500">O formulário só pode ser enviado com a foto.</p>
+              </div>
+              <Switch
+                checked={draft.required}
+                onCheckedChange={(checked) => handleFieldChange('required', checked)}
+              />
+            </div>
           </div>
+
 
           <div className="sticky bottom-0 bg-white pt-6 pb-2 border-t flex flex-col gap-3">
             <button onClick={handleSave} disabled={!hasChanges} className="w-full py-3 bg-pink-500 text-white rounded-xl font-bold text-sm disabled:opacity-50">Salvar bloco</button>
