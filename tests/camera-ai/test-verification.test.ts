@@ -68,30 +68,35 @@ describe('POST /api/camera-ai/test-verification', () => {
     const { createServerSupabaseClient } = await import('@/integrations/supabase/client.server');
     (createServerSupabaseClient as any).mockReturnValue(mockSupabase);
     
-    // Default rate limit mock: allowed
-    mockSupabase.rpc.mockResolvedValue({ data: true, error: null });
+    // Default rate limit mock: allowed (format: array of objects)
+    mockSupabase.rpc.mockResolvedValue({ data: [{ allowed: true, current_hits: 1 }], error: null });
   });
 
   const getHandler = () => (Route as any).options.server.handlers.POST;
 
-  const createTestRequest = async (fields: Record<string, any> = {}, token?: string) => {
+  const createTestRequest = async (fields: Record<string, unknown> = {}, token?: string) => {
     const formData = new FormData();
-    formData.append('checklistId', fields.checklistId ?? checklistId);
-    formData.append('blockId', fields.blockId ?? blockId);
+    formData.append('checklistId', (fields.checklistId as string) ?? checklistId);
+    formData.append('blockId', (fields.blockId as string) ?? blockId);
     
     if (fields.candidate !== null) {
       const blob = new Blob(['test'], { type: 'image/jpeg' });
-      formData.append('candidate', fields.candidate ?? blob, 'test.jpg');
+      formData.append('candidate', (fields.candidate as Blob) ?? blob, 'test.jpg');
     }
 
     const headers: Record<string, string> = {};
     if (token) headers['Authorization'] = `Bearer ${token}`;
 
-    return new Request('http://localhost/api/camera-ai/test-verification', {
+    const request = new Request('http://localhost/api/camera-ai/test-verification', {
       method: 'POST',
       headers,
       body: formData
     });
+
+    // Mocking request.formData directly to avoid parser issues in node/vitest environment
+    request.formData = async () => formData;
+
+    return request;
   };
 
   it('Retorna 503 se a IA estiver desativada', async () => {
@@ -150,8 +155,8 @@ describe('POST /api/camera-ai/test-verification', () => {
     mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: userId } }, error: null });
     mockSupabase.single.mockResolvedValue({ data: mockChecklist, error: null });
     
-    // Simulate rate limit rejection
-    mockSupabase.rpc.mockResolvedValue({ data: false, error: null });
+    // Simulate rate limit rejection (format: array of objects)
+    mockSupabase.rpc.mockResolvedValue({ data: [{ allowed: false, current_hits: 11 }], error: null });
 
     const { validateImageBuffer } = await import('../../src/server/camera-ai/image-validation');
     (validateImageBuffer as any).mockResolvedValue({ valid: true, mimeType: 'image/jpeg' });
@@ -164,6 +169,38 @@ describe('POST /api/camera-ai/test-verification', () => {
     
     expect(response.status).toBe(429);
     expect(body.code).toBe('rate_limit');
+    expect(analyzeImage).not.toHaveBeenCalled();
+  });
+
+  it('Retorna 429 quando a RPC retorna lista vazia', async () => {
+    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: userId } }, error: null });
+    mockSupabase.single.mockResolvedValue({ data: mockChecklist, error: null });
+    mockSupabase.rpc.mockResolvedValue({ data: [], error: null });
+
+    const { validateImageBuffer } = await import('../../src/server/camera-ai/image-validation');
+    (validateImageBuffer as any).mockResolvedValue({ valid: true, mimeType: 'image/jpeg' });
+    const { analyzeImage } = await import('../../src/server/camera-ai/openai-provider');
+
+    const request = await createTestRequest({}, 'valid-token');
+    const response = await getHandler()({ request });
+    
+    expect(response.status).toBe(429);
+    expect(analyzeImage).not.toHaveBeenCalled();
+  });
+
+  it('Retorna 429 quando a RPC retorna erro', async () => {
+    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: userId } }, error: null });
+    mockSupabase.single.mockResolvedValue({ data: mockChecklist, error: null });
+    mockSupabase.rpc.mockResolvedValue({ data: null, error: { message: 'Internal Error' } });
+
+    const { validateImageBuffer } = await import('../../src/server/camera-ai/image-validation');
+    (validateImageBuffer as any).mockResolvedValue({ valid: true, mimeType: 'image/jpeg' });
+    const { analyzeImage } = await import('../../src/server/camera-ai/openai-provider');
+
+    const request = await createTestRequest({}, 'valid-token');
+    const response = await getHandler()({ request });
+    
+    expect(response.status).toBe(429);
     expect(analyzeImage).not.toHaveBeenCalled();
   });
 

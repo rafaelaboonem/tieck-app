@@ -34,20 +34,6 @@ export function CameraSettingsPanel({ block, isOpen, onClose, onSave, isCompilin
     policy: block.cameraAiPolicy as CameraVerificationPolicyV1 | undefined
   });
 
-  useEffect(() => {
-    if (isOpen) {
-      setDraft({
-        title: block.title || block.subtitle || "",
-        description: block.description || "",
-        required: block.required !== false,
-        mode: block.mode || 'auto',
-        policy: block.cameraAiPolicy as CameraVerificationPolicyV1 | undefined
-      });
-      setHasChanges(false);
-    }
-  }, [isOpen, block]);
-
-  
   const [isTestModalOpen, setIsTestModalOpen] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
 
@@ -64,10 +50,14 @@ export function CameraSettingsPanel({ block, isOpen, onClose, onSave, isCompilin
     }
   }, [isOpen, block]);
 
-  const handleFieldChange = (field: keyof CameraDraft, value: any) => {
-    setDraft(prev => ({ ...prev, [field]: value }));
+  const handleFieldChange = <K extends keyof CameraDraft>(
+    field: K,
+    value: CameraDraft[K]
+  ) => {
+    setDraft((previous) => ({ ...previous, [field]: value }));
     setHasChanges(true);
   };
+
 
   const handlePolicyChange = (patch: Partial<CameraVerificationPolicyV1>) => {
     if (!draft.policy) return;
