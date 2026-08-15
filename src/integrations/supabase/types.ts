@@ -2668,43 +2668,20 @@ export type Database = {
         }
         Returns: undefined
       }
-      update_workspace_member_status:
-        | {
-            Args: {
-              p_actor_id: string
-              p_member_id: string
-              p_role?: string
-              p_status: string
-              p_workspace_id: string
-            }
-            Returns: boolean
-          }
-        | {
-            Args: {
-              p_member_id: string
-              p_role?: string
-              p_status: string
-              p_workspace_id: string
-            }
-            Returns: boolean
-          }
-      user_has_workspace_access:
-        | {
-            Args: {
-              p_min_role: Database["public"]["Enums"]["app_role"]
-              p_user_id: string
-              p_workspace_id: string
-            }
-            Returns: boolean
-          }
-        | {
-            Args: {
-              p_min_role?: string
-              p_user_id: string
-              p_workspace_id: string
-            }
-            Returns: boolean
-          }
+      update_workspace_member_status: {
+        Args: {
+          p_actor_id: string
+          p_member_id: string
+          p_role?: string
+          p_status: string
+          p_workspace_id: string
+        }
+        Returns: boolean
+      }
+      user_has_workspace_access: {
+        Args: { p_min_role: string; p_user_id: string; p_workspace_id: string }
+        Returns: boolean
+      }
       vision_lab_attempt_claim: {
         Args: {
           p_attempt_id: string

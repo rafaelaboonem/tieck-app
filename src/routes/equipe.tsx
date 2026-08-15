@@ -116,7 +116,7 @@ function TeamPage() {
           .eq('status', 'active')
           .maybeSingle();
         
-        setCurrentUserRole(memberRoleData?.role as any || 'viewer');
+        setCurrentUserRole(memberRoleData?.role as 'admin' | 'editor' | 'viewer' || 'viewer');
       }
 
       // 1. Fetch members

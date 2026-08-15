@@ -853,30 +853,24 @@ function WorkspacePage() {
   const handleAssignMember = async (checklistId: string, memberId: string | null) => {
     if (!currentWorkspace || !canManage) return;
     try {
+      const payload: any = {
+        p_workspace_id: currentWorkspace.id,
+        p_checklist_id: checklistId,
+        p_member_ids: memberId ? [memberId] : []
+      };
+
+      if (memberId) {
+        payload.p_primary_member_id = memberId;
+      }
+      
+      const { error } = await supabase.rpc('update_checklist_assignments', payload);
+
+      if (error) throw error;
+      
       if (!memberId) {
-        // Use RPC to remove assignments atomically
-        const { error } = await supabase.rpc('update_checklist_assignments', {
-          p_checklist_id: checklistId,
-          p_workspace_id: currentWorkspace.id,
-          p_primary_member_id: undefined,
-          p_member_ids: []
-        });
-        
-        if (error) throw error;
         setAssignments(prev => prev.filter(a => a.checklist_id !== checklistId));
         toast.success("Responsável removido");
       } else {
-        // RPC handles atomic update
-        const { error } = await supabase.rpc('update_checklist_assignments', {
-          p_checklist_id: checklistId,
-          p_workspace_id: currentWorkspace.id,
-          p_primary_member_id: memberId,
-          p_member_ids: [memberId]
-        });
-
-        if (error) throw error;
-        
-        // Refresh assignments local state
         const { data: newAssignments, error: fetchError } = await supabase
           .from('checklist_assignments')
           .select('*')
@@ -890,6 +884,7 @@ function WorkspacePage() {
         ]);
         toast.success("Responsável atribuído");
       }
+      // Data is refreshed via state updates above, no need for fetchChecklists() call
     } catch (err: any) {
       console.error(err);
       toast.error("Erro ao atribuir membro: " + err.message);
