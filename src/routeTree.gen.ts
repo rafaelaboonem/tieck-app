@@ -15,6 +15,7 @@ import { Route as MembrosRouteImport } from './routes/membros'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as InsightsRouteImport } from './routes/insights'
 import { Route as InicioRouteImport } from './routes/inicio'
+import { Route as EquipeRouteImport } from './routes/equipe'
 import { Route as DominiosRouteImport } from './routes/dominios'
 import { Route as ConfirmarEmailRouteImport } from './routes/confirmar-email'
 import { Route as ConfiguracoesRouteImport } from './routes/configuracoes'
@@ -61,6 +62,11 @@ const InsightsRoute = InsightsRouteImport.update({
 const InicioRoute = InicioRouteImport.update({
   id: '/inicio',
   path: '/inicio',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const EquipeRoute = EquipeRouteImport.update({
+  id: '/equipe',
+  path: '/equipe',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DominiosRoute = DominiosRouteImport.update({
@@ -162,6 +168,7 @@ export interface FileRoutesByFullPath {
   '/configuracoes': typeof ConfiguracoesRoute
   '/confirmar-email': typeof ConfirmarEmailRoute
   '/dominios': typeof DominiosRoute
+  '/equipe': typeof EquipeRoute
   '/inicio': typeof InicioRoute
   '/insights': typeof InsightsRoute
   '/login': typeof LoginRoute
@@ -187,6 +194,7 @@ export interface FileRoutesByTo {
   '/configuracoes': typeof ConfiguracoesRoute
   '/confirmar-email': typeof ConfirmarEmailRoute
   '/dominios': typeof DominiosRoute
+  '/equipe': typeof EquipeRoute
   '/inicio': typeof InicioRoute
   '/insights': typeof InsightsRoute
   '/login': typeof LoginRoute
@@ -213,6 +221,7 @@ export interface FileRoutesById {
   '/configuracoes': typeof ConfiguracoesRoute
   '/confirmar-email': typeof ConfirmarEmailRoute
   '/dominios': typeof DominiosRoute
+  '/equipe': typeof EquipeRoute
   '/inicio': typeof InicioRoute
   '/insights': typeof InsightsRoute
   '/login': typeof LoginRoute
@@ -240,6 +249,7 @@ export interface FileRouteTypes {
     | '/configuracoes'
     | '/confirmar-email'
     | '/dominios'
+    | '/equipe'
     | '/inicio'
     | '/insights'
     | '/login'
@@ -265,6 +275,7 @@ export interface FileRouteTypes {
     | '/configuracoes'
     | '/confirmar-email'
     | '/dominios'
+    | '/equipe'
     | '/inicio'
     | '/insights'
     | '/login'
@@ -290,6 +301,7 @@ export interface FileRouteTypes {
     | '/configuracoes'
     | '/confirmar-email'
     | '/dominios'
+    | '/equipe'
     | '/inicio'
     | '/insights'
     | '/login'
@@ -316,6 +328,7 @@ export interface RootRouteChildren {
   ConfiguracoesRoute: typeof ConfiguracoesRoute
   ConfirmarEmailRoute: typeof ConfirmarEmailRoute
   DominiosRoute: typeof DominiosRoute
+  EquipeRoute: typeof EquipeRoute
   InicioRoute: typeof InicioRoute
   InsightsRoute: typeof InsightsRoute
   LoginRoute: typeof LoginRoute
@@ -375,6 +388,13 @@ declare module '@tanstack/react-router' {
       path: '/inicio'
       fullPath: '/inicio'
       preLoaderRoute: typeof InicioRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/equipe': {
+      id: '/equipe'
+      path: '/equipe'
+      fullPath: '/equipe'
+      preLoaderRoute: typeof EquipeRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/dominios': {
@@ -508,6 +528,7 @@ const rootRouteChildren: RootRouteChildren = {
   ConfiguracoesRoute: ConfiguracoesRoute,
   ConfirmarEmailRoute: ConfirmarEmailRoute,
   DominiosRoute: DominiosRoute,
+  EquipeRoute: EquipeRoute,
   InicioRoute: InicioRoute,
   InsightsRoute: InsightsRoute,
   LoginRoute: LoginRoute,
