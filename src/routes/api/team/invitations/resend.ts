@@ -60,8 +60,12 @@ export const Route = createFileRoute('/api/team/invitations/resend')({
           });
 
           if (rpcError) {
-            const code = rpcError.message.includes('Forbidden') ? 'forbidden' : 'internal_error';
-            return new Response(JSON.stringify({ ok: false, code, requestId }), { status: code === 'forbidden' ? 403 : 400 });
+            console.error('[Invitation-Resend] RPC error:', rpcError);
+            const msg = rpcError.message;
+            const code = msg.includes('Forbidden') ? 'forbidden' : 'internal_error';
+            return new Response(JSON.stringify({ ok: false, code, requestId }), { 
+              status: code === 'forbidden' ? 403 : 400 
+            });
           }
 
           const inviteLink = `${new URL(request.url).origin}/convite/${tokenValue}`;

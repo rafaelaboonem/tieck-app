@@ -208,9 +208,12 @@ function TeamPage() {
 
       toast.success('Convite gerado com sucesso!');
       if (result.invitation.link) {
-        // Fallback para quando o e-mail não é enviado
-        navigator.clipboard.writeText(result.invitation.link);
-        toast.info('Link de convite copiado para a área de transferência.');
+        try {
+          await navigator.clipboard.writeText(result.invitation.link);
+          toast.info('Link de convite copiado para a área de transferência.');
+        } catch (err) {
+          console.warn('Clipboard access denied');
+        }
       }
       
       setInviteModalOpen(false);
@@ -218,7 +221,13 @@ function TeamPage() {
       fetchTeamData();
     } catch (error: any) {
       console.error('Invite error:', error);
-      toast.error(`Falha ao convidar: ${error.message === 'rate_limit' ? 'Limite de convites excedido. Tente mais tarde.' : 'Erro interno'}`);
+      const msg = error.message;
+      const errorMap: Record<string, string> = {
+        rate_limit: 'Limite de convites excedido. Tente mais tarde.',
+        already_member: 'Este usuário já é membro deste workspace.',
+        forbidden: 'Você não tem permissão para convidar nesta função.'
+      };
+      toast.error(errorMap[msg] || 'Erro interno ao convidar');
     } finally {
       setInviting(false);
     }
@@ -276,8 +285,12 @@ function TeamPage() {
 
       toast.success('Convite reenviado!');
       if (result.invitation.link) {
-        navigator.clipboard.writeText(result.invitation.link);
-        toast.info('Novo link copiado para a área de transferência.');
+        try {
+          await navigator.clipboard.writeText(result.invitation.link);
+          toast.info('Novo link copiado para a área de transferência.');
+        } catch (err) {
+          console.warn('Clipboard access denied');
+        }
       }
       fetchTeamData();
     } catch (error: any) {
