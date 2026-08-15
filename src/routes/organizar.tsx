@@ -528,15 +528,15 @@ function WorkspacePage() {
           supabase
             .from('workspace_members')
             .select(`
+              id,
               user_id,
-              profiles:profiles!workspace_members_user_id_fkey (
+              profiles:profiles (
                 id,
                 full_name,
                 avatar_url
               )
             `)
             .eq('workspace_id', currentWorkspace.id)
-            .eq('status', 'active'),
           supabase
             .from('checklist_assignments')
             .select('*')
@@ -804,7 +804,10 @@ function WorkspacePage() {
     try {
       if (!currentWorkspace) return;
 
-      if (!userId) {
+      const member = members.find(m => m.user_id === userId);
+      const memberId = member?.id;
+
+      if (!memberId) {
         // Remove primary assignment
         const { error } = await supabase
           .from('checklist_assignments')
@@ -816,14 +819,13 @@ function WorkspacePage() {
         setAssignments(prev => prev.filter(a => !(a.checklist_id === checklistId && a.is_primary)));
         toast.success("Responsável removido");
       } else {
-        // RPC handles atomic update (delete old primary, insert new one)
-        const { data, error } = await supabase.rpc('update_checklist_assignments', {
+        // RPC handles atomic update
+        const { error } = await supabase.rpc('update_checklist_assignments', {
           p_checklist_id: checklistId,
           p_workspace_id: currentWorkspace.id,
-          p_primary_member_id: userId,
-          p_member_ids: [userId]
+          p_primary_member_id: memberId,
+          p_member_ids: [memberId]
         });
-
 
         if (error) throw error;
         

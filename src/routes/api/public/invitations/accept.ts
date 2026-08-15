@@ -34,10 +34,9 @@ export const Route = createFileRoute('/api/public/invitations/accept')({
           
           const tokenHash = createHash('sha256').update(result.data.token).digest('hex');
 
-          // 3. Call atomic RPC
+          // 3. Call atomic RPC (internal logic handles user id)
           const { data, error: rpcError } = await supabaseAdmin.rpc('accept_workspace_invitation', {
-            p_token_hash: tokenHash,
-            p_user_id: user.id
+            p_token_hash: tokenHash
           });
 
           if (rpcError) {
