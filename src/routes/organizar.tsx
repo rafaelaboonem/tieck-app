@@ -805,12 +805,13 @@ function WorkspacePage() {
       if (!currentWorkspace) return;
 
       if (!memberId) {
-        // Remove assignments for this checklist
-        const { error } = await supabase
-          .from('checklist_assignments')
-          .delete()
-          .eq('checklist_id', checklistId)
-          .eq('workspace_id', currentWorkspace.id);
+        // Use RPC to remove assignments atomically
+        const { error } = await supabase.rpc('update_checklist_assignments', {
+          p_checklist_id: checklistId,
+          p_workspace_id: currentWorkspace.id,
+          p_primary_member_id: null,
+          p_member_ids: []
+        });
         
         if (error) throw error;
         setAssignments(prev => prev.filter(a => a.checklist_id !== checklistId));
