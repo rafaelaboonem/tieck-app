@@ -318,6 +318,8 @@ import logoIcon from "../assets/local/logo-tieck.webp";
                     { icon: Settings, label: "Configurações", to: "/configuracoes" },
                     { icon: CreditCard, label: "Meu Plano", to: "/membros" },
                     { icon: Briefcase, label: "Espaço de Trabalho", to: "/organizar" },
+                    { icon: Users, label: "Equipe", to: "/equipe" },
+
                   ].map((item: NavItem) => {
                     const Icon = item.icon;
                     const isSearch = item.label === "Buscar";
