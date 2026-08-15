@@ -14,7 +14,7 @@ const TestPayloadSchema = z.object({
 });
 
 function isPublishedBlock(b: unknown): b is PublishedBlock {
-  return b !== null && typeof b === 'object' && 'type' in b && b.type === 'camera';
+  return b !== null && typeof b === 'object' && 'type' in b && (b as any).type === 'camera';
 }
 
 export const Route = createFileRoute('/api/camera-ai/test-verification')({
@@ -41,8 +41,6 @@ export const Route = createFileRoute('/api/camera-ai/test-verification')({
         if (!user) return Response.json({ ok: false, code: 'unauthorized' }, { status: 401 });
 
         try {
-          const contentType = request.headers.get("content-type") || "";
-          
           let formData: FormData;
           try {
             formData = await request.formData();
@@ -60,13 +58,13 @@ export const Route = createFileRoute('/api/camera-ai/test-verification')({
           const candidate = formData.get('candidate');
           if (!candidate) return Response.json({ ok: false, code: 'missing_image' }, { status: 400 });
           
-          // Use any for duck typing to avoid TS environment issues with File/Blob
+          // Use duck typing and type assertion to handle FormDataEntryValue correctly
           const isBlob = candidate && typeof (candidate as any).arrayBuffer === 'function';
           if (!isBlob) {
             return Response.json({ ok: false, code: 'invalid_image_type', type: typeof candidate }, { status: 400 });
           }
 
-
+          const blobCandidate = candidate as unknown as Blob;
 
           const { data: checklist, error: chkError } = await client
             .from('checklists')
@@ -93,21 +91,21 @@ export const Route = createFileRoute('/api/camera-ai/test-verification')({
           if (!isAuthorized) return Response.json({ ok: false, code: 'forbidden' }, { status: 403 });
 
           const blocks = Array.isArray(checklist.blocks) ? checklist.blocks : [];
-          const block = blocks.find((b: unknown) => isPublishedBlock(b) && b.id === blockId);
+          const block = blocks.find((b: unknown) => isPublishedBlock(b) && (b as any).id === blockId);
           if (!block || !isPublishedBlock(block)) return Response.json({ ok: false, code: 'invalid_block' }, { status: 404 });
 
-          const policy = block.cameraAiPolicy;
+          const policy = (block as any).cameraAiPolicy;
           const policyValidation = CameraVerificationPolicyV1Schema.safeParse(policy);
           if (!policyValidation.success) return Response.json({ ok: false, code: 'invalid_policy' }, { status: 400 });
 
-          const question = (String(block.title || '') + ' ' + String(block.description || '')).trim();
+          const question = (String((block as any).title || '') + ' ' + String((block as any).description || '')).trim();
           const expectedHash = createHash('sha256').update(question).digest('hex');
           if (policyValidation.data.questionHash !== expectedHash) {
              return Response.json({ ok: false, code: 'checklist_update_required' }, { status: 400 });
           }
 
-          const buffer = await candidate.arrayBuffer();
-          const imgVal = await validateImageBuffer(buffer, candidate.type);
+          const buffer = await blobCandidate.arrayBuffer();
+          const imgVal = await validateImageBuffer(buffer, blobCandidate.type);
           if (!imgVal.valid) return Response.json({ ok: false, code: imgVal.code || 'invalid_image' }, { status: 400 });
 
           const openaiClient = new OpenAI({ apiKey });
@@ -120,7 +118,6 @@ export const Route = createFileRoute('/api/camera-ai/test-verification')({
           const message = error instanceof Error ? error.message : 'Unknown';
           return Response.json({ ok: false, code: 'technical_failure', debug: message }, { status: 500 });
         }
-
       }
     }
   }
