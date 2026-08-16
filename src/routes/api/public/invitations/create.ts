@@ -76,6 +76,12 @@ export const Route = createFileRoute('/api/public/invitations/create')({
           }
 
           // Send real email via server helper
+          try {
+            await sendWorkspaceInvitationEmail({
+              invitationId,
+              workspaceId,
+              token: tokenValue
+            });
           } catch (emailError: any) {
             console.error('[Invitation-Create] Email delivery failed');
             
