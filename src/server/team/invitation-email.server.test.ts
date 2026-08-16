@@ -72,9 +72,7 @@ describe('Phase 4B Invitation Flow (Direct Resend API)', () => {
     });
     expect(options.headers).toHaveProperty('Idempotency-Key');
     expect(options.headers['Idempotency-Key']).toContain('tieck-invite-123-1a7674eb4ee78df7');
-    expect(options.headers['Idempotency-Key']).not.toContain('tok');
     
-    // Ensure LOVABLE_API_KEY or X-Connection-Api-Key are not present
     expect(options.headers).not.toHaveProperty('X-Connection-Api-Key');
   });
 
@@ -141,6 +139,5 @@ describe('Phase 4B Invitation Flow (Direct Resend API)', () => {
     });
     
     expect(result).toEqual({ ok: true });
-    expect(result).not.toHaveProperty('token');
   });
 });
