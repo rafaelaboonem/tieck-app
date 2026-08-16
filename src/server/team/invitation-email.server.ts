@@ -38,7 +38,8 @@ export async function sendWorkspaceInvitationEmail({
 
   const logSecureError = (currentStage: string, errorCode: string, error: any) => {
     const code = allowedErrorCodes.includes(errorCode) ? errorCode : 'unexpected_error';
-    console.error(`[Resend] Diagnostic: stage=${currentStage} code=${code} type=${error?.name || 'Error'} sha=${shaPrefix}`);
+    const message = error?.message || 'Unknown error';
+    console.error(`[Resend] Diagnostic: stage=${currentStage} code=${code} type=${error?.name || 'Error'} sha=${shaPrefix} msg=${message}`);
   };
 
   try {
