@@ -8,6 +8,29 @@ async function sha256Hex(input: string) {
   return createHash('sha256').update(input).digest('hex');
 }
 
+export type ResendDiagnosticCode = 
+  | 'configuration_invalid'
+  | 'public_url_invalid'
+  | 'invitation_query_failed'
+  | 'invitation_not_pending'
+  | 'invitation_expired'
+  | 'token_hash_mismatch'
+  | 'payload_build_failed'
+  | 'abort_controller_failed'
+  | 'fetch_started'
+  | 'fetch_failed'
+  | 'fetch_response'
+  | 'resend_non_2xx'
+  | 'unexpected_error';
+
+export type ResendDiagnosticType = 
+  | 'Error'
+  | 'AbortError'
+  | 'TypeError'
+  | 'SyntaxError'
+  | 'DBError'
+  | 'ConfigError';
+
 export async function sendWorkspaceInvitationEmail({
   invitationId,
   workspaceId,
@@ -22,7 +45,7 @@ export async function sendWorkspaceInvitationEmail({
   const resendApiKey = process.env['RESEND_API_KEY'];
   const publicUrl = process.env['PUBLIC_URL'];
 
-  const allowedErrorCodes = [
+  const allowedCodes: ResendDiagnosticCode[] = [
     'configuration_invalid',
     'public_url_invalid',
     'invitation_query_failed',
@@ -33,13 +56,19 @@ export async function sendWorkspaceInvitationEmail({
     'abort_controller_failed',
     'fetch_started',
     'fetch_failed',
+    'fetch_response',
     'resend_non_2xx'
   ];
 
-  const logSecureError = (currentStage: string, errorCode: string, error: any) => {
-    const code = allowedErrorCodes.includes(errorCode) ? errorCode : 'unexpected_error';
-    const message = error?.message || 'Unknown error';
-    console.error(`[Resend] Diagnostic: stage=${currentStage} code=${code} type=${error?.name || 'Error'} sha=${shaPrefix} msg=${message}`);
+  const logSecure = (currentStage: string, code: ResendDiagnosticCode, type: ResendDiagnosticType, extra?: Record<string, unknown>) => {
+    const safeCode = allowedCodes.includes(code) ? code : 'unexpected_error';
+    console.error('[Resend] Diagnostic', {
+      stage: currentStage,
+      code: safeCode,
+      type,
+      sha: shaPrefix,
+      ...extra
+    });
   };
 
   try {
@@ -49,20 +78,19 @@ export async function sendWorkspaceInvitationEmail({
     const isPublicUrlPresent = !!publicUrl;
 
     if (!isResendKeyPresent || !isResendKeyFormatValid || !isPublicUrlPresent) {
-      const err = new Error('Email service unavailable: missing configuration');
-      logSecureError(stage, 'configuration_invalid', err);
-      throw err;
+      logSecure(stage, 'configuration_invalid', 'ConfigError');
+      throw new Error('Email service unavailable: missing configuration');
     }
 
     stage = 'public_url_validation';
     let validatedUrl: URL;
     try {
-      validatedUrl = new URL(publicUrl!);
+      validatedUrl = new URL(publicUrl);
       if (validatedUrl.protocol !== 'https:') throw new Error('Protocol must be HTTPS');
       if (validatedUrl.username || validatedUrl.password) throw new Error('URL cannot contain credentials');
       if (validatedUrl.search || validatedUrl.hash) throw new Error('URL cannot contain search params or hash');
     } catch (err) {
-      logSecureError(stage, 'public_url_invalid', err);
+      logSecure(stage, 'public_url_invalid', err instanceof TypeError ? 'TypeError' : 'Error');
       throw new Error('Internal Configuration Error');
     }
 
@@ -77,24 +105,24 @@ export async function sendWorkspaceInvitationEmail({
       .single();
 
     if (inviteError || !invite) {
-      logSecureError(stage, 'invitation_query_failed', inviteError || new Error('Invite not found'));
+      logSecure(stage, 'invitation_query_failed', 'DBError');
       throw new Error('Invitation not found');
     }
 
     if (invite.status !== 'pending') {
-      logSecureError(stage, 'invitation_not_pending', new Error(`Status: ${invite.status}`));
+      logSecure(stage, 'invitation_not_pending', 'Error');
       throw new Error('Invitation not pending');
     }
 
     if (new Date(invite.expires_at) < new Date()) {
-      logSecureError(stage, 'invitation_expired', new Error('Expired'));
+      logSecure(stage, 'invitation_expired', 'Error');
       throw new Error('Invitation expired');
     }
 
     stage = 'token_hash_validation';
     const hash = await sha256Hex(token);
     if (hash !== invite.token_hash) {
-      logSecureError(stage, 'token_hash_mismatch', new Error('Mismatch'));
+      logSecure(stage, 'token_hash_mismatch', 'Error');
       throw new Error('Security violation: token mismatch');
     }
 
@@ -142,9 +170,10 @@ export async function sendWorkspaceInvitationEmail({
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 10000);
 
+    let res: Response | null = null;
     try {
       stage = 'fetch_started';
-      const res = await fetch(RESEND_API_URL, {
+      res = await fetch(RESEND_API_URL, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -161,25 +190,28 @@ export async function sendWorkspaceInvitationEmail({
         }),
         signal: controller.signal
       });
-
-      if (!res.ok) {
-        const err = new Error(`Failed to send email via Resend: ${res.status}`);
-        logSecureError(stage, 'resend_non_2xx', err);
-        throw err;
-      }
-
-      return { ok: true };
-    } catch (fetchErr: any) {
-      if (fetchErr?.name === 'AbortError') {
-        logSecureError(stage, 'abort_controller_failed', fetchErr);
-      } else {
-        logSecureError(stage, 'fetch_failed', fetchErr);
-      }
+    } catch (fetchErr: unknown) {
+      const isAbort = fetchErr instanceof Error && fetchErr.name === 'AbortError';
+      logSecure(
+        stage, 
+        isAbort ? 'abort_controller_failed' : 'fetch_failed', 
+        isAbort ? 'AbortError' : (fetchErr instanceof TypeError ? 'TypeError' : 'Error')
+      );
       throw fetchErr;
     } finally {
       clearTimeout(timeoutId);
     }
-  } catch (err) {
+
+    if (!res.ok) {
+      logSecure(stage, 'resend_non_2xx', 'Error', {
+        status: res.status,
+        requestId: res.headers.get('x-request-id')?.slice(0, 64) || null
+      });
+      throw new Error(`Failed to send email via Resend: ${res.status}`);
+    }
+
+    return { ok: true };
+  } catch (err: unknown) {
     // Already logged internally if one of the monitored stages
     throw err;
   }
