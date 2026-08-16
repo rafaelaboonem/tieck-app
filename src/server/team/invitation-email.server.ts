@@ -8,7 +8,18 @@ async function sha256Hex(input: string) {
   return createHash('sha256').update(input).digest('hex');
 }
 
-export type ResendDiagnosticCode = 
+export type EmailDiagnosticStage = 
+  | 'init'
+  | 'config_validation'
+  | 'token_hash'
+  | 'invitation_query'
+  | 'token_comparison'
+  | 'payload_build'
+  | 'idempotency_hash'
+  | 'fetch_started'
+  | 'fetch_response';
+
+export type EmailDiagnosticCode = 
   | 'configuration_invalid'
   | 'public_url_invalid'
   | 'invitation_query_failed'
@@ -16,20 +27,27 @@ export type ResendDiagnosticCode =
   | 'invitation_expired'
   | 'token_hash_mismatch'
   | 'payload_build_failed'
-  | 'abort_controller_failed'
-  | 'fetch_started'
   | 'fetch_failed'
-  | 'fetch_response'
   | 'resend_non_2xx'
-  | 'unexpected_error';
+  | 'abort_error'
+  | 'unclassified_failure';
 
-export type ResendDiagnosticType = 
-  | 'Error'
-  | 'AbortError'
-  | 'TypeError'
-  | 'SyntaxError'
-  | 'DBError'
-  | 'ConfigError';
+export type EmailDiagnosticType = 'internal' | 'external' | 'config' | 'security';
+
+export class EmailDeliveryError extends Error {
+  constructor(
+    public diagnostic: {
+      stage: EmailDiagnosticStage;
+      code: EmailDiagnosticCode;
+      type: EmailDiagnosticType;
+      providerStatus?: number;
+      requestId?: string | null;
+    }
+  ) {
+    super(`Email delivery failed: ${diagnostic.code} at ${diagnostic.stage}`);
+    this.name = 'EmailDeliveryError';
+  }
+}
 
 export async function sendWorkspaceInvitationEmail({
   invitationId,
@@ -40,58 +58,36 @@ export async function sendWorkspaceInvitationEmail({
   workspaceId: string;
   token: string;
 }) {
-  let stage = 'init';
+  let stage: EmailDiagnosticStage = 'init';
   const shaPrefix = (process.env['VERCEL_GIT_COMMIT_SHA'] || 'unknown').slice(0, 12);
   const resendApiKey = process.env['RESEND_API_KEY'];
   const publicUrl = process.env['PUBLIC_URL'];
 
-  const allowedCodes: ResendDiagnosticCode[] = [
-    'configuration_invalid',
-    'public_url_invalid',
-    'invitation_query_failed',
-    'invitation_not_pending',
-    'invitation_expired',
-    'token_hash_mismatch',
-    'payload_build_failed',
-    'abort_controller_failed',
-    'fetch_started',
-    'fetch_failed',
-    'fetch_response',
-    'resend_non_2xx'
-  ];
-
-  const logSecure = (currentStage: string, code: ResendDiagnosticCode, type: ResendDiagnosticType, extra?: Record<string, unknown>) => {
-    const safeCode = allowedCodes.includes(code) ? code : 'unexpected_error';
+  const logSecure = (diag: EmailDeliveryError['diagnostic']) => {
     console.error('[Resend] Diagnostic', {
-      stage: currentStage,
-      code: safeCode,
-      type,
+      stage: diag.stage,
+      code: diag.code,
+      type: diag.type,
       sha: shaPrefix,
-      ...extra
+      providerStatus: diag.providerStatus,
+      requestId: diag.requestId
     });
   };
 
   try {
-    stage = 'configuration_check';
-    const isResendKeyPresent = !!resendApiKey;
-    const isResendKeyFormatValid = typeof resendApiKey === 'string' && resendApiKey.startsWith('re_');
-    const isPublicUrlPresent = !!publicUrl;
-
-    if (!isResendKeyPresent || !isResendKeyFormatValid || !isPublicUrlPresent) {
-      logSecure(stage, 'configuration_invalid', 'ConfigError');
-      throw new Error('Email service unavailable: missing configuration');
+    stage = 'config_validation';
+    if (!resendApiKey || !resendApiKey.startsWith('re_') || !publicUrl) {
+      throw new EmailDeliveryError({ stage, code: 'configuration_invalid', type: 'config' });
     }
 
-    stage = 'public_url_validation';
     let validatedUrl: URL;
     try {
       validatedUrl = new URL(publicUrl);
-      if (validatedUrl.protocol !== 'https:') throw new Error('Protocol must be HTTPS');
-      if (validatedUrl.username || validatedUrl.password) throw new Error('URL cannot contain credentials');
-      if (validatedUrl.search || validatedUrl.hash) throw new Error('URL cannot contain search params or hash');
-    } catch (err) {
-      logSecure(stage, 'public_url_invalid', err instanceof TypeError ? 'TypeError' : 'Error');
-      throw new Error('Internal Configuration Error');
+      if (validatedUrl.protocol !== 'https:' || validatedUrl.username || validatedUrl.password || validatedUrl.search || validatedUrl.hash) {
+        throw new Error('Invalid URL structure');
+      }
+    } catch {
+      throw new EmailDeliveryError({ stage, code: 'public_url_invalid', type: 'config' });
     }
 
     const cleanPublicUrl = validatedUrl.origin.replace(/\/+$/, '');
@@ -105,25 +101,21 @@ export async function sendWorkspaceInvitationEmail({
       .single();
 
     if (inviteError || !invite) {
-      logSecure(stage, 'invitation_query_failed', 'DBError');
-      throw new Error('Invitation not found');
+      throw new EmailDeliveryError({ stage, code: 'invitation_query_failed', type: 'internal' });
     }
 
     if (invite.status !== 'pending') {
-      logSecure(stage, 'invitation_not_pending', 'Error');
-      throw new Error('Invitation not pending');
+      throw new EmailDeliveryError({ stage, code: 'invitation_not_pending', type: 'security' });
     }
 
     if (new Date(invite.expires_at) < new Date()) {
-      logSecure(stage, 'invitation_expired', 'Error');
-      throw new Error('Invitation expired');
+      throw new EmailDeliveryError({ stage, code: 'invitation_expired', type: 'security' });
     }
 
-    stage = 'token_hash_validation';
+    stage = 'token_comparison';
     const hash = await sha256Hex(token);
     if (hash !== invite.token_hash) {
-      logSecure(stage, 'token_hash_mismatch', 'Error');
-      throw new Error('Security violation: token mismatch');
+      throw new EmailDeliveryError({ stage, code: 'token_hash_mismatch', type: 'security' });
     }
 
     stage = 'payload_build';
@@ -164,13 +156,14 @@ export async function sendWorkspaceInvitationEmail({
       </html>
     `;
     const text = `Você foi convidado para o workspace ${workspaceName} no Tieck como ${roleName}. Aceite o convite aqui: ${inviteLink}`;
+
+    stage = 'idempotency_hash';
     const idempotencyKey = `tieck-invite-${invitationId}-${hash.slice(0, 16)}`;
 
-    stage = 'abort_controller_setup';
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 10000);
 
-    let res: Response | null = null;
+    let res: Response;
     try {
       stage = 'fetch_started';
       res = await fetch(RESEND_API_URL, {
@@ -192,27 +185,39 @@ export async function sendWorkspaceInvitationEmail({
       });
     } catch (fetchErr: unknown) {
       const isAbort = fetchErr instanceof Error && fetchErr.name === 'AbortError';
-      logSecure(
+      throw new EmailDeliveryError({ 
         stage, 
-        isAbort ? 'abort_controller_failed' : 'fetch_failed', 
-        isAbort ? 'AbortError' : (fetchErr instanceof TypeError ? 'TypeError' : 'Error')
-      );
-      throw fetchErr;
+        code: isAbort ? 'abort_error' : 'fetch_failed', 
+        type: 'external' 
+      });
     } finally {
       clearTimeout(timeoutId);
     }
 
+    stage = 'fetch_response';
     if (!res.ok) {
-      logSecure(stage, 'resend_non_2xx', 'Error', {
-        status: res.status,
+      throw new EmailDeliveryError({ 
+        stage, 
+        code: 'resend_non_2xx', 
+        type: 'external',
+        providerStatus: res.status,
         requestId: res.headers.get('x-request-id')?.slice(0, 64) || null
       });
-      throw new Error(`Failed to send email via Resend: ${res.status}`);
     }
 
     return { ok: true };
   } catch (err: unknown) {
-    // Already logged internally if one of the monitored stages
-    throw err;
+    if (err instanceof EmailDeliveryError) {
+      logSecure(err.diagnostic);
+      throw err;
+    }
+    
+    const unclassifiedDiag: EmailDeliveryError['diagnostic'] = {
+      stage,
+      code: 'unclassified_failure',
+      type: 'internal'
+    };
+    logSecure(unclassifiedDiag);
+    throw new EmailDeliveryError(unclassifiedDiag);
   }
 }

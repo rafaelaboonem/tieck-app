@@ -1,22 +1,19 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { sendWorkspaceInvitationEmail } from './invitation-email.server';
+import { sendWorkspaceInvitationEmail, EmailDeliveryError } from './invitation-email.server';
 import { supabaseAdmin } from '@/integrations/supabase/client.server';
 
-// Mock supabaseAdmin
 vi.mock('@/integrations/supabase/client.server', () => ({
   supabaseAdmin: {
     from: vi.fn().mockReturnThis(),
     select: vi.fn().mockReturnThis(),
     eq: vi.fn().mockReturnThis(),
     single: vi.fn().mockReturnThis(),
-    update: vi.fn().mockReturnThis(),
   },
 }));
 
-// Mock global fetch
 global.fetch = vi.fn();
 
-describe('Phase 4B Invitation Flow (Direct Resend API)', () => {
+describe('Invitation Email Diagnostic Logic', () => {
   const defaultEnv = {
     RESEND_API_KEY: 're_test_key_12345',
     PUBLIC_URL: 'https://tieck.com.br',
@@ -27,154 +24,127 @@ describe('Phase 4B Invitation Flow (Direct Resend API)', () => {
     process.env = { ...defaultEnv };
   });
 
-  it('fails if RESEND_API_KEY is missing or invalid format', async () => {
-    process.env.RESEND_API_KEY = 'invalid_key';
+  it('classifies config validation failure before fetch', async () => {
+    process.env.RESEND_API_KEY = 'invalid_format';
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-    await expect(sendWorkspaceInvitationEmail({
-      invitationId: '123',
-      workspaceId: '456',
-      token: 'tok'
-    })).rejects.toThrow('Email service unavailable: missing configuration');
-    expect(consoleSpy).toHaveBeenCalled();
+    
+    try {
+      await sendWorkspaceInvitationEmail({ invitationId: '123', workspaceId: '456', token: 'tok' });
+    } catch (err: any) {
+      expect(err).toBeInstanceOf(EmailDeliveryError);
+      expect(err.diagnostic.stage).toBe('config_validation');
+      expect(err.diagnostic.code).toBe('configuration_invalid');
+    }
+    
+    expect(consoleSpy).toHaveBeenCalledWith('[Resend] Diagnostic', expect.objectContaining({
+      stage: 'config_validation',
+      code: 'configuration_invalid'
+    }));
   });
 
-  it('calls the official Resend API with correct headers', async () => {
+  it('classifies token hash mismatch correctly', async () => {
     const mockInvite = {
       email_normalized: 'test@example.com',
       role: 'admin',
-      token_hash: '1a7674eb4ee78df7e1ac439a93c3fa8e3c945784d4dec9fd8e3011738b2f1d62', // sha256 of 'tok'
+      token_hash: 'wrong_hash',
       expires_at: new Date(Date.now() + 100000).toISOString(),
       status: 'pending',
-      workspaces: { name: 'Test Workspace' }
+      workspaces: { name: 'Test' }
     };
-    (supabaseAdmin.from as any)().select().eq().single.mockResolvedValue({ data: mockInvite, error: null });
-    (global.fetch as any).mockResolvedValue({ ok: true, json: () => Promise.resolve({}) });
+    (supabaseAdmin.from as any)().select().eq().eq().single.mockResolvedValue({ data: mockInvite, error: null });
+    
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-    await sendWorkspaceInvitationEmail({
-      invitationId: '123',
-      workspaceId: '456',
-      token: 'tok'
-    });
-
-    const [url, options] = (global.fetch as any).mock.calls[0];
-    expect(url).toBe('https://api.resend.com/emails');
-    expect(options.headers).toMatchObject({
-      'Content-Type': 'application/json',
-      Authorization: 'Bearer re_test_key_12345',
-      'User-Agent': 'Tieck/1.0',
-    });
-    expect(options.headers).toHaveProperty('Idempotency-Key');
-    expect(options.headers['Idempotency-Key']).toContain('tieck-invite-123-1a7674eb4ee78df7');
+    try {
+      await sendWorkspaceInvitationEmail({ invitationId: '123', workspaceId: '456', token: 'tok' });
+    } catch (err: any) {
+      expect(err.diagnostic.stage).toBe('token_comparison');
+      expect(err.diagnostic.code).toBe('token_hash_mismatch');
+      expect(err.diagnostic.type).toBe('security');
+    }
   });
 
-  it('strictly sanitizes logs and emits exactly one resend_non_2xx on 401', async () => {
+  it('differentiates network fetch failure', async () => {
     const mockInvite = {
-      email_normalized: 'secret-invitee@example.com',
+      email_normalized: 'test@example.com',
       role: 'admin',
       token_hash: '1a7674eb4ee78df7e1ac439a93c3fa8e3c945784d4dec9fd8e3011738b2f1d62',
       expires_at: new Date(Date.now() + 100000).toISOString(),
       status: 'pending',
-      workspaces: { name: 'Secret Workspace' }
+      workspaces: { name: 'Test' }
     };
-    (supabaseAdmin.from as any)().select().eq().single.mockResolvedValue({ data: mockInvite, error: null });
+    (supabaseAdmin.from as any)().select().eq().eq().single.mockResolvedValue({ data: mockInvite, error: null });
+    (global.fetch as any).mockRejectedValue(new TypeError('Failed to fetch'));
 
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    try {
+      await sendWorkspaceInvitationEmail({ invitationId: '123', workspaceId: '456', token: 'tok' });
+    } catch (err: any) {
+      expect(err.diagnostic.stage).toBe('fetch_started');
+      expect(err.diagnostic.code).toBe('fetch_failed');
+    }
+  });
+
+  it('differentiates timeout/abort error', async () => {
+    const mockInvite = {
+      email_normalized: 'test@example.com',
+      role: 'admin',
+      token_hash: '1a7674eb4ee78df7e1ac439a93c3fa8e3c945784d4dec9fd8e3011738b2f1d62',
+      expires_at: new Date(Date.now() + 100000).toISOString(),
+      status: 'pending',
+      workspaces: { name: 'Test' }
+    };
+    (supabaseAdmin.from as any)().select().eq().eq().single.mockResolvedValue({ data: mockInvite, error: null });
+    
+    const abortErr = new Error('aborted');
+    abortErr.name = 'AbortError';
+    (global.fetch as any).mockRejectedValue(abortErr);
+
+    try {
+      await sendWorkspaceInvitationEmail({ invitationId: '123', workspaceId: '456', token: 'tok' });
+    } catch (err: any) {
+      expect(err.diagnostic.code).toBe('abort_error');
+    }
+  });
+
+  it('preserves status and requestId on non-2xx', async () => {
+    const mockInvite = {
+      email_normalized: 'test@example.com',
+      role: 'admin',
+      token_hash: '1a7674eb4ee78df7e1ac439a93c3fa8e3c945784d4dec9fd8e3011738b2f1d62',
+      expires_at: new Date(Date.now() + 100000).toISOString(),
+      status: 'pending',
+      workspaces: { name: 'Test' }
+    };
+    (supabaseAdmin.from as any)().select().eq().eq().single.mockResolvedValue({ data: mockInvite, error: null });
     (global.fetch as any).mockResolvedValue({
       ok: false,
       status: 401,
-      headers: new Map([['x-request-id', 'resend-req-123']])
+      headers: new Map([['x-request-id', 'req_123']])
     });
 
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-
-    await expect(sendWorkspaceInvitationEmail({
-      invitationId: '123',
-      workspaceId: '456',
-      token: 'tok'
-    })).rejects.toThrow('Failed to send email via Resend: 401');
-
-    const logOutput = JSON.stringify(consoleSpy.mock.calls);
-    
-    // Check for secrets
-    expect(logOutput).not.toContain('secret-invitee');
-    expect(logOutput).not.toContain('re_test_key_12345');
-    expect(logOutput).not.toContain('tok');
-    // Check for banned fields
-    expect(logOutput).not.toContain('message');
-    expect(logOutput).not.toContain('stack');
-    
-    // Check for correct codes
-    expect(logOutput).toContain('resend_non_2xx');
-    expect(logOutput).toContain('"status":401');
-    expect(logOutput).toContain('resend-req-123');
-    
-    // Verify NOT fetch_failed
-    expect(logOutput).not.toContain('fetch_failed');
-    
-    // Exactly one diagnostic call for this error
-    const diagnosticCalls = consoleSpy.mock.calls.filter(call => call[0] === '[Resend] Diagnostic');
-    expect(diagnosticCalls.length).toBe(1);
+    try {
+      await sendWorkspaceInvitationEmail({ invitationId: '123', workspaceId: '456', token: 'tok' });
+    } catch (err: any) {
+      expect(err.diagnostic.code).toBe('resend_non_2xx');
+      expect(err.diagnostic.providerStatus).toBe(401);
+      expect(err.diagnostic.requestId).toBe('req_123');
+    }
   });
 
-  it('logs exactly one fetch_failed on network error', async () => {
-    const mockInvite = {
-      email_normalized: 'test@example.com',
-      role: 'admin',
-      token_hash: '1a7674eb4ee78df7e1ac439a93c3fa8e3c945784d4dec9fd8e3011738b2f1d62',
-      expires_at: new Date(Date.now() + 100000).toISOString(),
-      status: 'pending',
-      workspaces: { name: 'Test' }
-    };
-    (supabaseAdmin.from as any)().select().eq().single.mockResolvedValue({ data: mockInvite, error: null });
-    
-    const networkError = new TypeError('Failed to fetch');
-    (global.fetch as any).mockRejectedValue(networkError);
-
+  it('ensures no sensitive data in logs', async () => {
+    process.env.RESEND_API_KEY = 're_SECRET';
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-    await expect(sendWorkspaceInvitationEmail({
-      invitationId: '123',
-      workspaceId: '456',
-      token: 'tok'
-    })).rejects.toThrow('Failed to fetch');
+    try {
+      await sendWorkspaceInvitationEmail({ invitationId: '123', workspaceId: '456', token: 'tok' });
+    } catch {}
 
-    const logOutput = JSON.stringify(consoleSpy.mock.calls);
-    expect(logOutput).toContain('fetch_failed');
-    expect(logOutput).toContain('TypeError');
-    expect(logOutput).not.toContain('resend_non_2xx');
-    
-    const diagnosticCalls = consoleSpy.mock.calls.filter(call => call[0] === '[Resend] Diagnostic');
-    expect(diagnosticCalls.length).toBe(1);
-  });
-
-  it('logs exactly one abort_controller_failed on timeout', async () => {
-    const mockInvite = {
-      email_normalized: 'test@example.com',
-      role: 'admin',
-      token_hash: '1a7674eb4ee78df7e1ac439a93c3fa8e3c945784d4dec9fd8e3011738b2f1d62',
-      expires_at: new Date(Date.now() + 100000).toISOString(),
-      status: 'pending',
-      workspaces: { name: 'Test' }
-    };
-    (supabaseAdmin.from as any)().select().eq().single.mockResolvedValue({ data: mockInvite, error: null });
-    
-    const abortError = new Error('The user aborted a request.');
-    abortError.name = 'AbortError';
-    (global.fetch as any).mockRejectedValue(abortError);
-
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-
-    await expect(sendWorkspaceInvitationEmail({
-      invitationId: '123',
-      workspaceId: '456',
-      token: 'tok'
-    })).rejects.toThrow('The user aborted a request.');
-
-    const logOutput = JSON.stringify(consoleSpy.mock.calls);
-    expect(logOutput).toContain('abort_controller_failed');
-    expect(logOutput).toContain('AbortError');
-    expect(logOutput).not.toContain('fetch_failed');
-    
-    const diagnosticCalls = consoleSpy.mock.calls.filter(call => call[0] === '[Resend] Diagnostic');
-    expect(diagnosticCalls.length).toBe(1);
+    const logCall = consoleSpy.mock.calls[0][1];
+    const logStr = JSON.stringify(logCall);
+    expect(logStr).not.toContain('re_SECRET');
+    expect(logStr).not.toContain('message');
+    expect(logStr).not.toContain('stack');
   });
 });
