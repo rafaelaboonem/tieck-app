@@ -31,7 +31,10 @@ export const mapAuthError = (message: string): string => {
   if (msg.includes("invalid token") || msg.includes("invalid otp") || msg.includes("code is invalid")) {
     return "Código de verificação inválido. Verifique o e-mail e tente novamente.";
   }
-  if (msg.includes("too many requests") || msg.includes("over_email_send_rate_limit")) {
+  if (msg.includes("signup_disabled") || msg.includes("signups_not_allowed")) {
+    return "O cadastro de novos usuários está temporariamente desativado.";
+  }
+  if (msg.includes("too many requests") || msg.includes("over_email_send_rate_limit") || msg.includes("rate_limit_exceeded")) {
     return "Muitas tentativas. Por favor, aguarde alguns minutos antes de tentar novamente.";
   }
   if (msg.includes("network error") || msg.includes("failed to fetch")) {
