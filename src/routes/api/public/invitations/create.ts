@@ -2,6 +2,7 @@ import { createFileRoute } from '@tanstack/react-router';
 import { z } from 'zod';
 import { createHash, randomBytes } from 'crypto';
 import { supabaseAdmin } from '@/integrations/supabase/client.server';
+import { sendWorkspaceInvitationEmail } from '@/server/team/invitation-email.server';
 
 const InviteSchema = z.object({
   workspaceId: z.string().uuid(),
@@ -74,18 +75,39 @@ export const Route = createFileRoute('/api/public/invitations/create')({
             });
           }
 
-          const inviteLink = `${new URL(request.url).origin}/convite/${tokenValue}`;
+          // Send real email via server helper
+          try {
+            await sendWorkspaceInvitationEmail({
+              invitationId,
+              workspaceId,
+              token: tokenValue
+            });
+          } catch (emailError) {
+            console.error('[Invitation-Create] Email delivery failed:', emailError);
+            
+            // Compensation: Revoke invitation if email fails
+            await supabaseAdmin
+              .from('workspace_invitations')
+              .update({ status: 'revoked' })
+              .eq('id', invitationId)
+              .eq('workspace_id', workspaceId)
+              .eq('status', 'pending');
+
+            return new Response(JSON.stringify({ 
+              ok: false, 
+              code: 'email_delivery_failed', 
+              requestId 
+            }), { status: 502 });
+          }
           
           return new Response(JSON.stringify({ 
             ok: true, 
             requestId,
-            emailSent: false,
+            emailSent: true,
             invitation: {
               id: invitationId,
               email,
               role,
-              token: tokenValue,
-              link: inviteLink,
               expiresAt: expiresAt.toISOString()
             }
           }), { status: 200 });
