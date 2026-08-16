@@ -4,6 +4,13 @@ import { AuthPage } from '../../components/AuthPage';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
+// Mocking ResizeObserver for input-otp
+global.ResizeObserver = class ResizeObserver {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+};
+
 // Mocking external modules
 vi.mock('@tanstack/react-router', () => ({
   useNavigate: () => vi.fn(),
