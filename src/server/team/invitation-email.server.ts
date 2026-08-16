@@ -1,0 +1,115 @@
+import { createHash } from 'crypto';
+import { supabaseAdmin } from '@/integrations/supabase/client.server';
+
+const FROM_ADDRESS = "Tieck <suporte@tieck.com.br>";
+const RESEND_API_URL = "https://connector-gateway.lovable.dev/resend/emails";
+
+async function sha256Hex(input: string) {
+  return createHash('sha256').update(input).digest('hex');
+}
+
+export async function sendWorkspaceInvitationEmail({
+  invitationId,
+  workspaceId,
+  token
+}: {
+  invitationId: string;
+  workspaceId: string;
+  token: string;
+}) {
+  const lovableApiKey = process.env['LOVABLE_API_KEY'];
+  const resendConnectionKey = process.env['RESEND_API_KEY'];
+  const publicUrl = process.env['PUBLIC_URL']?.replace(/\/+$/, '') || 'https://tieck.com.br';
+
+  if (!lovableApiKey || !resendConnectionKey) {
+    throw new Error('Email service unavailable: missing keys');
+  }
+
+  // Fetch true data from DB
+  const { data: invite, error: inviteError } = await supabaseAdmin
+    .from('workspace_invitations')
+    .select('email_normalized, role, token_hash, expires_at, status, workspaces(name)')
+    .eq('id', invitationId)
+    .eq('workspace_id', workspaceId)
+    .eq('status', 'pending')
+    .single();
+
+  if (inviteError || !invite) {
+    console.error('[Email] Invitation not found or not pending:', invitationId, inviteError);
+    throw new Error('Invitation not found or invalid status');
+  }
+
+  if (new Date(invite.expires_at) < new Date()) {
+    throw new Error('Invitation expired');
+  }
+
+  // Validate token hash
+  const hash = await sha256Hex(token);
+  if (hash !== invite.token_hash) {
+    throw new Error('Security violation: token mismatch');
+  }
+
+  const inviteLink = `${publicUrl}/convite/${token}`;
+  const workspaceName = invite.workspaces?.name || 'Workspace';
+  
+  const roleMap: Record<string, string> = { 
+    admin: 'Administrador', 
+    editor: 'Editor', 
+    viewer: 'Visualizador' 
+  };
+  const roleName = roleMap[invite.role] || invite.role;
+
+  // Escaping (simple)
+  const escapedWorkspaceName = workspaceName.replace(/[&<>"']/g, (m) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[m] || m));
+
+  const subject = `Você foi convidado para o workspace ${workspaceName} no Tieck`;
+  
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <body style="font-family: sans-serif; padding: 20px; color: #333;">
+      <div style="max-width: 600px; margin: auto; border: 1px solid #eee; padding: 20px; border-radius: 10px;">
+        <h2 style="color: #ec4899;">Tieck</h2>
+        <p>Olá,</p>
+        <p>Você foi convidado para participar do workspace <strong>${escapedWorkspaceName}</strong> no Tieck como <strong>${roleName}</strong>.</p>
+        <div style="margin: 30px 0; text-align: center;">
+          <a href="${inviteLink}" style="background-color: #ec4899; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold;">Aceitar convite</a>
+        </div>
+        <p style="font-size: 12px; color: #666;">Se o botão não funcionar, copie e cole este link no seu navegador:</p>
+        <p style="font-size: 12px; color: #666; word-break: break-all;">${inviteLink}</p>
+        <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;">
+        <p style="font-size: 11px; color: #999;">Este convite expira em 7 dias. Se você não esperava este convite, pode ignorar este e-mail.</p>
+        <p style="font-size: 11px; color: #999;">Tieck · suporte@tieck.com.br</p>
+      </div>
+    </body>
+    </html>
+  `;
+
+  const text = `Você foi convidado para o workspace ${workspaceName} no Tieck como ${roleName}. Aceite o convite aqui: ${inviteLink}`;
+
+  const res = await fetch(RESEND_API_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${lovableApiKey}`,
+      'X-Connection-Api-Key': resendConnectionKey,
+    },
+    body: JSON.stringify({
+      from: FROM_ADDRESS,
+      to: [invite.email_normalized],
+      subject,
+      html,
+      text
+    }),
+  });
+
+  if (!res.ok) {
+    const errorBody = await res.text();
+    console.error('[Resend] API Error:', res.status, errorBody);
+    throw new Error('Failed to send email via Resend');
+  }
+
+  return { ok: true };
+}
