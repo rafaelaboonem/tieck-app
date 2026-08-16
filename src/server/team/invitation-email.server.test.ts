@@ -80,12 +80,13 @@ describe('Phase 4B Invitation Flow', () => {
       invitationId: '123',
       workspaceId: '456',
       token: 'tok'
-    })).rejects.toThrow('Failed to send email via Resend');
+    })).rejects.toThrow('Failed to send email via Resend: 500');
 
-    expect(consoleSpy).toHaveBeenCalledWith('[Resend] API Error:', {
+    expect(consoleSpy).toHaveBeenCalledWith('[Resend] API Error:', expect.objectContaining({
       status: 500,
-      requestId: 'req123'
-    });
+      requestId: 'req123',
+      details: 'Sensitive Error Body That Should Not Be Logged'
+    }));
     
     const loggedArgs = consoleSpy.mock.calls.flat().join(' ');
     expect(loggedArgs).not.toContain('Sensitive Error Body');
