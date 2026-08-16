@@ -56,22 +56,32 @@ describe('Phase 4B Invitation Flow', () => {
     })).rejects.toThrow('Internal Configuration Error');
   });
 
-  it('sanitizes logs when Resend fails', async () => {
+  it('strictly sanitizes logs when Resend fails', async () => {
     const mockInvite = {
-      email_normalized: 'test@example.com',
+      email_normalized: 'secret-invitee@example.com',
       role: 'admin',
       token_hash: '1a7674eb4ee78df7e1ac439a93c3fa8e3c945784d4dec9fd8e3011738b2f1d62',
       expires_at: new Date(Date.now() + 100000).toISOString(),
       status: 'pending',
-      workspaces: { name: 'Test Workspace' }
+      workspaces: { name: 'Secret Workspace' }
     };
     (supabaseAdmin.from as any)().select().eq().single.mockResolvedValue({ data: mockInvite, error: null });
+
+    const sensitiveBody = JSON.stringify({
+      error: "Gateway error",
+      details: {
+        token: "tok-12345-secret",
+        email: "secret-invitee@example.com",
+        link: "https://tieck.com.br/convite/tok-12345-secret",
+        apiKey: "resend_sk_12345"
+      }
+    });
 
     (global.fetch as any).mockResolvedValue({
       ok: false,
       status: 500,
-      headers: new Map([['x-request-id', 'req123']]),
-      text: () => Promise.resolve('Sensitive Error Body That Should Not Be Logged')
+      headers: new Map([['x-request-id', 'req-id-789-safe']]),
+      text: () => Promise.resolve(sensitiveBody)
     });
 
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -82,15 +92,20 @@ describe('Phase 4B Invitation Flow', () => {
       token: 'tok'
     })).rejects.toThrow('Failed to send email via Resend: 500');
 
-    expect(consoleSpy).toHaveBeenCalledWith('[Resend] API Error:', expect.objectContaining({
-      status: 500,
-      requestId: 'req123',
-      details: 'Sensitive Error Body That Should Not Be Logged'
-    }));
+    // Verification must use JSON.stringify to catch nested objects
+    const logOutput = JSON.stringify(consoleSpy.mock.calls);
     
-    const loggedArgs = consoleSpy.mock.calls.flat().join(' ');
-    expect(loggedArgs).not.toContain('Sensitive Error Body');
-    expect(loggedArgs).not.toContain('test@example.com');
+    // Explicit fail-closed markers
+    expect(logOutput).not.toContain('secret-invitee@example.com');
+    expect(logOutput).not.toContain('tok-12345-secret');
+    expect(logOutput).not.toContain('resend_sk_12345');
+    expect(logOutput).not.toContain('https://tieck.com.br/convite');
+    expect(logOutput).not.toContain('Gateway error');
+    
+    // Valid log structure
+    expect(logOutput).toContain('request_failed');
+    expect(logOutput).toContain('500');
+    expect(logOutput).toContain('req-id-789-safe');
   });
 
   // New Phase 4B Stabilization Tests
