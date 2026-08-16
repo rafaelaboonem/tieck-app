@@ -127,11 +127,21 @@ export async function sendWorkspaceInvitationEmail({
   });
 
   if (!res.ok) {
+    let errorDetails = '';
+    try {
+      // Don't log full response if it's too large, but capture enough for diagnosis
+      const text = await res.text();
+      errorDetails = text.slice(0, 500);
+    } catch (e) {
+      errorDetails = 'Could not read error body';
+    }
+
     console.error('[Resend] API Error:', {
       status: res.status,
-      requestId: res.headers.get('x-request-id')
+      requestId: res.headers.get('x-request-id'),
+      details: errorDetails
     });
-    throw new Error('Failed to send email via Resend');
+    throw new Error(`Failed to send email via Resend: ${res.status}`);
   }
 
   return { ok: true };
