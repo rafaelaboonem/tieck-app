@@ -39,6 +39,9 @@ export async function sendWorkspaceInvitationEmail({
     throw new Error('Invitation not found or invalid status');
   }
 
+  const workspaceData = invite.workspaces as unknown as { name: string } | { name: string }[] | null;
+  const workspaceName = (Array.isArray(workspaceData) ? workspaceData[0]?.name : workspaceData?.name) || 'Workspace';
+  
   if (new Date(invite.expires_at) < new Date()) {
     throw new Error('Invitation expired');
   }
@@ -50,7 +53,7 @@ export async function sendWorkspaceInvitationEmail({
   }
 
   const inviteLink = `${publicUrl}/convite/${token}`;
-  const workspaceName = invite.workspaces?.name || 'Workspace';
+
   
   const roleMap: Record<string, string> = { 
     admin: 'Administrador', 
@@ -60,9 +63,10 @@ export async function sendWorkspaceInvitationEmail({
   const roleName = roleMap[invite.role] || invite.role;
 
   // Escaping (simple)
-  const escapedWorkspaceName = workspaceName.replace(/[&<>"']/g, (m) => ({
-    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
-  }[m] || m));
+  const escapedWorkspaceName = workspaceName.replace(/[&<>"']/g, (m: string) => {
+    const map: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+    return map[m] || m;
+  });
 
   const subject = `Você foi convidado para o workspace ${workspaceName} no Tieck`;
   
