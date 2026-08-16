@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { Loader2, Mail, CheckCircle2, XCircle, Shield, ArrowRight } from "lucide-react";
+import { Loader2, XCircle, Shield, ArrowRight } from "lucide-react";
 
 export const Route = createFileRoute("/convite/$token")({
   head: () => ({
@@ -25,19 +25,13 @@ function InvitePage() {
     expiresAt: string;
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [session, setSession] = useState<import("@supabase/supabase-js").Session | null>(null);
+  const [session, setSession] = useState<any>(null);
 
   useEffect(() => {
     const checkAuth = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      setSession(session);
-      
-      if (!session) {
-        setLoading(false);
-        return;
-      }
-
-      fetchInvite();
+      const { data: { session: currentSession } } = await supabase.auth.getSession();
+      setSession(currentSession);
+      setLoading(false);
     };
 
     checkAuth();
@@ -84,7 +78,6 @@ function InvitePage() {
       return;
     }
 
-    if (!session?.access_token) return;
     setAccepting(true);
     try {
       const response = await fetch('/api/public/invitations/accept', {
@@ -122,7 +115,6 @@ function InvitePage() {
     const redirectPath = encodeURIComponent(`/convite/${token}`);
     navigate({ to: `/login?redirect=${redirectPath}` });
   };
-
 
   if (loading) {
     return (
@@ -173,13 +165,10 @@ function InvitePage() {
     );
   }
 
-  const maskedEmail = invite?.email;
-
   return (
     <div className="min-h-screen flex items-center justify-center bg-neutral-50 px-4 py-12">
       <div className="max-w-md w-full animate-in fade-in slide-in-from-bottom-4 duration-500">
         <div className="bg-white p-8 rounded-3xl border border-neutral-200 shadow-xl shadow-pink-500/5 relative overflow-hidden">
-          {/* Decoração superior */}
           <div className="absolute top-0 left-0 w-full h-1.5 bg-pink-500" />
           
           <div className="text-center mb-8">
@@ -212,7 +201,7 @@ function InvitePage() {
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-xs text-neutral-500 uppercase font-bold tracking-wider">Para</span>
-                <span className="text-xs font-mono text-neutral-700">{maskedEmail}</span>
+                <span className="text-xs font-mono text-neutral-700">{invite?.email}</span>
               </div>
             </div>
           </div>
@@ -223,14 +212,14 @@ function InvitePage() {
                 <Button 
                   variant="outline"
                   className="h-12 font-bold"
-                  onClick={() => navigate({ to: `/login?redirect=${encodeURIComponent(\`/convite/\${token}\`)}` })}
+                  onClick={() => navigate({ to: `/login?redirect=${encodeURIComponent(`/convite/${token}`)}` })}
                 >
                   Entrar
                 </Button>
                 <Button 
                   variant="outline"
                   className="h-12 font-bold"
-                  onClick={() => navigate({ to: `/cadastro?redirect=${encodeURIComponent(\`/convite/\${token}\`)}` })}
+                  onClick={() => navigate({ to: `/cadastro?redirect=${encodeURIComponent(`/cadastro/${token}`)}` })}
                 >
                   Criar conta
                 </Button>
