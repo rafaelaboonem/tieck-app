@@ -5,7 +5,9 @@ const FROM_ADDRESS = "Tieck <suporte@tieck.com.br>";
 const RESEND_API_URL = "https://connector-gateway.lovable.dev/resend/emails";
 
 async function sha256Hex(input: string) {
-  return createHash('sha256').update(input).digest('hex');
+  const hash = createHash('sha256').update(input).digest('hex');
+  console.log('[DEBUG] Token:', input, 'Hash:', hash);
+  return hash;
 }
 
 export async function sendWorkspaceInvitationEmail({
