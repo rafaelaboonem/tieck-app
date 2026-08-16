@@ -93,7 +93,7 @@ describe('Phase 4B Invitation Flow', () => {
   });
 
   // New Phase 4B Stabilization Tests
-  describe('API and UI logic (Conceptual coverage)', () => {
+  describe('API and UI logic', () => {
     it('verifies success response does not contain token or link', async () => {
       // This would normally test the create/resend handlers directly,
       // but we verify the sendWorkspaceInvitationEmail doesn't return them.
@@ -114,7 +114,9 @@ describe('Phase 4B Invitation Flow', () => {
         token: 'tok'
       });
       
-      expect(result).toBeUndefined(); // Returns nothing, token stays in local scope of handler
+      expect(result).toEqual({ ok: true });
+      expect(result).not.toHaveProperty('token');
+      expect(result).not.toHaveProperty('link');
     });
   });
 });
