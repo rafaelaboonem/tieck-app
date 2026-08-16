@@ -2,7 +2,7 @@ import { createHash } from 'crypto';
 import { supabaseAdmin } from '@/integrations/supabase/client.server';
 
 const FROM_ADDRESS = "Tieck <suporte@tieck.com.br>";
-const RESEND_API_URL = "https://connector-gateway.lovable.dev/resend/emails";
+const RESEND_API_URL = "https://api.resend.com/emails";
 
 async function sha256Hex(input: string) {
   return createHash('sha256').update(input).digest('hex');
@@ -17,19 +17,27 @@ export async function sendWorkspaceInvitationEmail({
   workspaceId: string;
   token: string;
 }) {
-  const lovableApiKey = process.env['LOVABLE_API_KEY'];
-  const resendConnectionKey = process.env['RESEND_API_KEY'];
+  const resendApiKey = process.env['RESEND_API_KEY'];
   const publicUrl = process.env['PUBLIC_URL'];
 
-  if (!lovableApiKey || !resendConnectionKey || !publicUrl) {
-    console.error('[Email] Missing required environment variables');
+  // 11. Before deploy, validate only as boolean
+  const isResendKeyPresent = !!resendApiKey;
+  const isResendKeyFormatValid = typeof resendApiKey === 'string' && resendApiKey.startsWith('re_');
+  const isPublicUrlPresent = !!publicUrl;
+
+  if (!isResendKeyPresent || !isResendKeyFormatValid || !isPublicUrlPresent) {
+    console.error('[Email] Configuration Error', {
+      resendKey: isResendKeyPresent,
+      resendKeyFormat: isResendKeyFormatValid,
+      publicUrl: isPublicUrlPresent
+    });
     throw new Error('Email service unavailable: missing configuration');
   }
 
   // Validate PUBLIC_URL fail-closed
   let validatedUrl: URL;
   try {
-    validatedUrl = new URL(publicUrl);
+    validatedUrl = new URL(publicUrl!);
     if (validatedUrl.protocol !== 'https:') throw new Error('Protocol must be HTTPS');
     if (validatedUrl.username || validatedUrl.password) throw new Error('URL cannot contain credentials');
     if (validatedUrl.search || validatedUrl.hash) throw new Error('URL cannot contain search params or hash');
@@ -69,7 +77,6 @@ export async function sendWorkspaceInvitationEmail({
 
   const inviteLink = `${cleanPublicUrl}/convite/${token}`;
 
-  
   const roleMap: Record<string, string> = { 
     admin: 'Administrador', 
     editor: 'Editor', 
@@ -110,29 +117,43 @@ export async function sendWorkspaceInvitationEmail({
 
   const text = `Você foi convidado para o workspace ${workspaceName} no Tieck como ${roleName}. Aceite o convite aqui: ${inviteLink}`;
 
-  const res = await fetch(RESEND_API_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${lovableApiKey}`,
-      'X-Connection-Api-Key': resendConnectionKey,
-    },
-    body: JSON.stringify({
-      from: FROM_ADDRESS,
-      to: [invite.email_normalized],
-      subject,
-      html,
-      text
-    }),
-  });
+  // 7. Idempotency-Key without raw token
+  const idempotencyKey = `tieck-invite-${invitationId}-${hash.slice(0, 16)}`;
 
-  if (!res.ok) {
-    console.error('[Resend] API Error (Stage: request_failed)', {
-      status: res.status,
-      requestId: res.headers.get('x-request-id')?.slice(0, 100) || 'none',
+  // 9. Timeout with AbortController
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
+
+  try {
+    const res = await fetch(RESEND_API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${resendApiKey}`,
+        'User-Agent': 'Tieck/1.0',
+        'Idempotency-Key': idempotencyKey,
+      },
+      body: JSON.stringify({
+        from: FROM_ADDRESS,
+        to: [invite.email_normalized],
+        subject,
+        html,
+        text
+      }),
+      signal: controller.signal
     });
-    throw new Error(`Failed to send email via Resend: ${res.status}`);
-  }
 
-  return { ok: true };
+    if (!res.ok) {
+      // 8. Log only status and sanitized requestId
+      console.error('[Resend] API Error (Stage: request_failed)', {
+        status: res.status,
+        requestId: res.headers.get('x-request-id')?.slice(0, 100) || 'none',
+      });
+      throw new Error(`Failed to send email via Resend: ${res.status}`);
+    }
+
+    return { ok: true };
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }

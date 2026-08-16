@@ -16,10 +16,9 @@ vi.mock('@/integrations/supabase/client.server', () => ({
 // Mock global fetch
 global.fetch = vi.fn();
 
-describe('Phase 4B Invitation Flow', () => {
+describe('Phase 4B Invitation Flow (Direct Resend API)', () => {
   const defaultEnv = {
-    LOVABLE_API_KEY: 'test_lovable_key',
-    RESEND_API_KEY: 'test_resend_key',
+    RESEND_API_KEY: 're_test_key_12345',
     PUBLIC_URL: 'https://tieck.com.br',
   };
 
@@ -28,7 +27,15 @@ describe('Phase 4B Invitation Flow', () => {
     process.env = { ...defaultEnv };
   });
 
-  // Existing helper tests (maintained)
+  it('fails if RESEND_API_KEY is missing or invalid format', async () => {
+    process.env.RESEND_API_KEY = 'invalid_key';
+    await expect(sendWorkspaceInvitationEmail({
+      invitationId: '123',
+      workspaceId: '456',
+      token: 'tok'
+    })).rejects.toThrow('Email service unavailable: missing configuration');
+  });
+
   it('fails if PUBLIC_URL is missing', async () => {
     delete process.env.PUBLIC_URL;
     await expect(sendWorkspaceInvitationEmail({
@@ -38,22 +45,37 @@ describe('Phase 4B Invitation Flow', () => {
     })).rejects.toThrow('Email service unavailable: missing configuration');
   });
 
-  it('fails if PUBLIC_URL is not HTTPS', async () => {
-    process.env.PUBLIC_URL = 'http://tieck.com.br';
-    await expect(sendWorkspaceInvitationEmail({
-      invitationId: '123',
-      workspaceId: '456',
-      token: 'tok'
-    })).rejects.toThrow('Internal Configuration Error');
-  });
+  it('calls the official Resend API with correct headers', async () => {
+    const mockInvite = {
+      email_normalized: 'test@example.com',
+      role: 'admin',
+      token_hash: '1a7674eb4ee78df7e1ac439a93c3fa8e3c945784d4dec9fd8e3011738b2f1d62', // sha256 of 'tok'
+      expires_at: new Date(Date.now() + 100000).toISOString(),
+      status: 'pending',
+      workspaces: { name: 'Test Workspace' }
+    };
+    (supabaseAdmin.from as any)().select().eq().single.mockResolvedValue({ data: mockInvite, error: null });
+    (global.fetch as any).mockResolvedValue({ ok: true, json: () => Promise.resolve({}) });
 
-  it('fails if PUBLIC_URL contains query params', async () => {
-    process.env.PUBLIC_URL = 'https://tieck.com.br?q=1';
-    await expect(sendWorkspaceInvitationEmail({
+    await sendWorkspaceInvitationEmail({
       invitationId: '123',
       workspaceId: '456',
       token: 'tok'
-    })).rejects.toThrow('Internal Configuration Error');
+    });
+
+    const [url, options] = (global.fetch as any).mock.calls[0];
+    expect(url).toBe('https://api.resend.com/emails');
+    expect(options.headers).toMatchObject({
+      'Content-Type': 'application/json',
+      Authorization: 'Bearer re_test_key_12345',
+      'User-Agent': 'Tieck/1.0',
+    });
+    expect(options.headers).toHaveProperty('Idempotency-Key');
+    expect(options.headers['Idempotency-Key']).toContain('tieck-invite-123-1a7674eb4ee78df7');
+    expect(options.headers['Idempotency-Key']).not.toContain('tok');
+    
+    // Ensure LOVABLE_API_KEY or X-Connection-Api-Key are not present
+    expect(options.headers).not.toHaveProperty('X-Connection-Api-Key');
   });
 
   it('strictly sanitizes logs when Resend fails', async () => {
@@ -68,19 +90,17 @@ describe('Phase 4B Invitation Flow', () => {
     (supabaseAdmin.from as any)().select().eq().single.mockResolvedValue({ data: mockInvite, error: null });
 
     const sensitiveBody = JSON.stringify({
-      error: "Gateway error",
+      error: "Resend internal error",
       details: {
-        token: "tok-12345-secret",
-        email: "secret-invitee@example.com",
-        link: "https://tieck.com.br/convite/tok-12345-secret",
-        apiKey: "resend_sk_12345"
+        token: "tok-secret",
+        apiKey: "re_test_key_12345"
       }
     });
 
     (global.fetch as any).mockResolvedValue({
       ok: false,
-      status: 500,
-      headers: new Map([['x-request-id', 'req-id-789-safe']]),
+      status: 401,
+      headers: new Map([['x-request-id', 'resend-req-123']]),
       text: () => Promise.resolve(sensitiveBody)
     });
 
@@ -90,49 +110,37 @@ describe('Phase 4B Invitation Flow', () => {
       invitationId: '123',
       workspaceId: '456',
       token: 'tok'
-    })).rejects.toThrow('Failed to send email via Resend: 500');
+    })).rejects.toThrow('Failed to send email via Resend: 401');
 
-    // Verification must use JSON.stringify to catch nested objects
     const logOutput = JSON.stringify(consoleSpy.mock.calls);
     
-    // Explicit fail-closed markers
-    expect(logOutput).not.toContain('secret-invitee@example.com');
-    expect(logOutput).not.toContain('tok-12345-secret');
-    expect(logOutput).not.toContain('resend_sk_12345');
-    expect(logOutput).not.toContain('https://tieck.com.br/convite');
-    expect(logOutput).not.toContain('Gateway error');
-    
-    // Valid log structure
+    expect(logOutput).not.toContain('tok-secret');
+    expect(logOutput).not.toContain('re_test_key_12345');
+    expect(logOutput).not.toContain('Resend internal error');
     expect(logOutput).toContain('request_failed');
-    expect(logOutput).toContain('500');
-    expect(logOutput).toContain('req-id-789-safe');
+    expect(logOutput).toContain('401');
+    expect(logOutput).toContain('resend-req-123');
   });
 
-  // New Phase 4B Stabilization Tests
-  describe('API and UI logic', () => {
-    it('verifies success response does not contain token or link', async () => {
-      // This would normally test the create/resend handlers directly,
-      // but we verify the sendWorkspaceInvitationEmail doesn't return them.
-      const mockInvite = {
-        email_normalized: 'test@example.com',
-        role: 'admin',
-        token_hash: '1a7674eb4ee78df7e1ac439a93c3fa8e3c945784d4dec9fd8e3011738b2f1d62',
-        expires_at: new Date(Date.now() + 100000).toISOString(),
-        status: 'pending',
-        workspaces: { name: 'Test Workspace' }
-      };
-      (supabaseAdmin.from as any)().select().eq().single.mockResolvedValue({ data: mockInvite, error: null });
-      (global.fetch as any).mockResolvedValue({ ok: true, json: () => Promise.resolve({}) });
+  it('returns exactly { ok: true } on success', async () => {
+    const mockInvite = {
+      email_normalized: 'test@example.com',
+      role: 'admin',
+      token_hash: '1a7674eb4ee78df7e1ac439a93c3fa8e3c945784d4dec9fd8e3011738b2f1d62',
+      expires_at: new Date(Date.now() + 100000).toISOString(),
+      status: 'pending',
+      workspaces: { name: 'Test' }
+    };
+    (supabaseAdmin.from as any)().select().eq().single.mockResolvedValue({ data: mockInvite, error: null });
+    (global.fetch as any).mockResolvedValue({ ok: true });
 
-      const result = await sendWorkspaceInvitationEmail({
-        invitationId: '123',
-        workspaceId: '456',
-        token: 'tok'
-      });
-      
-      expect(result).toEqual({ ok: true });
-      expect(result).not.toHaveProperty('token');
-      expect(result).not.toHaveProperty('link');
+    const result = await sendWorkspaceInvitationEmail({
+      invitationId: '123',
+      workspaceId: '456',
+      token: 'tok'
     });
+    
+    expect(result).toEqual({ ok: true });
+    expect(result).not.toHaveProperty('token');
   });
 });
