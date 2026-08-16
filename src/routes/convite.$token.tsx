@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { Loader2, Mail, CheckCircle2, XCircle, Shield, ArrowRight } from "lucide-react";
+import { Loader2, XCircle, Shield, ArrowRight } from "lucide-react";
 
 export const Route = createFileRoute("/convite/$token")({
   head: () => ({
@@ -25,24 +25,20 @@ function InvitePage() {
     expiresAt: string;
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [session, setSession] = useState<import("@supabase/supabase-js").Session | null>(null);
+  const [session, setSession] = useState<any>(null);
 
   useEffect(() => {
     const checkAuth = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      setSession(session);
-      
-      if (!session) {
-        // Preserva o token no redirecionamento de login
-        const returnUrl = encodeURIComponent(window.location.pathname);
-        navigate({ to: `/login?returnTo=${returnUrl}` });
-        return;
-      }
-
-      fetchInvite();
+      const { data: { session: currentSession } } = await supabase.auth.getSession();
+      setSession(currentSession);
+      setLoading(false);
     };
 
     checkAuth();
+  }, [token, navigate]);
+
+  useEffect(() => {
+    fetchInvite();
   }, [token]);
 
   const fetchInvite = async () => {
@@ -76,7 +72,12 @@ function InvitePage() {
   };
 
   const handleAccept = async () => {
-    if (!session?.access_token) return;
+    if (!session) {
+      const redirectPath = encodeURIComponent(`/convite/${token}`);
+      navigate({ to: `/login?redirect=${redirectPath}` });
+      return;
+    }
+
     setAccepting(true);
     try {
       const response = await fetch('/api/public/invitations/accept', {
@@ -92,7 +93,7 @@ function InvitePage() {
 
       if (!result.ok) {
         if (result.code === 'email_mismatch') {
-          toast.error("Este convite foi enviado para outro e-mail.");
+          setError('email_mismatch');
         } else {
           toast.error("Não foi possível aceitar o convite.");
         }
@@ -109,6 +110,11 @@ function InvitePage() {
     }
   };
 
+  const handleSignOutAndRetry = async () => {
+    await supabase.auth.signOut();
+    const redirectPath = encodeURIComponent(`/convite/${token}`);
+    navigate({ to: `/login?redirect=${redirectPath}` });
+  };
 
   if (loading) {
     return (
@@ -129,29 +135,40 @@ function InvitePage() {
             {error === 'convite_expirado' && "Convite expirado"}
             {error === 'convite_invalido' && "Convite inválido"}
             {error === 'erro_carregamento' && "Erro ao carregar convite"}
+            {error === 'email_mismatch' && "E-mail não correspondente"}
           </h2>
           <p className="text-sm text-neutral-500 mt-2">
-            Este link pode estar quebrado ou já ter expirado após 7 dias.
+            {error === 'email_mismatch' 
+              ? "Você está logado com uma conta diferente da destinatária deste convite."
+              : "Este link pode estar quebrado ou já ter expirado após 7 dias."}
           </p>
-          <Button 
-            variant="outline" 
-            className="mt-6 w-full"
-            onClick={() => navigate({ to: '/inicio' })}
-          >
-            Voltar ao Início
-          </Button>
+          {error === 'email_mismatch' ? (
+            <div className="space-y-3 mt-6">
+              <Button className="w-full bg-pink-500 hover:bg-pink-600 text-white" onClick={handleSignOutAndRetry}>
+                Sair e entrar com outra conta
+              </Button>
+              <Button variant="outline" className="w-full" onClick={() => navigate({ to: '/inicio' })}>
+                Ir para o Painel
+              </Button>
+            </div>
+          ) : (
+            <Button 
+              variant="outline" 
+              className="mt-6 w-full"
+              onClick={() => navigate({ to: '/inicio' })}
+            >
+              Voltar ao Início
+            </Button>
+          )}
         </div>
       </div>
     );
   }
 
-  const maskedEmail = invite?.email;
-
   return (
     <div className="min-h-screen flex items-center justify-center bg-neutral-50 px-4 py-12">
       <div className="max-w-md w-full animate-in fade-in slide-in-from-bottom-4 duration-500">
         <div className="bg-white p-8 rounded-3xl border border-neutral-200 shadow-xl shadow-pink-500/5 relative overflow-hidden">
-          {/* Decoração superior */}
           <div className="absolute top-0 left-0 w-full h-1.5 bg-pink-500" />
           
           <div className="text-center mb-8">
@@ -179,17 +196,35 @@ function InvitePage() {
               <div className="flex items-center justify-between">
                 <span className="text-xs text-neutral-500 uppercase font-bold tracking-wider">Papel</span>
                 <span className="text-xs font-bold px-2.5 py-1 bg-pink-100 text-pink-600 rounded-full capitalize">
-                  {invite?.role}
+                  {invite?.role === 'admin' ? 'Administrador' : invite?.role === 'editor' ? 'Editor' : 'Visualizador'}
                 </span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-xs text-neutral-500 uppercase font-bold tracking-wider">Para</span>
-                <span className="text-xs font-mono text-neutral-700">{maskedEmail}</span>
+                <span className="text-xs font-mono text-neutral-700">{invite?.email}</span>
               </div>
             </div>
           </div>
 
           <div className="space-y-3">
+            {!session && (
+              <div className="grid grid-cols-2 gap-3 mb-3">
+                <Button 
+                  variant="outline"
+                  className="h-12 font-bold"
+                  onClick={() => navigate({ to: `/login?redirect=${encodeURIComponent(`/convite/${token}`)}` })}
+                >
+                  Entrar
+                </Button>
+                <Button 
+                  variant="outline"
+                  className="h-12 font-bold"
+                  onClick={() => navigate({ to: `/cadastro?redirect=${encodeURIComponent(`/cadastro/${token}`)}` })}
+                >
+                  Criar conta
+                </Button>
+              </div>
+            )}
             <Button 
               className="w-full bg-pink-500 hover:bg-pink-600 text-white shadow-lg shadow-pink-100 h-12 text-base font-bold gap-2"
               onClick={handleAccept}
@@ -199,7 +234,7 @@ function InvitePage() {
                 <Loader2 className="w-5 h-5 animate-spin" />
               ) : (
                 <>
-                  Aceitar Convite
+                  {session ? 'Aceitar Convite' : 'Entrar para aceitar'}
                   <ArrowRight className="w-5 h-5" />
                 </>
               )}
