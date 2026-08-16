@@ -59,7 +59,7 @@ describe('sendWorkspaceInvitationEmail', () => {
     const mockInvite = {
       email_normalized: 'test@example.com',
       role: 'admin',
-      token_hash: '21c2105e49ad0803565f42c4a93593f0b24ed283d699317537b88edeb3768d71', // sha256 of 'tok'
+      token_hash: '1a7674eb4ee78df7e1ac439a93c3fa8e3c945784d4dec9fd8e3011738b2f1d62', // sha256 of 'tok'
       expires_at: new Date(Date.now() + 100000).toISOString(),
       status: 'pending',
       workspaces: { name: 'Test Workspace' }
