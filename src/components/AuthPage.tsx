@@ -16,71 +16,11 @@ type Props = {
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string | undefined;
 const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined;
-const SIGNUP_FUNCTIONS_URL = SUPABASE_URL ? `${SUPABASE_URL.replace(/\/$/, "")}/functions/v1` : "";
-const SIGNUP_FUNCTIONS_KEY = SUPABASE_PUBLISHABLE_KEY ?? "";
 
 export function AuthPage({ mode, redirect }: Props) {
   const navigate = useNavigate();
   const { user } = useAuth();
   const isSignUp = mode === "signup";
-
-  async function invokeSignupFn<T = any>(name: string, body: Record<string, unknown>): Promise<T> {
-    if (!SIGNUP_FUNCTIONS_URL || !SIGNUP_FUNCTIONS_KEY) {
-      throw new Error("O serviço de cadastro não está configurado neste ambiente.");
-    }
-    const url = `${SIGNUP_FUNCTIONS_URL}/${name}`;
-    let response: Response;
-    try {
-      response = await fetch(url, {
-        method: "POST",
-        headers: {
-          apikey: SIGNUP_FUNCTIONS_KEY,
-          Authorization: `Bearer ${SIGNUP_FUNCTIONS_KEY}`,
-          "x-client-info": "tieck-web-signup/1.0",
-          "content-type": "application/json",
-        },
-        body: JSON.stringify(body),
-      });
-    } catch (error) {
-      console.error("Signup function network error", { name, url, error });
-      throw new Error("O serviço de cadastro está indisponível no momento. Tente novamente em instantes.");
-    }
-
-    const responseText = await response.text();
-    let data: unknown;
-    try {
-      data = responseText ? JSON.parse(responseText) : null;
-    } catch {
-      data = responseText;
-    }
-
-    const errorCode =
-      data && typeof data === "object" && "code" in data ? String((data as { code: unknown }).code) : undefined;
-
-    if (!response.ok) {
-      console.error("Signup function HTTP error", {
-        name,
-        url,
-        status: response.status,
-        statusText: response.statusText,
-        response: data,
-      });
-      const message =
-        data && typeof data === "object" && "error" in data
-          ? String((data as { error: unknown }).error)
-          : `Falha no serviço de cadastro (${response.status}). Tente novamente.`;
-      const err = new Error(message) as Error & { code?: string };
-      err.code = errorCode;
-      throw err;
-    }
-    if (data && typeof data === "object" && "error" in data && (data as { error?: unknown }).error) {
-      console.error("Signup function response error", { name, url, status: response.status, response: data });
-      const err = new Error(String((data as { error: unknown }).error)) as Error & { code?: string };
-      err.code = errorCode;
-      throw err;
-    }
-    return data as T;
-  }
 
   const safeRedirect = (() => {
     if (typeof redirect === "string" && redirect.startsWith("/") && !redirect.startsWith("//")) return redirect;
@@ -148,24 +88,8 @@ export function AuthPage({ mode, redirect }: Props) {
   };
 
   const handleGoogle = async () => {
-    if (isLoading) return;
-    setIsLoading(true);
-    try {
-      const callbackUrl = new URL("/auth/callback", window.location.origin);
-      callbackUrl.searchParams.set("redirect", safeRedirect ?? "/inicio");
-
-      const result = await lovable.auth.signInWithOAuth("google", {
-        redirect_uri: callbackUrl.toString(),
-      });
-      if (result.error) throw result.error;
-      if (result.redirected) return;
-      goAfterAuth();
-    } catch (err: any) {
-      console.error("Google auth error:", err);
-      toast.error(mapAuthError(err.message || "Erro ao entrar com Google"));
-    } finally {
-      setIsLoading(false);
-    }
+    // Hidden temporarily while provider is not configured
+    toast.error("O cadastro com Google está temporariamente desativado. Use e-mail.");
   };
 
   const handleSendCode = async (e: React.FormEvent) => {
@@ -174,22 +98,24 @@ export function AuthPage({ mode, redirect }: Props) {
     setAlreadyRegistered(false);
     setIsLoading(true);
     try {
-      const result = await invokeSignupFn<{ ok: boolean; code?: string }>(
-        "signup-request-otp",
-        { email: normalizedEmail() },
-      );
-      if (!result.ok) {
-        setAlreadyRegistered(true);
-        toast.error("Este e-mail já está cadastrado.");
-        return;
-      }
+      // Use standard Supabase signInWithOtp. 
+      // OTP verification automatically handles signup vs login based on shouldCreateUser.
+      const { error } = await supabase.auth.signInWithOtp({
+        email: normalizedEmail(),
+        options: {
+          shouldCreateUser: isSignUp,
+          emailRedirectTo: window.location.origin + (safeRedirect || "/inicio"),
+        }
+      });
+      
+      if (error) throw error;
+      
       toast.success("Código enviado! Verifique seu e-mail.");
       setSignupStep(2);
-      setResendCountdown(30);
+      setResendCountdown(60); // Increased to 60s for Supabase default rate limits
     } catch (err: any) {
-      console.error("Send OTP error:", err, JSON.stringify(err));
-      const raw = err?.message || "Não foi possível enviar o código. Tente novamente.";
-      toast.error(raw);
+      console.error("Send OTP error:", err);
+      toast.error(mapAuthError(err.message));
     } finally {
       setIsLoading(false);
     }
@@ -197,27 +123,35 @@ export function AuthPage({ mode, redirect }: Props) {
 
   const handleVerifyCode = async (e?: React.FormEvent, codeOverride?: string) => {
     e?.preventDefault();
-    const code = codeOverride ?? otp;
-    if (isLoading || code.length !== 6) return;
-    // Prevent the same 6-digit code from being submitted twice concurrently.
-    if (verifyingRef.current === code) return;
-    verifyingRef.current = code;
+    const token = codeOverride ?? otp;
+    if (isLoading || token.length !== 6) return;
+    if (verifyingRef.current === token) return;
+    verifyingRef.current = token;
     setIsLoading(true);
     try {
-      const result = await invokeSignupFn<{ ok: boolean; verificationToken: string }>(
-        "signup-verify-otp",
-        { email: normalizedEmail(), code },
-      );
-      setVerificationToken(result.verificationToken);
+      const { data, error } = await supabase.auth.verifyOtp({
+        email: normalizedEmail(),
+        token,
+        type: isSignUp ? 'signup' : 'magiclink', // magiclink works for standard OTP login too
+      });
+      
+      if (error) {
+        // Retry with 'magiclink' if 'signup' failed or vice-versa
+        const { error: secondTryError } = await supabase.auth.verifyOtp({
+          email: normalizedEmail(),
+          token,
+          type: isSignUp ? 'magiclink' : 'signup',
+        });
+        if (secondTryError) throw secondTryError;
+      }
+
       setOtpVerified(true);
       toast.success("E-mail verificado!");
-      setSignupStep(3);
+      
+      // With OTP, we have a session now. Redirection happens in useEffect.
     } catch (err: any) {
       console.error("Verify OTP error:", err);
-      const raw = String(err?.message || "Código inválido");
-      // Server-side messages we want to show as-is (already in Portuguese, user-friendly).
-      const passthrough = /código|expirado|tentativas|sessão/i.test(raw);
-      toast.error(passthrough ? raw : mapAuthError(raw));
+      toast.error(mapAuthError(err.message));
       setOtp("");
     } finally {
       verifyingRef.current = null;
@@ -236,27 +170,21 @@ export function AuthPage({ mode, redirect }: Props) {
     if (isLoading || !email || resendCountdown > 0) return;
     setOtp("");
     setOtpVerified(false);
-    setAlreadyRegistered(false);
-    setVerificationToken("");
     setIsLoading(true);
     try {
-      const result = await invokeSignupFn<{ ok: boolean; code?: string }>(
-        "signup-request-otp",
-        { email: normalizedEmail() },
-      );
-      if (!result.ok) {
-        setAlreadyRegistered(true);
-        toast.error("Este e-mail já está cadastrado.");
-        setSignupStep(1);
-        return;
-      }
+      const { error } = await supabase.auth.signInWithOtp({
+        email: normalizedEmail(),
+        options: {
+          shouldCreateUser: isSignUp,
+          emailRedirectTo: window.location.origin + (safeRedirect || "/inicio"),
+        }
+      });
+      if (error) throw error;
       toast.success("Novo código enviado! Verifique seu e-mail.");
-      setSignupStep(2);
-      setResendCountdown(30);
+      setResendCountdown(60);
     } catch (err: any) {
-      console.error("Resend OTP error:", err, JSON.stringify(err));
-      const raw = err?.message || "Não foi possível reenviar o código. Tente novamente.";
-      toast.error(raw);
+      console.error("Resend OTP error:", err);
+      toast.error(mapAuthError(err.message));
     } finally {
       setIsLoading(false);
     }
