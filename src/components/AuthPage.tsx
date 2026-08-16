@@ -39,7 +39,6 @@ export function AuthPage({ mode, redirect }: Props) {
   };
 
   const [isLoading, setIsLoading] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState("");
   const [signupStep, setSignupStep] = useState<1 | 2>(1);
   const [otp, setOtp] = useState("");
@@ -75,7 +74,6 @@ export function AuthPage({ mode, redirect }: Props) {
   const backToCodeStep = (message: string) => {
     setOtp("");
     setOtpVerified(false);
-    setVerificationToken("");
     setResendCountdown(0);
     setSignupStep(2);
     toast.error(message);
