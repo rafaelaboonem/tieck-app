@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { Loader2, XCircle, Shield, ArrowRight } from "lucide-react";
+import type { Session } from "@supabase/supabase-js";
 
 export const Route = createFileRoute("/convite/$token")({
   head: () => ({
@@ -25,7 +26,7 @@ function InvitePage() {
     expiresAt: string;
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [session, setSession] = useState<any>(null);
+  const [session, setSession] = useState<Session | null>(null);
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -73,8 +74,10 @@ function InvitePage() {
 
   const handleAccept = async () => {
     if (!session) {
-      const redirectPath = encodeURIComponent(`/convite/${token}`);
-      navigate({ to: `/login?redirect=${redirectPath}` });
+      navigate({ 
+        to: '/login',
+        search: { redirect: `/convite/${token}` }
+      });
       return;
     }
 
@@ -112,8 +115,10 @@ function InvitePage() {
 
   const handleSignOutAndRetry = async () => {
     await supabase.auth.signOut();
-    const redirectPath = encodeURIComponent(`/convite/${token}`);
-    navigate({ to: `/login?redirect=${redirectPath}` });
+    navigate({ 
+      to: '/login',
+      search: { redirect: `/convite/${token}` }
+    });
   };
 
   if (loading) {
@@ -207,38 +212,45 @@ function InvitePage() {
           </div>
 
           <div className="space-y-3">
-            {!session && (
+            {!session ? (
               <div className="grid grid-cols-2 gap-3 mb-3">
                 <Button 
                   variant="outline"
                   className="h-12 font-bold"
-                  onClick={() => navigate({ to: `/login?redirect=${encodeURIComponent(`/convite/${token}`)}` })}
+                  onClick={() => navigate({ 
+                    to: '/login',
+                    search: { redirect: `/convite/${token}` }
+                  })}
                 >
                   Entrar
                 </Button>
                 <Button 
                   variant="outline"
                   className="h-12 font-bold"
-                  onClick={() => navigate({ to: `/cadastro?redirect=${encodeURIComponent(`/cadastro/${token}`)}` })}
+                  onClick={() => navigate({ 
+                    to: '/cadastro',
+                    search: { redirect: `/convite/${token}` }
+                  })}
                 >
                   Criar conta
                 </Button>
               </div>
+            ) : (
+              <Button 
+                className="w-full bg-pink-500 hover:bg-pink-600 text-white shadow-lg shadow-pink-100 h-12 text-base font-bold gap-2"
+                onClick={handleAccept}
+                disabled={accepting}
+              >
+                {accepting ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                  <>
+                    Aceitar Convite
+                    <ArrowRight className="w-5 h-5" />
+                  </>
+                )}
+              </Button>
             )}
-            <Button 
-              className="w-full bg-pink-500 hover:bg-pink-600 text-white shadow-lg shadow-pink-100 h-12 text-base font-bold gap-2"
-              onClick={handleAccept}
-              disabled={accepting}
-            >
-              {accepting ? (
-                <Loader2 className="w-5 h-5 animate-spin" />
-              ) : (
-                <>
-                  {session ? 'Aceitar Convite' : 'Entrar para aceitar'}
-                  <ArrowRight className="w-5 h-5" />
-                </>
-              )}
-            </Button>
             <p className="text-[10px] text-center text-neutral-400">
               Ao aceitar, você concorda com os termos e privacidade do Tieck.
             </p>

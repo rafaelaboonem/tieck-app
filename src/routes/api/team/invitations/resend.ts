@@ -80,11 +80,21 @@ export const Route = createFileRoute('/api/team/invitations/resend')({
             console.error('[Invitation-Resend] Email delivery failed:', emailError);
             
             // Compensation: Revoke invitation if email fails after rotation
-            await supabaseAdmin
+            const { data: revoked, error: revokeError } = await supabaseAdmin
               .from('workspace_invitations')
               .update({ status: 'revoked' })
               .eq('id', invitationId)
-              .eq('workspace_id', workspaceId);
+              .eq('workspace_id', workspaceId)
+              .eq('status', 'pending')
+              .select('id');
+
+            if (revokeError || !revoked || revoked.length === 0) {
+              console.error('[Invitation-Resend] Compensation failed:', { 
+                invitationId, 
+                workspaceId,
+                error: revokeError
+              });
+            }
 
             return new Response(JSON.stringify({ 
               ok: false, 
