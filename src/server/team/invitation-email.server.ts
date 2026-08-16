@@ -48,7 +48,7 @@ export async function sendWorkspaceInvitationEmail({
     const isPublicUrlPresent = !!publicUrl;
 
     if (!isResendKeyPresent || !isResendKeyFormatValid || !isPublicUrlPresent) {
-      const err = new Error('Configuration Invalid');
+      const err = new Error('Email service unavailable: missing configuration');
       logSecureError(stage, 'configuration_invalid', err);
       throw err;
     }
@@ -162,7 +162,7 @@ export async function sendWorkspaceInvitationEmail({
       });
 
       if (!res.ok) {
-        const err = new Error(`Resend ${res.status}`);
+        const err = new Error(`Failed to send email via Resend: ${res.status}`);
         logSecureError(stage, 'resend_non_2xx', err);
         throw err;
       }
