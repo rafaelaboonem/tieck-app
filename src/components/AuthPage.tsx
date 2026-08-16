@@ -4,8 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { mapAuthError } from "@/utils/auth-errors";
 import { useAuth } from "@/contexts/AuthContext";
-import { Eye, EyeOff, Loader2, ArrowRight, Mail, KeyRound, CheckCircle2, ArrowLeft } from "lucide-react";
-import { lovable } from "@/integrations/lovable";
+import { Loader2, ArrowRight, Mail, ArrowLeft } from "lucide-react";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import logoUrl from "../assets/local/logo-tieck.webp";
 
@@ -13,9 +12,6 @@ type Props = {
   mode: "login" | "signup";
   redirect?: string;
 };
-
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string | undefined;
-const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined;
 
 export function AuthPage({ mode, redirect }: Props) {
   const navigate = useNavigate();
@@ -26,6 +22,7 @@ export function AuthPage({ mode, redirect }: Props) {
     if (typeof redirect === "string" && redirect.startsWith("/") && !redirect.startsWith("//")) return redirect;
     return null;
   })();
+
   const goAfterAuth = () => {
     if (user && !user.email_confirmed_at) {
       navigate({ to: "/confirmar-email" });
@@ -60,24 +57,7 @@ export function AuthPage({ mode, redirect }: Props) {
     return () => clearTimeout(t);
   }, [resendCountdown]);
 
-  const resetSignup = () => {
-    setSignupStep(1);
-    setOtp("");
-    setOtpVerified(false);
-    setAlreadyRegistered(false);
-    setResendCountdown(0);
-  };
-
   const normalizedEmail = () => email.trim().toLowerCase();
-
-  /** Volta para a etapa do código permitindo pedir um novo, em vez de reiniciar tudo. */
-  const backToCodeStep = (message: string) => {
-    setOtp("");
-    setOtpVerified(false);
-    setResendCountdown(0);
-    setSignupStep(2);
-    toast.error(message);
-  };
 
   const handleGoogle = async () => {
     // Hidden temporarily while provider is not configured
@@ -104,7 +84,7 @@ export function AuthPage({ mode, redirect }: Props) {
       
       toast.success("Código enviado! Verifique seu e-mail.");
       setSignupStep(2);
-      setResendCountdown(60); // Increased to 60s for Supabase default rate limits
+      setResendCountdown(60);
     } catch (err: any) {
       console.error("Send OTP error:", err);
       toast.error(mapAuthError(err.message));
@@ -121,14 +101,13 @@ export function AuthPage({ mode, redirect }: Props) {
     verifyingRef.current = token;
     setIsLoading(true);
     try {
-      const { data, error } = await supabase.auth.verifyOtp({
+      const { error } = await supabase.auth.verifyOtp({
         email: normalizedEmail(),
         token,
-        type: isSignUp ? 'signup' : 'magiclink', // magiclink works for standard OTP login too
+        type: isSignUp ? 'signup' : 'magiclink',
       });
       
       if (error) {
-        // Retry with 'magiclink' if 'signup' failed or vice-versa
         const { error: secondTryError } = await supabase.auth.verifyOtp({
           email: normalizedEmail(),
           token,
@@ -139,8 +118,6 @@ export function AuthPage({ mode, redirect }: Props) {
 
       setOtpVerified(true);
       toast.success("E-mail verificado!");
-      
-      // With OTP, we have a session now. Redirection happens in useEffect.
     } catch (err: any) {
       console.error("Verify OTP error:", err);
       toast.error(mapAuthError(err.message));
@@ -182,29 +159,6 @@ export function AuthPage({ mode, redirect }: Props) {
     }
   };
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (isLoading) return;
-    setIsLoading(true);
-    try {
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) throw error;
-      // Bloqueio de acesso: e-mail ainda não confirmado.
-      if (data.user && !data.user.email_confirmed_at) {
-        toast.info("Confirme seu e-mail para acessar a plataforma.");
-        navigate({ to: "/confirmar-email" });
-        return;
-      }
-      toast.success("Bem-vindo de volta!");
-      goAfterAuth();
-    } catch (err: any) {
-      console.error("Auth error:", err);
-      toast.error(mapAuthError(err.message));
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   // ---------- UI ----------
   const heading = isSignUp
     ? signupStep === 1
@@ -229,44 +183,31 @@ export function AuthPage({ mode, redirect }: Props) {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-white font-body p-4 relative overflow-hidden">
-      {/* Ambient background glows */}
       <div className="pointer-events-none absolute -top-40 -left-40 w-[480px] h-[480px] bg-[#FF007F] opacity-[0.06] blur-[120px] rounded-full" />
       <div className="pointer-events-none absolute -bottom-40 -right-40 w-[480px] h-[480px] bg-[#FF007F] opacity-[0.05] blur-[120px] rounded-full" />
 
       <div className="w-full max-w-[440px] bg-white border border-neutral-100 rounded-3xl p-8 md:p-10 shadow-xl shadow-neutral-200/60 relative overflow-hidden backdrop-blur-sm">
-        {/* Card inner glow */}
         <div className="pointer-events-none absolute -top-24 -right-24 w-48 h-48 bg-[#FF007F] opacity-5 blur-[80px]" />
 
-        {/* Brand */}
         <div className="text-center mb-8 relative">
-          <img
-            src={logoUrl}
-            alt="Tieck"
-            className="mx-auto h-12 md:h-14 w-auto mb-4"
-          />
+          <img src={logoUrl} alt="Tieck" className="mx-auto h-12 md:h-14 w-auto mb-4" />
           <h2 className="mt-4 text-xl font-semibold text-neutral-900 font-display">{heading}</h2>
           <p className="text-neutral-500 mt-1.5 text-sm">{subheading}</p>
         </div>
 
-        {/* Step indicator for signup */}
         {isSignUp && (
           <div className="flex items-center justify-center gap-2 mb-7">
             {[1, 2].map((s) => (
               <div
                 key={s}
                 className={`h-1 rounded-full transition-all duration-300 ${
-                  s === signupStep
-                    ? "w-8 bg-[#FF007F]"
-                    : s < signupStep
-                    ? "w-4 bg-[#FF007F]/60"
-                    : "w-4 bg-neutral-200"
+                  s === signupStep ? "w-8 bg-[#FF007F]" : "w-4 bg-neutral-200"
                 }`}
               />
             ))}
           </div>
         )}
 
-        {/* Google + divider (only on step 1 of signup, or login) */}
         {(!isSignUp || signupStep === 1) && (
           <div className="space-y-4 mb-6 relative">
             <button
@@ -295,133 +236,99 @@ export function AuthPage({ mode, redirect }: Props) {
           </div>
         )}
 
-        {/* ============ LOGIN ============ */}
-        {!isSignUp && (
-          <form className="space-y-5 relative" onSubmit={handleLogin}>
-            <div>
-              <label className="block text-xs font-semibold text-neutral-500 uppercase tracking-wider mb-2">E-mail</label>
-              <input
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className={inputClass}
-                placeholder="seu@email.com"
-              />
-            </div>
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <label className="block text-xs font-semibold text-neutral-500 uppercase tracking-wider">Senha</label>
-              </div>
-              <div className="relative">
+        <div className="space-y-5 relative">
+          {signupStep === 1 && (
+            <form onSubmit={handleSendCode} className="space-y-5 animate-in fade-in slide-in-from-bottom-2 duration-300">
+              <div>
+                <label className="block text-xs font-semibold text-neutral-500 uppercase tracking-wider mb-2">E-mail</label>
                 <input
-                  type={showPassword ? "text" : "password"}
+                  type="email"
                   required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className={`${inputClass} pr-12`}
-                  placeholder="••••••••"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className={inputClass}
+                  placeholder="seu@email.com"
+                  autoFocus
                 />
+              </div>
+
+              {!isSignUp && (
+                <div className="rounded-xl border border-blue-100 bg-blue-50 p-4 text-sm text-blue-700 flex items-start gap-3">
+                  <Mail className="h-5 w-5 mt-0.5 flex-shrink-0" />
+                  <div className="flex-1">
+                    <p className="font-medium">Login via código seguro</p>
+                    <p className="mt-1 text-xs text-blue-600/80 leading-relaxed">
+                      Enviaremos um código de acesso temporário para seu e-mail.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {alreadyRegistered && isSignUp && (
+                <div className="rounded-xl border border-[#FF007F]/30 bg-[#FF007F]/10 p-3 text-sm text-[#FFB3D9] flex items-start gap-2">
+                  <Mail className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                  <div className="flex-1">
+                    <p className="font-medium">E-mail já cadastrado</p>
+                    <Link to="/login" className="mt-1 inline-block text-xs font-semibold text-white hover:underline">
+                      Ir para o login →
+                    </Link>
+                  </div>
+                </div>
+              )}
+
+              <button type="submit" disabled={isLoading} className={primaryBtn}>
+                {isLoading ? <Loader2 className="animate-spin h-5 w-5" /> : (
+                  <>
+                    {isSignUp ? "Enviar código" : "Receber código de acesso"}
+                    <ArrowRight className="h-4 w-4" />
+                  </>
+                )}
+              </button>
+            </form>
+          )}
+
+          {signupStep === 2 && (
+            <form onSubmit={handleVerifyCode} className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+              <div className="flex justify-center">
+                <InputOTP maxLength={6} value={otp} onChange={setOtp} disabled={isLoading} autoFocus>
+                  <InputOTPGroup className="gap-2 sm:gap-3">
+                    {[0, 1, 2, 3, 4, 5].map((i) => (
+                      <InputOTPSlot
+                        key={i}
+                        index={i}
+                        className="h-12 w-12 text-xl font-bold rounded-xl bg-white border-neutral-200 text-neutral-900 data-[active=true]:border-[#FF007F] data-[active=true]:ring-1 data-[active=true]:ring-[#FF007F]"
+                      />
+                    ))}
+                  </InputOTPGroup>
+                </InputOTP>
+              </div>
+
+              <div className="flex items-center justify-center min-h-[24px] text-sm text-neutral-500">
+                {isLoading ? (
+                  <span className="flex items-center gap-2">
+                    <Loader2 className="animate-spin h-4 w-4" /> Verificando…
+                  </span>
+                ) : (
+                  <span>O código é verificado automaticamente</span>
+                )}
+              </div>
+
+              <div className="space-y-3">
                 <button
                   type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute inset-y-0 right-0 pr-4 flex items-center text-neutral-400 hover:text-neutral-900 transition-colors"
+                  onClick={handleResendCode}
+                  disabled={isLoading || resendCountdown > 0}
+                  className={ghostBtn}
                 >
-                  {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                  {resendCountdown > 0
+                    ? `Reenviar em ${resendCountdown}s`
+                    : (<><ArrowLeft className="h-4 w-4" /> Reenviar e-mail</>)}
                 </button>
               </div>
-            </div>
+            </form>
+          )}
+        </div>
 
-            <button type="submit" disabled={isLoading} className={primaryBtn}>
-              {isLoading ? <Loader2 className="animate-spin h-5 w-5" /> : (<>Entrar <ArrowRight className="h-4 w-4" /></>)}
-            </button>
-          </form>
-        )}
-
-        {/* ============ SIGNUP ============ */}
-        {isSignUp && (
-          <div className="space-y-5 relative">
-            {/* Step 1 — email */}
-            {signupStep === 1 && (
-              <form onSubmit={handleSendCode} className="space-y-5 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                <div>
-                  <label className="block text-xs font-semibold text-neutral-500 uppercase tracking-wider mb-2">E-mail</label>
-                  <input
-                    type="email"
-                    required
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className={inputClass}
-                    placeholder="seu@email.com"
-                    autoFocus
-                  />
-                </div>
-
-                {alreadyRegistered && (
-                  <div className="rounded-xl border border-[#FF007F]/30 bg-[#FF007F]/10 p-3 text-sm text-[#FFB3D9] flex items-start gap-2">
-                    <Mail className="h-4 w-4 mt-0.5 flex-shrink-0" />
-                    <div className="flex-1">
-                      <p className="font-medium">E-mail já cadastrado</p>
-                      <Link to="/login" className="mt-1 inline-block text-xs font-semibold text-white hover:underline">
-                        Ir para o login →
-                      </Link>
-                    </div>
-                  </div>
-                )}
-
-                <button type="submit" disabled={isLoading} className={primaryBtn}>
-                  {isLoading ? <Loader2 className="animate-spin h-5 w-5" /> : (<>Enviar código <ArrowRight className="h-4 w-4" /></>)}
-                </button>
-              </form>
-            )}
-
-            {/* Step 2 — OTP */}
-            {signupStep === 2 && (
-              <form onSubmit={handleVerifyCode} className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                <div className="flex justify-center">
-                  <InputOTP maxLength={6} value={otp} onChange={setOtp} disabled={isLoading} autoFocus>
-                    <InputOTPGroup className="gap-2 sm:gap-3">
-                      {[0, 1, 2, 3, 4, 5].map((i) => (
-                        <InputOTPSlot
-                          key={i}
-                          index={i}
-                          className="h-12 w-12 text-xl font-bold rounded-xl bg-white border-neutral-200 text-neutral-900 data-[active=true]:border-[#FF007F] data-[active=true]:ring-1 data-[active=true]:ring-[#FF007F]"
-                        />
-                      ))}
-                    </InputOTPGroup>
-                  </InputOTP>
-                </div>
-
-                <div className="flex items-center justify-center min-h-[24px] text-sm text-neutral-500">
-                  {isLoading ? (
-                    <span className="flex items-center gap-2">
-                      <Loader2 className="animate-spin h-4 w-4" /> Verificando…
-                    </span>
-                  ) : (
-                    <span>O código é verificado automaticamente</span>
-                  )}
-                </div>
-
-                <div className="space-y-3">
-                  <button
-                    type="button"
-                    onClick={handleResendCode}
-                    disabled={isLoading || resendCountdown > 0}
-                    className={ghostBtn}
-                  >
-                    {resendCountdown > 0
-                      ? `Reenviar em ${resendCountdown}s`
-                      : (<><ArrowLeft className="h-4 w-4" /> Reenviar e-mail</>)}
-                  </button>
-                </div>
-              </form>
-            )}
-
-            {/* Step 3 (Removed — OTP handles both creation and login) */}
-          </div>
-        )}
-
-        {/* Footer link */}
         <div className="text-center pt-6 mt-6 border-t border-neutral-200 relative">
           {isSignUp ? (
             <p className="text-neutral-500 text-sm">
