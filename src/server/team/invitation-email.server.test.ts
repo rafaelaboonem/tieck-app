@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { sendWorkspaceInvitationEmail } from './invitation-email.server';
 import { supabaseAdmin } from '@/integrations/supabase/client.server';
 
@@ -8,7 +8,7 @@ vi.mock('@/integrations/supabase/client.server', () => ({
     from: vi.fn().mockReturnThis(),
     select: vi.fn().mockReturnThis(),
     eq: vi.fn().mockReturnThis(),
-    single: vi.fn(),
+    single: vi.fn().mockReturnThis(),
   },
 }));
 
@@ -64,7 +64,7 @@ describe('sendWorkspaceInvitationEmail', () => {
       status: 'pending',
       workspaces: { name: 'Test Workspace' }
     };
-    (supabaseAdmin.single as any).mockResolvedValue({ data: mockInvite, error: null });
+    (supabaseAdmin.from('any').select('any').eq('any', 'any').single as any).mockResolvedValue({ data: mockInvite, error: null });
 
     // Mock Resend error
     (global.fetch as any).mockResolvedValue({
