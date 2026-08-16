@@ -82,9 +82,11 @@ export const Route = createFileRoute('/api/public/invitations/create')({
               workspaceId,
               token: tokenValue
             });
-          } catch (emailError) {
+          } catch (emailError: any) {
             console.error('[Invitation-Create] Email delivery failed');
             
+            const diagnostic = emailError?.diagnostic || {};
+
             // Compensation: Revoke invitation if email fails
             const { data: revoked, error: revokeError } = await supabaseAdmin
               .from('workspace_invitations')
@@ -101,14 +103,22 @@ export const Route = createFileRoute('/api/public/invitations/create')({
               return new Response(JSON.stringify({ 
                 ok: false, 
                 code: 'email_delivery_compensation_failed', 
-                requestId 
+                requestId,
+                diagnosticStage: diagnostic.stage,
+                diagnosticCode: diagnostic.code,
+                diagnosticType: diagnostic.type,
               }), { status: 500 });
             }
 
             return new Response(JSON.stringify({ 
               ok: false, 
               code: 'email_delivery_failed', 
-              requestId 
+              requestId,
+              diagnosticStage: diagnostic.stage,
+              diagnosticCode: diagnostic.code,
+              diagnosticType: diagnostic.type,
+              providerStatus: diagnostic.providerStatus,
+              resendRequestId: diagnostic.requestId
             }), { status: 502 });
           }
           
