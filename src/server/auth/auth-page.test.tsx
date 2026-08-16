@@ -4,12 +4,16 @@ import { AuthPage } from '../../components/AuthPage';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
-// Mocking ResizeObserver for input-otp
+// Mocking DOM globals for input-otp and other components
 global.ResizeObserver = class ResizeObserver {
   observe() {}
   unobserve() {}
   disconnect() {}
 };
+
+if (typeof document !== 'undefined') {
+  document.elementFromPoint = () => null;
+}
 
 // Mocking external modules
 vi.mock('@tanstack/react-router', () => ({
