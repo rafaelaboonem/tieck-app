@@ -1,4 +1,5 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
+// Qual foi sua conclusão?
 import { useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { MotionProvider, m } from "@/lib/motion";
