@@ -206,26 +206,19 @@ function TeamPage() {
       const result = await response.json();
       if (!result.ok) throw new Error(result.code);
 
-      toast.success('Convite gerado com sucesso!');
-      if (result.invitation.link) {
-        try {
-          await navigator.clipboard.writeText(result.invitation.link);
-          toast.info('Link de convite copiado para a área de transferência.');
-        } catch (err) {
-          console.warn('Clipboard access denied');
-        }
-      }
+      toast.success(`Convite enviado para ${inviteEmail}`);
       
       setInviteModalOpen(false);
       setInviteEmail('');
       fetchTeamData();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Invite error:', error);
-      const msg = error.message;
+      const msg = error instanceof Error ? error.message : String(error);
       const errorMap: Record<string, string> = {
         rate_limit: 'Limite de convites excedido. Tente mais tarde.',
         already_member: 'Este usuário já é membro deste workspace.',
-        forbidden: 'Você não tem permissão para convidar nesta função.'
+        forbidden: 'Você não tem permissão para convidar nesta função.',
+        email_delivery_failed: 'Falha ao enviar e-mail. O convite foi cancelado.'
       };
       toast.error(errorMap[msg] || 'Erro interno ao convidar');
     } finally {
@@ -283,18 +276,15 @@ function TeamPage() {
       const result = await response.json();
       if (!result.ok) throw new Error(result.code);
 
-      toast.success('Convite reenviado!');
-      if (result.invitation.link) {
-        try {
-          await navigator.clipboard.writeText(result.invitation.link);
-          toast.info('Novo link copiado para a área de transferência.');
-        } catch (err) {
-          console.warn('Clipboard access denied');
-        }
-      }
+      toast.success(`Convite reenviado para ${result.invitation.email}`);
       fetchTeamData();
-    } catch (error: any) {
-      toast.error(`Erro ao reenviar convite: ${error.message}`);
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : String(error);
+      if (msg === 'email_delivery_failed') {
+        toast.error('Falha ao enviar e-mail. O convite foi invalidado e deve ser criado novamente.');
+      } else {
+        toast.error(`Erro ao reenviar convite: ${msg}`);
+      }
     } finally {
       setActionLoading(false);
     }
