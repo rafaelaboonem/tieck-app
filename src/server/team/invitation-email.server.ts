@@ -19,11 +19,26 @@ export async function sendWorkspaceInvitationEmail({
 }) {
   const lovableApiKey = process.env['LOVABLE_API_KEY'];
   const resendConnectionKey = process.env['RESEND_API_KEY'];
-  const publicUrl = process.env['PUBLIC_URL']?.replace(/\/+$/, '') || 'https://tieck.com.br';
+  const publicUrl = process.env['PUBLIC_URL'];
 
-  if (!lovableApiKey || !resendConnectionKey) {
-    throw new Error('Email service unavailable: missing keys');
+  if (!lovableApiKey || !resendConnectionKey || !publicUrl) {
+    console.error('[Email] Missing required environment variables');
+    throw new Error('Email service unavailable: missing configuration');
   }
+
+  // Validate PUBLIC_URL fail-closed
+  let validatedUrl: URL;
+  try {
+    validatedUrl = new URL(publicUrl);
+    if (validatedUrl.protocol !== 'https:') throw new Error('Protocol must be HTTPS');
+    if (validatedUrl.username || validatedUrl.password) throw new Error('URL cannot contain credentials');
+    if (validatedUrl.search || validatedUrl.hash) throw new Error('URL cannot contain search params or hash');
+  } catch (err) {
+    console.error('[Email] Invalid PUBLIC_URL:', publicUrl);
+    throw new Error('Internal Configuration Error');
+  }
+
+  const cleanPublicUrl = validatedUrl.origin.replace(/\/+$/, '');
 
   // Fetch true data from DB
   const { data: invite, error: inviteError } = await supabaseAdmin
@@ -52,7 +67,7 @@ export async function sendWorkspaceInvitationEmail({
     throw new Error('Security violation: token mismatch');
   }
 
-  const inviteLink = `${publicUrl}/convite/${token}`;
+  const inviteLink = `${cleanPublicUrl}/convite/${token}`;
 
   
   const roleMap: Record<string, string> = { 
@@ -68,7 +83,9 @@ export async function sendWorkspaceInvitationEmail({
     return map[m] || m;
   });
 
-  const subject = `Você foi convidado para o workspace ${workspaceName} no Tieck`;
+  // Sanitize workspace name for subject
+  const sanitizedWorkspaceName = workspaceName.replace(/[\r\n\x00-\x1F\x7F]/g, '').slice(0, 100);
+  const subject = `Você foi convidado para o workspace ${sanitizedWorkspaceName} no Tieck`;
   
   const html = `
     <!DOCTYPE html>
@@ -110,8 +127,10 @@ export async function sendWorkspaceInvitationEmail({
   });
 
   if (!res.ok) {
-    const errorBody = await res.text();
-    console.error('[Resend] API Error:', res.status, errorBody);
+    console.error('[Resend] API Error:', {
+      status: res.status,
+      requestId: res.headers.get('x-request-id')
+    });
     throw new Error('Failed to send email via Resend');
   }
 
