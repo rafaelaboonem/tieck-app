@@ -33,9 +33,7 @@ function InvitePage() {
       setSession(session);
       
       if (!session) {
-        // Preserva o token no redirecionamento de login
-        const returnUrl = encodeURIComponent(window.location.pathname);
-        navigate({ to: `/login?returnTo=${returnUrl}` });
+        setLoading(false);
         return;
       }
 
@@ -43,6 +41,10 @@ function InvitePage() {
     };
 
     checkAuth();
+  }, [token, navigate]);
+
+  useEffect(() => {
+    fetchInvite();
   }, [token]);
 
   const fetchInvite = async () => {
@@ -76,6 +78,12 @@ function InvitePage() {
   };
 
   const handleAccept = async () => {
+    if (!session) {
+      const redirectPath = encodeURIComponent(`/convite/${token}`);
+      navigate({ to: `/login?redirect=${redirectPath}` });
+      return;
+    }
+
     if (!session?.access_token) return;
     setAccepting(true);
     try {
@@ -92,7 +100,7 @@ function InvitePage() {
 
       if (!result.ok) {
         if (result.code === 'email_mismatch') {
-          toast.error("Este convite foi enviado para outro e-mail.");
+          setError('email_mismatch');
         } else {
           toast.error("Não foi possível aceitar o convite.");
         }
@@ -107,6 +115,12 @@ function InvitePage() {
     } finally {
       setAccepting(false);
     }
+  };
+
+  const handleSignOutAndRetry = async () => {
+    await supabase.auth.signOut();
+    const redirectPath = encodeURIComponent(`/convite/${token}`);
+    navigate({ to: `/login?redirect=${redirectPath}` });
   };
 
 
@@ -129,17 +143,31 @@ function InvitePage() {
             {error === 'convite_expirado' && "Convite expirado"}
             {error === 'convite_invalido' && "Convite inválido"}
             {error === 'erro_carregamento' && "Erro ao carregar convite"}
+            {error === 'email_mismatch' && "E-mail não correspondente"}
           </h2>
           <p className="text-sm text-neutral-500 mt-2">
-            Este link pode estar quebrado ou já ter expirado após 7 dias.
+            {error === 'email_mismatch' 
+              ? "Você está logado com uma conta diferente da destinatária deste convite."
+              : "Este link pode estar quebrado ou já ter expirado após 7 dias."}
           </p>
-          <Button 
-            variant="outline" 
-            className="mt-6 w-full"
-            onClick={() => navigate({ to: '/inicio' })}
-          >
-            Voltar ao Início
-          </Button>
+          {error === 'email_mismatch' ? (
+            <div className="space-y-3 mt-6">
+              <Button className="w-full bg-pink-500 hover:bg-pink-600 text-white" onClick={handleSignOutAndRetry}>
+                Sair e entrar com outra conta
+              </Button>
+              <Button variant="outline" className="w-full" onClick={() => navigate({ to: '/inicio' })}>
+                Ir para o Painel
+              </Button>
+            </div>
+          ) : (
+            <Button 
+              variant="outline" 
+              className="mt-6 w-full"
+              onClick={() => navigate({ to: '/inicio' })}
+            >
+              Voltar ao Início
+            </Button>
+          )}
         </div>
       </div>
     );
@@ -179,7 +207,7 @@ function InvitePage() {
               <div className="flex items-center justify-between">
                 <span className="text-xs text-neutral-500 uppercase font-bold tracking-wider">Papel</span>
                 <span className="text-xs font-bold px-2.5 py-1 bg-pink-100 text-pink-600 rounded-full capitalize">
-                  {invite?.role}
+                  {invite?.role === 'admin' ? 'Administrador' : invite?.role === 'editor' ? 'Editor' : 'Visualizador'}
                 </span>
               </div>
               <div className="flex items-center justify-between">
@@ -190,6 +218,24 @@ function InvitePage() {
           </div>
 
           <div className="space-y-3">
+            {!session && (
+              <div className="grid grid-cols-2 gap-3 mb-3">
+                <Button 
+                  variant="outline"
+                  className="h-12 font-bold"
+                  onClick={() => navigate({ to: `/login?redirect=${encodeURIComponent(\`/convite/\${token}\`)}` })}
+                >
+                  Entrar
+                </Button>
+                <Button 
+                  variant="outline"
+                  className="h-12 font-bold"
+                  onClick={() => navigate({ to: `/cadastro?redirect=${encodeURIComponent(\`/convite/\${token}\`)}` })}
+                >
+                  Criar conta
+                </Button>
+              </div>
+            )}
             <Button 
               className="w-full bg-pink-500 hover:bg-pink-600 text-white shadow-lg shadow-pink-100 h-12 text-base font-bold gap-2"
               onClick={handleAccept}
@@ -199,7 +245,7 @@ function InvitePage() {
                 <Loader2 className="w-5 h-5 animate-spin" />
               ) : (
                 <>
-                  Aceitar Convite
+                  {session ? 'Aceitar Convite' : 'Entrar para aceitar'}
                   <ArrowRight className="w-5 h-5" />
                 </>
               )}
