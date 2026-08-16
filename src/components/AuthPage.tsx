@@ -190,62 +190,6 @@ export function AuthPage({ mode, redirect }: Props) {
     }
   };
 
-  const handleSetPassword = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (isLoading) return;
-    if (displayName.trim().length < 2) {
-      toast.error("Informe seu nome.");
-      return;
-    }
-    if (password.length < 6) {
-      toast.error("A senha deve ter pelo menos 6 caracteres.");
-      return;
-    }
-    if (!otpVerified || !verificationToken) {
-      backToCodeStep("Sua verificação expirou. Solicite um novo código.");
-      return;
-    }
-    setIsLoading(true);
-    try {
-      const result = await invokeSignupFn<{ ok: boolean; code?: string }>(
-        "signup-complete",
-        { email: normalizedEmail(), verificationToken, password, displayName: displayName.trim() },
-      );
-      if (!result.ok) {
-        if (result.code === "account_recovered_login_required") {
-          toast.info(
-            "Sua conta já existia e foi restaurada. Entre com sua senha ou use “Esqueci minha senha”.",
-          );
-          navigate({ to: "/login" });
-          return;
-        }
-        toast.error("Este e-mail já está cadastrado.");
-        resetSignup();
-        return;
-      }
-      const { error: signInErr } = await supabase.auth.signInWithPassword({
-        email: normalizedEmail(),
-        password,
-      });
-      if (signInErr) throw signInErr;
-      const { data: sessionData } = await supabase.auth.getSession();
-      if (!sessionData.session) {
-        throw new Error("Não foi possível iniciar a sessão. Tente entrar novamente.");
-      }
-      toast.success("Conta criada com sucesso!");
-      goAfterAuth();
-    } catch (err: any) {
-      console.error("Set password error:", err);
-      if (err?.code === "session_invalid" || err?.code === "session_expired") {
-        backToCodeStep("Sua verificação expirou. Enviamos você de volta para solicitar um novo código.");
-        return;
-      }
-      toast.error(mapAuthError(err.message || "Erro ao finalizar cadastro"));
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isLoading) return;
