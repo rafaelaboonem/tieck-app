@@ -16,7 +16,8 @@ export const Route = createFileRoute("/convite/$token")({
 function InvitePage() {
   const { token } = useParams({ from: "/convite/$token" });
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(true);
+  const [sessionLoading, setSessionLoading] = useState(true);
+  const [inviteLoading, setInviteLoading] = useState(true);
   const [accepting, setAccepting] = useState(false);
   const [invite, setInvite] = useState<{
     email: string;
@@ -32,18 +33,18 @@ function InvitePage() {
     const checkAuth = async () => {
       const { data: { session: currentSession } } = await supabase.auth.getSession();
       setSession(currentSession);
-      setLoading(false);
+      setSessionLoading(false);
     };
 
     checkAuth();
-  }, [token, navigate]);
+  }, [token]);
 
   useEffect(() => {
     fetchInvite();
   }, [token]);
 
   const fetchInvite = async () => {
-    setLoading(true);
+    setInviteLoading(true);
     try {
       const response = await fetch('/api/public/invitations/inspect', {
         method: 'POST',
@@ -68,7 +69,7 @@ function InvitePage() {
       console.error("Erro ao buscar convite:", err);
       setError("erro_carregamento");
     } finally {
-      setLoading(false);
+      setInviteLoading(false);
     }
   };
 
@@ -121,7 +122,7 @@ function InvitePage() {
     });
   };
 
-  if (loading) {
+  if (sessionLoading || inviteLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-neutral-50">
         <Loader2 className="w-6 h-6 text-pink-500 animate-spin" />
@@ -212,7 +213,7 @@ function InvitePage() {
           </div>
 
           <div className="space-y-3">
-            {!session ? (
+            {invite && !session ? (
               <div className="grid grid-cols-2 gap-3 mb-3">
                 <Button 
                   variant="outline"

@@ -218,9 +218,11 @@ function TeamPage() {
         rate_limit: 'Limite de convites excedido. Tente mais tarde.',
         already_member: 'Este usuário já é membro deste workspace.',
         forbidden: 'Você não tem permissão para convidar nesta função.',
-        email_delivery_failed: 'Falha ao enviar e-mail. O convite foi cancelado.'
+        email_delivery_failed: 'Falha ao enviar e-mail. O convite foi cancelado.',
+        email_delivery_compensation_failed: 'O e-mail falhou e não foi possível confirmar o cancelamento do convite. Atualize a lista e revogue o convite manualmente, se ele ainda aparecer como pendente.'
       };
       toast.error(errorMap[msg] || 'Erro interno ao convidar');
+      fetchTeamData();
     } finally {
       setInviting(false);
     }
@@ -282,9 +284,12 @@ function TeamPage() {
       const msg = error instanceof Error ? error.message : String(error);
       if (msg === 'email_delivery_failed') {
         toast.error('Falha ao enviar e-mail. O convite foi invalidado e deve ser criado novamente.');
+      } else if (msg === 'email_delivery_compensation_failed') {
+        toast.error('O e-mail falhou e não foi possível confirmar o cancelamento do convite. Atualize a lista e revogue o convite manualmente, se ele ainda aparecer como pendente.');
       } else {
         toast.error(`Erro ao reenviar convite: ${msg}`);
       }
+      fetchTeamData();
     } finally {
       setActionLoading(false);
     }
