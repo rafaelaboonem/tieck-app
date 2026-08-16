@@ -41,13 +41,10 @@ export function AuthPage({ mode, redirect }: Props) {
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [displayName, setDisplayName] = useState("");
-  const [signupStep, setSignupStep] = useState<1 | 2 | 3>(1);
+  const [signupStep, setSignupStep] = useState<1 | 2>(1);
   const [otp, setOtp] = useState("");
   const [otpVerified, setOtpVerified] = useState(false);
   const [alreadyRegistered, setAlreadyRegistered] = useState(false);
-  const [verificationToken, setVerificationToken] = useState("");
   const [resendCountdown, setResendCountdown] = useState(0);
 
   // Guards against double-submission of the same OTP (auto-submit + Enter/form).
@@ -67,11 +64,8 @@ export function AuthPage({ mode, redirect }: Props) {
   const resetSignup = () => {
     setSignupStep(1);
     setOtp("");
-    setPassword("");
-    setDisplayName("");
     setOtpVerified(false);
     setAlreadyRegistered(false);
-    setVerificationToken("");
     setResendCountdown(0);
   };
 
@@ -217,17 +211,13 @@ export function AuthPage({ mode, redirect }: Props) {
   const heading = isSignUp
     ? signupStep === 1
       ? "Crie sua conta"
-      : signupStep === 2
-      ? "Verifique seu e-mail"
-      : "Defina sua senha"
+      : "Verifique seu e-mail"
     : "Bem-vindo de volta";
 
   const subheading = isSignUp
     ? signupStep === 1
       ? "Comece informando seu melhor e-mail"
-      : signupStep === 2
-      ? `Enviamos um código de 6 dígitos para ${email}`
-      : "Escolha uma senha forte para finalizar"
+      : `Enviamos um código de 6 dígitos para ${email}`
     : "Acesse sua conta para continuar";
 
   const inputClass =
@@ -263,7 +253,7 @@ export function AuthPage({ mode, redirect }: Props) {
         {/* Step indicator for signup */}
         {isSignUp && (
           <div className="flex items-center justify-center gap-2 mb-7">
-            {[1, 2, 3].map((s) => (
+            {[1, 2].map((s) => (
               <div
                 key={s}
                 className={`h-1 rounded-full transition-all duration-300 ${
@@ -429,48 +419,7 @@ export function AuthPage({ mode, redirect }: Props) {
               </form>
             )}
 
-            {/* Step 3 — password */}
-            {signupStep === 3 && (
-              <form onSubmit={handleSetPassword} className="space-y-5 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                <div>
-                  <label className="block text-xs font-semibold text-neutral-500 uppercase tracking-wider mb-2">Seu nome</label>
-                  <input
-                    type="text"
-                    required
-                    autoFocus
-                    minLength={2}
-                    value={displayName}
-                    onChange={(e) => setDisplayName(e.target.value)}
-                    className={inputClass}
-                    placeholder="Como podemos te chamar?"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-neutral-500 uppercase tracking-wider mb-2">Crie sua senha</label>
-                  <div className="relative">
-                    <input
-                      type={showPassword ? "text" : "password"}
-                      required
-                      minLength={6}
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      className={`${inputClass} pr-12`}
-                      placeholder="Mínimo 6 caracteres"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute inset-y-0 right-0 pr-4 flex items-center text-neutral-400 hover:text-neutral-900 transition-colors"
-                    >
-                      {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-                    </button>
-                  </div>
-                </div>
-                <button type="submit" disabled={isLoading} className={primaryBtn}>
-                  {isLoading ? <Loader2 className="animate-spin h-5 w-5" /> : (<><KeyRound className="h-5 w-5" />Finalizar cadastro</>)}
-                </button>
-              </form>
-            )}
+            {/* Step 3 (Removed — OTP handles both creation and login) */}
           </div>
         )}
 
