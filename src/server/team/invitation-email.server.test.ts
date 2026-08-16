@@ -117,9 +117,9 @@ describe('Phase 4B Invitation Flow (Direct Resend API)', () => {
     expect(logOutput).not.toContain('tok-secret');
     expect(logOutput).not.toContain('re_test_key_12345');
     expect(logOutput).not.toContain('Resend internal error');
-    expect(logOutput).toContain('request_failed');
+    expect(logOutput).toContain('resend_non_2xx');
     expect(logOutput).toContain('401');
-    expect(logOutput).toContain('resend-req-123');
+    expect(logOutput).toContain('fetch_started');
   });
 
   it('returns exactly { ok: true } on success', async () => {
