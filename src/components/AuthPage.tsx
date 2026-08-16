@@ -4,8 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { mapAuthError } from "@/utils/auth-errors";
 import { useAuth } from "@/contexts/AuthContext";
-import { Eye, EyeOff, Loader2, ArrowRight, Mail, KeyRound, CheckCircle2, ArrowLeft } from "lucide-react";
-import { lovable } from "@/integrations/lovable";
+import { Loader2, ArrowRight, Mail, ArrowLeft } from "lucide-react";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import logoUrl from "../assets/local/logo-tieck.webp";
 
@@ -14,78 +13,16 @@ type Props = {
   redirect?: string;
 };
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string | undefined;
-const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined;
-const SIGNUP_FUNCTIONS_URL = SUPABASE_URL ? `${SUPABASE_URL.replace(/\/$/, "")}/functions/v1` : "";
-const SIGNUP_FUNCTIONS_KEY = SUPABASE_PUBLISHABLE_KEY ?? "";
-
 export function AuthPage({ mode, redirect }: Props) {
   const navigate = useNavigate();
   const { user } = useAuth();
   const isSignUp = mode === "signup";
 
-  async function invokeSignupFn<T = any>(name: string, body: Record<string, unknown>): Promise<T> {
-    if (!SIGNUP_FUNCTIONS_URL || !SIGNUP_FUNCTIONS_KEY) {
-      throw new Error("O serviço de cadastro não está configurado neste ambiente.");
-    }
-    const url = `${SIGNUP_FUNCTIONS_URL}/${name}`;
-    let response: Response;
-    try {
-      response = await fetch(url, {
-        method: "POST",
-        headers: {
-          apikey: SIGNUP_FUNCTIONS_KEY,
-          Authorization: `Bearer ${SIGNUP_FUNCTIONS_KEY}`,
-          "x-client-info": "tieck-web-signup/1.0",
-          "content-type": "application/json",
-        },
-        body: JSON.stringify(body),
-      });
-    } catch (error) {
-      console.error("Signup function network error", { name, url, error });
-      throw new Error("O serviço de cadastro está indisponível no momento. Tente novamente em instantes.");
-    }
-
-    const responseText = await response.text();
-    let data: unknown;
-    try {
-      data = responseText ? JSON.parse(responseText) : null;
-    } catch {
-      data = responseText;
-    }
-
-    const errorCode =
-      data && typeof data === "object" && "code" in data ? String((data as { code: unknown }).code) : undefined;
-
-    if (!response.ok) {
-      console.error("Signup function HTTP error", {
-        name,
-        url,
-        status: response.status,
-        statusText: response.statusText,
-        response: data,
-      });
-      const message =
-        data && typeof data === "object" && "error" in data
-          ? String((data as { error: unknown }).error)
-          : `Falha no serviço de cadastro (${response.status}). Tente novamente.`;
-      const err = new Error(message) as Error & { code?: string };
-      err.code = errorCode;
-      throw err;
-    }
-    if (data && typeof data === "object" && "error" in data && (data as { error?: unknown }).error) {
-      console.error("Signup function response error", { name, url, status: response.status, response: data });
-      const err = new Error(String((data as { error: unknown }).error)) as Error & { code?: string };
-      err.code = errorCode;
-      throw err;
-    }
-    return data as T;
-  }
-
   const safeRedirect = (() => {
     if (typeof redirect === "string" && redirect.startsWith("/") && !redirect.startsWith("//")) return redirect;
     return null;
   })();
+
   const goAfterAuth = () => {
     if (user && !user.email_confirmed_at) {
       navigate({ to: "/confirmar-email" });
@@ -99,15 +36,11 @@ export function AuthPage({ mode, redirect }: Props) {
   };
 
   const [isLoading, setIsLoading] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [displayName, setDisplayName] = useState("");
-  const [signupStep, setSignupStep] = useState<1 | 2 | 3>(1);
+  const [signupStep, setSignupStep] = useState<1 | 2>(1);
   const [otp, setOtp] = useState("");
   const [otpVerified, setOtpVerified] = useState(false);
   const [alreadyRegistered, setAlreadyRegistered] = useState(false);
-  const [verificationToken, setVerificationToken] = useState("");
   const [resendCountdown, setResendCountdown] = useState(0);
 
   // Guards against double-submission of the same OTP (auto-submit + Enter/form).
@@ -124,48 +57,11 @@ export function AuthPage({ mode, redirect }: Props) {
     return () => clearTimeout(t);
   }, [resendCountdown]);
 
-  const resetSignup = () => {
-    setSignupStep(1);
-    setOtp("");
-    setPassword("");
-    setDisplayName("");
-    setOtpVerified(false);
-    setAlreadyRegistered(false);
-    setVerificationToken("");
-    setResendCountdown(0);
-  };
-
   const normalizedEmail = () => email.trim().toLowerCase();
 
-  /** Volta para a etapa do código permitindo pedir um novo, em vez de reiniciar tudo. */
-  const backToCodeStep = (message: string) => {
-    setOtp("");
-    setOtpVerified(false);
-    setVerificationToken("");
-    setResendCountdown(0);
-    setSignupStep(2);
-    toast.error(message);
-  };
-
   const handleGoogle = async () => {
-    if (isLoading) return;
-    setIsLoading(true);
-    try {
-      const callbackUrl = new URL("/auth/callback", window.location.origin);
-      callbackUrl.searchParams.set("redirect", safeRedirect ?? "/inicio");
-
-      const result = await lovable.auth.signInWithOAuth("google", {
-        redirect_uri: callbackUrl.toString(),
-      });
-      if (result.error) throw result.error;
-      if (result.redirected) return;
-      goAfterAuth();
-    } catch (err: any) {
-      console.error("Google auth error:", err);
-      toast.error(mapAuthError(err.message || "Erro ao entrar com Google"));
-    } finally {
-      setIsLoading(false);
-    }
+    // Hidden temporarily while provider is not configured
+    toast.error("O cadastro com Google está temporariamente desativado. Use e-mail.");
   };
 
   const handleSendCode = async (e: React.FormEvent) => {
@@ -174,22 +70,24 @@ export function AuthPage({ mode, redirect }: Props) {
     setAlreadyRegistered(false);
     setIsLoading(true);
     try {
-      const result = await invokeSignupFn<{ ok: boolean; code?: string }>(
-        "signup-request-otp",
-        { email: normalizedEmail() },
-      );
-      if (!result.ok) {
-        setAlreadyRegistered(true);
-        toast.error("Este e-mail já está cadastrado.");
-        return;
-      }
+      // Use standard Supabase signInWithOtp. 
+      // OTP verification automatically handles signup vs login based on shouldCreateUser.
+      const { error } = await supabase.auth.signInWithOtp({
+        email: normalizedEmail(),
+        options: {
+          shouldCreateUser: isSignUp,
+          emailRedirectTo: window.location.origin + (safeRedirect || "/inicio"),
+        }
+      });
+      
+      if (error) throw error;
+      
       toast.success("Código enviado! Verifique seu e-mail.");
       setSignupStep(2);
-      setResendCountdown(30);
+      setResendCountdown(60);
     } catch (err: any) {
-      console.error("Send OTP error:", err, JSON.stringify(err));
-      const raw = err?.message || "Não foi possível enviar o código. Tente novamente.";
-      toast.error(raw);
+      console.error("Send OTP error:", err);
+      toast.error(mapAuthError(err.message));
     } finally {
       setIsLoading(false);
     }
@@ -197,27 +95,32 @@ export function AuthPage({ mode, redirect }: Props) {
 
   const handleVerifyCode = async (e?: React.FormEvent, codeOverride?: string) => {
     e?.preventDefault();
-    const code = codeOverride ?? otp;
-    if (isLoading || code.length !== 6) return;
-    // Prevent the same 6-digit code from being submitted twice concurrently.
-    if (verifyingRef.current === code) return;
-    verifyingRef.current = code;
+    const token = codeOverride ?? otp;
+    if (isLoading || token.length !== 6) return;
+    if (verifyingRef.current === token) return;
+    verifyingRef.current = token;
     setIsLoading(true);
     try {
-      const result = await invokeSignupFn<{ ok: boolean; verificationToken: string }>(
-        "signup-verify-otp",
-        { email: normalizedEmail(), code },
-      );
-      setVerificationToken(result.verificationToken);
+      const { error } = await supabase.auth.verifyOtp({
+        email: normalizedEmail(),
+        token,
+        type: isSignUp ? 'signup' : 'magiclink',
+      });
+      
+      if (error) {
+        const { error: secondTryError } = await supabase.auth.verifyOtp({
+          email: normalizedEmail(),
+          token,
+          type: isSignUp ? 'magiclink' : 'signup',
+        });
+        if (secondTryError) throw secondTryError;
+      }
+
       setOtpVerified(true);
       toast.success("E-mail verificado!");
-      setSignupStep(3);
     } catch (err: any) {
       console.error("Verify OTP error:", err);
-      const raw = String(err?.message || "Código inválido");
-      // Server-side messages we want to show as-is (already in Portuguese, user-friendly).
-      const passthrough = /código|expirado|tentativas|sessão/i.test(raw);
-      toast.error(passthrough ? raw : mapAuthError(raw));
+      toast.error(mapAuthError(err.message));
       setOtp("");
     } finally {
       verifyingRef.current = null;
@@ -236,105 +139,20 @@ export function AuthPage({ mode, redirect }: Props) {
     if (isLoading || !email || resendCountdown > 0) return;
     setOtp("");
     setOtpVerified(false);
-    setAlreadyRegistered(false);
-    setVerificationToken("");
     setIsLoading(true);
     try {
-      const result = await invokeSignupFn<{ ok: boolean; code?: string }>(
-        "signup-request-otp",
-        { email: normalizedEmail() },
-      );
-      if (!result.ok) {
-        setAlreadyRegistered(true);
-        toast.error("Este e-mail já está cadastrado.");
-        setSignupStep(1);
-        return;
-      }
-      toast.success("Novo código enviado! Verifique seu e-mail.");
-      setSignupStep(2);
-      setResendCountdown(30);
-    } catch (err: any) {
-      console.error("Resend OTP error:", err, JSON.stringify(err));
-      const raw = err?.message || "Não foi possível reenviar o código. Tente novamente.";
-      toast.error(raw);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleSetPassword = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (isLoading) return;
-    if (displayName.trim().length < 2) {
-      toast.error("Informe seu nome.");
-      return;
-    }
-    if (password.length < 6) {
-      toast.error("A senha deve ter pelo menos 6 caracteres.");
-      return;
-    }
-    if (!otpVerified || !verificationToken) {
-      backToCodeStep("Sua verificação expirou. Solicite um novo código.");
-      return;
-    }
-    setIsLoading(true);
-    try {
-      const result = await invokeSignupFn<{ ok: boolean; code?: string }>(
-        "signup-complete",
-        { email: normalizedEmail(), verificationToken, password, displayName: displayName.trim() },
-      );
-      if (!result.ok) {
-        if (result.code === "account_recovered_login_required") {
-          toast.info(
-            "Sua conta já existia e foi restaurada. Entre com sua senha ou use “Esqueci minha senha”.",
-          );
-          navigate({ to: "/login" });
-          return;
-        }
-        toast.error("Este e-mail já está cadastrado.");
-        resetSignup();
-        return;
-      }
-      const { error: signInErr } = await supabase.auth.signInWithPassword({
+      const { error } = await supabase.auth.signInWithOtp({
         email: normalizedEmail(),
-        password,
+        options: {
+          shouldCreateUser: isSignUp,
+          emailRedirectTo: window.location.origin + (safeRedirect || "/inicio"),
+        }
       });
-      if (signInErr) throw signInErr;
-      const { data: sessionData } = await supabase.auth.getSession();
-      if (!sessionData.session) {
-        throw new Error("Não foi possível iniciar a sessão. Tente entrar novamente.");
-      }
-      toast.success("Conta criada com sucesso!");
-      goAfterAuth();
-    } catch (err: any) {
-      console.error("Set password error:", err);
-      if (err?.code === "session_invalid" || err?.code === "session_expired") {
-        backToCodeStep("Sua verificação expirou. Enviamos você de volta para solicitar um novo código.");
-        return;
-      }
-      toast.error(mapAuthError(err.message || "Erro ao finalizar cadastro"));
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (isLoading) return;
-    setIsLoading(true);
-    try {
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
-      // Bloqueio de acesso: e-mail ainda não confirmado.
-      if (data.user && !data.user.email_confirmed_at) {
-        toast.info("Confirme seu e-mail para acessar a plataforma.");
-        navigate({ to: "/confirmar-email" });
-        return;
-      }
-      toast.success("Bem-vindo de volta!");
-      goAfterAuth();
+      toast.success("Novo código enviado! Verifique seu e-mail.");
+      setResendCountdown(60);
     } catch (err: any) {
-      console.error("Auth error:", err);
+      console.error("Resend OTP error:", err);
       toast.error(mapAuthError(err.message));
     } finally {
       setIsLoading(false);
@@ -345,17 +163,13 @@ export function AuthPage({ mode, redirect }: Props) {
   const heading = isSignUp
     ? signupStep === 1
       ? "Crie sua conta"
-      : signupStep === 2
-      ? "Verifique seu e-mail"
-      : "Defina sua senha"
+      : "Verifique seu e-mail"
     : "Bem-vindo de volta";
 
   const subheading = isSignUp
     ? signupStep === 1
       ? "Comece informando seu melhor e-mail"
-      : signupStep === 2
-      ? `Enviamos um código de 6 dígitos para ${email}`
-      : "Escolha uma senha forte para finalizar"
+      : `Enviamos um código de 6 dígitos para ${email}`
     : "Acesse sua conta para continuar";
 
   const inputClass =
@@ -369,44 +183,31 @@ export function AuthPage({ mode, redirect }: Props) {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-white font-body p-4 relative overflow-hidden">
-      {/* Ambient background glows */}
       <div className="pointer-events-none absolute -top-40 -left-40 w-[480px] h-[480px] bg-[#FF007F] opacity-[0.06] blur-[120px] rounded-full" />
       <div className="pointer-events-none absolute -bottom-40 -right-40 w-[480px] h-[480px] bg-[#FF007F] opacity-[0.05] blur-[120px] rounded-full" />
 
       <div className="w-full max-w-[440px] bg-white border border-neutral-100 rounded-3xl p-8 md:p-10 shadow-xl shadow-neutral-200/60 relative overflow-hidden backdrop-blur-sm">
-        {/* Card inner glow */}
         <div className="pointer-events-none absolute -top-24 -right-24 w-48 h-48 bg-[#FF007F] opacity-5 blur-[80px]" />
 
-        {/* Brand */}
         <div className="text-center mb-8 relative">
-          <img
-            src={logoUrl}
-            alt="Tieck"
-            className="mx-auto h-12 md:h-14 w-auto mb-4"
-          />
+          <img src={logoUrl} alt="Tieck" className="mx-auto h-12 md:h-14 w-auto mb-4" />
           <h2 className="mt-4 text-xl font-semibold text-neutral-900 font-display">{heading}</h2>
           <p className="text-neutral-500 mt-1.5 text-sm">{subheading}</p>
         </div>
 
-        {/* Step indicator for signup */}
         {isSignUp && (
           <div className="flex items-center justify-center gap-2 mb-7">
-            {[1, 2, 3].map((s) => (
+            {[1, 2].map((s) => (
               <div
                 key={s}
                 className={`h-1 rounded-full transition-all duration-300 ${
-                  s === signupStep
-                    ? "w-8 bg-[#FF007F]"
-                    : s < signupStep
-                    ? "w-4 bg-[#FF007F]/60"
-                    : "w-4 bg-neutral-200"
+                  s === signupStep ? "w-8 bg-[#FF007F]" : "w-4 bg-neutral-200"
                 }`}
               />
             ))}
           </div>
         )}
 
-        {/* Google + divider (only on step 1 of signup, or login) */}
         {(!isSignUp || signupStep === 1) && (
           <div className="space-y-4 mb-6 relative">
             <button
@@ -435,174 +236,99 @@ export function AuthPage({ mode, redirect }: Props) {
           </div>
         )}
 
-        {/* ============ LOGIN ============ */}
-        {!isSignUp && (
-          <form className="space-y-5 relative" onSubmit={handleLogin}>
-            <div>
-              <label className="block text-xs font-semibold text-neutral-500 uppercase tracking-wider mb-2">E-mail</label>
-              <input
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className={inputClass}
-                placeholder="seu@email.com"
-              />
-            </div>
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <label className="block text-xs font-semibold text-neutral-500 uppercase tracking-wider">Senha</label>
-              </div>
-              <div className="relative">
+        <div className="space-y-5 relative">
+          {signupStep === 1 && (
+            <form onSubmit={handleSendCode} className="space-y-5 animate-in fade-in slide-in-from-bottom-2 duration-300">
+              <div>
+                <label className="block text-xs font-semibold text-neutral-500 uppercase tracking-wider mb-2">E-mail</label>
                 <input
-                  type={showPassword ? "text" : "password"}
+                  type="email"
                   required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className={`${inputClass} pr-12`}
-                  placeholder="••••••••"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className={inputClass}
+                  placeholder="seu@email.com"
+                  autoFocus
                 />
+              </div>
+
+              {!isSignUp && (
+                <div className="rounded-xl border border-blue-100 bg-blue-50 p-4 text-sm text-blue-700 flex items-start gap-3">
+                  <Mail className="h-5 w-5 mt-0.5 flex-shrink-0" />
+                  <div className="flex-1">
+                    <p className="font-medium">Login via código seguro</p>
+                    <p className="mt-1 text-xs text-blue-600/80 leading-relaxed">
+                      Enviaremos um código de acesso temporário para seu e-mail.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {alreadyRegistered && isSignUp && (
+                <div className="rounded-xl border border-[#FF007F]/30 bg-[#FF007F]/10 p-3 text-sm text-[#FFB3D9] flex items-start gap-2">
+                  <Mail className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                  <div className="flex-1">
+                    <p className="font-medium">E-mail já cadastrado</p>
+                    <Link to="/login" className="mt-1 inline-block text-xs font-semibold text-white hover:underline">
+                      Ir para o login →
+                    </Link>
+                  </div>
+                </div>
+              )}
+
+              <button type="submit" disabled={isLoading} className={primaryBtn}>
+                {isLoading ? <Loader2 className="animate-spin h-5 w-5" /> : (
+                  <>
+                    {isSignUp ? "Enviar código" : "Receber código de acesso"}
+                    <ArrowRight className="h-4 w-4" />
+                  </>
+                )}
+              </button>
+            </form>
+          )}
+
+          {signupStep === 2 && (
+            <form onSubmit={handleVerifyCode} className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+              <div className="flex justify-center">
+                <InputOTP maxLength={6} value={otp} onChange={setOtp} disabled={isLoading} autoFocus>
+                  <InputOTPGroup className="gap-2 sm:gap-3">
+                    {[0, 1, 2, 3, 4, 5].map((i) => (
+                      <InputOTPSlot
+                        key={i}
+                        index={i}
+                        className="h-12 w-12 text-xl font-bold rounded-xl bg-white border-neutral-200 text-neutral-900 data-[active=true]:border-[#FF007F] data-[active=true]:ring-1 data-[active=true]:ring-[#FF007F]"
+                      />
+                    ))}
+                  </InputOTPGroup>
+                </InputOTP>
+              </div>
+
+              <div className="flex items-center justify-center min-h-[24px] text-sm text-neutral-500">
+                {isLoading ? (
+                  <span className="flex items-center gap-2">
+                    <Loader2 className="animate-spin h-4 w-4" /> Verificando…
+                  </span>
+                ) : (
+                  <span>O código é verificado automaticamente</span>
+                )}
+              </div>
+
+              <div className="space-y-3">
                 <button
                   type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute inset-y-0 right-0 pr-4 flex items-center text-neutral-400 hover:text-neutral-900 transition-colors"
+                  onClick={handleResendCode}
+                  disabled={isLoading || resendCountdown > 0}
+                  className={ghostBtn}
                 >
-                  {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                  {resendCountdown > 0
+                    ? `Reenviar em ${resendCountdown}s`
+                    : (<><ArrowLeft className="h-4 w-4" /> Reenviar e-mail</>)}
                 </button>
               </div>
-            </div>
+            </form>
+          )}
+        </div>
 
-            <button type="submit" disabled={isLoading} className={primaryBtn}>
-              {isLoading ? <Loader2 className="animate-spin h-5 w-5" /> : (<>Entrar <ArrowRight className="h-4 w-4" /></>)}
-            </button>
-          </form>
-        )}
-
-        {/* ============ SIGNUP ============ */}
-        {isSignUp && (
-          <div className="space-y-5 relative">
-            {/* Step 1 — email */}
-            {signupStep === 1 && (
-              <form onSubmit={handleSendCode} className="space-y-5 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                <div>
-                  <label className="block text-xs font-semibold text-neutral-500 uppercase tracking-wider mb-2">E-mail</label>
-                  <input
-                    type="email"
-                    required
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className={inputClass}
-                    placeholder="seu@email.com"
-                    autoFocus
-                  />
-                </div>
-
-                {alreadyRegistered && (
-                  <div className="rounded-xl border border-[#FF007F]/30 bg-[#FF007F]/10 p-3 text-sm text-[#FFB3D9] flex items-start gap-2">
-                    <Mail className="h-4 w-4 mt-0.5 flex-shrink-0" />
-                    <div className="flex-1">
-                      <p className="font-medium">E-mail já cadastrado</p>
-                      <Link to="/login" className="mt-1 inline-block text-xs font-semibold text-white hover:underline">
-                        Ir para o login →
-                      </Link>
-                    </div>
-                  </div>
-                )}
-
-                <button type="submit" disabled={isLoading} className={primaryBtn}>
-                  {isLoading ? <Loader2 className="animate-spin h-5 w-5" /> : (<>Enviar código <ArrowRight className="h-4 w-4" /></>)}
-                </button>
-              </form>
-            )}
-
-            {/* Step 2 — OTP */}
-            {signupStep === 2 && (
-              <form onSubmit={handleVerifyCode} className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                <div className="flex justify-center">
-                  <InputOTP maxLength={6} value={otp} onChange={setOtp} disabled={isLoading} autoFocus>
-                    <InputOTPGroup className="gap-2 sm:gap-3">
-                      {[0, 1, 2, 3, 4, 5].map((i) => (
-                        <InputOTPSlot
-                          key={i}
-                          index={i}
-                          className="h-12 w-12 text-xl font-bold rounded-xl bg-white border-neutral-200 text-neutral-900 data-[active=true]:border-[#FF007F] data-[active=true]:ring-1 data-[active=true]:ring-[#FF007F]"
-                        />
-                      ))}
-                    </InputOTPGroup>
-                  </InputOTP>
-                </div>
-
-                <div className="flex items-center justify-center min-h-[24px] text-sm text-neutral-500">
-                  {isLoading ? (
-                    <span className="flex items-center gap-2">
-                      <Loader2 className="animate-spin h-4 w-4" /> Verificando…
-                    </span>
-                  ) : (
-                    <span>O código é verificado automaticamente</span>
-                  )}
-                </div>
-
-                <div className="space-y-3">
-                  <button
-                    type="button"
-                    onClick={handleResendCode}
-                    disabled={isLoading || resendCountdown > 0}
-                    className={ghostBtn}
-                  >
-                    {resendCountdown > 0
-                      ? `Reenviar em ${resendCountdown}s`
-                      : (<><ArrowLeft className="h-4 w-4" /> Reenviar e-mail</>)}
-                  </button>
-                </div>
-              </form>
-            )}
-
-            {/* Step 3 — password */}
-            {signupStep === 3 && (
-              <form onSubmit={handleSetPassword} className="space-y-5 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                <div>
-                  <label className="block text-xs font-semibold text-neutral-500 uppercase tracking-wider mb-2">Seu nome</label>
-                  <input
-                    type="text"
-                    required
-                    autoFocus
-                    minLength={2}
-                    value={displayName}
-                    onChange={(e) => setDisplayName(e.target.value)}
-                    className={inputClass}
-                    placeholder="Como podemos te chamar?"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-neutral-500 uppercase tracking-wider mb-2">Crie sua senha</label>
-                  <div className="relative">
-                    <input
-                      type={showPassword ? "text" : "password"}
-                      required
-                      minLength={6}
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      className={`${inputClass} pr-12`}
-                      placeholder="Mínimo 6 caracteres"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute inset-y-0 right-0 pr-4 flex items-center text-neutral-400 hover:text-neutral-900 transition-colors"
-                    >
-                      {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-                    </button>
-                  </div>
-                </div>
-                <button type="submit" disabled={isLoading} className={primaryBtn}>
-                  {isLoading ? <Loader2 className="animate-spin h-5 w-5" /> : (<><KeyRound className="h-5 w-5" />Finalizar cadastro</>)}
-                </button>
-              </form>
-            )}
-          </div>
-        )}
-
-        {/* Footer link */}
         <div className="text-center pt-6 mt-6 border-t border-neutral-200 relative">
           {isSignUp ? (
             <p className="text-neutral-500 text-sm">
