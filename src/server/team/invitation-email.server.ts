@@ -34,7 +34,7 @@ export async function sendWorkspaceInvitationEmail({
     if (validatedUrl.username || validatedUrl.password) throw new Error('URL cannot contain credentials');
     if (validatedUrl.search || validatedUrl.hash) throw new Error('URL cannot contain search params or hash');
   } catch (err) {
-    console.error('[Email] Invalid PUBLIC_URL:', publicUrl);
+    console.error('[Email] Configuration Error: Invalid PUBLIC_URL protocol or format');
     throw new Error('Internal Configuration Error');
   }
 
@@ -127,19 +127,9 @@ export async function sendWorkspaceInvitationEmail({
   });
 
   if (!res.ok) {
-    let errorDetails = '';
-    try {
-      // Don't log full response if it's too large, but capture enough for diagnosis
-      const text = await res.text();
-      errorDetails = text.slice(0, 500);
-    } catch (e) {
-      errorDetails = 'Could not read error body';
-    }
-
-    console.error('[Resend] API Error:', {
+    console.error('[Resend] API Error (Stage: request_failed)', {
       status: res.status,
-      requestId: res.headers.get('x-request-id'),
-      details: errorDetails
+      requestId: res.headers.get('x-request-id')?.slice(0, 100) || 'none',
     });
     throw new Error(`Failed to send email via Resend: ${res.status}`);
   }
