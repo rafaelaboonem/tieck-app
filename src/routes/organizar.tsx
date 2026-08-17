@@ -138,6 +138,7 @@ function SortableChecklistCard({
   assignments,
   members,
   onAssign,
+  onSetDeadline,
   canManage,
 }: { 
   checklist: Checklist; 
