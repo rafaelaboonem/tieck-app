@@ -5382,8 +5382,8 @@ export function NovoChecklistPage() {
       )}
 
       {isSettingsOpen && (
-        <div className="fixed inset-0 z-50 bg-white overflow-y-auto">
-          <div className="sticky top-0 bg-white border-b border-neutral-100 px-6 py-3 flex items-center">
+        <div className="fixed inset-0 z-50 bg-white overflow-y-auto w-full">
+          <div className="sticky top-0 bg-white border-b border-neutral-100 px-4 sm:px-6 py-3 flex items-center w-full z-20">
             <button
               type="button"
               onClick={() => setIsSettingsOpen(false)}
