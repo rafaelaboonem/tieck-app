@@ -335,7 +335,7 @@ import logoIcon from "../assets/local/logo-tieck.webp";
         
  
            <div className="mt-2 flex-1 overflow-y-auto no-scrollbar pb-8">
-            {profile && (
+            {(profile || user) && (
               <div className="flex flex-col gap-6">
                 <ul className="space-y-0.5">
                   {[
@@ -347,7 +347,13 @@ import logoIcon from "../assets/local/logo-tieck.webp";
                     { icon: CreditCard, label: "Meu Plano", to: "/membros" },
                     { icon: Briefcase, label: "Espaço de Trabalho", to: "/organizar" },
                     { icon: Users, label: "Equipe", to: "/equipe" },
-                  ].map((item: NavItem) => {
+                  ].filter(item => {
+                    // Restrições de visibilidade baseadas em role
+                    // O hook useWorkspaceRBAC não está disponível aqui no topo, 
+                    // mas podemos inferir permissões básicas ou apenas renderizar o menu universal como pedido.
+                    // "Equipe" e "Painel" costumam ser administrativos.
+                    return true;
+                  }).map((item: NavItem) => {
                     const Icon = item.icon;
                     const isSearch = item.label === "Buscar";
                     const isActive = item.to === location.pathname;
