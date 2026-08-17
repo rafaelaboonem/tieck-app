@@ -109,7 +109,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       
       // Limpar o parâmetro da URL após sincronizar com o estado
       const url = new URL(window.location.href);
-      if (url.searchParams.has('workspace')) {
+      if (url.searchParams.has('workspace') && url.pathname !== '/checklist') {
         url.searchParams.delete('workspace');
         window.history.replaceState({}, '', url.pathname + url.search);
       }
