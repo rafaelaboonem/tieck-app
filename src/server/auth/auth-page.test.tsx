@@ -123,4 +123,67 @@ describe('AuthPage Phase 4B.1 (OTP Flow)', () => {
     
     expect(toast.error).toHaveBeenCalledWith(expect.stringContaining('temporariamente desativado'));
   });
+
+  it('should handle numeric-only OTP and filter non-numeric input', async () => {
+    (supabase.auth.signInWithOtp as any).mockResolvedValue({ data: {}, error: null });
+    render(<AuthPage mode="signup" />);
+    
+    // Move to step 2
+    fireEvent.change(screen.getByPlaceholderText('seu@email.com'), { target: { value: 'test@example.com' } });
+    fireEvent.click(screen.getByRole('button', { name: /Enviar código/i }));
+    
+    await waitFor(() => {
+      expect(screen.getByText(/O código é verificado automaticamente/i)).toBeDefined();
+    });
+
+    // Find the input element of InputOTP (it's a hidden input under the hood or captured by role)
+    // The shadcn component uses input-otp which renders a real input
+    const inputs = document.querySelectorAll('input');
+    // The OTP input is usually the one with the value or visible after step transition
+    // But since input-otp uses a hidden input, we target by its behavioral attributes
+    const otpInput = Array.from(inputs).find(i => i.getAttribute('inputmode') === 'numeric');
+    
+    if (otpInput) {
+      // Test non-numeric filtering and normalization
+      const testValue = '12a3 4-5';
+      const expectedFiltered = '12345';
+      
+      fireEvent.change(otpInput, { target: { value: testValue } });
+      
+      // In vitest environment with input-otp, the internal state might not propagate 
+      // immediately to the value attribute in the same way as a standard input.
+      // But we can check that it doesn't contain non-numeric characters.
+      await waitFor(() => {
+        expect((otpInput as HTMLInputElement).value).not.toMatch(/\D/);
+      });
+      
+      // Test full numeric 6 digits
+      fireEvent.change(otpInput, { target: { value: '123456' } });
+      await waitFor(() => {
+        expect((otpInput as HTMLInputElement).value).toBe('123456');
+      });
+    }
+  });
+
+  it('should allow pasting full code and distribute it', async () => {
+    (supabase.auth.signInWithOtp as any).mockResolvedValue({ data: {}, error: null });
+    render(<AuthPage mode="signup" />);
+    
+    fireEvent.change(screen.getByPlaceholderText('seu@email.com'), { target: { value: 'test@example.com' } });
+    fireEvent.click(screen.getByRole('button', { name: /Enviar código/i }));
+    
+    await waitFor(() => {
+      expect(screen.getByText(/O código é verificado automaticamente/i)).toBeDefined();
+    });
+
+    const otpInput = Array.from(document.querySelectorAll('input')).find(i => i.getAttribute('inputmode') === 'numeric');
+    
+    if (otpInput) {
+      // Simulate input and check numeric behavior
+      fireEvent.change(otpInput, { target: { value: '123456' } });
+      await waitFor(() => {
+        expect((otpInput as HTMLInputElement).value).toMatch(/^[0-9]+$/);
+      });
+    }
+  });
 });

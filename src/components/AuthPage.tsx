@@ -95,7 +95,7 @@ export function AuthPage({ mode, redirect }: Props) {
 
   const handleVerifyCode = async (e?: React.FormEvent, codeOverride?: string) => {
     e?.preventDefault();
-    const token = codeOverride ?? otp;
+    const token = (codeOverride ?? otp).replace(/\D/g, "");
     if (isLoading || token.length !== 6) return;
     if (verifyingRef.current === token) return;
     verifyingRef.current = token;
@@ -290,7 +290,19 @@ export function AuthPage({ mode, redirect }: Props) {
           {signupStep === 2 && (
             <form onSubmit={handleVerifyCode} className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
               <div className="flex justify-center">
-                <InputOTP maxLength={6} value={otp} onChange={setOtp} disabled={isLoading} autoFocus>
+                <InputOTP 
+                  maxLength={6} 
+                  value={otp} 
+                  onChange={(val) => {
+                    // Filter non-numeric characters and handle copy-paste normalization
+                    const filtered = val.replace(/\D/g, "");
+                    setOtp(filtered);
+                  }} 
+                  disabled={isLoading} 
+                  autoFocus
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                >
                   <InputOTPGroup className="gap-2 sm:gap-3">
                     {[0, 1, 2, 3, 4, 5].map((i) => (
                       <InputOTPSlot
