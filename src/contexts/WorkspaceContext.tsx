@@ -26,6 +26,8 @@ async function fetchWorkspacesQuery(): Promise<Workspace[]> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return [];
 
+  // Fetch workspaces where user is owner OR a member
+  // Note: RLS (ws_owner_all and ws_member_select) handles the filtration
   const { data, error } = await supabase
     .from("workspaces")
     .select("*")
@@ -36,7 +38,9 @@ async function fetchWorkspacesQuery(): Promise<Workspace[]> {
     return [];
   }
 
+  // If the user has access to workspaces, return them
   if (data && data.length > 0) return data;
+
 
   // Create default workspace if none exist
   const { data: newWs, error: createError } = await supabase

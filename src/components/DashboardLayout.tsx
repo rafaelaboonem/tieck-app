@@ -180,7 +180,7 @@ import logoIcon from "../assets/local/logo-tieck.webp";
     return (
         <div className="min-h-screen bg-white text-neutral-900 flex">
        {/* Sidebar */}
-       {profile && (
+       {(profile || user) && (
        <aside
          className={`${sidebarOpen ? "w-64 px-3 opacity-100" : "w-0 px-0 -translate-x-full overflow-hidden opacity-0"} border-r border-neutral-200 flex flex-col py-4 shrink-0 h-screen sticky top-0 transition-all duration-300 ease-in-out z-40 bg-white shadow-xl shadow-neutral-200/20`}
        >
@@ -291,7 +291,7 @@ import logoIcon from "../assets/local/logo-tieck.webp";
                   </div>
                 </DropdownMenuItem>
 
-              {profile?.is_admin && (
+              {(profile?.is_admin || workspaces.length === 0) && (
                 <button
                   onClick={() => { setCreateWsOpen(true); setNewWsName(""); setNewWsIcon("📁"); }}
                   className="w-full flex items-center gap-2 px-2 py-2 mb-1 text-[13px] font-semibold text-[#FF007F] hover:bg-[#FF007F]/5 rounded-md transition-all mx-0 text-left"
