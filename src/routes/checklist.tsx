@@ -686,12 +686,18 @@ function NovoChecklistPage() {
         }
 
         // Verificar membership
+        if (!authUser?.id) {
+          setAuthStatus('forbidden');
+          return;
+        }
+
         const { data: member, error: memberError } = await supabase
           .from("workspace_members")
           .select("role, status")
           .eq("workspace_id", checklist.workspace_id)
-          .eq("user_id", authUser?.id)
+          .eq("user_id", authUser.id)
           .maybeSingle();
+
 
         if (memberError) throw memberError;
 
