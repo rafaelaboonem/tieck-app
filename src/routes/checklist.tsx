@@ -3368,17 +3368,14 @@ export function NovoChecklistPage() {
                       className="group flex flex-col gap-2 border border-transparent transition-colors"
                     >
                       <input
-                        className="w-full text-base sm:text-lg font-bold placeholder:text-neutral-400 bg-transparent outline-none"
-                        style={{ color: textColor }}
-                        type="text"
-                       ref={(el) => {
-                         if (el) textareaRefs.current[block.id] = el as any;
-                       }}
-                       value={block.placeholder}
-                       onChange={(e) => updateBlock(block.id, { placeholder: e.target.value } as Partial<Block>)}
-                         onKeyDown={(e) => {
-                           if (e.key === "Enter") {
-                             e.preventDefault();
+                        ref={(el) => {
+                          if (el) textareaRefs.current[block.id] = el as any;
+                        }}
+                        value={block.placeholder}
+                        onChange={(e) => updateBlock(block.id, { placeholder: e.target.value } as Partial<Block>)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
                             const idx = blocks.findIndex(b => b.id === block.id);
                             const nextId = newId();
                             setBlocks(prev => {
@@ -3390,9 +3387,9 @@ export function NovoChecklistPage() {
                             focusBlockId.current = nextId;
                           }
                         }}
-                       placeholder="Texto de exemplo (placeholder)"
-                       className="w-full bg-white border border-neutral-200 rounded-lg px-4 py-3 outline-none focus:ring-2 focus:ring-pink-500/20 transition-all text-sm placeholder:text-neutral-400 shadow-sm"
-                       style={{ color: textColor }}
+                        placeholder="Texto de exemplo (placeholder)"
+                        className="w-full bg-white border border-neutral-200 rounded-lg px-4 py-3 outline-none focus:ring-2 focus:ring-pink-500/20 transition-all text-sm placeholder:text-neutral-400 shadow-sm"
+                        style={{ color: textColor }}
                       />
                     </div>
                    );
