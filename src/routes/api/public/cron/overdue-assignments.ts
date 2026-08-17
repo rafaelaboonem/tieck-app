@@ -22,9 +22,10 @@ export const Route = createFileRoute('/api/public/cron/overdue-assignments')({
         }
 
         try {
-          const now = new Date().toISOString();
+          const now = new Date();
           
-          const { data: overdue, error } = await supabaseAdmin
+          // Get assignments that passed their deadline and haven't been notified yet
+          const { data: candidates, error } = await supabaseAdmin
             .from('checklist_assignments')
             .select(`
               id,
@@ -36,12 +37,11 @@ export const Route = createFileRoute('/api/public/cron/overdue-assignments')({
               workspaces(name, owner_id),
               workspace_members(profiles(display_name, email))
             `)
-            .lt('due_at', now)
-            .is('overdue_notified_at', null)
-            .or('completed_at.is.null,completed_at.gt.due_at');
+            .lt('due_at', now.toISOString())
+            .is('overdue_notified_at', null);
 
           if (error) throw error;
-          if (!overdue || overdue.length === 0) {
+          if (!candidates || candidates.length === 0) {
             return new Response(JSON.stringify({ processed: 0 }), { 
               status: 200, 
               headers: { 'Content-Type': 'application/json' } 
@@ -50,18 +50,30 @@ export const Route = createFileRoute('/api/public/cron/overdue-assignments')({
 
           const results = [];
           
-          for (const assignment of overdue) {
+          for (const assignment of candidates) {
             try {
+              const dueAt = new Date(assignment.due_at!);
+              const completedAt = assignment.completed_at ? new Date(assignment.completed_at) : null;
+              
+              // Business logic:
+              // - completed_at NULL + due_at passed = overdue (ATRASADO)
+              // - completed_at <= due_at = NOT overdue (OK)
+              // - completed_at > due_at = completed late (ATRASADO)
+              const isOverdue = !completedAt || completedAt > dueAt;
+              
+              if (!isOverdue) continue;
+
               const ownerId = (assignment.workspaces as any)?.owner_id;
               if (!ownerId) continue;
               
-              const { data: ownerProfile } = await supabaseAdmin
-                .from('profiles')
-                .select('email')
-                .eq('id', ownerId)
-                .single();
+              // Resolve owner email using Admin API (source of truth)
+              const { data: userData, error: userError } = await supabaseAdmin.auth.admin.getUserById(ownerId);
+              if (userError || !userData.user?.email) {
+                console.error(`Could not resolve email for owner ${ownerId}:`, userError);
+                continue;
+              }
               
-              if (!ownerProfile?.email) continue;
+              const ownerEmail = userData.user.email;
 
               await sendOverdueAssignmentEmail({
                 assignmentId: assignment.id,
@@ -69,10 +81,11 @@ export const Route = createFileRoute('/api/public/cron/overdue-assignments')({
                 workspaceName: (assignment.workspaces as any)?.name || 'Meu Workspace',
                 assigneeName: (assignment.workspace_members as any)?.profiles?.display_name || (assignment.workspace_members as any)?.profiles?.email || 'Membro',
                 dueAt: assignment.due_at!,
-                ownerEmail: ownerProfile.email,
+                ownerEmail: ownerEmail,
                 isStillPending: !assignment.completed_at
               });
 
+              // Only persist notified_at AFTER successful Resend response
               await supabaseAdmin
                 .from('checklist_assignments')
                 .update({ overdue_notified_at: new Date().toISOString() })

@@ -41,7 +41,21 @@ export async function sendOverdueAssignmentEmail({
     minute: '2-digit' 
   });
 
-  const subject = `Prazo não cumprido: ${checklistTitle}`;
+  const escapeHtml = (str: string) => str.replace(/[&<>"']/g, (m) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;'
+  })[m] || m);
+
+  const cleanSubject = (str: string) => str.replace(/[\r\n\x00-\x1F\x7F]/g, "").slice(0, 255);
+
+  const safeChecklistTitle = escapeHtml(checklistTitle);
+  const safeWorkspaceName = escapeHtml(workspaceName);
+  const safeAssigneeName = escapeHtml(assigneeName);
+
+  const subject = cleanSubject(`Prazo não cumprido: ${checklistTitle}`);
   const statusMessage = isStillPending 
     ? "O checklist ainda está pendente de execução." 
     : "O checklist foi concluído, mas após o prazo estabelecido.";
@@ -51,12 +65,12 @@ export async function sendOverdueAssignmentEmail({
       <img src="${publicUrl}/email/tieck-logo.png" alt="Tieck" style="width: 120px; margin-bottom: 24px;" />
       <h1 style="font-size: 20px; color: #111; margin-bottom: 16px;">Atenção: Prazo expirado</h1>
       <p style="color: #666; font-size: 16px; line-height: 24px;">
-        Informamos que o prazo para a execução do checklist <strong>${checklistTitle}</strong> no workspace <strong>${workspaceName}</strong> não foi cumprido.
+        Informamos que o prazo para a execução do checklist <strong>${safeChecklistTitle}</strong> no workspace <strong>${safeWorkspaceName}</strong> não foi cumprido.
       </p>
       
       <div style="background-color: #f9f9f9; border-radius: 12px; padding: 20px; margin: 24px 0;">
         <p style="margin: 0 0 8px 0; font-size: 14px; color: #888; text-transform: uppercase; letter-spacing: 0.5px;">Responsável</p>
-        <p style="margin: 0 0 16px 0; font-size: 16px; color: #111; font-weight: bold;">${assigneeName}</p>
+        <p style="margin: 0 0 16px 0; font-size: 16px; color: #111; font-weight: bold;">${safeAssigneeName}</p>
         
         <p style="margin: 0 0 8px 0; font-size: 14px; color: #888; text-transform: uppercase; letter-spacing: 0.5px;">Prazo Original</p>
         <p style="margin: 0 0 16px 0; font-size: 16px; color: #111; font-weight: bold;">${formattedDueAt}</p>
@@ -84,7 +98,7 @@ export async function sendOverdueAssignmentEmail({
     headers: {
       'Authorization': `Bearer ${resendApiKey}`,
       'Content-Type': 'application/json',
-      'X-Idempotency-Key': idempotencyKey
+      'Idempotency-Key': idempotencyKey
     },
     body: JSON.stringify({
       from: FROM_ADDRESS,

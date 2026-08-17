@@ -2668,24 +2668,15 @@ export type Database = {
           upload_token_expires_at: string
         }[]
       }
-      update_checklist_assignments:
-        | {
-            Args: {
-              p_checklist_id: string
-              p_member_ids: string[]
-              p_workspace_id: string
-            }
-            Returns: undefined
-          }
-        | {
-            Args: {
-              p_checklist_id: string
-              p_member_ids: string[]
-              p_primary_member_id?: string
-              p_workspace_id: string
-            }
-            Returns: boolean
-          }
+      update_checklist_assignments: {
+        Args: {
+          p_checklist_id: string
+          p_member_ids: string[]
+          p_primary_member_id?: string
+          p_workspace_id: string
+        }
+        Returns: undefined
+      }
       update_checklist_retention: {
         Args: {
           p_checklist_id: string
