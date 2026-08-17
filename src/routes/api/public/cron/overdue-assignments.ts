@@ -7,7 +7,6 @@ export const Route = createFileRoute('/api/public/cron/overdue-assignments')({
   server: {
     handlers: {
       POST: async ({ request }) => {
-        // 1. Authorization check
         const authHeader = request.headers.get('Authorization');
         const cronSecret = process.env['CRON_SECRET'];
         
@@ -18,19 +17,16 @@ export const Route = createFileRoute('/api/public/cron/overdue-assignments')({
 
         const expected = `Bearer ${cronSecret}`;
         
-        // Safe comparison
         if (!authHeader || authHeader.length !== expected.length || !timingSafeEqual(Buffer.from(authHeader), Buffer.from(expected))) {
           return new Response('Unauthorized', { status: 401 });
         }
 
         try {
-          // 2. Query overdue assignments that haven't been notified yet
-          // Logic: due_at < now AND (completed_at IS NULL OR completed_at > due_at) AND overdue_notified_at IS NULL
           const now = new Date().toISOString();
           
           const { data: overdue, error } = await supabaseAdmin
             .from('checklist_assignments')
-            .select(\`
+            .select(`
               id,
               due_at,
               completed_at,
@@ -39,10 +35,10 @@ export const Route = createFileRoute('/api/public/cron/overdue-assignments')({
               checklists(title),
               workspaces(name, owner_id),
               workspace_members(profiles(display_name, email))
-            \`)
+            `)
             .lt('due_at', now)
             .is('overdue_notified_at', null)
-            .or(\`completed_at.is.null,completed_at.gt.due_at\`);
+            .or('completed_at.is.null,completed_at.gt.due_at');
 
           if (error) throw error;
           if (!overdue || overdue.length === 0) {
@@ -56,7 +52,6 @@ export const Route = createFileRoute('/api/public/cron/overdue-assignments')({
           
           for (const assignment of overdue) {
             try {
-              // Get Owner Email
               const ownerId = (assignment.workspaces as any)?.owner_id;
               if (!ownerId) continue;
               
@@ -68,7 +63,6 @@ export const Route = createFileRoute('/api/public/cron/overdue-assignments')({
               
               if (!ownerProfile?.email) continue;
 
-              // Send Email
               await sendOverdueAssignmentEmail({
                 assignmentId: assignment.id,
                 checklistTitle: (assignment.checklists as any)?.title || 'Checklist',
@@ -79,7 +73,6 @@ export const Route = createFileRoute('/api/public/cron/overdue-assignments')({
                 isStillPending: !assignment.completed_at
               });
 
-              // Mark as notified
               await supabaseAdmin
                 .from('checklist_assignments')
                 .update({ overdue_notified_at: new Date().toISOString() })
@@ -87,7 +80,7 @@ export const Route = createFileRoute('/api/public/cron/overdue-assignments')({
 
               results.push({ id: assignment.id, status: 'sent' });
             } catch (err: any) {
-              console.error(\`Failed to process assignment \${assignment.id}:\`, err);
+              console.error(`Failed to process assignment ${assignment.id}:`, err);
               results.push({ id: assignment.id, status: 'failed', error: err.message });
             }
           }
