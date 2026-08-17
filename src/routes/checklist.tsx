@@ -2929,7 +2929,7 @@ export function NovoChecklistPage() {
           <button
             type="button"
             onClick={() => setIsSettingsOpen(true)}
-            className="hover:text-neutral-900 flex items-center gap-1.5"
+            className="hover:text-neutral-900 flex items-center gap-1 sm:gap-1.5"
           >
             <Settings className="w-4 h-4" />
             <span className="hidden sm:inline">Configuração</span>
