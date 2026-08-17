@@ -77,4 +77,30 @@ describe("useWorkspaceRBAC Performance and Cache", () => {
     expect(result.current.loading).toBe(false);
     expect(result.current.role).toBe("owner");
   });
+
+  it("should return neutral state (loading=true, role=null) when switching workspace without cache", async () => {
+    const mockUser = { id: "user-123" };
+    const mockWorkspace1 = { id: "ws-1", owner_id: "user-123" };
+    const mockWorkspace2 = { id: "ws-2", owner_id: "other-user" };
+
+    (useAuth as any).mockReturnValue({ user: mockUser });
+    (useWorkspace as any).mockReturnValue({ workspaces: [mockWorkspace1, mockWorkspace2] });
+
+    const { result, rerender } = renderHook(({ wsId }) => useWorkspaceRBAC(wsId), { 
+      wrapper,
+      initialProps: { wsId: "ws-1" }
+    });
+
+    // Load first workspace
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.role).toBe("owner");
+
+    // Switch to second workspace (which has no cache yet)
+    rerender({ wsId: "ws-2" });
+
+    // With placeholderData removed, it should NOT inherit "owner"
+    // It should go back to loading state for the new key
+    expect(result.current.role).toBe(null);
+    expect(result.current.loading).toBe(true);
+  });
 });
