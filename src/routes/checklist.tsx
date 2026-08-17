@@ -597,11 +597,17 @@ export const Route = createFileRoute("/checklist")({
   component: NovoChecklistPage,
 });
 
+import { useWorkspaceRBAC } from "@/hooks/useWorkspaceRBAC";
+
 function NovoChecklistPage() {
   const { sidebarOpen, setSidebarOpen } = useSidebar();
   const { currentWorkspace } = useWorkspace();
   const navigate = useNavigate();
   const { id: checklistId, workspace: workspaceParam, category: categoryParam, settings: openSettingsParam } = Route.useSearch();
+  
+  // RBAC Gating
+  const { role, isViewer, loading: rbacLoading } = useWorkspaceRBAC(workspaceParam || currentWorkspace?.id);
+  
   const [user, setUser] = useState<any>(null);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [authEmail, setAuthEmail] = useState("");
@@ -1528,6 +1534,16 @@ function NovoChecklistPage() {
         return next;
       }
 
+      // Gating Viewer
+      if (!rbacLoading && isViewer && checklistId) {
+        toast.info("Você possui acesso somente para execução.");
+        navigate({ 
+          to: `/c/${checklistId}` as any, 
+          replace: true 
+        });
+        return prev;
+      }
+
       // If target block is empty text, replace it
       if (targetBlock.type === "text" && (!targetBlock.value || targetBlock.value.trim() === "")) {
         next[idx] = block;
@@ -1558,6 +1574,32 @@ function NovoChecklistPage() {
       options: s.options.filter((o) => o.label.toLowerCase().includes(pickerQuery.toLowerCase())),
     }))
     .filter((s) => s.options.length > 0);
+
+  // Gating Viewer
+  useEffect(() => {
+    if (!rbacLoading && isViewer && checklistId) {
+      toast.info("Você possui acesso somente para execução.");
+      navigate({ 
+        to: `/c/${checklistId}` as any, 
+        replace: true 
+      });
+    }
+  }, [rbacLoading, isViewer, checklistId, navigate]);
+
+  if (rbacLoading && checklistId) {
+    return (
+      <div className="flex h-screen w-full items-center justify-center bg-white">
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="h-8 w-8 animate-spin text-neutral-400" />
+          <p className="text-sm text-neutral-500">Verificando permissões...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (isViewer && checklistId) {
+    return null; // Redirecionamento em curso
+  }
 
   const handleStart = (font?: string) => {
     setIsStarted(true);

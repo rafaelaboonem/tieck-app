@@ -414,7 +414,10 @@ import logoIcon from "../assets/local/logo-tieck.webp";
                             <li key={chk.id}>
                               <button
                                 type="button"
-                                onClick={() => navigate({ to: "/checklist", search: { id: chk.id } as any })}
+                                onClick={() => {
+                                  // O redirecionamento centralizado em /checklist cuidará do Viewer.
+                                  navigate({ to: "/checklist", search: { id: chk.id } });
+                                }}
                                 className="w-full text-left py-1 text-[13px] text-neutral-400 hover:text-neutral-900 transition-colors truncate block font-medium"
                               >
                                 {chk.title || "Sem título"}
