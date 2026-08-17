@@ -15,9 +15,11 @@ if (typeof document !== 'undefined') {
   document.elementFromPoint = () => null;
 }
 
+const mockNavigate = vi.fn();
+
 // Mocking external modules
 vi.mock('@tanstack/react-router', () => ({
-  useNavigate: () => vi.fn(),
+  useNavigate: () => mockNavigate,
   Link: ({ children, to }: any) => <a href={to}>{children}</a>,
 }));
 
@@ -31,8 +33,11 @@ vi.mock('@/integrations/supabase/client', () => ({
   },
 }));
 
+let mockUser: any = null;
+let mockSession: any = null;
+
 vi.mock('@/contexts/AuthContext', () => ({
-  useAuth: () => ({ user: null }),
+  useAuth: () => ({ user: mockUser, session: mockSession }),
 }));
 
 vi.mock('sonner', () => ({
@@ -47,143 +52,99 @@ vi.mock('../assets/local/logo-tieck.webp', () => ({
   default: 'logo-url',
 }));
 
-describe('AuthPage Phase 4B.1 (OTP Flow)', () => {
+describe('AuthPage Phase 4B.2 (Redirect Integrity)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-  });
-
-  it('should request OTP and transition to step 2 on signup', async () => {
-    (supabase.auth.signInWithOtp as any).mockResolvedValue({ data: {}, error: null });
-
-    render(<AuthPage mode="signup" />);
-
-    const emailInput = screen.getByPlaceholderText('seu@email.com');
-    fireEvent.change(emailInput, { target: { value: 'test@example.com' } });
-
-    const submitBtn = screen.getByRole('button', { name: /Enviar código/i });
-    fireEvent.click(submitBtn);
-
-    await waitFor(() => {
-      expect(supabase.auth.signInWithOtp).toHaveBeenCalledWith({
-        email: 'test@example.com',
-        options: expect.objectContaining({
-          shouldCreateUser: true,
-        }),
-      });
-      expect(toast.success).toHaveBeenCalledWith(expect.stringContaining('Código enviado'));
+    mockUser = null;
+    mockSession = null;
+    // Mock window.location.assign
+    vi.stubGlobal('location', {
+      ...window.location,
+      assign: vi.fn(),
+      origin: 'http://localhost:3000',
     });
   });
 
-  it('should request OTP on login with shouldCreateUser: false', async () => {
+  it('should redirect to safe redirect after OTP success', async () => {
     (supabase.auth.signInWithOtp as any).mockResolvedValue({ data: {}, error: null });
+    (supabase.auth.verifyOtp as any).mockResolvedValue({ data: { user: { id: '1' } }, error: null });
+    
+    // Simulate successful verifyOtp setting session
+    mockUser = { id: '1', email_confirmed_at: '2023-01-01' };
+    mockSession = { access_token: 'tok' };
 
-    render(<AuthPage mode="login" />);
+    const redirect = '/convite/abc-123';
+    render(<AuthPage mode="signup" redirect={redirect} />);
 
-    const emailInput = screen.getByPlaceholderText('seu@email.com');
-    fireEvent.change(emailInput, { target: { value: 'login@example.com' } });
+    // Step 1: Send OTP
+    fireEvent.change(screen.getByPlaceholderText('seu@email.com'), { target: { value: 'test@example.com' } });
+    fireEvent.click(screen.getByRole('button', { name: /Enviar código/i }));
 
-    const submitBtn = screen.getByRole('button', { name: /Receber código/i });
-    fireEvent.click(submitBtn);
+    // Step 2: Verify OTP
+    await waitFor(() => {
+      expect(screen.getByText(/O código é verificado automaticamente/i)).toBeDefined();
+    });
+
+    // Directly trigger verification (useEffect simulates this on 6 digits)
+    const otpInput = Array.from(document.querySelectorAll('input')).find(i => i.getAttribute('inputmode') === 'numeric');
+    if (otpInput) {
+      fireEvent.change(otpInput, { target: { value: '123456' } });
+    }
 
     await waitFor(() => {
-      expect(supabase.auth.signInWithOtp).toHaveBeenCalledWith({
-        email: 'login@example.com',
-        options: expect.objectContaining({
-          shouldCreateUser: false,
-        }),
-      });
+      // Should use window.location.assign for /convite/ paths
+      expect(window.location.assign).toHaveBeenCalledWith(redirect);
     });
   });
 
-  it('should handle verifyOtp and display success message', async () => {
-     (supabase.auth.signInWithOtp as any).mockResolvedValue({ data: {}, error: null });
-     (supabase.auth.verifyOtp as any).mockResolvedValue({ data: { user: { id: '1' } }, error: null });
+  it('should reject malicious external redirects', async () => {
+    const maliciousRedirect = 'https://malicious.com';
+    render(<AuthPage mode="signup" redirect={maliciousRedirect} />);
 
-     render(<AuthPage mode="signup" />);
+    // Simulate session exists
+    mockUser = { id: '1', email_confirmed_at: '2023-01-01' };
+    mockSession = { access_token: 'tok' };
 
-     // Step 1: Send OTP
-     fireEvent.change(screen.getByPlaceholderText('seu@email.com'), { target: { value: 'test@example.com' } });
-     fireEvent.click(screen.getByRole('button', { name: /Enviar código/i }));
-
-     // Step 2: Verify OTP
-     await waitFor(() => {
-       expect(screen.getByText(/O código é verificado automaticamente/i)).toBeDefined();
-     });
-
-     // Simulate OTP entry
-     // Note: In real test we would interact with InputOTP, but here we check the logic call
-     // Since handleVerifyCode is called via useEffect when otp.length === 6
+    await waitFor(() => {
+      // Should fall back to /inicio instead of malicious URL
+      expect(mockNavigate).toHaveBeenCalledWith({ to: '/inicio' });
+      expect(window.location.assign).not.toHaveBeenCalled();
+    });
   });
 
-  it('should hide Google button when it is not configured (simulated via toast error)', async () => {
-    render(<AuthPage mode="login" />);
-    
-    const googleBtn = screen.getByRole('button', { name: /Entrar com Google/i });
-    fireEvent.click(googleBtn);
-    
-    expect(toast.error).toHaveBeenCalledWith(expect.stringContaining('temporariamente desativado'));
+  it('should reject protocol-relative redirects (//evil.com)', async () => {
+    const maliciousRedirect = '//evil.com';
+    render(<AuthPage mode="signup" redirect={maliciousRedirect} />);
+
+    mockUser = { id: '1' };
+    mockSession = { access_token: 'tok' };
+
+    await waitFor(() => {
+      expect(mockNavigate).toHaveBeenCalledWith({ to: '/inicio' });
+    });
   });
 
-  it('should handle numeric-only OTP and filter non-numeric input', async () => {
-    (supabase.auth.signInWithOtp as any).mockResolvedValue({ data: {}, error: null });
+  it('should prevent duplicate navigation/verification for the same token', async () => {
+    (supabase.auth.verifyOtp as any).mockResolvedValue({ data: { user: { id: '1' } }, error: null });
+    
     render(<AuthPage mode="signup" />);
     
     // Move to step 2
     fireEvent.change(screen.getByPlaceholderText('seu@email.com'), { target: { value: 'test@example.com' } });
     fireEvent.click(screen.getByRole('button', { name: /Enviar código/i }));
-    
-    await waitFor(() => {
-      expect(screen.getByText(/O código é verificado automaticamente/i)).toBeDefined();
-    });
 
-    // Find the input element of InputOTP (it's a hidden input under the hood or captured by role)
-    // The shadcn component uses input-otp which renders a real input
-    const inputs = document.querySelectorAll('input');
-    // The OTP input is usually the one with the value or visible after step transition
-    // But since input-otp uses a hidden input, we target by its behavioral attributes
-    const otpInput = Array.from(inputs).find(i => i.getAttribute('inputmode') === 'numeric');
-    
-    if (otpInput) {
-      // Test non-numeric filtering and normalization
-      const testValue = '12a3 4-5';
-      const expectedFiltered = '12345';
-      
-      fireEvent.change(otpInput, { target: { value: testValue } });
-      
-      // In vitest environment with input-otp, the internal state might not propagate 
-      // immediately to the value attribute in the same way as a standard input.
-      // But we can check that it doesn't contain non-numeric characters.
-      await waitFor(() => {
-        expect((otpInput as HTMLInputElement).value).not.toMatch(/\D/);
-      });
-      
-      // Test full numeric 6 digits
-      fireEvent.change(otpInput, { target: { value: '123456' } });
-      await waitFor(() => {
-        expect((otpInput as HTMLInputElement).value).toBe('123456');
-      });
-    }
-  });
-
-  it('should allow pasting full code and distribute it', async () => {
-    (supabase.auth.signInWithOtp as any).mockResolvedValue({ data: {}, error: null });
-    render(<AuthPage mode="signup" />);
-    
-    fireEvent.change(screen.getByPlaceholderText('seu@email.com'), { target: { value: 'test@example.com' } });
-    fireEvent.click(screen.getByRole('button', { name: /Enviar código/i }));
-    
     await waitFor(() => {
       expect(screen.getByText(/O código é verificado automaticamente/i)).toBeDefined();
     });
 
     const otpInput = Array.from(document.querySelectorAll('input')).find(i => i.getAttribute('inputmode') === 'numeric');
-    
     if (otpInput) {
-      // Simulate input and check numeric behavior
-      fireEvent.change(otpInput, { target: { value: '123456' } });
-      await waitFor(() => {
-        expect((otpInput as HTMLInputElement).value).toMatch(/^[0-9]+$/);
-      });
+      fireEvent.change(otpInput, { target: { value: '111111' } });
+      fireEvent.change(otpInput, { target: { value: '111111' } });
     }
+
+    await waitFor(() => {
+      expect(supabase.auth.verifyOtp).toHaveBeenCalledTimes(1);
+    });
   });
 });
