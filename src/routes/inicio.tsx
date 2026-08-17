@@ -320,32 +320,36 @@ export function Dashboard() {
                             className={`w-2 h-2 rounded-full shrink-0 ${item.is_published ? "bg-green-500" : "bg-yellow-400"}`}
                             title={item.is_published ? "Publicado" : "Não publicado"}
                           />
-                          <h3 className="font-semibold text-neutral-900 truncate group-hover:text-pink-500 transition-colors text-sm">{item.title}</h3>
-                          <div className="flex items-center gap-1.5 text-[10px] text-neutral-400 shrink-0 bg-neutral-50 px-2 py-0.5 rounded-full border border-neutral-100">
-                            <Clock className="w-2.5 h-2.5" />
-                            <span>{new Date(item.updated_at || item.created_at).toLocaleDateString("pt-BR")}</span>
-                          </div>
-                          {item.checklist_assignments?.map((a: any) => {
-                            const status = getAssignmentStatus(a.due_at, a.completed_at);
-                            const badge = getStatusBadge(status);
-                            if (!badge) return null;
-                            return (
-                              <div key={a.id} className="flex items-center gap-1.5 ml-1">
-                                <span className={cn(
-                                  "px-2 py-0.5 rounded-full text-[9px] font-bold border flex items-center gap-1",
-                                  badge.className
-                                )}>
-                                  <CalendarDays className="w-2.5 h-2.5" />
-                                  {badge.label}
-                                  {a.due_at && (
-                                    <span className="opacity-70 ml-0.5 font-medium">
-                                      • {new Date(a.due_at).toLocaleDateString("pt-BR", { day: '2-digit', month: '2-digit' })}
-                                    </span>
-                                  )}
-                                </span>
+                          <div className="flex flex-col min-w-0 flex-1">
+                            <h3 className="font-semibold text-neutral-900 truncate group-hover:text-pink-500 transition-colors text-sm">{item.title}</h3>
+                            <div className="flex flex-wrap items-center gap-2 mt-1">
+                              <div className="flex items-center gap-1.5 text-[10px] text-neutral-400 shrink-0 bg-neutral-50 px-2 py-0.5 rounded-full border border-neutral-100">
+                                <Clock className="w-2.5 h-2.5" />
+                                <span>{new Date(item.updated_at || item.created_at).toLocaleDateString("pt-BR")}</span>
                               </div>
-                            );
-                          })}
+                              {item.checklist_assignments?.map((a: any) => {
+                                const status = getAssignmentStatus(a.due_at, a.completed_at);
+                                const badge = getStatusBadge(status);
+                                if (!badge) return null;
+                                return (
+                                  <div key={a.id} className="flex items-center gap-1.5">
+                                    <span className={cn(
+                                      "px-2 py-0.5 rounded-full text-[9px] font-bold border flex items-center gap-1",
+                                      badge.className
+                                    )}>
+                                      <CalendarDays className="w-2.5 h-2.5" />
+                                      {badge.label}
+                                      {a.due_at && (
+                                        <span className="opacity-70 ml-0.5 font-medium hidden sm:inline">
+                                          • {new Date(a.due_at).toLocaleDateString("pt-BR", { day: '2-digit', month: '2-digit' })}
+                                        </span>
+                                      )}
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
                         </div>
                       </div>
 
