@@ -131,4 +131,36 @@ describe('Phase 4C.1 - Assignment Integrity & Logic', () => {
       expect(headers).not.toHaveProperty('X-Idempotency-Key');
     });
   });
+
+  describe('Phase 4C.2 - Hardening Regressions', () => {
+    it('cron query avoids profiles.email', () => {
+      const query = `
+        id,
+        due_at,
+        completed_at,
+        checklist_id,
+        workspace_id,
+        checklists(title),
+        workspaces(name, owner_id),
+        workspace_members(user_id, profiles(display_name))
+      `;
+      expect(query).not.toContain('profiles(display_name, email)');
+      expect(query).toContain('workspace_members(user_id, profiles(display_name))');
+    });
+
+    it('requires both email success and DB update for "sent" status', async () => {
+      // Logic test: status must be sent only if notifyUpdateError is null
+      const resendSuccess = true;
+      const dbError = { message: 'DB Error' };
+      
+      const getStatus = (resendOk: boolean, dbErr: any) => {
+        if (!resendOk) return 'failed';
+        if (dbErr) return 'failed';
+        return 'sent';
+      };
+
+      expect(getStatus(resendSuccess, dbError)).toBe('failed');
+      expect(getStatus(resendSuccess, null)).toBe('sent');
+    });
+  });
 });

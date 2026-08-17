@@ -32,9 +32,10 @@ export function AssignmentDeadlinePopover({
 }: AssignmentDeadlinePopoverProps) {
   // Internal state for inputs (local time representation)
   const [localDateTime, setLocalDateTime] = React.useState<string>("");
+  const [open, setOpen] = React.useState(false);
 
-  // Sync internal state when dueAt prop changes or popover is handled
-  React.useEffect(() => {
+  // Sync internal state when dueAt prop changes or popover opens
+  const syncLocalState = React.useCallback(() => {
     if (dueAt) {
       const date = parseISO(dueAt);
       setLocalDateTime(toLocalISO(date));
@@ -43,24 +44,38 @@ export function AssignmentDeadlinePopover({
     }
   }, [dueAt]);
 
+  React.useEffect(() => {
+    syncLocalState();
+  }, [dueAt, syncLocalState]);
+
+  const onOpenChange = (isOpen: boolean) => {
+    if (isOpen) {
+      syncLocalState();
+    }
+    setOpen(isOpen);
+  };
+
   const handleSave = () => {
     if (!localDateTime) {
       onUpdate(null);
+      setOpen(false);
       return;
     }
     // Date constructor with YYYY-MM-DDTHH:mm uses local timezone
     const date = new Date(localDateTime);
     onUpdate(date.toISOString());
+    setOpen(false);
   };
 
   const handleClear = () => {
     onUpdate(null);
+    setOpen(false);
   };
 
   const [datePart, timePart] = localDateTime.split('T');
 
   return (
-    <Popover>
+    <Popover open={open} onOpenChange={onOpenChange}>
       <PopoverTrigger asChild disabled={disabled}>
         <Button
           variant="ghost"

@@ -35,7 +35,7 @@ export const Route = createFileRoute('/api/public/cron/overdue-assignments')({
               workspace_id,
               checklists(title),
               workspaces(name, owner_id),
-              workspace_members(profiles(display_name, email))
+              workspace_members(user_id, profiles(display_name))
             `)
             .lt('due_at', now.toISOString())
             .is('overdue_notified_at', null);
@@ -75,23 +75,40 @@ export const Route = createFileRoute('/api/public/cron/overdue-assignments')({
               
               const ownerEmail = userData.user.email;
 
+              // Resolve assignee name/email fallback
+              const member = assignment.workspace_members as any;
+              let assigneeName = member?.profiles?.display_name || 'Membro';
+              
+              // If name is 'Membro' (fallback) and we have a user_id, try to get email as better identifier
+              if (assigneeName === 'Membro' && member?.user_id) {
+                const { data: memberData } = await supabaseAdmin.auth.admin.getUserById(member.user_id);
+                if (memberData.user?.email) {
+                  assigneeName = memberData.user.email;
+                }
+              }
+
               await sendOverdueAssignmentEmail({
                 assignmentId: assignment.id,
                 checklistTitle: (assignment.checklists as any)?.title || 'Checklist',
                 workspaceName: (assignment.workspaces as any)?.name || 'Meu Workspace',
-                assigneeName: (assignment.workspace_members as any)?.profiles?.display_name || (assignment.workspace_members as any)?.profiles?.email || 'Membro',
+                assigneeName: assigneeName,
                 dueAt: assignment.due_at!,
                 ownerEmail: ownerEmail,
                 isStillPending: !assignment.completed_at
               });
 
               // Only persist notified_at AFTER successful Resend response
-              await supabaseAdmin
+              const { error: notifyUpdateError } = await supabaseAdmin
                 .from('checklist_assignments')
                 .update({ overdue_notified_at: new Date().toISOString() })
                 .eq('id', assignment.id);
 
-              results.push({ id: assignment.id, status: 'sent' });
+              if (notifyUpdateError) {
+                console.error(`Failed to persist notification status for assignment ${assignment.id}:`, notifyUpdateError);
+                results.push({ id: assignment.id, status: 'failed', error: 'Persistence error' });
+              } else {
+                results.push({ id: assignment.id, status: 'sent' });
+              }
             } catch (err: any) {
               console.error(`Failed to process assignment ${assignment.id}:`, err);
               results.push({ id: assignment.id, status: 'failed', error: err.message });
