@@ -34,7 +34,11 @@ function AuthenticatedExecutionPage() {
     }
 
     const fetchChecklist = async () => {
-      setLoading(true);
+      // Não re-inicializamos o loading se já temos o checklist para evitar flash
+      if (!checklist) {
+        setLoading(true);
+      }
+      
       const { data, error } = await supabase
         .from("checklists")
         .select("*")
@@ -59,10 +63,10 @@ function AuthenticatedExecutionPage() {
       setLoading(false);
     };
 
-    if (user) {
+    if (user?.id) {
       fetchChecklist();
     }
-  }, [id, user, authLoading, navigate]);
+  }, [id, user?.id, authLoading]);
 
   useEffect(() => {
     if (checklist && !rbacLoading && !role) {

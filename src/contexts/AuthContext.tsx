@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useState, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { User, Session } from "@supabase/supabase-js";
 import { ensureUserProfile } from "@/utils/auth-bootstrap";
@@ -21,11 +21,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const lastUserIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     // Check active sessions and sets the user
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (session?.user) {
+        lastUserIdRef.current = session.user.id;
         await ensureUserProfile(session.user.id, session.user.email!);
       }
       setSession(session);
@@ -34,12 +36,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
 
     // Listen for changes on auth state (sign in, sign out, etc.)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      if (session?.user) {
-        await ensureUserProfile(session.user.id, session.user.email!);
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      const newUser = session?.user ?? null;
+      const newUserId = newUser?.id ?? null;
+      
+      // Se for TOKEN_REFRESHED e o ID do usuário não mudou, evitamos re-bootstrap destrutivo
+      if (event === 'TOKEN_REFRESHED' && newUserId === lastUserIdRef.current && lastUserIdRef.current !== null) {
+        setSession(session);
+        // Não atualizamos o objeto 'user' para evitar disparar hooks que dependem do objeto inteiro
+        // O Supabase garante que session.user e user são o mesmo, mas a referência do objeto muda.
+        // Se realmente precisarmos atualizar o objeto (ex: metadados mudaram), faríamos aqui,
+        // mas o requisito é estabilidade.
+        return;
       }
+
+      lastUserIdRef.current = newUserId;
+
+      if (newUser) {
+        await ensureUserProfile(newUser.id, newUser.email!);
+      }
+      
       setSession(session);
-      setUser(session?.user ?? null);
+      setUser(newUser);
       setLoading(false);
     });
 
@@ -48,10 +66,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const refreshUser = async () => {
     const { data } = await supabase.auth.getUser();
-    if (data?.user) setUser(data.user);
+    if (data?.user) {
+      lastUserIdRef.current = data.user.id;
+      setUser(data.user);
+    }
   };
 
   const signOut = async () => {
+    lastUserIdRef.current = null;
     await supabase.auth.signOut();
   };
 

@@ -62,14 +62,13 @@ export function Dashboard() {
 
     const fetchChecklists = async () => {
       // Bloqueio de flash: Não carregar até o contexto estar definido
-      if (workspaceStatus === 'loading' || !user) {
-        setIsLoading(true);
+      if (workspaceStatus === 'loading' || !user?.id) {
         return;
       }
       
+      // Só ativamos o loading bloqueante se for a primeira carga ou mudança de contexto real
+      // O TanStack Query (se usado) lidaria com isso, mas aqui usamos estado local.
       setIsLoading(true);
-      // Limpar estado anterior para evitar flash de outro contexto
-      setChecklists([]);
       
       try {
         let query = supabase.from("checklists").select("*");
@@ -96,7 +95,7 @@ export function Dashboard() {
     };
 
     fetchChecklists();
-  }, [authLoading, user, workspaceStatus, currentWorkspace?.id]);
+  }, [authLoading, user?.id, workspaceStatus, currentWorkspace?.id]);
 
   const handleNew = () => {
     setGlow(true);
