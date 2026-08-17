@@ -1877,7 +1877,7 @@ export function WorkspacePage() {
 
 
         <Dialog open={isCategoryModalOpen} onOpenChange={setIsCategoryModalOpen}>
-          <DialogContent className="sm:max-w-[450px] rounded-[2rem] p-10 backdrop-blur-sm bg-white/90">
+          <DialogContent className="w-[calc(100%-2rem)] sm:max-w-[450px] mx-auto rounded-[2rem] p-6 sm:p-10 backdrop-blur-sm bg-white/90">
             <DialogHeader>
               <DialogTitle className="text-2xl font-bold">Criar novo tópico</DialogTitle>
             </DialogHeader>
