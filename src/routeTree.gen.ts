@@ -39,6 +39,7 @@ import { Route as ApiTeamInvitationsResendRouteImport } from './routes/api/team/
 import { Route as ApiPublicInvitationsInspectRouteImport } from './routes/api/public/invitations/inspect'
 import { Route as ApiPublicInvitationsCreateRouteImport } from './routes/api/public/invitations/create'
 import { Route as ApiPublicInvitationsAcceptRouteImport } from './routes/api/public/invitations/accept'
+import { Route as ApiPublicCronOverdueAssignmentsRouteImport } from './routes/api/public/cron/overdue-assignments'
 
 const PainelRoute = PainelRouteImport.update({
   id: '/painel',
@@ -197,6 +198,12 @@ const ApiPublicInvitationsAcceptRoute =
     path: '/api/public/invitations/accept',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicCronOverdueAssignmentsRoute =
+  ApiPublicCronOverdueAssignmentsRouteImport.update({
+    id: '/api/public/cron/overdue-assignments',
+    path: '/api/public/cron/overdue-assignments',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -223,6 +230,7 @@ export interface FileRoutesByFullPath {
   '/api/camera-ai/test-verification': typeof ApiCameraAiTestVerificationRoute
   '/api/camera-ai/verify': typeof ApiCameraAiVerifyRoute
   '/unidades/$unitId/operacao': typeof UnidadesUnitIdOperacaoRoute
+  '/api/public/cron/overdue-assignments': typeof ApiPublicCronOverdueAssignmentsRoute
   '/api/public/invitations/accept': typeof ApiPublicInvitationsAcceptRoute
   '/api/public/invitations/create': typeof ApiPublicInvitationsCreateRoute
   '/api/public/invitations/inspect': typeof ApiPublicInvitationsInspectRoute
@@ -255,6 +263,7 @@ export interface FileRoutesByTo {
   '/api/camera-ai/test-verification': typeof ApiCameraAiTestVerificationRoute
   '/api/camera-ai/verify': typeof ApiCameraAiVerifyRoute
   '/unidades/$unitId/operacao': typeof UnidadesUnitIdOperacaoRoute
+  '/api/public/cron/overdue-assignments': typeof ApiPublicCronOverdueAssignmentsRoute
   '/api/public/invitations/accept': typeof ApiPublicInvitationsAcceptRoute
   '/api/public/invitations/create': typeof ApiPublicInvitationsCreateRoute
   '/api/public/invitations/inspect': typeof ApiPublicInvitationsInspectRoute
@@ -288,6 +297,7 @@ export interface FileRoutesById {
   '/api/camera-ai/test-verification': typeof ApiCameraAiTestVerificationRoute
   '/api/camera-ai/verify': typeof ApiCameraAiVerifyRoute
   '/unidades/$unitId/operacao': typeof UnidadesUnitIdOperacaoRoute
+  '/api/public/cron/overdue-assignments': typeof ApiPublicCronOverdueAssignmentsRoute
   '/api/public/invitations/accept': typeof ApiPublicInvitationsAcceptRoute
   '/api/public/invitations/create': typeof ApiPublicInvitationsCreateRoute
   '/api/public/invitations/inspect': typeof ApiPublicInvitationsInspectRoute
@@ -322,6 +332,7 @@ export interface FileRouteTypes {
     | '/api/camera-ai/test-verification'
     | '/api/camera-ai/verify'
     | '/unidades/$unitId/operacao'
+    | '/api/public/cron/overdue-assignments'
     | '/api/public/invitations/accept'
     | '/api/public/invitations/create'
     | '/api/public/invitations/inspect'
@@ -354,6 +365,7 @@ export interface FileRouteTypes {
     | '/api/camera-ai/test-verification'
     | '/api/camera-ai/verify'
     | '/unidades/$unitId/operacao'
+    | '/api/public/cron/overdue-assignments'
     | '/api/public/invitations/accept'
     | '/api/public/invitations/create'
     | '/api/public/invitations/inspect'
@@ -386,6 +398,7 @@ export interface FileRouteTypes {
     | '/api/camera-ai/test-verification'
     | '/api/camera-ai/verify'
     | '/unidades/$unitId/operacao'
+    | '/api/public/cron/overdue-assignments'
     | '/api/public/invitations/accept'
     | '/api/public/invitations/create'
     | '/api/public/invitations/inspect'
@@ -419,6 +432,7 @@ export interface RootRouteChildren {
   ApiCameraAiTestVerificationRoute: typeof ApiCameraAiTestVerificationRoute
   ApiCameraAiVerifyRoute: typeof ApiCameraAiVerifyRoute
   UnidadesUnitIdOperacaoRoute: typeof UnidadesUnitIdOperacaoRoute
+  ApiPublicCronOverdueAssignmentsRoute: typeof ApiPublicCronOverdueAssignmentsRoute
   ApiPublicInvitationsAcceptRoute: typeof ApiPublicInvitationsAcceptRoute
   ApiPublicInvitationsCreateRoute: typeof ApiPublicInvitationsCreateRoute
   ApiPublicInvitationsInspectRoute: typeof ApiPublicInvitationsInspectRoute
@@ -639,6 +653,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicInvitationsAcceptRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/cron/overdue-assignments': {
+      id: '/api/public/cron/overdue-assignments'
+      path: '/api/public/cron/overdue-assignments'
+      fullPath: '/api/public/cron/overdue-assignments'
+      preLoaderRoute: typeof ApiPublicCronOverdueAssignmentsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -667,6 +688,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiCameraAiTestVerificationRoute: ApiCameraAiTestVerificationRoute,
   ApiCameraAiVerifyRoute: ApiCameraAiVerifyRoute,
   UnidadesUnitIdOperacaoRoute: UnidadesUnitIdOperacaoRoute,
+  ApiPublicCronOverdueAssignmentsRoute: ApiPublicCronOverdueAssignmentsRoute,
   ApiPublicInvitationsAcceptRoute: ApiPublicInvitationsAcceptRoute,
   ApiPublicInvitationsCreateRoute: ApiPublicInvitationsCreateRoute,
   ApiPublicInvitationsInspectRoute: ApiPublicInvitationsInspectRoute,
