@@ -225,30 +225,39 @@ export type Database = {
       checklist_assignments: {
         Row: {
           checklist_id: string
+          completed_at: string | null
           created_at: string
           created_by: string | null
+          due_at: string | null
           id: string
           is_primary: boolean
+          overdue_notified_at: string | null
           updated_at: string
           workspace_id: string
           workspace_member_id: string
         }
         Insert: {
           checklist_id: string
+          completed_at?: string | null
           created_at?: string
           created_by?: string | null
+          due_at?: string | null
           id?: string
           is_primary?: boolean
+          overdue_notified_at?: string | null
           updated_at?: string
           workspace_id: string
           workspace_member_id: string
         }
         Update: {
           checklist_id?: string
+          completed_at?: string | null
           created_at?: string
           created_by?: string | null
+          due_at?: string | null
           id?: string
           is_primary?: boolean
+          overdue_notified_at?: string | null
           updated_at?: string
           workspace_id?: string
           workspace_member_id?: string
@@ -2506,6 +2515,10 @@ export type Database = {
       }
       cleanup_expired_responses: { Args: never; Returns: undefined }
       cleanup_expired_signup_otps: { Args: never; Returns: number }
+      complete_assignment: {
+        Args: { p_checklist_id: string }
+        Returns: boolean
+      }
       consume_signup_verification: {
         Args: { p_email: string; p_token: string }
         Returns: {
@@ -2639,6 +2652,10 @@ export type Database = {
           workspace_id: string
         }[]
       }
+      set_assignment_deadline: {
+        Args: { p_assignment_id: string; p_due_at: string }
+        Returns: undefined
+      }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
       signup_account_state: { Args: { p_user_id: string }; Returns: string }
@@ -2651,15 +2668,24 @@ export type Database = {
           upload_token_expires_at: string
         }[]
       }
-      update_checklist_assignments: {
-        Args: {
-          p_checklist_id: string
-          p_member_ids: string[]
-          p_primary_member_id?: string
-          p_workspace_id: string
-        }
-        Returns: boolean
-      }
+      update_checklist_assignments:
+        | {
+            Args: {
+              p_checklist_id: string
+              p_member_ids: string[]
+              p_workspace_id: string
+            }
+            Returns: undefined
+          }
+        | {
+            Args: {
+              p_checklist_id: string
+              p_member_ids: string[]
+              p_primary_member_id?: string
+              p_workspace_id: string
+            }
+            Returns: boolean
+          }
       update_checklist_retention: {
         Args: {
           p_checklist_id: string
