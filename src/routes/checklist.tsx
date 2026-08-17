@@ -2120,8 +2120,8 @@ function NovoChecklistPage() {
       } else if (checklistId) {
         // When editing an existing checklist, don't change workspace_id unless specified
       } else if (!sessionChecklistIdRef.current) {
-        // For new checklists, default to null unless specified
-        checklistData.workspace_id = null;
+        // For new checklists, default to current context if available, or null
+        checklistData.workspace_id = currentWorkspace?.id || null;
       }
 
       if (categoryParam !== undefined) {

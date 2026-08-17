@@ -106,7 +106,12 @@ export function Dashboard() {
       localStorage.removeItem("draft_checklist_blocks");
       localStorage.removeItem("draft_checklist_started");
     } catch {}
-    setTimeout(() => navigate({ to: "/checklist" }), 220);
+    
+    // Pass current workspace ID to the checklist editor if active
+    setTimeout(() => navigate({ 
+      to: "/checklist",
+      search: currentWorkspace ? { workspace: currentWorkspace.id } as any : undefined
+    }), 220);
   };
   const handleDelete = async () => {
     if (!checklistToDelete) return;
