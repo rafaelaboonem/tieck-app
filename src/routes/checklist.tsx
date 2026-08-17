@@ -3019,7 +3019,7 @@ export function NovoChecklistPage() {
             })()}
 
           <div 
-            className="w-full mx-auto px-6"
+            className="w-full mx-auto px-4 sm:px-6"
             style={{ 
               maxWidth: pageWidth,
               color: textColor 
