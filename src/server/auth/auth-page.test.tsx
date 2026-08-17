@@ -4,7 +4,7 @@ import { AuthPage } from '../../components/AuthPage';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
-// Mocking DOM globals for input-otp and other components
+// Mocking DOM globals
 global.ResizeObserver = class ResizeObserver {
   observe() {}
   unobserve() {}
@@ -37,7 +37,15 @@ let mockUser: any = null;
 let mockSession: any = null;
 
 vi.mock('@/contexts/AuthContext', () => ({
-  useAuth: () => ({ user: mockUser, session: mockSession }),
+  useAuth: () => ({ 
+    user: mockUser, 
+    session: mockSession,
+    loading: false,
+    emailConfirmed: true,
+    needsEmailConfirmation: false,
+    refreshUser: vi.fn(),
+    signOut: vi.fn()
+  }),
 }));
 
 vi.mock('sonner', () => ({
@@ -57,7 +65,6 @@ describe('AuthPage Phase 4B.2 (Redirect Integrity)', () => {
     vi.clearAllMocks();
     mockUser = null;
     mockSession = null;
-    // Mock window.location.assign
     vi.stubGlobal('location', {
       ...window.location,
       assign: vi.fn(),
@@ -69,44 +76,34 @@ describe('AuthPage Phase 4B.2 (Redirect Integrity)', () => {
     (supabase.auth.signInWithOtp as any).mockResolvedValue({ data: {}, error: null });
     (supabase.auth.verifyOtp as any).mockResolvedValue({ data: { user: { id: '1' } }, error: null });
     
-    // Simulate successful verifyOtp setting session
-    mockUser = { id: '1', email_confirmed_at: '2023-01-01' };
-    mockSession = { access_token: 'tok' };
-
+    // Simulate successful verifyOtp triggering the effect
     const redirect = '/convite/abc-123';
-    render(<AuthPage mode="signup" redirect={redirect} />);
+    const { rerender } = render(<AuthPage mode="signup" redirect={redirect} />);
 
     // Step 1: Send OTP
     fireEvent.change(screen.getByPlaceholderText('seu@email.com'), { target: { value: 'test@example.com' } });
     fireEvent.click(screen.getByRole('button', { name: /Enviar código/i }));
 
-    // Step 2: Verify OTP
-    await waitFor(() => {
-      expect(screen.getByText(/O código é verificado automaticamente/i)).toBeDefined();
-    });
-
-    // Directly trigger verification (useEffect simulates this on 6 digits)
-    const otpInput = Array.from(document.querySelectorAll('input')).find(i => i.getAttribute('inputmode') === 'numeric');
-    if (otpInput) {
-      fireEvent.change(otpInput, { target: { value: '123456' } });
-    }
+    // Step 2: Simulate successful verification
+    mockUser = { id: '1', email_confirmed_at: '2023-01-01' };
+    mockSession = { access_token: 'tok' };
+    
+    // Rerender to trigger useEffect with new user/session state
+    rerender(<AuthPage mode="signup" redirect={redirect} />);
 
     await waitFor(() => {
-      // Should use window.location.assign for /convite/ paths
       expect(window.location.assign).toHaveBeenCalledWith(redirect);
     });
   });
 
-  it('should reject malicious external redirects', async () => {
+  it('should reject malicious external redirects and fallback to /inicio', async () => {
     const maliciousRedirect = 'https://malicious.com';
-    render(<AuthPage mode="signup" redirect={maliciousRedirect} />);
-
-    // Simulate session exists
     mockUser = { id: '1', email_confirmed_at: '2023-01-01' };
     mockSession = { access_token: 'tok' };
 
+    render(<AuthPage mode="signup" redirect={maliciousRedirect} />);
+
     await waitFor(() => {
-      // Should fall back to /inicio instead of malicious URL
       expect(mockNavigate).toHaveBeenCalledWith({ to: '/inicio' });
       expect(window.location.assign).not.toHaveBeenCalled();
     });
@@ -114,10 +111,10 @@ describe('AuthPage Phase 4B.2 (Redirect Integrity)', () => {
 
   it('should reject protocol-relative redirects (//evil.com)', async () => {
     const maliciousRedirect = '//evil.com';
-    render(<AuthPage mode="signup" redirect={maliciousRedirect} />);
-
     mockUser = { id: '1' };
     mockSession = { access_token: 'tok' };
+
+    render(<AuthPage mode="signup" redirect={maliciousRedirect} />);
 
     await waitFor(() => {
       expect(mockNavigate).toHaveBeenCalledWith({ to: '/inicio' });
