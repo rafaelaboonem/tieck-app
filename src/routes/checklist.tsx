@@ -93,7 +93,9 @@ import {
   CollapsibleTrigger 
 } from "@/components/ui/collapsible";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { cn } from "@/lib/utils";
 import { EditableBlock } from "@/components/EditableBlock";
+
 import { ColorPicker } from "@/components/ColorPicker";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -1485,7 +1487,7 @@ export function NovoChecklistPage() {
 
       if (members && members.length > 0) {
         // 2. Resolver perfis separadamente (evitar nested profiles PostgREST invalid relation)
-        const userIds = members.map(m => m.user_id);
+        const userIds = members.map(m => m.user_id).filter(id => !!id) as string[];
         const { data: profiles, error: profErr } = await supabase
           .from("profiles")
           .select("id, display_name, avatar_url")
