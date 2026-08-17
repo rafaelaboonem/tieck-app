@@ -111,6 +111,7 @@ import {
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { useSidebar } from "@/contexts/SidebarContext";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
+import { useIsMobile } from "@/hooks/use-mobile";
 import logoUrl from "../assets/local/logo-k.webp";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
