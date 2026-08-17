@@ -1300,7 +1300,7 @@ export function WorkspacePage() {
                       { icon: Bell, name: 'Bell' },
                       { icon: Globe, name: 'Globe' },
                       { icon: Users, name: 'Users' }
-                    ].map((item, i) => (
+                    ].map((item: any, i) => (
                       <button 
                         key={i}
                         onClick={() => {
@@ -1351,7 +1351,7 @@ export function WorkspacePage() {
 
 
 
-                {categories.map((cat) => {
+                {categories.map((cat: any) => {
                   const IconMap: Record<string, any> = { Files, Layout, BarChart3, Settings, MessageSquare, Bell, Globe, Users, CheckSquare, Calendar, Clock, UserIcon, Rows };
                   const Icon = IconMap[cat.icon_name || 'Layout'] || Layout;
                   return (
@@ -1826,7 +1826,7 @@ export function WorkspacePage() {
             <DialogHeader>
               <DialogTitle className="text-2xl font-bold">Criar novo tópico</DialogTitle>
             </DialogHeader>
-            <form onSubmit={handleCreateCategory} className="space-y-8 pt-4">
+            <form onSubmit={(e) => handleCreateCategory(e)} className="space-y-8 pt-4">
               <div className="space-y-3">
                 <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-[0.2em] ml-1">Nome do Tópico</label>
                 <Input 
