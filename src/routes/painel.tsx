@@ -128,13 +128,13 @@ function PainelPage() {
 
   return (
     <DashboardLayout>
-      <header className="flex items-center justify-between px-6 py-4">
+      <header className="flex items-center justify-between px-4 sm:px-6 py-4">
         <div
-          className={`flex items-center gap-2 transition-all duration-300 ${sidebarOpen ? "pl-0" : "pl-14"}`}
+          className={`flex items-center gap-2 transition-all duration-300 ${!sidebarOpen && !isMobile ? "pl-14" : "pl-0"} ${isMobile && !sidebarOpen ? "pl-12" : "pl-0"}`}
         >
-          <img src={logoUrl} alt="Logo" className="w-10 h-10 object-contain" />
+          <img src={logoUrl} alt="Logo" className={`${isMobile ? "w-8 h-8" : "w-10 h-10"} object-contain`} />
           <span className="text-neutral-400">›</span>
-          <span className="text-neutral-600 font-medium">Painel operacional</span>
+          <span className="text-neutral-600 font-medium truncate max-w-[150px] sm:max-w-none">Painel operacional</span>
         </div>
       </header>
 
