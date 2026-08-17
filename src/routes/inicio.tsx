@@ -242,8 +242,8 @@ export function Dashboard() {
           </div>
         </header>
 
-        <main className="flex-1 px-6 py-8 overflow-y-auto">
-          <div className="max-w-5xl mx-auto h-full">
+        <main className="flex-1 px-4 sm:px-6 py-6 sm:py-8 overflow-y-auto w-full max-w-full">
+          <div className="max-w-5xl mx-auto h-full w-full">
             {isLoading || workspaceStatus === 'loading' ? (
               <div className="space-y-4">
                 {[1, 2, 3].map((i) => (
