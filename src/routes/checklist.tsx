@@ -2954,7 +2954,7 @@ export function NovoChecklistPage() {
             type="button"
             onClick={() => saveChecklist(undefined, true)}
             disabled={isPublishing}
-            className="text-xs font-bold bg-[#FF007F] text-white rounded-md px-4 py-1.5 hover:opacity-90 transition-opacity disabled:opacity-50 shadow-sm"
+            className="text-xs font-bold bg-[#FF007F] text-white rounded-md px-2.5 sm:px-4 py-1.5 hover:opacity-90 transition-opacity disabled:opacity-50 shadow-sm"
           >
             {isPublishing ? "Publicando..." : "Publicar"}
           </button>
