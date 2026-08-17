@@ -2939,7 +2939,8 @@ export function NovoChecklistPage() {
             onClick={() => setIsCustomizeOpen((v) => !v)}
             className={`hover:text-neutral-900 px-2 py-1 rounded-md ${isCustomizeOpen ? "ring-1 ring-blue-400 text-neutral-900" : ""}`}
           >
-            Personalizar
+            <span className="hidden sm:inline">Personalizar</span>
+            <span className="sm:hidden"><Palette className="w-4 h-4" /></span>
           </button>
           <button 
             type="button"
