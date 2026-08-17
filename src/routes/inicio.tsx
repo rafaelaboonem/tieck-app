@@ -296,11 +296,7 @@ export function Dashboard() {
                           className="cursor-pointer flex items-center gap-3 min-w-0"
                           onClick={() => {
                             if (isSelectionMode) return;
-                            if (isViewer) {
-                              navigate({ to: `/executar/${item.id}` as any });
-                            } else {
-                              navigate({ to: "/checklist", search: { id: item.id } });
-                            }
+                            navigate({ to: "/checklist", search: { id: item.id } });
                           }}
                         >
                           <div 
@@ -321,11 +317,7 @@ export function Dashboard() {
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
-                                if (isViewer) {
-                                  navigate({ to: `/executar/${item.id}` as any });
-                                } else {
-                                  navigate({ to: "/checklist", search: { id: item.id } });
-                                }
+                                navigate({ to: "/checklist", search: { id: item.id } });
                               }}
                               className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-neutral-500 hover:text-[#FF007F] hover:bg-pink-50 transition-all text-xs font-medium"
                               title="Editar"
