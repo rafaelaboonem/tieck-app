@@ -1641,7 +1641,7 @@ export function WorkspacePage() {
                 modifiers={[restrictToWindowEdges]}
               >
 
-              <div className="flex gap-6 items-start overflow-x-auto overflow-y-hidden pb-4 no-scrollbar">
+              <div className="flex gap-4 sm:gap-6 items-start overflow-x-auto overflow-y-hidden pb-4 no-scrollbar max-w-full">
                 {[{ id: 'unassigned', name: 'Tarefas' }, ...categories].map((cat, idx) => {
                   const isUnassigned = cat.id === 'unassigned';
                   const categoryName = isUnassigned ? null : cat.name;
