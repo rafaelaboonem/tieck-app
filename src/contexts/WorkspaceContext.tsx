@@ -18,6 +18,7 @@ interface WorkspaceContextType {
   setCurrentWorkspace: (ws: Workspace) => void;
   refreshWorkspaces: () => Promise<void>;
   isLoading: boolean;
+  workspaceStatus: 'loading' | 'personal' | 'workspace';
 }
 
 const WorkspaceContext = createContext<WorkspaceContextType | undefined>(undefined);
@@ -93,14 +94,17 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     return localStorage.getItem("currentWorkspaceId");
   });
 
+  const workspaceStatus = useMemo(() => {
+    if (isLoading) return 'loading';
+    if (!currentId) return 'personal';
+    return 'workspace';
+  }, [isLoading, currentId]);
+
   const currentWorkspace = useMemo(() => {
-    if (!workspaces.length) return null;
+    if (!workspaces.length || workspaceStatus !== 'workspace') return null;
     const found = workspaces.find((w) => w.id === currentId);
-    
-    // Se não encontrou o ID solicitado (pode ser um workspace novo recém aceito), 
-    // mas temos workspaces, o primeiro da lista é o fallback seguro.
     return found || workspaces[0];
-  }, [workspaces, currentId]);
+  }, [workspaces, currentId, workspaceStatus]);
 
   useEffect(() => {
     if (currentWorkspace && currentWorkspace.id !== currentId) {
@@ -126,7 +130,14 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <WorkspaceContext.Provider value={{ workspaces, currentWorkspace, setCurrentWorkspace, refreshWorkspaces, isLoading }}>
+    <WorkspaceContext.Provider value={{ 
+      workspaces, 
+      currentWorkspace, 
+      setCurrentWorkspace, 
+      refreshWorkspaces, 
+      isLoading,
+      workspaceStatus
+    }}>
       {children}
     </WorkspaceContext.Provider>
   );

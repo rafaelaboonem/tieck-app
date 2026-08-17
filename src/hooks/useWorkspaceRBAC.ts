@@ -19,14 +19,16 @@ export function useWorkspaceRBAC(workspaceId: string | undefined) {
 
       setLoading(true);
       try {
-        // Check if owner
+        // Regra canônica: Proprietário do Workspace tem poder total, 
+        // mesmo sem registro na tabela workspace_members.
         const ws = workspaces.find(w => w.id === workspaceId);
         if (ws && ws.owner_id === user.id) {
           setRole('owner');
+          setLoading(false);
           return;
         }
 
-        // Check membership
+        // Consultar membership na tabela (Admin, Editor, Viewer)
         const { data, error } = await supabase
           .from("workspace_members")
           .select("role, status")
@@ -39,6 +41,7 @@ export function useWorkspaceRBAC(workspaceId: string | undefined) {
         if (data && data.status === 'active') {
           setRole(data.role as any);
         } else {
+          // Fallback: se não é o owner e não tem membership ativo
           setRole(null);
         }
       } catch (err) {

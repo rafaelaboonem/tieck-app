@@ -36,8 +36,8 @@ export const Route = createFileRoute("/inicio")({
 
 export function Dashboard() {
   const { sidebarOpen } = useSidebar();
-  const { currentWorkspace } = useWorkspace();
-  const { user, loading, needsEmailConfirmation } = useAuth();
+  const { currentWorkspace, workspaceStatus } = useWorkspace();
+  const { user, loading: authLoading, needsEmailConfirmation } = useAuth();
   const { canManage, isViewer, loading: rbacLoading } = useWorkspaceRBAC(currentWorkspace?.id);
   const navigate = useNavigate();
   const [glow, setGlow] = useState(false);
@@ -51,50 +51,52 @@ export function Dashboard() {
   const [showBulkDeleteDialog, setShowBulkDeleteDialog] = useState(false);
 
   useEffect(() => {
-    if (!loading && !user) {
+    if (!authLoading && !user) {
       navigate({ to: "/login" });
       return;
     }
-    if (!loading && user && needsEmailConfirmation) {
+    if (!authLoading && user && needsEmailConfirmation) {
       navigate({ to: "/confirmar-email" });
       return;
     }
 
     const fetchChecklists = async () => {
-      if (!user) {
-        setIsLoading(false);
+      // Bloqueio de flash: Não carregar até o contexto estar definido
+      if (workspaceStatus === 'loading' || !user) {
+        setIsLoading(true);
         return;
       }
       
       setIsLoading(true);
+      // Limpar estado anterior para evitar flash de outro contexto
+      setChecklists([]);
       
-      // Query contextual: pessoal ou de equipe
-      let query = supabase.from("checklists").select("*");
-      
-      if (currentWorkspace) {
-        // Contexto de Equipe
-        query = query.eq("workspace_id", currentWorkspace.id);
-      } else {
-        // Contexto Pessoal
-        query = query.is("workspace_id", null);
-      }
-      
-      const { data, error } = await query
-        .is("category", null)
-        .is("view_type", null)
-        .order("created_at", { ascending: false });
-      
-      if (error) {
+      try {
+        let query = supabase.from("checklists").select("*");
+        
+        if (workspaceStatus === 'workspace' && currentWorkspace) {
+          query = query.eq("workspace_id", currentWorkspace.id);
+        } else {
+          query = query.is("workspace_id", null);
+        }
+        
+        const { data, error } = await query
+          .is("category", null)
+          .is("view_type", null)
+          .order("created_at", { ascending: false });
+        
+        if (error) throw error;
+        setChecklists(data || []);
+      } catch (error) {
         console.error("Erro ao carregar checklists:", error);
         toast.error("Erro ao carregar checklists");
+      } finally {
+        setIsLoading(false);
       }
-      if (data) {
-        setChecklists(data);
-      }
-      setIsLoading(false);
     };
+
     fetchChecklists();
-  }, [loading, user, currentWorkspace?.id]);
+  }, [authLoading, user, workspaceStatus, currentWorkspace?.id]);
 
   const handleNew = () => {
     setGlow(true);
@@ -226,9 +228,11 @@ export function Dashboard() {
 
         <main className="flex-1 px-6 py-8 overflow-y-auto">
           <div className="max-w-5xl mx-auto h-full">
-            {isLoading ? (
-              <div className="flex items-center justify-center h-64 text-neutral-400">
-                Carregando...
+            {isLoading || workspaceStatus === 'loading' ? (
+              <div className="space-y-4">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="w-full h-[70px] bg-neutral-50 animate-pulse rounded-xl border border-neutral-100" />
+                ))}
               </div>
             ) : checklists.length > 0 ? (
               <div className="space-y-6">
