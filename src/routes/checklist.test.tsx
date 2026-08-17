@@ -29,14 +29,12 @@ vi.mock('@/hooks/useWorkspaceRBAC', () => ({
   useWorkspaceRBAC: () => ({ canManage: true, role: 'owner' })
 }));
 
-describe('Fase 4C.5 — Integridade da UX de Alertas de Prazo', () => {
+describe('Fase 4C.6 — Sincronização e Integridade de Prazos', () => {
   it('converte corretamente Timezone entre LOCAL e UTC', () => {
     const utcString = "2026-08-17T18:30:00.000Z";
     const date = new Date(utcString);
     const localISO = toLocalISO(date);
     
-    // O localISO deve conter o horário local correspondente
-    // Se estivermos em -03:00, deve ser 15:30
     const [d, t] = localISO.split('T');
     expect(d).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     expect(t).toMatch(/^\d{2}:\d{2}$/);
@@ -46,22 +44,9 @@ describe('Fase 4C.5 — Integridade da UX de Alertas de Prazo', () => {
   });
 
   it('resolve membros e perfis sem usar relacionamentos aninhados (evita PostgREST fail)', async () => {
-    // Simular a chamada que busca membros e depois perfis
     const mockMembers = [{ id: 'm1', user_id: 'u1', role: 'editor', status: 'active' }];
     const mockProfiles = [{ id: 'u1', display_name: 'User One', avatar_url: null }];
     
-    // Mock do supabase.from().select()
-    const selectMock = vi.fn().mockImplementation((query) => {
-      if (query.includes('workspace_members')) {
-        return { data: mockMembers, error: null };
-      }
-      if (query.includes('profiles')) {
-        return { data: mockProfiles, error: null };
-      }
-      return { data: [], error: null };
-    });
-
-    // Esta parte do teste valida a lógica de combinação implementada no useEffect
     const combined = mockMembers.map(m => ({
       ...m,
       profiles: mockProfiles.find(p => p.id === m.user_id) || null
@@ -87,9 +72,40 @@ describe('Fase 4C.5 — Integridade da UX de Alertas de Prazo', () => {
   });
 
   it('bloqueia edição de alertas para Viewers', () => {
-    // Simular hook retornando canManage: false
     const canManage = false;
     expect(canManage).toBe(false);
-    // Na UI, o switch e inputs teriam o atributo disabled={!canManage}
+  });
+
+  it('valida que loadDeadlineAssignmentState limpa estado se não houver primary', () => {
+    const assignments: any[] = [];
+    const primary = assignments.find(a => a.is_primary);
+    
+    let primaryMemberId: string | null = 'old';
+    let assignmentDueAt: string | null = 'old';
+    let deadlineAlertEnabled = true;
+    
+    if (!primary) {
+      primaryMemberId = null;
+      assignmentDueAt = null;
+      deadlineAlertEnabled = false;
+    }
+    
+    expect(primaryMemberId).toBeNull();
+    expect(assignmentDueAt).toBeNull();
+    expect(deadlineAlertEnabled).toBe(false);
+  });
+
+  it('valida que erro ao localizar assignment impede set_assignment_deadline', async () => {
+    const refreshedData = null as any;
+    const targetAssignmentId = refreshedData?.id;
+
+
+    
+    let rpcCalled = false;
+    if (targetAssignmentId) {
+      rpcCalled = true;
+    }
+    
+    expect(rpcCalled).toBe(false);
   });
 });

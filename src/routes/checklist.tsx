@@ -1512,35 +1512,8 @@ export function NovoChecklistPage() {
   }, [user, currentWorkspace?.id, workspaceParam]);
 
   useEffect(() => {
-    const fetchAssignments = async () => {
-      if (!settingsChecklistId) return;
-      setIsDeadlineLoading(true);
-      try {
-        const { data, error } = await supabase
-          .from("checklist_assignments")
-          .select("*")
-          .eq("checklist_id", settingsChecklistId);
-        
-        if (data && !error) {
-          setChecklistAssignments(data);
-          const primary = data.find(a => a.is_primary);
-          if (primary) {
-            setPrimaryMemberId(primary.workspace_member_id);
-            setAssignmentDeadline(primary.due_at);
-            setDeadlineAlertEnabled(!!primary.due_at);
-            
-            if (primary.due_at) {
-              setDeadlineStatus(getAssignmentStatus(primary.due_at, primary.completed_at));
-            }
-
-          }
-        }
-      } finally {
-        setIsDeadlineLoading(false);
-      }
-    };
-    if (isSettingsOpen && settingsActiveTab === "emails") {
-      fetchAssignments();
+    if (isSettingsOpen && settingsActiveTab === "emails" && settingsChecklistId) {
+      loadDeadlineAssignmentState();
     }
   }, [settingsChecklistId, isSettingsOpen, settingsActiveTab]);
 
@@ -2492,6 +2465,43 @@ export function NovoChecklistPage() {
     }
   }, [user, title, blocks, theme, font, bgColor, textColor, accentColor, pageWidth, baseFontSize, language, redirectOnCompletion, redirectUrl, progressBar, btnBgColor, btnTextColor, btnText, btnIcon, btnIconPosition, checklistId, selfEmailNotif, respondentEmailNotif, respondentEmailFieldId, respondentEmailSubject, respondentEmailMessage, includeResponsesInEmail, ownerEmailAddress, dataRetention, retentionDays, partialSubmissions, checklistBranding, thankYouTitle, thankYouDescription, categoryParam, customDomain, passwordProtect, formPassword, closeForm, closeFormScheduled, closeFormDate, limitSubmissions, submissionLimit, closedFormMessage, closedMessageText, deadlineAlertEnabled, primaryMemberId, assignmentDueAt]);
 
+  const loadDeadlineAssignmentState = async () => {
+    if (!settingsChecklistId) {
+      setPrimaryMemberId(null);
+      setAssignmentDeadline(null);
+      setDeadlineAlertEnabled(false);
+      setDeadlineStatus(null);
+      setChecklistAssignments([]);
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('checklist_assignments')
+        .select('*')
+        .eq('checklist_id', settingsChecklistId);
+
+      if (error) throw error;
+
+      setChecklistAssignments(data || []);
+      const primary = data?.find(a => a.is_primary);
+
+      if (primary) {
+        setPrimaryMemberId(primary.workspace_member_id);
+        setAssignmentDeadline(primary.due_at);
+        setDeadlineAlertEnabled(!!primary.due_at);
+        setDeadlineStatus(getAssignmentStatus(primary.due_at, primary.completed_at));
+      } else {
+        setPrimaryMemberId(null);
+        setAssignmentDeadline(null);
+        setDeadlineAlertEnabled(false);
+        setDeadlineStatus(null);
+      }
+    } catch (err) {
+      console.error("Error loading deadline state:", err);
+    }
+  };
+
   const saveDeadlineConfig = async () => {
     const wsId = currentWorkspace?.id || workspaceParam;
     if (!settingsChecklistId || !wsId || !canManage) return;
@@ -2501,18 +2511,15 @@ export function NovoChecklistPage() {
       const allCurrentMemberIds = checklistAssignments.map(a => a.workspace_member_id);
       
       if (!deadlineAlertEnabled) {
-        // Desligar alerta: manter assignment, apenas setar due_at = NULL
         if (existingPrimary) {
           const { error } = await supabase.rpc('set_assignment_deadline', {
             p_assignment_id: existingPrimary.id,
             p_due_at: null as any
           });
           if (error) throw error;
-          setAssignmentDeadline(null);
-          
-          // Refresh local state status
-          setDeadlineStatus(getAssignmentStatus(null, existingPrimary.completed_at));
+          await loadDeadlineAssignmentState();
         }
+        toast.success("Configurações de prazo salvas");
         return;
       }
 
@@ -2523,27 +2530,30 @@ export function NovoChecklistPage() {
 
       let targetAssignmentId = existingPrimary?.id;
 
-      // Se o responsável mudou ou não existe primary
       if (!existingPrimary || existingPrimary.workspace_member_id !== primaryMemberId) {
-        // Preservar outros membros: garantir que a lista contenha todos os atuais + o novo responsável
         const newMemberList = Array.from(new Set([...allCurrentMemberIds, primaryMemberId]));
 
-        const { error } = await supabase.rpc('update_checklist_assignments', {
+        const { error: updateError } = await supabase.rpc('update_checklist_assignments', {
           p_workspace_id: wsId,
           p_checklist_id: settingsChecklistId,
           p_member_ids: newMemberList,
           p_primary_member_id: primaryMemberId
         });
-        if (error) throw error;
+        if (updateError) throw updateError;
 
-        const { data: refreshed } = await supabase
+        const { data: refreshed, error: fetchError } = await supabase
           .from('checklist_assignments')
           .select('id')
           .eq('checklist_id', settingsChecklistId)
           .eq('workspace_member_id', primaryMemberId)
-          .single();
+          .maybeSingle();
         
-        targetAssignmentId = refreshed?.id;
+        if (fetchError) throw fetchError;
+        if (!refreshed?.id) {
+          throw new Error("Não foi possível localizar a atribuição criada");
+        }
+        
+        targetAssignmentId = refreshed.id;
       }
 
       if (targetAssignmentId) {
@@ -2552,12 +2562,9 @@ export function NovoChecklistPage() {
           p_due_at: assignmentDueAt
         });
         if (error) throw error;
-        
-        // Refresh local status
-        const currentAssignment = checklistAssignments.find(a => a.id === targetAssignmentId);
-        setDeadlineStatus(getAssignmentStatus(assignmentDueAt, currentAssignment?.completed_at || null));
       }
 
+      await loadDeadlineAssignmentState();
       toast.success("Configurações de prazo salvas");
     } catch (err: any) {
       console.error(err);
