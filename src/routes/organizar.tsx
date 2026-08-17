@@ -893,6 +893,25 @@ export function WorkspacePage() {
       toast.error(message);
     }
   };
+  
+  const handleSetDeadline = async (assignmentId: string, dueAt: string | null) => {
+    if (!canManage) return;
+    try {
+      const { error } = await supabase.rpc('set_assignment_deadline', {
+        p_assignment_id: assignmentId,
+        p_due_at: dueAt
+      });
+
+      if (error) throw error;
+      
+      setAssignments(prev => prev.map(a => 
+        a.id === assignmentId ? { ...a, due_at: dueAt } : a
+      ));
+      toast.success(dueAt ? "Prazo definido" : "Prazo removido");
+    } catch (err: any) {
+      toast.error("Erro ao definir prazo: " + err.message);
+    }
+  };
 
 
 
