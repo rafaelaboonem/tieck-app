@@ -12,11 +12,12 @@ import {
   Calendar, User as UserIcon, ArrowUpDown, Maximize2, Rows,
   Edit2, Eye, Palette, Link as LinkIcon, Copy as CopyIcon2, Trash,
   Smile, Briefcase, BookOpen, EyeOff, CheckCircle2, AlertCircle,
-  CalendarDays
+  CalendarDays, Menu
 } from "lucide-react";
 import { getAssignmentStatus, getStatusBadge } from "@/utils/assignment-status";
 import { AssignmentDeadlinePopover } from "@/components/AssignmentDeadlinePopover";
 import { cn } from "@/lib/utils";
+import { useIsMobile } from "@/hooks/use-mobile";
 import type { WorkspaceMemberView } from "./equipe";
 import type { Database } from "@/integrations/supabase/types";
 
@@ -1314,17 +1315,17 @@ export function WorkspacePage() {
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto bg-white pt-12">
-          <div className="max-w-full mx-auto px-[4.25rem] pb-20">
+        <div className="flex-1 overflow-y-auto bg-white pt-8 sm:pt-12">
+          <div className="max-w-full mx-auto px-4 sm:px-[4.25rem] pb-20">
             {/* Title Section */}
-            <div className="flex items-center gap-6 mb-12">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-6 mb-8 sm:mb-12">
               <DropdownMenu open={isIconPickerOpen} onOpenChange={setIsIconPickerOpen}>
                 <DropdownMenuTrigger asChild>
                   <div 
-                    className="w-24 h-24 bg-neutral-50 rounded-3xl flex items-center justify-center shrink-0 cursor-pointer hover:bg-neutral-100 transition-colors group relative"
+                    className="w-16 h-16 sm:w-24 sm:h-24 bg-neutral-50 rounded-2xl sm:rounded-3xl flex items-center justify-center shrink-0 cursor-pointer hover:bg-neutral-100 transition-colors group relative"
                     onClick={() => setIsIconPickerOpen(true)}
                   >
-                    <div className="w-14 h-14 bg-[#E16259] rounded-xl flex items-center justify-center overflow-hidden">
+                    <div className="w-10 h-10 sm:w-14 sm:h-14 bg-[#E16259] rounded-lg sm:rounded-xl flex items-center justify-center overflow-hidden">
                       {currentWorkspace?.icon_url ? (
                         <img src={currentWorkspace.icon_url} alt="Icon" className="w-full h-full object-cover" />
                       ) : (
@@ -1332,7 +1333,7 @@ export function WorkspacePage() {
                           const iconName = currentWorkspace?.icon || 'Files';
                           const IconMap: Record<string, any> = { Files, Layout, BarChart3, Settings, MessageSquare, Bell, Globe, Users };
                           const Icon = IconMap[iconName] || Files;
-                          return <Icon className="w-9 h-9 text-white" />;
+                          return <Icon className="w-6 h-6 sm:w-9 sm:h-9 text-white" />;
                         })()
                       )}
                     </div>
@@ -1380,7 +1381,7 @@ export function WorkspacePage() {
               {isEditingTitle ? (
                 <input
                   autoFocus
-                  className="text-5xl font-bold text-neutral-900 tracking-tight bg-transparent border-none outline-none focus:ring-0 p-0 w-full"
+                  className="text-3xl sm:text-5xl font-bold text-neutral-900 tracking-tight bg-transparent border-none outline-none focus:ring-0 p-0 w-full"
                   placeholder="Título aqui"
                   value={editingTitleValue}
                   onChange={(e) => setEditingTitleValue(e.target.value)}
@@ -1389,7 +1390,7 @@ export function WorkspacePage() {
                 />
               ) : (
                 <h1 
-                  className="text-5xl font-bold text-neutral-900 tracking-tight cursor-pointer hover:opacity-80"
+                  className="text-3xl sm:text-5xl font-bold text-neutral-900 tracking-tight cursor-pointer hover:opacity-80"
                   onClick={canManage ? startEditingTitle : undefined}
                 >
                   {currentWorkspace?.name || "Título aqui"}
@@ -1398,8 +1399,8 @@ export function WorkspacePage() {
             </div>
 
             {/* Sub-nav Tabs */}
-            <div className="flex items-center justify-between mb-8">
-              <div className="flex items-center gap-1 overflow-x-auto overflow-y-hidden no-scrollbar pb-1">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">
+              <div className="flex items-center gap-1 overflow-x-auto overflow-y-hidden no-scrollbar pb-1 w-full sm:w-auto">
                 {/* Categorias dinâmicas */}
 
 
@@ -1640,7 +1641,7 @@ export function WorkspacePage() {
                 modifiers={[restrictToWindowEdges]}
               >
 
-              <div className="flex gap-6 items-start overflow-x-auto overflow-y-hidden pb-4 no-scrollbar">
+              <div className="flex gap-4 sm:gap-6 items-start overflow-x-auto overflow-y-hidden pb-4 no-scrollbar max-w-full">
                 {[{ id: 'unassigned', name: 'Tarefas' }, ...categories].map((cat, idx) => {
                   const isUnassigned = cat.id === 'unassigned';
                   const categoryName = isUnassigned ? null : cat.name;
@@ -1876,7 +1877,7 @@ export function WorkspacePage() {
 
 
         <Dialog open={isCategoryModalOpen} onOpenChange={setIsCategoryModalOpen}>
-          <DialogContent className="sm:max-w-[450px] rounded-[2rem] p-10 backdrop-blur-sm bg-white/90">
+          <DialogContent className="w-[calc(100%-2rem)] sm:max-w-[450px] mx-auto rounded-[2rem] p-6 sm:p-10 backdrop-blur-sm bg-white/90">
             <DialogHeader>
               <DialogTitle className="text-2xl font-bold">Criar novo tópico</DialogTitle>
             </DialogHeader>
@@ -1930,7 +1931,7 @@ export function WorkspacePage() {
         </Dialog>
 
         <Dialog open={!!checklistToDelete} onOpenChange={() => setChecklistToDelete(null)}>
-          <DialogContent className="sm:max-w-[400px] rounded-[2.5rem] p-10">
+          <DialogContent className="w-[calc(100%-2rem)] sm:max-w-[400px] mx-auto rounded-[2.5rem] p-6 sm:p-10">
             <DialogHeader>
               <DialogTitle className="text-2xl font-bold text-red-600">Excluir Checklist</DialogTitle>
             </DialogHeader>
@@ -1947,7 +1948,7 @@ export function WorkspacePage() {
         </Dialog>
 
         <Dialog open={viewSettingsOpen} onOpenChange={setViewSettingsOpen}>
-          <DialogContent className="sm:max-w-[450px] rounded-[2rem] p-10 backdrop-blur-sm bg-white/90">
+          <DialogContent className="w-[calc(100%-2rem)] sm:max-w-[450px] mx-auto rounded-[2rem] p-6 sm:p-10 backdrop-blur-sm bg-white/90">
             <DialogHeader>
               <DialogTitle className="text-2xl font-bold">Editar Visualização</DialogTitle>
             </DialogHeader>

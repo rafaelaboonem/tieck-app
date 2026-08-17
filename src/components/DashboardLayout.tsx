@@ -1,8 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Link, useNavigate, useLocation } from "@tanstack/react-router";
 import { useSidebar } from "@/contexts/SidebarContext";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { useAuth } from "@/contexts/AuthContext";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -32,7 +34,7 @@ import {
    LogOut, User, CheckSquare, PanelLeftClose, PanelLeftOpen, ChevronsLeft, ChevronsRight, LogIn,
    BarChart3, Share2, Inbox, MousePointer2, Image, Palette, Eye, ShieldCheck, Check, Briefcase, CreditCard,
    Clock, FileText, ChevronRight, MoreHorizontal, UserPlus, Files, Layout, Bell
-  , LayoutDashboard
+  , LayoutDashboard, Menu, X as CloseIcon
   } from "lucide-react";
  import { supabase } from "@/integrations/supabase/client";
  import {
@@ -196,13 +198,68 @@ import logoIcon from "../assets/local/logo-tieck.webp";
       toast.success("Saiu com sucesso!");
     };
   
+    const isMobile = useIsMobile();
+  
+    // Close sidebar on navigation (mobile only)
+    useEffect(() => {
+      if (isMobile && sidebarOpen) {
+        setSidebarOpen(false);
+      }
+    }, [location.pathname, isMobile]);
+
+    // Handle Escape key to close sidebar
+    useEffect(() => {
+      const handleEsc = (e: KeyboardEvent) => {
+        if (e.key === "Escape" && sidebarOpen && isMobile) {
+          setSidebarOpen(false);
+        }
+      };
+      window.addEventListener("keydown", handleEsc);
+      return () => window.removeEventListener("keydown", handleEsc);
+    }, [sidebarOpen, isMobile, setSidebarOpen]);
+
+    // Scroll lock when mobile sidebar is open
+    useEffect(() => {
+      if (isMobile && sidebarOpen) {
+        document.body.style.overflow = "hidden";
+      } else {
+        document.body.style.overflow = "";
+      }
+      return () => {
+        document.body.style.overflow = "";
+      };
+    }, [sidebarOpen, isMobile]);
+
     return (
-        <div className="min-h-screen bg-white text-neutral-900 flex">
+        <div className="min-h-screen bg-white text-neutral-900 flex overflow-x-hidden">
+       {/* Mobile Backdrop */}
+       {isMobile && sidebarOpen && (
+         <div 
+           className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40 animate-in fade-in duration-200"
+           onClick={() => setSidebarOpen(false)}
+         />
+       )}
+
        {/* Sidebar */}
        {(profile || user || authLoading) && (
        <aside
-         className={`${sidebarOpen ? "w-64 px-3 opacity-100" : "w-0 px-0 -translate-x-full overflow-hidden opacity-0"} border-r border-neutral-200 flex flex-col py-4 shrink-0 h-screen sticky top-0 transition-all duration-300 ease-in-out z-40 bg-white shadow-xl shadow-neutral-200/20`}
+         className={cn(
+           "border-r border-neutral-200 flex flex-col py-4 shrink-0 transition-all duration-300 ease-in-out bg-white shadow-xl shadow-neutral-200/20",
+           isMobile 
+             ? "fixed top-0 left-0 h-[100dvh] z-50 w-[288px] max-w-[85vw]" 
+             : "sticky top-0 h-screen w-64 px-3",
+           !sidebarOpen && (isMobile ? "-translate-x-full" : "w-0 px-0 overflow-hidden opacity-0")
+         )}
        >
+         {isMobile && (
+           <button
+             onClick={() => setSidebarOpen(false)}
+             className="absolute top-4 right-4 p-2 text-neutral-400 hover:text-neutral-900"
+             aria-label="Fechar menu"
+           >
+             <CloseIcon className="w-5 h-5" />
+           </button>
+         )}
         <div className="flex items-center justify-between mb-8 px-1">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -329,15 +386,17 @@ import logoIcon from "../assets/local/logo-tieck.webp";
               </div>
             </DropdownMenuContent>
           </DropdownMenu>
-          <button
-            type="button"
-            onClick={() => setSidebarOpen(false)}
-            className="p-1.5 rounded-md text-neutral-400 hover:text-neutral-900 hover:bg-neutral-100 transition-colors"
-            title="Esconder menu"
-            aria-label="Esconder menu"
-          >
-            <ChevronsLeft className="w-4 h-4" />
-          </button>
+          {!isMobile && (
+            <button
+              type="button"
+              onClick={() => setSidebarOpen(false)}
+              className="p-1.5 rounded-md text-neutral-400 hover:text-neutral-900 hover:bg-neutral-100 transition-colors"
+              title="Esconder menu"
+              aria-label="Esconder menu"
+            >
+              <ChevronsLeft className="w-4 h-4" />
+            </button>
+          )}
         </div>
         
  
@@ -525,16 +584,20 @@ import logoIcon from "../assets/local/logo-tieck.webp";
        )}
  
        {/* Main Content Area */}
-       <div className="flex-1 flex flex-col min-h-screen">
+       <div className="flex-1 flex flex-col min-h-screen min-w-0 w-full max-w-full">
          {profile && !sidebarOpen && (
            <button
              type="button"
              onClick={() => setSidebarOpen(true)}
-             className="fixed top-[22px] left-6 z-[120] p-1 rounded-md text-neutral-400 hover:text-neutral-900 hover:bg-neutral-100 transition-colors animate-in fade-in bg-white/80 backdrop-blur-sm border border-neutral-200 shadow-sm"
+             className={cn(
+               "fixed z-[120] p-1 rounded-md text-neutral-400 hover:text-neutral-900 hover:bg-neutral-100 transition-colors animate-in fade-in bg-white/80 backdrop-blur-sm border border-neutral-200 shadow-sm",
+               isMobile ? "top-4 left-4 h-11 w-11 flex items-center justify-center" : "top-[22px] left-6"
+             )}
              title="Mostrar menu"
              aria-label="Mostrar menu"
+             aria-expanded={sidebarOpen}
            >
-             <ChevronsRight className="w-4 h-4" />
+             {isMobile ? <Menu className="w-6 h-6" /> : <ChevronsRight className="w-4 h-4" />}
            </button>
          )}
          {children}

@@ -111,6 +111,7 @@ import {
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { useSidebar } from "@/contexts/SidebarContext";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
+import { useIsMobile } from "@/hooks/use-mobile";
 import logoUrl from "../assets/local/logo-k.webp";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -453,10 +454,10 @@ function ChecklistPreview({
           </button>
         </main>
       ) : (
-      <main className="max-w-full mx-auto pb-32 relative">
+      <main className="max-w-full mx-auto pb-32 relative w-full overflow-x-hidden">
         <div className="flex flex-col items-center w-full">
           <div className="w-full relative">
-            <div className="absolute top-4 left-6 z-20">
+            <div className="absolute top-4 left-4 sm:left-6 z-20">
               <button
                 type="button"
                 onClick={onClose}
@@ -520,7 +521,7 @@ function ChecklistPreview({
               );
             })()}
 
-            <div className="max-w-4xl mx-auto px-6 pt-12" style={{ maxWidth: settings.pageWidth }}>
+            <div className="max-w-4xl mx-auto px-4 sm:px-6 pt-12" style={{ maxWidth: settings.pageWidth }}>
             {title && (
               <h1 className="text-4xl font-bold mb-10 tracking-tight" style={{ color: settings.textColor }}>{title}</h1>
             )}
@@ -765,6 +766,7 @@ function ChecklistAuthGuard({ children }: { children: React.ReactNode }) {
 }
 
 export function NovoChecklistPage() {
+  const isMobile = useIsMobile();
   const { sidebarOpen, setSidebarOpen } = useSidebar();
   const { currentWorkspace } = useWorkspace();
   const { user: authUser } = useAuth();
@@ -1209,9 +1211,13 @@ export function NovoChecklistPage() {
   }, [user]);
 
   useEffect(() => {
-    // Ensure sidebar is open by default on this page for better UX
-    setSidebarOpen(true);
-  }, [setSidebarOpen]);
+    // Mobile-safe default sidebar state
+    if (!isMobile) {
+      setSidebarOpen(true);
+    } else {
+      setSidebarOpen(false);
+    }
+  }, [setSidebarOpen, isMobile]);
 
   const previewVersion = (versionId: string) => {
     if (versionId === "current") {
@@ -2891,17 +2897,17 @@ export function NovoChecklistPage() {
       )}
 
       {/* Top bar */}
-      <header className="flex items-center justify-between px-6 py-3 border-b border-neutral-100">
-        <div className={`flex items-center gap-2 transition-all duration-300 ${sidebarOpen ? "pl-0" : "pl-14"}`}>
+      <header className="flex items-center justify-between px-4 sm:px-6 py-3 border-b border-neutral-100">
+        <div className={`flex items-center gap-1.5 sm:gap-2 transition-all duration-300 ${!sidebarOpen && !isMobile ? "pl-14" : "pl-0"} ${isMobile && !sidebarOpen ? "pl-12" : "pl-0"}`}>
           <Link to={user ? "/inicio" : "/"}>
-            <img src={logoUrl} alt="Logo" className="w-14 h-14 object-contain grayscale hover:grayscale-0 active:grayscale-0 transition-all cursor-pointer" />
+            <img src={logoUrl} alt="Logo" className={`${isMobile ? "w-7 h-7" : "w-14 h-14"} object-contain grayscale hover:grayscale-0 active:grayscale-0 transition-all cursor-pointer`} />
           </Link>
-          <span className="text-neutral-400">›</span>
-          <Link to={user ? "/inicio" : "/"} className="text-neutral-600 hover:text-neutral-900 transition-colors text-sm">
+          <span className="text-neutral-400 text-[10px] sm:text-xs">›</span>
+          <Link to={user ? "/inicio" : "/"} className="text-neutral-600 hover:text-neutral-900 transition-colors text-[10px] sm:text-sm truncate max-w-[60px] sm:max-w-none">
             {user ? (currentWorkspace?.name || "Meu workspace") : "Início"}
           </Link>
-          <span className="text-neutral-400">›</span>
-          <span className="text-neutral-700 font-medium text-sm">{title || "Sem título"}</span>
+          <span className="text-neutral-400 text-[10px] sm:text-xs">›</span>
+          <span className="text-neutral-700 font-medium text-[10px] sm:text-sm truncate max-w-[80px] sm:max-w-none">{title || "Sem título"}</span>
         </div>
 
         <div className="flex items-center gap-3 text-sm text-neutral-500">
@@ -2923,30 +2929,32 @@ export function NovoChecklistPage() {
           <button
             type="button"
             onClick={() => setIsSettingsOpen(true)}
-            className="hover:text-neutral-900 flex items-center gap-1.5"
+            className="hover:text-neutral-900 flex items-center gap-1 sm:gap-1.5"
           >
             <Settings className="w-4 h-4" />
-            <span>Configuração</span>
+            <span className="hidden sm:inline">Configuração</span>
           </button>
           <button
             type="button"
             onClick={() => setIsCustomizeOpen((v) => !v)}
             className={`hover:text-neutral-900 px-2 py-1 rounded-md ${isCustomizeOpen ? "ring-1 ring-blue-400 text-neutral-900" : ""}`}
           >
-            Personalizar
+            <span className="hidden sm:inline">Personalizar</span>
+            <span className="sm:hidden"><Palette className="w-4 h-4" /></span>
           </button>
           <button 
             type="button"
             onClick={() => setIsPreviewMode(true)}
             className="hover:text-neutral-900"
           >
-            Pré-visualizar
+            <span className="hidden sm:inline">Pré-visualizar</span>
+            <span className="sm:hidden"><Eye className="w-4 h-4" /></span>
           </button>
           <button 
             type="button"
             onClick={() => saveChecklist(undefined, true)}
             disabled={isPublishing}
-            className="text-xs font-bold bg-[#FF007F] text-white rounded-md px-4 py-1.5 hover:opacity-90 transition-opacity disabled:opacity-50 shadow-sm"
+            className="text-xs font-bold bg-[#FF007F] text-white rounded-md px-2.5 sm:px-4 py-1.5 hover:opacity-90 transition-opacity disabled:opacity-50 shadow-sm"
           >
             {isPublishing ? "Publicando..." : "Publicar"}
           </button>
@@ -2955,7 +2963,7 @@ export function NovoChecklistPage() {
 
       {/* Editor */}
       <main 
-        className="flex-1 flex flex-col items-center pt-24 pb-20 overflow-x-hidden"
+        className="flex-1 flex flex-col items-center pt-16 sm:pt-24 pb-20 overflow-x-hidden"
         style={{ 
           backgroundColor: theme === "Escuro" ? "#1a1a1a" : bgColor 
         }}
@@ -3011,7 +3019,7 @@ export function NovoChecklistPage() {
             })()}
 
           <div 
-            className="w-full mx-auto px-6"
+            className="w-full mx-auto px-4 sm:px-6"
             style={{ 
               maxWidth: pageWidth,
               color: textColor 
@@ -3100,7 +3108,7 @@ export function NovoChecklistPage() {
                   }
                 }}
                 placeholder="Título do checklist"
-                className="w-full text-4xl font-bold placeholder:text-neutral-300 border-none outline-none bg-transparent"
+                className="w-full text-2xl sm:text-4xl font-bold placeholder:text-neutral-300 border-none outline-none bg-transparent"
                 style={{ color: textColor }}
                 autoFocus
               />
@@ -3128,7 +3136,7 @@ export function NovoChecklistPage() {
                   </div>
                 </div>
               ) : (
-                <div className="mt-8 p-6 bg-neutral-50 rounded-xl border border-neutral-100 animate-in fade-in slide-in-from-top-2 duration-300">
+                <div className="mt-8 p-4 sm:p-6 bg-neutral-50 rounded-xl border border-neutral-100 animate-in fade-in slide-in-from-top-2 duration-300 w-full">
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="font-semibold text-neutral-900">Modelos Disponíveis</h3>
                     <button 
@@ -3357,18 +3365,17 @@ export function NovoChecklistPage() {
                     <div
                       key={block.id}
                       onFocus={() => setActiveBlockId(block.id)}
-                      className="group flex flex-col gap-2 border border-transparent transition-colors"
+                      className="group flex flex-col gap-2 border border-transparent transition-colors w-full px-0 sm:px-0"
                     >
-                     <input
-                       type="text"
-                       ref={(el) => {
-                         if (el) textareaRefs.current[block.id] = el as any;
-                       }}
-                       value={block.placeholder}
-                       onChange={(e) => updateBlock(block.id, { placeholder: e.target.value } as Partial<Block>)}
-                         onKeyDown={(e) => {
-                           if (e.key === "Enter") {
-                             e.preventDefault();
+                      <input
+                        ref={(el) => {
+                          if (el) textareaRefs.current[block.id] = el as any;
+                        }}
+                        value={block.placeholder}
+                        onChange={(e) => updateBlock(block.id, { placeholder: e.target.value } as Partial<Block>)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
                             const idx = blocks.findIndex(b => b.id === block.id);
                             const nextId = newId();
                             setBlocks(prev => {
@@ -3380,9 +3387,9 @@ export function NovoChecklistPage() {
                             focusBlockId.current = nextId;
                           }
                         }}
-                       placeholder="Texto de exemplo (placeholder)"
-                       className="w-full bg-white border border-neutral-200 rounded-lg px-4 py-3 outline-none focus:ring-2 focus:ring-pink-500/20 transition-all text-sm placeholder:text-neutral-400 shadow-sm"
-                       style={{ color: textColor }}
+                        placeholder="Texto de exemplo (placeholder)"
+                        className="w-full bg-white border border-neutral-200 rounded-lg px-4 py-3 outline-none focus:ring-2 focus:ring-pink-500/20 transition-all text-sm placeholder:text-neutral-400 shadow-sm"
+                        style={{ color: textColor }}
                       />
                     </div>
                    );
@@ -3392,7 +3399,7 @@ export function NovoChecklistPage() {
                   <div
                     key={block.id}
                     onFocus={() => setActiveBlockId(block.id)}
-                    className="group flex flex-col gap-2 border border-transparent transition-colors"
+                    className="group flex flex-col gap-2 border border-transparent transition-colors w-full px-0 sm:px-0"
                   >
                     <textarea
                       ref={(el) => {
@@ -5380,8 +5387,8 @@ export function NovoChecklistPage() {
       )}
 
       {isSettingsOpen && (
-        <div className="fixed inset-0 z-50 bg-white overflow-y-auto">
-          <div className="sticky top-0 bg-white border-b border-neutral-100 px-6 py-3 flex items-center">
+        <div className="fixed inset-0 z-50 bg-white overflow-y-auto w-full">
+          <div className="sticky top-0 bg-white border-b border-neutral-100 px-4 sm:px-6 py-3 flex items-center w-full z-20">
             <button
               type="button"
               onClick={() => setIsSettingsOpen(false)}
@@ -5392,10 +5399,10 @@ export function NovoChecklistPage() {
             </button>
           </div>
 
-          <div className="max-w-3xl mx-auto px-8 pt-10 pb-20">
-            <h1 className="text-2xl font-bold text-neutral-900 mb-8">Configurações</h1>
+          <div className="max-w-3xl mx-auto px-4 sm:px-8 pt-10 pb-20 w-full overflow-x-hidden">
+            <h1 className="text-xl sm:text-2xl font-bold text-neutral-900 mb-6 sm:mb-8">Configurações</h1>
             
-            <div className="flex items-center gap-1 bg-neutral-100 p-1 rounded-lg w-fit mb-10">
+            <div className="flex items-center gap-1 bg-neutral-100 p-1 rounded-lg w-fit mb-10 overflow-x-auto max-w-full no-scrollbar">
               <button 
                 onClick={() => setSettingsActiveTab("geral")}
                 className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all ${settingsActiveTab === "geral" ? "bg-white text-neutral-900 shadow-sm" : "text-neutral-500 hover:text-neutral-700"}`}
@@ -6511,7 +6518,7 @@ function SettingsRow({
   badge?: { label: string; color: string };
 }) {
   return (
-    <div className="grid grid-cols-[1fr_auto] gap-6 py-5 border-b border-neutral-200 items-start">
+    <div className="flex flex-col sm:grid sm:grid-cols-[1fr_auto] gap-4 sm:gap-6 py-5 border-b border-neutral-200 items-start">
       <div>
         <div className="flex items-center gap-2">
           <h3 className="text-sm font-semibold text-neutral-900">{title}</h3>

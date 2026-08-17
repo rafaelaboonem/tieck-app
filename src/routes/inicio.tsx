@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Search, Sparkles, Settings, Plus, HelpCircle, Pencil, Link2, Trash2, MoreHorizontal, Copy as CopyIcon, CheckSquare, X } from "lucide-react";
+import { Search, Sparkles, Settings, Plus, HelpCircle, Pencil, Link2, Trash2, MoreHorizontal, Copy as CopyIcon, CheckSquare, X, Menu } from "lucide-react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { useWorkspaceRBAC } from "@/hooks/useWorkspaceRBAC";
 import { useSidebar } from "@/contexts/SidebarContext";
@@ -11,6 +11,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { FileText, Clock, ChevronRight, CalendarDays } from "lucide-react";
 import { getAssignmentStatus, getStatusBadge } from "@/utils/assignment-status";
 import { cn } from "@/lib/utils";
+import { useIsMobile } from "@/hooks/use-mobile";
 import logoUrl from "../assets/local/logo-k.webp";
 import { toast } from "sonner";
 import {
@@ -37,6 +38,7 @@ export const Route = createFileRoute("/inicio")({
 });
 
 export function Dashboard() {
+  const isMobile = useIsMobile();
   const { sidebarOpen } = useSidebar();
   const { currentWorkspace, workspaceStatus } = useWorkspace();
   const { user, loading: authLoading, needsEmailConfirmation } = useAuth();
@@ -204,15 +206,28 @@ export function Dashboard() {
 
   return (
      <DashboardLayout>
-        <header className="flex items-center justify-between px-6 py-4">
-          <div className={`flex items-center gap-2 transition-all duration-300 ${sidebarOpen ? "pl-0" : "pl-14"}`}>
-            <img src={logoUrl} alt="Logo" className="w-20 h-20 object-contain grayscale hover:grayscale-0 active:grayscale-0 transition-all cursor-pointer" />
+        <header className="flex items-center justify-between px-4 sm:px-6 py-4">
+          <div className={cn(
+            "flex items-center gap-2 transition-all duration-300",
+            !sidebarOpen && !isMobile ? "pl-14" : "pl-0",
+            isMobile && !sidebarOpen ? "pl-12" : "pl-0"
+          )}>
+            <img 
+              src={logoUrl} 
+              alt="Logo" 
+              className={cn(
+                "object-contain grayscale hover:grayscale-0 transition-all cursor-pointer shrink-0",
+                isMobile ? "w-10 h-10" : "w-20 h-20"
+              )} 
+            />
             <span className="text-neutral-400">›</span>
-            <span className="text-neutral-600 font-medium">{currentWorkspace?.name || "Meu workspace"}</span>
+            <span className="text-neutral-600 font-medium truncate max-w-[120px] sm:max-w-none">
+              {currentWorkspace?.name || "Meu workspace"}
+            </span>
           </div>
-          <div className="flex items-center gap-3 text-neutral-500">
-             <button className="flex items-center gap-1 text-sm hover:text-neutral-900">
-              <Search className="w-4 h-4" /> Buscar
+          <div className="flex items-center gap-2 sm:gap-3 text-neutral-500">
+             <button className="flex items-center gap-1 text-xs sm:text-sm hover:text-neutral-900">
+              <Search className="w-4 h-4" /> <span className="hidden sm:inline">Buscar</span>
             </button>
             <button className="hover:text-neutral-900">
               <Sparkles className="w-4 h-4" />
@@ -227,8 +242,8 @@ export function Dashboard() {
           </div>
         </header>
 
-        <main className="flex-1 px-6 py-8 overflow-y-auto">
-          <div className="max-w-5xl mx-auto h-full">
+        <main className="flex-1 px-4 sm:px-6 py-6 sm:py-8 overflow-y-auto w-full max-w-full">
+          <div className="max-w-5xl mx-auto h-full w-full">
             {isLoading || workspaceStatus === 'loading' ? (
               <div className="space-y-4">
                 {[1, 2, 3].map((i) => (
@@ -273,14 +288,15 @@ export function Dashboard() {
                   <div
                     key={item.id}
                     onClick={() => isSelectionMode && toggleSelection(item.id)}
-                    className={`group relative bg-white border rounded-xl p-4 pl-6 transition-all cursor-default min-h-[70px] flex items-center justify-between overflow-hidden shadow-sm ${
+                    className={cn(
+                      "group relative bg-white border rounded-xl p-3 sm:p-4 sm:pl-6 transition-all cursor-default min-h-[70px] flex flex-col sm:flex-row sm:items-center justify-between overflow-hidden shadow-sm gap-3",
                       isSelectionMode && selectedIds.includes(item.id) 
                         ? "border-pink-500 bg-pink-50/30" 
                         : "border-neutral-200 hover:border-pink-300 hover:shadow-md"
-                    }`}
+                    )}
                   >
-                    <div className="relative z-10 flex flex-row items-center justify-between w-full gap-4">
-                      <div className="flex items-center gap-4 min-w-0">
+                    <div className="relative z-10 flex flex-row items-center justify-between w-full gap-2 sm:gap-4">
+                      <div className="flex items-center gap-2 sm:gap-4 min-w-0 flex-1">
                         {isSelectionMode && (
                           <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${
                             selectedIds.includes(item.id) 
@@ -304,38 +320,45 @@ export function Dashboard() {
                             className={`w-2 h-2 rounded-full shrink-0 ${item.is_published ? "bg-green-500" : "bg-yellow-400"}`}
                             title={item.is_published ? "Publicado" : "Não publicado"}
                           />
-                          <h3 className="font-semibold text-neutral-900 truncate group-hover:text-pink-500 transition-colors text-sm">{item.title}</h3>
-                          <div className="flex items-center gap-1.5 text-[10px] text-neutral-400 shrink-0 bg-neutral-50 px-2 py-0.5 rounded-full border border-neutral-100">
-                            <Clock className="w-2.5 h-2.5" />
-                            <span>{new Date(item.updated_at || item.created_at).toLocaleDateString("pt-BR")}</span>
-                          </div>
-                          {item.checklist_assignments?.map((a: any) => {
-                            const status = getAssignmentStatus(a.due_at, a.completed_at);
-                            const badge = getStatusBadge(status);
-                            if (!badge) return null;
-                            return (
-                              <div key={a.id} className="flex items-center gap-1.5 ml-1">
-                                <span className={cn(
-                                  "px-2 py-0.5 rounded-full text-[9px] font-bold border flex items-center gap-1",
-                                  badge.className
-                                )}>
-                                  <CalendarDays className="w-2.5 h-2.5" />
-                                  {badge.label}
-                                  {a.due_at && (
-                                    <span className="opacity-70 ml-0.5 font-medium">
-                                      • {new Date(a.due_at).toLocaleDateString("pt-BR", { day: '2-digit', month: '2-digit' })}
-                                    </span>
-                                  )}
-                                </span>
+                          <div className="flex flex-col min-w-0 flex-1">
+                            <h3 className="font-semibold text-neutral-900 truncate group-hover:text-pink-500 transition-colors text-sm">{item.title}</h3>
+                            <div className="flex flex-wrap items-center gap-2 mt-1">
+                              <div className="flex items-center gap-1.5 text-[10px] text-neutral-400 shrink-0 bg-neutral-50 px-2 py-0.5 rounded-full border border-neutral-100">
+                                <Clock className="w-2.5 h-2.5" />
+                                <span>{new Date(item.updated_at || item.created_at).toLocaleDateString("pt-BR")}</span>
                               </div>
-                            );
-                          })}
+                              {item.checklist_assignments?.map((a: any) => {
+                                const status = getAssignmentStatus(a.due_at, a.completed_at);
+                                const badge = getStatusBadge(status);
+                                if (!badge) return null;
+                                return (
+                                  <div key={a.id} className="flex items-center gap-1.5">
+                                    <span className={cn(
+                                      "px-2 py-0.5 rounded-full text-[9px] font-bold border flex items-center gap-1",
+                                      badge.className
+                                    )}>
+                                      <CalendarDays className="w-2.5 h-2.5" />
+                                      {badge.label}
+                                      {a.due_at && (
+                                        <span className="opacity-70 ml-0.5 font-medium hidden sm:inline">
+                                          • {new Date(a.due_at).toLocaleDateString("pt-BR", { day: '2-digit', month: '2-digit' })}
+                                        </span>
+                                      )}
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
                         </div>
                       </div>
 
                       {!isSelectionMode && canManage && (
-                        <div className="flex items-center gap-2 shrink-0">
-                          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                        <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+                          <div className={cn(
+                            "flex items-center gap-1 transition-all",
+                            isMobile ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+                          )}>
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();

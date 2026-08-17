@@ -2,6 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSidebar } from "@/contexts/SidebarContext";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { Card } from "@/components/tremor/ui/Card";
 import { Badge } from "@/components/tremor/ui/Badge";
@@ -56,6 +57,7 @@ export const Route = createFileRoute("/painel")({
 function PainelPage() {
   const { user, loading: authLoading } = useAuth();
   const { sidebarOpen } = useSidebar();
+  const isMobile = useIsMobile();
   const navigate = useNavigate();
   const search = Route.useSearch();
 
@@ -128,19 +130,19 @@ function PainelPage() {
 
   return (
     <DashboardLayout>
-      <header className="flex items-center justify-between px-6 py-4">
+      <header className="flex items-center justify-between px-4 sm:px-6 py-4">
         <div
-          className={`flex items-center gap-2 transition-all duration-300 ${sidebarOpen ? "pl-0" : "pl-14"}`}
+          className={`flex items-center gap-2 transition-all duration-300 ${!sidebarOpen && !isMobile ? "pl-14" : "pl-0"} ${isMobile && !sidebarOpen ? "pl-12" : "pl-0"}`}
         >
-          <img src={logoUrl} alt="Logo" className="w-10 h-10 object-contain" />
+          <img src={logoUrl} alt="Logo" className={`${isMobile ? "w-8 h-8" : "w-10 h-10"} object-contain`} />
           <span className="text-neutral-400">›</span>
-          <span className="text-neutral-600 font-medium">Painel operacional</span>
+          <span className="text-neutral-600 font-medium truncate max-w-[150px] sm:max-w-none">Painel operacional</span>
         </div>
       </header>
 
-      <main className="flex-1 px-6 py-6 overflow-y-auto bg-neutral-50/50">
-        <div className="max-w-7xl mx-auto space-y-6">
-          <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
+      <main className="flex-1 px-4 sm:px-6 py-6 overflow-y-auto bg-neutral-50/50 w-full overflow-x-hidden">
+        <div className="max-w-7xl mx-auto space-y-6 w-full">
+          <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4 w-full">
             <div>
               <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-neutral-900">
                 Visão da operação

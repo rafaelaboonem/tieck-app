@@ -4,6 +4,8 @@ import { Search, Shield, Monitor, Link2, AlertTriangle, Upload, Loader2, Check }
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { useSidebar } from "@/contexts/SidebarContext";
 import { useAuth } from "@/contexts/AuthContext";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import {
@@ -23,6 +25,7 @@ export const Route = createFileRoute("/configuracoes")({
 const tabs = ["Minha conta", "Notificações", "Chaves de API", "Cobrança"];
 
 function ConfiguracoesPage() {
+  const isMobile = useIsMobile();
   const { sidebarOpen } = useSidebar();
   const { user, loading } = useAuth();
   const navigate = useNavigate();
@@ -152,16 +155,27 @@ function ConfiguracoesPage() {
 
   return (
      <DashboardLayout>
-      <header className="flex items-center justify-between px-6 py-4">
-        <div className={`flex items-center gap-2 text-sm transition-all duration-300 ${sidebarOpen ? "pl-0" : "pl-14"}`}>
+      <header className="flex items-center justify-between px-4 sm:px-6 py-4">
+        <div className={cn(
+          "flex items-center gap-2 text-sm transition-all duration-300",
+          !sidebarOpen && !isMobile ? "pl-14" : "pl-0",
+          isMobile && !sidebarOpen ? "pl-12" : "pl-0"
+        )}>
           <Link to="/inicio">
-            <img src={logo} alt="Logo" className="w-20 h-20 object-contain grayscale hover:grayscale-0 active:grayscale-0 transition-all cursor-pointer" />
+            <img 
+              src={logo} 
+              alt="Logo" 
+              className={cn(
+                "object-contain grayscale hover:grayscale-0 transition-all cursor-pointer",
+                isMobile ? "w-10 h-10" : "w-20 h-20"
+              )} 
+            />
           </Link>
           <span className="text-neutral-400">›</span>
           <span className="text-neutral-700 font-medium">Configurações</span>
         </div>
-        <button className="flex items-center gap-1 text-sm text-neutral-500 hover:text-neutral-900">
-          <Search className="w-4 h-4" /> Buscar
+        <button className="flex items-center gap-1 text-xs sm:text-sm text-neutral-500 hover:text-neutral-900">
+          <Search className="w-4 h-4" /> <span className="hidden sm:inline">Buscar</span>
         </button>
       </header>
 
