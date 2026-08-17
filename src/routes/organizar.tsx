@@ -447,7 +447,7 @@ export function WorkspacePage() {
 
   useEffect(() => {
     if (!rbacLoading) {
-      setCurrentUserRole(rbacRole);
+      setCurrentUserRole(rbacRole || null);
     }
   }, [rbacRole, rbacLoading]);
 
