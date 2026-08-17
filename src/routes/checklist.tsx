@@ -3399,7 +3399,7 @@ export function NovoChecklistPage() {
                   <div
                     key={block.id}
                     onFocus={() => setActiveBlockId(block.id)}
-                    className="group flex flex-col gap-2 border border-transparent transition-colors"
+                    className="group flex flex-col gap-2 border border-transparent transition-colors w-full px-0 sm:px-0"
                   >
                     <textarea
                       ref={(el) => {
