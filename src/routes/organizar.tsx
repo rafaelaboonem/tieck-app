@@ -40,6 +40,7 @@ import {
   defaultDropAnimationSideEffects,
   useDroppable,
 } from "@dnd-kit/core";
+import { useWorkspaceRBAC } from "@/hooks/useWorkspaceRBAC";
 
 import {
   arrayMove,
@@ -441,7 +442,12 @@ export function WorkspacePage() {
   const [assignments, setAssignments] = useState<ChecklistAssignmentView[]>([]);
   const [currentUserRole, setCurrentUserRole] = useState<'owner' | 'admin' | 'editor' | 'viewer' | null>(null);
 
-  const canManage = currentUserRole === 'owner' || currentUserRole === 'admin' || currentUserRole === 'editor';
+  useEffect(() => {
+    if (!rbacLoading) {
+      setCurrentUserRole(rbacRole);
+    }
+  }, [rbacRole, rbacLoading]);
+
 
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [hasCheckedOnboarding, setHasCheckedOnboarding] = useState(false);
@@ -518,24 +524,18 @@ export function WorkspacePage() {
           return;
         }
 
-        // Get role and membership
-        const { data: memberData } = await supabase
-          .from("workspace_members")
-          .select("role, status")
-          .eq("workspace_id", workspaceId)
-          .eq("user_id", user.id)
-          .maybeSingle();
+        // The role is now managed by useWorkspaceRBAC
+        // Just verify access here for navigation
+        const ws = workspaces.find((w: any) => w.id === workspaceId);
+        const isOwner = ws?.owner_id === user.id;
         
-        const isOwner = wsData.owner_id === user.id;
-        const role = isOwner ? 'owner' : (memberData?.status === 'active' ? memberData.role : null);
-        
-        if (!isOwner && !role) {
+        // If we have no role and not owner after RBAC loaded, then no access
+        if (!rbacLoading && !isOwner && !rbacRole) {
           toast.error("Você não tem acesso a este workspace");
           navigate({ to: "/inicio" });
           return;
         }
 
-        setCurrentUserRole(role as any);
 
         // Batch data loading
         const [checklistsRes, categoriesRes, membersRes, assignmentsRes] = await Promise.all([
