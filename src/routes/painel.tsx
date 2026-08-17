@@ -2,6 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSidebar } from "@/contexts/SidebarContext";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { Card } from "@/components/tremor/ui/Card";
 import { Badge } from "@/components/tremor/ui/Badge";
