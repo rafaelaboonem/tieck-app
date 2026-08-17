@@ -95,7 +95,7 @@ export function AuthPage({ mode, redirect }: Props) {
 
   const handleVerifyCode = async (e?: React.FormEvent, codeOverride?: string) => {
     e?.preventDefault();
-    const token = codeOverride ?? otp;
+    const token = (codeOverride ?? otp).replace(/\D/g, "");
     if (isLoading || token.length !== 6) return;
     if (verifyingRef.current === token) return;
     verifyingRef.current = token;

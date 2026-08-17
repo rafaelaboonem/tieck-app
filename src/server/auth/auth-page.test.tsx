@@ -150,8 +150,6 @@ describe('AuthPage Phase 4B.1 (OTP Flow)', () => {
       
       fireEvent.change(otpInput, { target: { value: testValue } });
       
-      // In vitest/react-testing-library, the value attribute might not update instantly 
-      // if the onChange handler filters it before setting state, but let's check the call
       await waitFor(() => {
         expect((otpInput as HTMLInputElement).value).toBe(expectedFiltered);
       });
