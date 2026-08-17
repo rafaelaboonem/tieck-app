@@ -206,15 +206,28 @@ export function Dashboard() {
 
   return (
      <DashboardLayout>
-        <header className="flex items-center justify-between px-6 py-4">
-          <div className={`flex items-center gap-2 transition-all duration-300 ${sidebarOpen ? "pl-0" : "pl-14"}`}>
-            <img src={logoUrl} alt="Logo" className="w-20 h-20 object-contain grayscale hover:grayscale-0 active:grayscale-0 transition-all cursor-pointer" />
+        <header className="flex items-center justify-between px-4 sm:px-6 py-4">
+          <div className={cn(
+            "flex items-center gap-2 transition-all duration-300",
+            !sidebarOpen && !isMobile ? "pl-14" : "pl-0",
+            isMobile && !sidebarOpen ? "pl-12" : "pl-0"
+          )}>
+            <img 
+              src={logoUrl} 
+              alt="Logo" 
+              className={cn(
+                "object-contain grayscale hover:grayscale-0 transition-all cursor-pointer shrink-0",
+                isMobile ? "w-10 h-10" : "w-20 h-20"
+              )} 
+            />
             <span className="text-neutral-400">›</span>
-            <span className="text-neutral-600 font-medium">{currentWorkspace?.name || "Meu workspace"}</span>
+            <span className="text-neutral-600 font-medium truncate max-w-[120px] sm:max-w-none">
+              {currentWorkspace?.name || "Meu workspace"}
+            </span>
           </div>
-          <div className="flex items-center gap-3 text-neutral-500">
-             <button className="flex items-center gap-1 text-sm hover:text-neutral-900">
-              <Search className="w-4 h-4" /> Buscar
+          <div className="flex items-center gap-2 sm:gap-3 text-neutral-500">
+             <button className="flex items-center gap-1 text-xs sm:text-sm hover:text-neutral-900">
+              <Search className="w-4 h-4" /> <span className="hidden sm:inline">Buscar</span>
             </button>
             <button className="hover:text-neutral-900">
               <Sparkles className="w-4 h-4" />
