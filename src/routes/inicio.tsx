@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Search, Sparkles, Settings, Plus, HelpCircle, Pencil, Link2, Trash2, MoreHorizontal, Copy as CopyIcon, CheckSquare, X } from "lucide-react";
 import { DashboardLayout } from "@/components/DashboardLayout";
+import { useWorkspaceRBAC } from "@/hooks/useWorkspaceRBAC";
 import { useSidebar } from "@/contexts/SidebarContext";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -37,6 +38,7 @@ export function Dashboard() {
   const { sidebarOpen } = useSidebar();
   const { currentWorkspace } = useWorkspace();
   const { user, loading, needsEmailConfirmation } = useAuth();
+  const { canManage, isViewer, loading: rbacLoading } = useWorkspaceRBAC(currentWorkspace?.id);
   const navigate = useNavigate();
   const [glow, setGlow] = useState(false);
   const [checklists, setChecklists] = useState<any[]>([]);
@@ -59,21 +61,28 @@ export function Dashboard() {
     }
 
     const fetchChecklists = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         setIsLoading(false);
         return;
       }
-      const { data, error } = await supabase
-        .from("checklists")
-        .select("*")
-        .eq("user_id", user.id)
-        .is("workspace_id", null) 
+      
+      setIsLoading(true);
+      
+      // Query contextual: pessoal ou de equipe
+      let query = supabase.from("checklists").select("*");
+      
+      if (currentWorkspace) {
+        // Contexto de Equipe
+        query = query.eq("workspace_id", currentWorkspace.id);
+      } else {
+        // Contexto Pessoal
+        query = query.is("workspace_id", null);
+      }
+      
+      const { data, error } = await query
         .is("category", null)
         .is("view_type", null)
         .order("created_at", { ascending: false });
-
-
       
       if (error) {
         console.error("Erro ao carregar checklists:", error);
@@ -85,7 +94,7 @@ export function Dashboard() {
       setIsLoading(false);
     };
     fetchChecklists();
-  }, []);
+  }, [loading, user, currentWorkspace?.id]);
 
   const handleNew = () => {
     setGlow(true);
@@ -222,7 +231,7 @@ export function Dashboard() {
                   <h2 className="text-xl font-bold text-neutral-900">
                     {isSelectionMode ? `${selectedIds.length} selecionado(s)` : "Checklists"}
                   </h2>
-                  {isSelectionMode && (
+                  {isSelectionMode && canManage && (
                     <div className="flex items-center gap-2">
                       <Button
                         variant="ghost"
@@ -290,7 +299,7 @@ export function Dashboard() {
                         </div>
                       </div>
 
-                      {!isSelectionMode && (
+                      {!isSelectionMode && canManage && (
                         <div className="flex items-center gap-2 shrink-0">
                           <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
                             <button
@@ -484,13 +493,15 @@ export function Dashboard() {
           </div>
         )}
 
-        <button
-                  onClick={handleNew}
-                  className="flex items-center justify-center border-2 border-dashed border-neutral-200 rounded-xl p-4 text-neutral-400 hover:border-pink-300 hover:text-pink-500 transition-all min-h-[70px]"
-                >
-                  <Plus className="w-6 h-6 mr-2" />
-                  <span className="text-sm font-medium">Novo checklist</span>
-                </button>
+        {canManage && (
+          <button
+            onClick={handleNew}
+            className="flex items-center justify-center border-2 border-dashed border-neutral-200 rounded-xl p-4 text-neutral-400 hover:border-pink-300 hover:text-pink-500 transition-all min-h-[70px]"
+          >
+            <Plus className="w-6 h-6 mr-2" />
+            <span className="text-sm font-medium">Novo checklist</span>
+          </button>
+        )}
               </div>
             </div>
             ) : (
@@ -508,7 +519,7 @@ export function Dashboard() {
                   </svg>
                 </div>
                 <h2 className="text-base font-semibold text-neutral-900">
-                  {checklists.length === 0 ? "Nenhum checklist ainda" : "Tudo pronto por aqui"}
+                  {checklists.length === 0 ? (currentWorkspace ? "Nenhum checklist disponível neste workspace" : "Nenhum checklist ainda") : "Tudo pronto por aqui"}
                 </h2>
                 <p className="mt-1 text-sm text-neutral-500 mb-6">
                   {checklists.length === 0 
@@ -521,18 +532,20 @@ export function Dashboard() {
                   Portanto, mantemos o botão, mas removemos o glow se já houver checklists no workspace
                   ou se for uma experiência guiada.
                 */}
-                <button
-                  type="button"
-                  onClick={handleNew}
-                  className={`inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-md transition-all ${
-                    glow
-                      ? "shadow-[0_0_0_4px_rgba(236,72,153,0.35),0_0_24px_rgba(236,72,153,0.7)] ring-2 ring-pink-400"
-                      : ""
-                  }`}
-                >
-                  <Plus className="w-4 h-4" />
-                  Novo checklist pessoal
-                </button>
+                {!currentWorkspace && (
+                  <button
+                    type="button"
+                    onClick={handleNew}
+                    className={`inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-md transition-all ${
+                      glow
+                        ? "shadow-[0_0_0_4px_rgba(236,72,153,0.35),0_0_24px_rgba(236,72,153,0.7)] ring-2 ring-pink-400"
+                        : ""
+                    }`}
+                  >
+                    <Plus className="w-4 h-4" />
+                    Novo checklist pessoal
+                  </button>
+                )}
               </div>
             )}
           </div>

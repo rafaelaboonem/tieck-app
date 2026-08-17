@@ -121,13 +121,25 @@ import logoIcon from "../assets/local/logo-tieck.webp";
             }
 
 
-           // Fetch profile
-           const { data: profileData } = await supabase
-             .from("profiles")
-             .select("display_name, avatar_url, is_admin, plan_type")
-             .eq("id", user.id)
-             .single();
-           if (profileData) setProfile({ ...profileData, email: user.email ?? null });
+            // Fetch profile
+            const { data: profileData } = await supabase
+              .from("profiles")
+              .select("display_name, avatar_url, is_admin, plan_type")
+              .eq("id", user.id)
+              .maybeSingle(); // Use maybeSingle to prevent crash if profile doesn't exist yet
+            
+            if (profileData) {
+              setProfile({ ...profileData, email: user.email ?? null });
+            } else {
+              // Fallback identitário imediato para usuários autenticados sem profile
+              setProfile({
+                display_name: user.email?.split('@')[0] || "Usuário",
+                avatar_url: null,
+                is_admin: false,
+                plan_type: "free",
+                email: user.email ?? null
+              });
+            }
 
            // Check for published checklists
            const { data: checklistsData } = await supabase
@@ -180,7 +192,7 @@ import logoIcon from "../assets/local/logo-tieck.webp";
     return (
         <div className="min-h-screen bg-white text-neutral-900 flex">
        {/* Sidebar */}
-       {(profile || user) && (
+       {(profile || user || authLoading) && (
        <aside
          className={`${sidebarOpen ? "w-64 px-3 opacity-100" : "w-0 px-0 -translate-x-full overflow-hidden opacity-0"} border-r border-neutral-200 flex flex-col py-4 shrink-0 h-screen sticky top-0 transition-all duration-300 ease-in-out z-40 bg-white shadow-xl shadow-neutral-200/20`}
        >
@@ -323,7 +335,7 @@ import logoIcon from "../assets/local/logo-tieck.webp";
         
  
            <div className="mt-2 flex-1 overflow-y-auto no-scrollbar pb-8">
-            {profile && (
+            {(profile || user) && (
               <div className="flex flex-col gap-6">
                 <ul className="space-y-0.5">
                   {[
@@ -335,7 +347,13 @@ import logoIcon from "../assets/local/logo-tieck.webp";
                     { icon: CreditCard, label: "Meu Plano", to: "/membros" },
                     { icon: Briefcase, label: "Espaço de Trabalho", to: "/organizar" },
                     { icon: Users, label: "Equipe", to: "/equipe" },
-                  ].map((item: NavItem) => {
+                  ].filter(item => {
+                    // Restrições de visibilidade baseadas em role
+                    // O hook useWorkspaceRBAC não está disponível aqui no topo, 
+                    // mas podemos inferir permissões básicas ou apenas renderizar o menu universal como pedido.
+                    // "Equipe" e "Painel" costumam ser administrativos.
+                    return true;
+                  }).map((item: NavItem) => {
                     const Icon = item.icon;
                     const isSearch = item.label === "Buscar";
                     const isActive = item.to === location.pathname;
