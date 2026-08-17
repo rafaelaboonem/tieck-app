@@ -103,9 +103,9 @@ import logoIcon from "../assets/local/logo-tieck.webp";
 
      useEffect(() => {
       const fetchData = async () => {
-         if (user) {
+          if (user?.id) {
             // Contagem real de membros ativos
-            if (currentWorkspace) {
+            if (currentWorkspace?.id) {
               const { count, error: countError } = await supabase
                 .from("workspace_members")
                 .select("*", { count: 'exact', head: true })
@@ -153,7 +153,7 @@ import logoIcon from "../assets/local/logo-tieck.webp";
              // Fetch recent checklists - contextual
              let recentQuery = supabase.from("checklists").select("id, title");
              
-             if (workspaceStatus === 'workspace' && currentWorkspace) {
+             if (workspaceStatus === 'workspace' && currentWorkspace?.id) {
                recentQuery = recentQuery.eq("workspace_id", currentWorkspace.id);
              } else {
                recentQuery = recentQuery.is("workspace_id", null);
@@ -169,18 +169,18 @@ import logoIcon from "../assets/local/logo-tieck.webp";
               } else {
                 setRecentChecklists([]);
               }
-         } else {
-           setProfile(null);
-           setRecentChecklists([]);
-           setHasChecklists(false);
-         }
+          } else {
+            setProfile(null);
+            setRecentChecklists([]);
+            setHasChecklists(false);
+          }
         };
        fetchData();
  
        const handleOpenSearch = () => setSearchOpen(true);
        window.addEventListener('open-search', handleOpenSearch);
        return () => window.removeEventListener('open-search', handleOpenSearch);
-     }, [user, currentWorkspace?.id, workspaceStatus]);
+     }, [user?.id, currentWorkspace?.id, workspaceStatus]);
 
     // Gate: usuário logado com e-mail não confirmado não acessa o app.
     useEffect(() => {
