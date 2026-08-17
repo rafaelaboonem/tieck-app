@@ -386,15 +386,17 @@ import logoIcon from "../assets/local/logo-tieck.webp";
               </div>
             </DropdownMenuContent>
           </DropdownMenu>
-          <button
-            type="button"
-            onClick={() => setSidebarOpen(false)}
-            className="p-1.5 rounded-md text-neutral-400 hover:text-neutral-900 hover:bg-neutral-100 transition-colors"
-            title="Esconder menu"
-            aria-label="Esconder menu"
-          >
-            <ChevronsLeft className="w-4 h-4" />
-          </button>
+          {!isMobile && (
+            <button
+              type="button"
+              onClick={() => setSidebarOpen(false)}
+              className="p-1.5 rounded-md text-neutral-400 hover:text-neutral-900 hover:bg-neutral-100 transition-colors"
+              title="Esconder menu"
+              aria-label="Esconder menu"
+            >
+              <ChevronsLeft className="w-4 h-4" />
+            </button>
+          )}
         </div>
         
  
