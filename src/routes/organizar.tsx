@@ -1931,7 +1931,7 @@ export function WorkspacePage() {
         </Dialog>
 
         <Dialog open={!!checklistToDelete} onOpenChange={() => setChecklistToDelete(null)}>
-          <DialogContent className="sm:max-w-[400px] rounded-[2.5rem] p-10">
+          <DialogContent className="w-[calc(100%-2rem)] sm:max-w-[400px] mx-auto rounded-[2.5rem] p-6 sm:p-10">
             <DialogHeader>
               <DialogTitle className="text-2xl font-bold text-red-600">Excluir Checklist</DialogTitle>
             </DialogHeader>
