@@ -113,6 +113,7 @@ import logoUrl from "../assets/local/logo-k.webp";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { mapAuthError } from "@/utils/auth-errors";
+import { useQuery } from "@tanstack/react-query";
 const InsightsTab = lazy(() => import("@/components/InsightsTab").then(m => ({ default: m.InsightsTab })));
 const SubmissionsTab = lazy(() => import("@/components/SubmissionsTab").then(m => ({ default: m.SubmissionsTab })));
 import { BlockRenderer, INTERACTIVE_BLOCK_TYPES } from "@/components/BlockRenderer";
@@ -618,20 +619,15 @@ function ChecklistAuthGuard({ children }: { children: React.ReactNode }) {
   const { user: authUser, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const { id: checklistId } = Route.useSearch();
-  const [authStatus, setAuthStatus] = useState<AuthStatus>('session_loading');
 
-  useEffect(() => {
-    async function resolveAuth() {
-      if (authLoading) return;
-      
+  const { data: authStatus, isLoading } = useQuery({
+    queryKey: ["checklist-access", authUser?.id, checklistId],
+    queryFn: async (): Promise<AuthStatus> => {
       if (!checklistId) {
-        setAuthStatus(authUser ? 'editor_allowed' : 'session_loading');
-        return;
+        return authUser ? 'editor_allowed' : 'session_loading';
       }
 
       try {
-        setAuthStatus('metadata_loading');
-        
         const { data: checklist, error: chkError } = await supabase
           .from("checklists")
           .select("id, user_id, workspace_id")
@@ -639,21 +635,13 @@ function ChecklistAuthGuard({ children }: { children: React.ReactNode }) {
           .maybeSingle();
 
         if (chkError) throw chkError;
-        if (!checklist) {
-          setAuthStatus('not_found');
-          return;
-        }
+        if (!checklist) return 'not_found';
 
         if (!checklist.workspace_id) {
-          if (authUser && checklist.user_id === authUser.id) {
-            setAuthStatus('editor_allowed');
-          } else {
-            setAuthStatus('forbidden');
-          }
-          return;
+          return (authUser && checklist.user_id === authUser.id) 
+            ? 'editor_allowed' 
+            : 'forbidden';
         }
-
-        setAuthStatus('authorization_loading');
 
         const { data: workspace, error: wsError } = await supabase
           .from("workspaces")
@@ -663,14 +651,10 @@ function ChecklistAuthGuard({ children }: { children: React.ReactNode }) {
         
         if (wsError) throw wsError;
         if (workspace && workspace.owner_id === authUser?.id) {
-          setAuthStatus('editor_allowed');
-          return;
+          return 'editor_allowed';
         }
 
-        if (!authUser?.id) {
-          setAuthStatus('forbidden');
-          return;
-        }
+        if (!authUser?.id) return 'forbidden';
 
         const { data: member, error: memberError } = await supabase
           .from("workspace_members")
@@ -682,23 +666,19 @@ function ChecklistAuthGuard({ children }: { children: React.ReactNode }) {
         if (memberError) throw memberError;
 
         if (member && member.status === 'active') {
-          if (member.role === 'viewer') {
-            setAuthStatus('execution_only');
-          } else {
-            setAuthStatus('editor_allowed');
-          }
-        } else {
-          setAuthStatus('forbidden');
+          return member.role === 'viewer' ? 'execution_only' : 'editor_allowed';
         }
-
+        
+        return 'forbidden';
       } catch (err) {
         console.error("[ChecklistAuth] Resolution error:", err);
-        setAuthStatus('technical_error');
+        return 'technical_error';
       }
-    }
-
-    resolveAuth();
-  }, [checklistId, authUser, authLoading]);
+    },
+    enabled: !authLoading,
+    staleTime: 1000 * 60 * 5, // 5 minutos
+    gcTime: 1000 * 60 * 30, // 30 minutos
+  });
 
   useEffect(() => {
     if (authStatus === 'execution_only' && checklistId) {
@@ -711,7 +691,7 @@ function ChecklistAuthGuard({ children }: { children: React.ReactNode }) {
   }, [authStatus, checklistId, navigate]);
 
   if (checklistId) {
-    if (authStatus === 'session_loading' || authStatus === 'metadata_loading' || authStatus === 'authorization_loading') {
+    if (authLoading || isLoading) {
       return (
         <div className="flex h-screen w-full items-center justify-center bg-white">
           <div className="flex flex-col items-center gap-4">
