@@ -2900,7 +2900,7 @@ export function NovoChecklistPage() {
       <header className="flex items-center justify-between px-4 sm:px-6 py-3 border-b border-neutral-100">
         <div className={`flex items-center gap-2 transition-all duration-300 ${!sidebarOpen && !isMobile ? "pl-14" : "pl-0"} ${isMobile && !sidebarOpen ? "pl-12" : "pl-0"}`}>
           <Link to={user ? "/inicio" : "/"}>
-            <img src={logoUrl} alt="Logo" className="w-14 h-14 object-contain grayscale hover:grayscale-0 active:grayscale-0 transition-all cursor-pointer" />
+            <img src={logoUrl} alt="Logo" className={`${isMobile ? "w-8 h-8" : "w-14 h-14"} object-contain grayscale hover:grayscale-0 active:grayscale-0 transition-all cursor-pointer`} />
           </Link>
           <span className="text-neutral-400">›</span>
           <Link to={user ? "/inicio" : "/"} className="text-neutral-600 hover:text-neutral-900 transition-colors text-sm">
