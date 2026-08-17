@@ -3108,7 +3108,7 @@ export function NovoChecklistPage() {
                   }
                 }}
                 placeholder="Título do checklist"
-                className="w-full text-4xl font-bold placeholder:text-neutral-300 border-none outline-none bg-transparent"
+                className="w-full text-2xl sm:text-4xl font-bold placeholder:text-neutral-300 border-none outline-none bg-transparent"
                 style={{ color: textColor }}
                 autoFocus
               />
