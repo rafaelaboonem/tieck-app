@@ -45,12 +45,6 @@ export function useWorkspaceRBAC(workspaceId: string | undefined) {
     gcTime: 1000 * 60 * 30,
     placeholderData: (previousData) => previousData,
   });
-    enabled: !!user && !!workspaceId,
-    staleTime: 1000 * 60 * 5, // 5 minutos de cache
-    gcTime: 1000 * 60 * 30,
-    // Mantém o estado anterior enquanto revalida no background (evita flash de loading)
-    placeholderData: (previousData) => previousData,
-  });
 
   // O loading só deve ser verdadeiro se não temos dados e estamos carregando pela primeira vez
   // ou se o workspaceId mudou e ainda não temos cache para ele.
