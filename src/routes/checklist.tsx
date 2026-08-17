@@ -597,7 +597,7 @@ export const Route = createFileRoute("/checklist")({
   component: NovoChecklistPage,
 });
 
-import { useWorkspaceRBAC } from "@/hooks/useWorkspaceRBAC";
+
 import { useAuth } from "@/contexts/AuthContext";
 
 type AuthStatus = 
@@ -618,20 +618,12 @@ function NovoChecklistPage() {
   const { id: checklistId, workspace: workspaceParam, category: categoryParam, settings: openSettingsParam } = Route.useSearch();
   
   const [authStatus, setAuthStatus] = useState<AuthStatus>('session_loading');
-  const [resolvedWorkspaceId, setResolvedWorkspaceId] = useState<string | undefined>(workspaceParam);
 
-  // RBAC Gating (fallback para compatibilidade legada em funções internas)
-  const { role, isViewer, loading: rbacHookLoading } = useWorkspaceRBAC(resolvedWorkspaceId || currentWorkspace?.id);
   
   // Máquina de Estados Determinística para Autorização
   useEffect(() => {
     let isMounted = true;
-    const timeout = setTimeout(() => {
-      if (isMounted && (authStatus === 'session_loading' || authStatus === 'metadata_loading' || authStatus === 'authorization_loading')) {
-        console.warn("[ChecklistAuth] Auth resolution timeout");
-        setAuthStatus('technical_error');
-      }
-    }, 10000);
+
 
     async function resolveAuth() {
       if (authLoading) return;
@@ -669,8 +661,8 @@ function NovoChecklistPage() {
         }
 
         // 3. Regra: Checklist de Workspace
-        setResolvedWorkspaceId(checklist.workspace_id);
         setAuthStatus('authorization_loading');
+
 
         // Verificar Owner primeiro (bypass members table)
         const { data: workspace, error: wsError } = await supabase
@@ -720,7 +712,6 @@ function NovoChecklistPage() {
     resolveAuth();
     return () => {
       isMounted = false;
-      clearTimeout(timeout);
     };
   }, [checklistId, authUser, authLoading]);
 
