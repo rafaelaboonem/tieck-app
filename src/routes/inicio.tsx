@@ -508,13 +508,19 @@ function Dashboard() {
                   </svg>
                 </div>
                 <h2 className="text-base font-semibold text-neutral-900">
-                  Nenhum checklist ainda
+                  {checklists.length === 0 ? "Nenhum checklist ainda" : "Tudo pronto por aqui"}
                 </h2>
                 <p className="mt-1 text-sm text-neutral-500 mb-6">
-                  Arregace as mangas e vamos começar.
-                  <br />
-                  É simples como um, dois, três.
+                  {checklists.length === 0 
+                    ? "Arregace as mangas e vamos começar. É simples como um, dois, três."
+                    : "Você não possui checklists individuais nesta visualização."}
                 </p>
+                {/* 
+                  O botão Novo Checklist na Home (/inicio) é para checklists PESSOAIS (workspace_id IS NULL).
+                  Mesmo um Viewer de um workspace pode criar seus próprios checklists pessoais.
+                  Portanto, mantemos o botão, mas removemos o glow se já houver checklists no workspace
+                  ou se for uma experiência guiada.
+                */}
                 <button
                   type="button"
                   onClick={handleNew}
@@ -525,7 +531,7 @@ function Dashboard() {
                   }`}
                 >
                   <Plus className="w-4 h-4" />
-                  Novo checklist
+                  Novo checklist pessoal
                 </button>
               </div>
             )}

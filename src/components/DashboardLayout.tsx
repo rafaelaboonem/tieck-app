@@ -291,13 +291,15 @@ import logoIcon from "../assets/local/logo-tieck.webp";
                   </div>
                 </DropdownMenuItem>
 
-              <button
-                onClick={() => { setCreateWsOpen(true); setNewWsName(""); setNewWsIcon("📁"); }}
-                className="w-full flex items-center gap-2 px-2 py-2 mb-1 text-[13px] font-semibold text-[#FF007F] hover:bg-[#FF007F]/5 rounded-md transition-all mx-0 text-left"
-              >
-                <Plus className="w-4 h-4" />
-                Novo espaço de trabalho
-              </button>
+              {(profile?.is_admin || workspaces.length === 0) && (
+                <button
+                  onClick={() => { setCreateWsOpen(true); setNewWsName(""); setNewWsIcon("📁"); }}
+                  className="w-full flex items-center gap-2 px-2 py-2 mb-1 text-[13px] font-semibold text-[#FF007F] hover:bg-[#FF007F]/5 rounded-md transition-all mx-0 text-left"
+                >
+                  <Plus className="w-4 h-4" />
+                  Novo espaço de trabalho
+                </button>
+              )}
 
               <button
                 onClick={handleLogout}

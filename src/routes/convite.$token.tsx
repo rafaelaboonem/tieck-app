@@ -1,5 +1,6 @@
 import { createFileRoute, useNavigate, useParams } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
+import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -16,6 +17,7 @@ export const Route = createFileRoute("/convite/$token")({
 function InvitePage() {
   const { token } = useParams({ from: "/convite/$token" });
   const navigate = useNavigate();
+  const { refreshWorkspaces } = useWorkspace();
   const [sessionLoading, setSessionLoading] = useState(true);
   const [inviteLoading, setInviteLoading] = useState(true);
   const [accepting, setAccepting] = useState(false);
@@ -105,6 +107,7 @@ function InvitePage() {
       }
 
       toast.success("Convite aceito com sucesso!");
+      await refreshWorkspaces();
       navigate({ to: '/inicio' });
     } catch (err) {
       console.error("Erro ao aceitar convite:", err);
