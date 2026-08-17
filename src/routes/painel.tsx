@@ -140,9 +140,9 @@ function PainelPage() {
         </div>
       </header>
 
-      <main className="flex-1 px-6 py-6 overflow-y-auto bg-neutral-50/50">
-        <div className="max-w-7xl mx-auto space-y-6">
-          <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
+      <main className="flex-1 px-4 sm:px-6 py-6 overflow-y-auto bg-neutral-50/50 w-full overflow-x-hidden">
+        <div className="max-w-7xl mx-auto space-y-6 w-full">
+          <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4 w-full">
             <div>
               <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-neutral-900">
                 Visão da operação
