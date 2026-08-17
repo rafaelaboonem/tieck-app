@@ -2963,7 +2963,7 @@ export function NovoChecklistPage() {
 
       {/* Editor */}
       <main 
-        className="flex-1 flex flex-col items-center pt-24 pb-20 overflow-x-hidden"
+        className="flex-1 flex flex-col items-center pt-16 sm:pt-24 pb-20 overflow-x-hidden"
         style={{ 
           backgroundColor: theme === "Escuro" ? "#1a1a1a" : bgColor 
         }}
