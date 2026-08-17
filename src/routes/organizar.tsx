@@ -13,8 +13,9 @@ import {
   Edit2, Eye, Palette, Link as LinkIcon, Copy as CopyIcon2, Trash,
   Smile, Briefcase, BookOpen, EyeOff, CheckCircle2, AlertCircle
 } from "lucide-react";
-import { WorkspaceMemberView } from "./equipe";
-import { Database } from "@/integrations/supabase/types";
+import type { WorkspaceMemberView } from "./equipe";
+import type { Database } from "@/integrations/supabase/types";
+
 
 
 
@@ -493,6 +494,7 @@ export function WorkspacePage() {
   useEffect(() => {
     const fetchData = async () => {
       if (workspaceLoading) return;
+      
       const workspaceId = selectedId || currentWorkspace?.id;
       if (!workspaceId) {
         setIsLoading(false);
@@ -546,8 +548,9 @@ export function WorkspacePage() {
         if (checklistsRes.data) setChecklists(checklistsRes.data);
         
         // Handle categories and selectedSubTab
-        const finalCats = categoriesRes.data || [];
-        setCategories(finalCats.map(c => ({
+        const finalCats = (categoriesRes.data || []) as any[];
+        setCategories(finalCats.map((c: any) => ({
+
           id: c.id,
           name: c.name,
           workspace_id: c.workspace_id,
@@ -571,7 +574,8 @@ export function WorkspacePage() {
     };
 
     fetchData();
-  }, [selectedId, currentWorkspace?.id, user, workspaceLoading, navigate]);
+  }, [selectedId, currentWorkspace?.id, user, workspaceLoading, navigate, selectedSubTab]);
+
 
   // Handle onboarding trigger
   useEffect(() => {
@@ -968,9 +972,10 @@ export function WorkspacePage() {
       
       // If the deleted workspace was the active one, find another one to navigate to
       if (currentWorkspace?.id === id) {
-        const remainingWorkspaces = workspaces.filter(w => w.id !== id);
+        const remainingWorkspaces = workspaces.filter((w: any) => w.id !== id);
         if (remainingWorkspaces.length > 0) {
           const nextWorkspace = remainingWorkspaces[0];
+
           // Update the context state immediately
           setCurrentWorkspace(nextWorkspace);
           // Navigate to the same route but without the old workspace ID in search params
@@ -1080,7 +1085,8 @@ export function WorkspacePage() {
 
   const handlePrevTab = () => {
     if (workspaces.length <= 1) return;
-    const currentIndex = workspaces.findIndex(w => w.id === currentWorkspace?.id);
+    const currentIndex = workspaces.findIndex((w: any) => w.id === currentWorkspace?.id);
+
     if (currentIndex !== -1) {
       const prevIndex = (currentIndex - 1 + workspaces.length) % workspaces.length;
       setCurrentWorkspace(workspaces[prevIndex]);
@@ -1089,7 +1095,7 @@ export function WorkspacePage() {
 
   const handleNextTab = () => {
     if (workspaces.length <= 1) return;
-    const currentIndex = workspaces.findIndex(w => w.id === currentWorkspace?.id);
+    const currentIndex = workspaces.findIndex((w: any) => w.id === currentWorkspace?.id);
     if (currentIndex !== -1) {
       const nextIndex = (currentIndex + 1) % workspaces.length;
       setCurrentWorkspace(workspaces[nextIndex]);
@@ -1199,7 +1205,7 @@ export function WorkspacePage() {
               </div>
               
               <div className="flex items-center gap-1 h-8 overflow-x-auto overflow-y-hidden no-scrollbar max-w-full">
-                {workspaces.map((ws) => {
+                {workspaces.map((ws: any) => {
                   const isActive = ws.id === currentWorkspace?.id;
                   return (
                     <div 
