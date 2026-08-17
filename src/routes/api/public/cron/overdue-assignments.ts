@@ -35,7 +35,7 @@ export const Route = createFileRoute('/api/public/cron/overdue-assignments')({
               workspace_id,
               checklists(title),
               workspaces(name, owner_id),
-              workspace_members(user_id, profiles(display_name))
+              workspace_members(user_id)
             `)
             .lt('due_at', now.toISOString())
             .is('overdue_notified_at', null);
@@ -77,13 +77,24 @@ export const Route = createFileRoute('/api/public/cron/overdue-assignments')({
 
               // Resolve assignee name/email fallback
               const member = assignment.workspace_members as any;
-              let assigneeName = member?.profiles?.display_name || 'Membro';
+              let assigneeName = 'Membro';
               
-              // If name is 'Membro' (fallback) and we have a user_id, try to get email as better identifier
-              if (assigneeName === 'Membro' && member?.user_id) {
-                const { data: memberData } = await supabaseAdmin.auth.admin.getUserById(member.user_id);
-                if (memberData.user?.email) {
-                  assigneeName = memberData.user.email;
+              if (member?.user_id) {
+                // 1. Try profiles.display_name
+                const { data: profile } = await supabaseAdmin
+                  .from('profiles')
+                  .select('display_name')
+                  .eq('id', member.user_id)
+                  .maybeSingle();
+                
+                if (profile?.display_name) {
+                  assigneeName = profile.display_name;
+                } else {
+                  // 2. Fallback to auth email
+                  const { data: memberData } = await supabaseAdmin.auth.admin.getUserById(member.user_id);
+                  if (memberData.user?.email) {
+                    assigneeName = memberData.user.email;
+                  }
                 }
               }
 
