@@ -3367,8 +3367,10 @@ export function NovoChecklistPage() {
                       onFocus={() => setActiveBlockId(block.id)}
                       className="group flex flex-col gap-2 border border-transparent transition-colors"
                     >
-                     <input
-                       type="text"
+                      <input
+                        className="w-full text-base sm:text-lg font-bold placeholder:text-neutral-400 bg-transparent outline-none"
+                        style={{ color: textColor }}
+                        type="text"
                        ref={(el) => {
                          if (el) textareaRefs.current[block.id] = el as any;
                        }}
