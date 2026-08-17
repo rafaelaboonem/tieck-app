@@ -521,7 +521,7 @@ function ChecklistPreview({
               );
             })()}
 
-            <div className="max-w-4xl mx-auto px-6 pt-12" style={{ maxWidth: settings.pageWidth }}>
+            <div className="max-w-4xl mx-auto px-4 sm:px-6 pt-12" style={{ maxWidth: settings.pageWidth }}>
             {title && (
               <h1 className="text-4xl font-bold mb-10 tracking-tight" style={{ color: settings.textColor }}>{title}</h1>
             )}
