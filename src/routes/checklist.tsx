@@ -453,10 +453,10 @@ function ChecklistPreview({
           </button>
         </main>
       ) : (
-      <main className="max-w-full mx-auto pb-32 relative">
+      <main className="max-w-full mx-auto pb-32 relative w-full overflow-x-hidden">
         <div className="flex flex-col items-center w-full">
           <div className="w-full relative">
-            <div className="absolute top-4 left-6 z-20">
+            <div className="absolute top-4 left-4 sm:left-6 z-20">
               <button
                 type="button"
                 onClick={onClose}
