@@ -8,14 +8,11 @@ import { useAuth } from '@/contexts/AuthContext';
 
 // Mocks
 vi.mock('@tanstack/react-router', () => ({
-  createFileRoute: (path: string) => {
-    const routeObj = {
-      useSearch: () => ({ id: 'ws-123' }),
-      head: () => ({}),
-      validateSearch: (s: any) => s,
-    };
-    return (opts: any) => routeObj;
-  },
+  createFileRoute: (path: string) => (opts: any) => ({
+    useSearch: () => ({ id: 'ws-123' }),
+    head: () => ({}),
+    validateSearch: (s: any) => s,
+  }),
   useNavigate: () => vi.fn(),
   useLocation: () => ({ pathname: '/inicio' }),
   useSearch: () => ({ id: 'ws-123' }),
