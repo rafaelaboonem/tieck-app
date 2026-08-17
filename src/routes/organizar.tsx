@@ -1381,7 +1381,7 @@ export function WorkspacePage() {
               {isEditingTitle ? (
                 <input
                   autoFocus
-                  className="text-5xl font-bold text-neutral-900 tracking-tight bg-transparent border-none outline-none focus:ring-0 p-0 w-full"
+                  className="text-3xl sm:text-5xl font-bold text-neutral-900 tracking-tight bg-transparent border-none outline-none focus:ring-0 p-0 w-full"
                   placeholder="Título aqui"
                   value={editingTitleValue}
                   onChange={(e) => setEditingTitleValue(e.target.value)}
@@ -1390,7 +1390,7 @@ export function WorkspacePage() {
                 />
               ) : (
                 <h1 
-                  className="text-5xl font-bold text-neutral-900 tracking-tight cursor-pointer hover:opacity-80"
+                  className="text-3xl sm:text-5xl font-bold text-neutral-900 tracking-tight cursor-pointer hover:opacity-80"
                   onClick={canManage ? startEditingTitle : undefined}
                 >
                   {currentWorkspace?.name || "Título aqui"}
