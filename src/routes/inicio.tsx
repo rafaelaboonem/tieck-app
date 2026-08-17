@@ -354,8 +354,11 @@ export function Dashboard() {
                       </div>
 
                       {!isSelectionMode && canManage && (
-                        <div className="flex items-center gap-2 shrink-0">
-                          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                        <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+                          <div className={cn(
+                            "flex items-center gap-1 transition-all",
+                            isMobile ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+                          )}>
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
