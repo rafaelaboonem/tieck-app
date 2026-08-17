@@ -87,7 +87,7 @@ import logoIcon from "../assets/local/logo-tieck.webp";
   export function DashboardLayout({ children }: { children: React.ReactNode }) {
     const { sidebarOpen, setSidebarOpen } = useSidebar();
     const { user, loading: authLoading, needsEmailConfirmation, signOut } = useAuth();
-    const { workspaces, currentWorkspace, setCurrentWorkspace, refreshWorkspaces } = useWorkspace();
+    const { workspaces, currentWorkspace, setCurrentWorkspace, refreshWorkspaces, workspaceStatus } = useWorkspace();
     const [createWsOpen, setCreateWsOpen] = useState(false);
     const [newWsName, setNewWsName] = useState("");
     const [newWsIcon, setNewWsIcon] = useState("📁");
@@ -150,17 +150,24 @@ import logoIcon from "../assets/local/logo-tieck.webp";
            
            setHasChecklists(!!(checklistsData && checklistsData.length > 0));
 
-             // Fetch recent checklists - only those created in the editor (workspace_id is null)
-             const { data: recentData } = await supabase
-               .from("checklists")
-               .select("id, title")
+             // Fetch recent checklists - contextual
+             let recentQuery = supabase.from("checklists").select("id, title");
+             
+             if (workspaceStatus === 'workspace' && currentWorkspace) {
+               recentQuery = recentQuery.eq("workspace_id", currentWorkspace.id);
+             } else {
+               recentQuery = recentQuery.is("workspace_id", null);
+             }
+
+             const { data: recentData } = await recentQuery
                .eq("user_id", user.id)
-               .is("workspace_id", null)
                .order("updated_at", { ascending: false })
                .limit(3);
              
               if (recentData) {
                 setRecentChecklists(recentData);
+              } else {
+                setRecentChecklists([]);
               }
          } else {
            setProfile(null);
@@ -173,7 +180,7 @@ import logoIcon from "../assets/local/logo-tieck.webp";
        const handleOpenSearch = () => setSearchOpen(true);
        window.addEventListener('open-search', handleOpenSearch);
        return () => window.removeEventListener('open-search', handleOpenSearch);
-     }, [user, currentWorkspace?.id]);
+     }, [user, currentWorkspace?.id, workspaceStatus]);
 
     // Gate: usuário logado com e-mail não confirmado não acessa o app.
     useEffect(() => {
