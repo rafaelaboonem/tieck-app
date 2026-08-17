@@ -2497,8 +2497,10 @@ export function NovoChecklistPage() {
         setDeadlineAlertEnabled(false);
         setDeadlineStatus(null);
       }
+      return { ok: true };
     } catch (err) {
       console.error("Error loading deadline state:", err);
+      return { ok: false, error: err };
     }
   };
 
@@ -2517,8 +2519,11 @@ export function NovoChecklistPage() {
             p_due_at: null as any
           });
           if (error) throw error;
-          await loadDeadlineAssignmentState();
         }
+        
+        const refresh = await loadDeadlineAssignmentState();
+        if (!refresh?.ok) throw new Error("Erro ao sincronizar estado final");
+        
         toast.success("Configurações de prazo salvas");
         return;
       }
@@ -2529,8 +2534,9 @@ export function NovoChecklistPage() {
       }
 
       let targetAssignmentId = existingPrimary?.id;
+      const isChangingPrimary = existingPrimary && existingPrimary.workspace_member_id !== primaryMemberId;
 
-      if (!existingPrimary || existingPrimary.workspace_member_id !== primaryMemberId) {
+      if (!existingPrimary || isChangingPrimary) {
         const newMemberList = Array.from(new Set([...allCurrentMemberIds, primaryMemberId]));
 
         const { error: updateError } = await supabase.rpc('update_checklist_assignments', {
@@ -2554,6 +2560,17 @@ export function NovoChecklistPage() {
         }
         
         targetAssignmentId = refreshed.id;
+
+        // Se trocou o responsável, limpa o due_at do antigo para não disparar o cron indevidamente
+        if (isChangingPrimary && existingPrimary?.id) {
+          const { error: clearOldError } = await supabase.rpc('set_assignment_deadline', {
+            p_assignment_id: existingPrimary.id,
+            p_due_at: null as any
+          });
+          if (clearOldError) {
+            console.error("Aviso: Falha ao limpar prazo do antigo responsável", clearOldError);
+          }
+        }
       }
 
       if (targetAssignmentId) {
@@ -2564,7 +2581,9 @@ export function NovoChecklistPage() {
         if (error) throw error;
       }
 
-      await loadDeadlineAssignmentState();
+      const refresh = await loadDeadlineAssignmentState();
+      if (!refresh?.ok) throw new Error("Erro ao sincronizar estado final");
+      
       toast.success("Configurações de prazo salvas");
     } catch (err: any) {
       console.error(err);
