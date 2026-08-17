@@ -598,15 +598,143 @@ export const Route = createFileRoute("/checklist")({
 });
 
 import { useWorkspaceRBAC } from "@/hooks/useWorkspaceRBAC";
+import { useAuth } from "@/contexts/AuthContext";
+
+type AuthStatus = 
+  | 'session_loading'
+  | 'metadata_loading' 
+  | 'authorization_loading'
+  | 'editor_allowed'
+  | 'execution_only'
+  | 'forbidden'
+  | 'not_found'
+  | 'technical_error';
 
 function NovoChecklistPage() {
   const { sidebarOpen, setSidebarOpen } = useSidebar();
   const { currentWorkspace } = useWorkspace();
+  const { user: authUser, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const { id: checklistId, workspace: workspaceParam, category: categoryParam, settings: openSettingsParam } = Route.useSearch();
   
-  // RBAC Gating
-  const { role, isViewer, loading: rbacLoading } = useWorkspaceRBAC(workspaceParam || currentWorkspace?.id);
+  const [authStatus, setAuthStatus] = useState<AuthStatus>('session_loading');
+  const [resolvedWorkspaceId, setResolvedWorkspaceId] = useState<string | undefined>(workspaceParam);
+
+  // RBAC Gating (fallback para compatibilidade legada em funções internas)
+  const { role, isViewer, loading: rbacHookLoading } = useWorkspaceRBAC(resolvedWorkspaceId || currentWorkspace?.id);
+  
+  // Máquina de Estados Determinística para Autorização
+  useEffect(() => {
+    let isMounted = true;
+    const timeout = setTimeout(() => {
+      if (isMounted && (authStatus === 'session_loading' || authStatus === 'metadata_loading' || authStatus === 'authorization_loading')) {
+        console.warn("[ChecklistAuth] Auth resolution timeout");
+        setAuthStatus('technical_error');
+      }
+    }, 10000);
+
+    async function resolveAuth() {
+      if (authLoading) return;
+      
+      // Se não há ID, é um rascunho novo (exige apenas estar logado, RLS cuida do resto no save)
+      if (!checklistId) {
+        setAuthStatus(authUser ? 'editor_allowed' : 'session_loading');
+        return;
+      }
+
+      try {
+        setAuthStatus('metadata_loading');
+        
+        // 1. Consultar metadados mínimos do checklist
+        const { data: checklist, error: chkError } = await supabase
+          .from("checklists")
+          .select("id, user_id, workspace_id")
+          .eq("id", checklistId)
+          .maybeSingle();
+
+        if (chkError) throw chkError;
+        if (!checklist) {
+          setAuthStatus('not_found');
+          return;
+        }
+
+        // 2. Regra: Checklist Pessoal
+        if (!checklist.workspace_id) {
+          if (authUser && checklist.user_id === authUser.id) {
+            setAuthStatus('editor_allowed');
+          } else {
+            setAuthStatus('forbidden');
+          }
+          return;
+        }
+
+        // 3. Regra: Checklist de Workspace
+        setResolvedWorkspaceId(checklist.workspace_id);
+        setAuthStatus('authorization_loading');
+
+        // Verificar Owner primeiro (bypass members table)
+        const { data: workspace, error: wsError } = await supabase
+          .from("workspaces")
+          .select("owner_id")
+          .eq("id", checklist.workspace_id)
+          .maybeSingle();
+        
+        if (wsError) throw wsError;
+        if (workspace && workspace.owner_id === authUser?.id) {
+          setAuthStatus('editor_allowed');
+          return;
+        }
+
+        // Verificar membership
+        if (!authUser?.id) {
+          setAuthStatus('forbidden');
+          return;
+        }
+
+        const { data: member, error: memberError } = await supabase
+          .from("workspace_members")
+          .select("role, status")
+          .eq("workspace_id", checklist.workspace_id)
+          .eq("user_id", authUser.id)
+          .maybeSingle();
+
+
+        if (memberError) throw memberError;
+
+        if (member && member.status === 'active') {
+          if (member.role === 'viewer') {
+            setAuthStatus('execution_only');
+          } else {
+            setAuthStatus('editor_allowed');
+          }
+        } else {
+          setAuthStatus('forbidden');
+        }
+
+      } catch (err) {
+        console.error("[ChecklistAuth] Resolution error:", err);
+        setAuthStatus('technical_error');
+      }
+    }
+
+    resolveAuth();
+    return () => {
+      isMounted = false;
+      clearTimeout(timeout);
+    };
+  }, [checklistId, authUser, authLoading]);
+
+  // Redirecionamento Determinístico
+  useEffect(() => {
+    if (authStatus === 'execution_only' && checklistId) {
+      toast.info("Você possui acesso somente para execução.");
+      navigate({ 
+        to: `/c/${checklistId}` as any, 
+        replace: true 
+      });
+    }
+  }, [authStatus, checklistId, navigate]);
+
   
   const [user, setUser] = useState<any>(null);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
@@ -1534,8 +1662,8 @@ function NovoChecklistPage() {
         return next;
       }
 
-      // Gating Viewer
-      if (!rbacLoading && isViewer && checklistId) {
+      // Gating Viewer (Legacy compat guard for picker)
+      if (authStatus === 'execution_only' && checklistId) {
         toast.info("Você possui acesso somente para execução.");
         navigate({ 
           to: `/c/${checklistId}` as any, 
@@ -1543,6 +1671,7 @@ function NovoChecklistPage() {
         });
         return prev;
       }
+
 
       // If target block is empty text, replace it
       if (targetBlock.type === "text" && (!targetBlock.value || targetBlock.value.trim() === "")) {
@@ -1575,31 +1704,68 @@ function NovoChecklistPage() {
     }))
     .filter((s) => s.options.length > 0);
 
-  // Gating Viewer
-  useEffect(() => {
-    if (!rbacLoading && isViewer && checklistId) {
-      toast.info("Você possui acesso somente para execução.");
-      navigate({ 
-        to: `/c/${checklistId}` as any, 
-        replace: true 
-      });
-    }
-  }, [rbacLoading, isViewer, checklistId, navigate]);
-
-  if (rbacLoading && checklistId) {
-    return (
-      <div className="flex h-screen w-full items-center justify-center bg-white">
-        <div className="flex flex-col items-center gap-4">
-          <Loader2 className="h-8 w-8 animate-spin text-neutral-400" />
-          <p className="text-sm text-neutral-500">Verificando permissões...</p>
+  // Gating de Renderização baseado na Máquina de Estados
+  if (checklistId) {
+    if (authStatus === 'session_loading' || authStatus === 'metadata_loading' || authStatus === 'authorization_loading') {
+      return (
+        <div className="flex h-screen w-full items-center justify-center bg-white">
+          <div className="flex flex-col items-center gap-4">
+            <Loader2 className="h-8 w-8 animate-spin text-neutral-400" />
+            <p className="text-sm text-neutral-500">Verificando permissões...</p>
+          </div>
         </div>
-      </div>
-    );
+      );
+    }
+
+    if (authStatus === 'execution_only') {
+      return null; // Redirecionamento em curso via useEffect
+    }
+
+    if (authStatus === 'forbidden') {
+      return (
+        <div className="flex h-screen w-full items-center justify-center bg-white">
+          <div className="flex flex-col items-center gap-4 text-center px-6">
+            <Ban className="h-12 w-12 text-red-500 mb-2" />
+            <h1 className="text-xl font-bold text-neutral-900">Acesso Negado</h1>
+            <p className="text-neutral-500 max-w-md">Você não tem permissão para editar este checklist. Entre em contato com o proprietário do workspace.</p>
+            <Link to="/inicio" className="mt-4 text-pink-600 font-semibold hover:underline">Voltar ao início</Link>
+          </div>
+        </div>
+      );
+    }
+
+    if (authStatus === 'not_found') {
+      return (
+        <div className="flex h-screen w-full items-center justify-center bg-white">
+          <div className="flex flex-col items-center gap-4 text-center px-6">
+            <AlertCircle className="h-12 w-12 text-neutral-300 mb-2" />
+            <h1 className="text-xl font-bold text-neutral-900">Checklist não encontrado</h1>
+            <p className="text-neutral-500">O checklist solicitado não existe ou foi removido.</p>
+            <Link to="/inicio" className="mt-4 text-pink-600 font-semibold hover:underline">Ir para o início</Link>
+          </div>
+        </div>
+      );
+    }
+
+    if (authStatus === 'technical_error') {
+      return (
+        <div className="flex h-screen w-full items-center justify-center bg-white">
+          <div className="flex flex-col items-center gap-4 text-center px-6">
+            <Info className="h-12 w-12 text-blue-500 mb-2" />
+            <h1 className="text-xl font-bold text-neutral-900">Erro de Carregamento</h1>
+            <p className="text-neutral-500">Ocorreu um problema ao verificar suas credenciais. Por favor, tente recarregar a página.</p>
+            <button 
+              onClick={() => window.location.reload()}
+              className="mt-4 bg-neutral-900 text-white px-6 py-2 rounded-lg font-medium hover:bg-neutral-800 transition-colors"
+            >
+              Recarregar
+            </button>
+          </div>
+        </div>
+      );
+    }
   }
 
-  if (isViewer && checklistId) {
-    return null; // Redirecionamento em curso
-  }
 
   const handleStart = (font?: string) => {
     setIsStarted(true);
