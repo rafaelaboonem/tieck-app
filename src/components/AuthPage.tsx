@@ -15,21 +15,31 @@ type Props = {
 
 export function AuthPage({ mode, redirect }: Props) {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const isSignUp = mode === "signup";
 
   const safeRedirect = (() => {
-    if (typeof redirect === "string" && redirect.startsWith("/") && !redirect.startsWith("//")) return redirect;
+    if (typeof redirect !== "string") return null;
+    const clean = redirect.trim();
+    // Rejeitar caminhos maliciosos: deve começar com /, não pode ter // nem ser URL externa
+    if (clean.startsWith("/") && !clean.startsWith("//") && !clean.includes("\\")) {
+      // Nunca permitir que o token do convite seja registrado no histórico de navegação
+      // Mas aqui validamos apenas o caminho.
+      return clean;
+    }
     return null;
   })();
 
   const goAfterAuth = () => {
-    if (user && !user.email_confirmed_at) {
-      navigate({ to: "/confirmar-email" });
-      return;
-    }
+    // Redirecionamento cirúrgico pós-autenticação/confirmação
     if (safeRedirect) {
-      window.location.assign(safeRedirect);
+      // Se for um fluxo de convite (/convite/...), garantir navegação completa
+      // para recarregar o estado do workspace/sessão se necessário
+      if (safeRedirect.startsWith("/convite/")) {
+        window.location.assign(safeRedirect);
+      } else {
+        navigate({ to: safeRedirect as any });
+      }
     } else {
       navigate({ to: "/inicio" });
     }
@@ -47,9 +57,16 @@ export function AuthPage({ mode, redirect }: Props) {
   const verifyingRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (user && !(isSignUp && signupStep > 1)) goAfterAuth();
+    // Se o usuário estiver autenticado e não estivermos no meio da verificação OTP, redirecionar
+    if (user && session && !otpVerified && signupStep === 1) {
+      goAfterAuth();
+    }
+    // Se acabamos de verificar o OTP com sucesso
+    if (otpVerified && user && session) {
+      goAfterAuth();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, isSignUp, signupStep]);
+  }, [user, session, otpVerified, signupStep]);
 
   useEffect(() => {
     if (resendCountdown <= 0) return;
