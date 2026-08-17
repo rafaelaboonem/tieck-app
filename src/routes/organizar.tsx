@@ -1776,6 +1776,7 @@ export function WorkspacePage() {
                               assignments={assignments}
                               members={members}
                               onAssign={handleAssignMember}
+                              onSetDeadline={handleSetDeadline}
                               canManage={canManage}
                             />
                           ))}
