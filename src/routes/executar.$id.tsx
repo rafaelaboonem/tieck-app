@@ -37,7 +37,7 @@ function AuthenticatedExecutionPage() {
       setLoading(true);
       const { data, error } = await supabase
         .from("checklists")
-        .select("id, title, description, published_content, settings, workspace_id, user_id")
+        .select("*")
         .eq("id", id)
         .maybeSingle();
 
@@ -48,9 +48,10 @@ function AuthenticatedExecutionPage() {
       }
 
       // Conforme contrato, Viewer deve ver APENAS a versão publicada
+      const published_content = data.published_content as any;
       const publishedChecklist = {
         ...data,
-        blocks: data.published_content?.blocks || [],
+        blocks: published_content?.blocks || [],
         is_published: true
       };
 
