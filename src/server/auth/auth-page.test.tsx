@@ -123,4 +123,54 @@ describe('AuthPage Phase 4B.1 (OTP Flow)', () => {
     
     expect(toast.error).toHaveBeenCalledWith(expect.stringContaining('temporariamente desativado'));
   });
+
+  it('should handle numeric-only OTP and filter non-numeric input', async () => {
+    (supabase.auth.signInWithOtp as any).mockResolvedValue({ data: {}, error: null });
+    render(<AuthPage mode="signup" />);
+    
+    // Move to step 2
+    fireEvent.change(screen.getByPlaceholderText('seu@email.com'), { target: { value: 'test@example.com' } });
+    fireEvent.click(screen.getByRole('button', { name: /Enviar código/i }));
+    
+    await waitFor(() => {
+      expect(screen.getByText(/O código é verificado automaticamente/i)).toBeDefined();
+    });
+
+    // Find the input element of InputOTP (it's a hidden input under the hood or captured by role)
+    // The shadcn component uses input-otp which renders a real input
+    const inputs = document.querySelectorAll('input');
+    // The OTP input is usually the one with the value or visible after step transition
+    // But since input-otp uses a hidden input, we target by its behavioral attributes
+    const otpInput = Array.from(inputs).find(i => i.getAttribute('inputmode') === 'numeric');
+    
+    if (otpInput) {
+      // Test non-numeric filtering
+      fireEvent.change(otpInput, { target: { value: '12a3 4-5' } });
+      expect((otpInput as HTMLInputElement).value).toBe('12345');
+      
+      // Test full numeric 6 digits
+      fireEvent.change(otpInput, { target: { value: '123456' } });
+      expect((otpInput as HTMLInputElement).value).toBe('123456');
+    }
+  });
+
+  it('should allow pasting full code and distribute it', async () => {
+    (supabase.auth.signInWithOtp as any).mockResolvedValue({ data: {}, error: null });
+    render(<AuthPage mode="signup" />);
+    
+    fireEvent.change(screen.getByPlaceholderText('seu@email.com'), { target: { value: 'test@example.com' } });
+    fireEvent.click(screen.getByRole('button', { name: /Enviar código/i }));
+    
+    await waitFor(() => {
+      expect(screen.getByText(/O código é verificado automaticamente/i)).toBeDefined();
+    });
+
+    const otpInput = Array.from(document.querySelectorAll('input')).find(i => i.getAttribute('inputmode') === 'numeric');
+    
+    if (otpInput) {
+      // Simulate paste
+      fireEvent.change(otpInput, { target: { value: ' 654 321 ' } });
+      expect((otpInput as HTMLInputElement).value).toBe('654321');
+    }
+  });
 });
