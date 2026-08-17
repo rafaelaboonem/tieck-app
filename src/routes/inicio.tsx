@@ -73,7 +73,7 @@ export function Dashboard() {
       setIsLoading(true);
       
       try {
-        let query = supabase.from("checklists").select("*");
+        let query = supabase.from("checklists").select("*, checklist_assignments(*)");
         
         if (workspaceStatus === 'workspace' && currentWorkspace) {
           query = query.eq("workspace_id", currentWorkspace.id);
