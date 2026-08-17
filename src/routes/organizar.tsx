@@ -1452,7 +1452,7 @@ function WorkspacePage() {
                   <span>Atribuições</span>
                 </div>
 
-                {categories.length < 4 && (
+                {canManage && categories.length < 4 && (
                   <button 
                     onClick={() => setIsCategoryModalOpen(true)}
                     className="p-1.5 text-neutral-400 hover:bg-neutral-50 rounded-lg ml-1 shrink-0"
