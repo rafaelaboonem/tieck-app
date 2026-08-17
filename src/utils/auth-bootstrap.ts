@@ -6,13 +6,14 @@ import { supabase } from "@/integrations/supabase/client";
  * This should be called during the authentication bootstrap process.
  */
 export async function ensureUserProfile(userId: string, email: string) {
+  // Use maybeSingle to avoid 406 errors when not found
   const { data: profile, error: fetchError } = await supabase
     .from("profiles")
     .select("id")
     .eq("id", userId)
-    .single();
+    .maybeSingle();
 
-  if (fetchError && fetchError.code === "PGRST116") {
+  if (!profile && !fetchError) {
     // Profile not found, create it
     console.log(`[Auth-Bootstrap] Creating missing profile for user ${userId}`);
     const displayName = email.split("@")[0];

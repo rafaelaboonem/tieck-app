@@ -13,8 +13,11 @@ import {
   Edit2, Eye, Palette, Link as LinkIcon, Copy as CopyIcon2, Trash,
   Smile, Briefcase, BookOpen, EyeOff, CheckCircle2, AlertCircle
 } from "lucide-react";
-import { WorkspaceMemberView } from "./equipe";
-import { Database } from "@/integrations/supabase/types";
+import type { WorkspaceMemberView } from "./equipe";
+import type { Database } from "@/integrations/supabase/types";
+
+
+
 
 
 import { supabase } from "@/integrations/supabase/client";
@@ -37,6 +40,7 @@ import {
   defaultDropAnimationSideEffects,
   useDroppable,
 } from "@dnd-kit/core";
+import { useWorkspaceRBAC } from "@/hooks/useWorkspaceRBAC";
 
 import {
   arrayMove,
@@ -430,6 +434,9 @@ export function WorkspacePage() {
   const navigate = useNavigate();
   const { id: selectedId } = Route.useSearch();
   
+  const workspaceId = selectedId || currentWorkspace?.id;
+  const { canManage, role: rbacRole, loading: rbacLoading } = useWorkspaceRBAC(workspaceId);
+
   const [checklists, setChecklists] = useState<Checklist[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [submissionCounts, setSubmissionCounts] = useState<Record<string, number>>({});
@@ -438,7 +445,13 @@ export function WorkspacePage() {
   const [assignments, setAssignments] = useState<ChecklistAssignmentView[]>([]);
   const [currentUserRole, setCurrentUserRole] = useState<'owner' | 'admin' | 'editor' | 'viewer' | null>(null);
 
-  const canManage = currentUserRole === 'owner' || currentUserRole === 'admin' || currentUserRole === 'editor';
+  useEffect(() => {
+    if (!rbacLoading) {
+      setCurrentUserRole(rbacRole);
+    }
+  }, [rbacRole, rbacLoading]);
+
+
 
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [hasCheckedOnboarding, setHasCheckedOnboarding] = useState(false);
@@ -461,25 +474,8 @@ export function WorkspacePage() {
   const [checklistToDelete, setChecklistToDelete] = useState<Checklist | null>(null);
   const [isAddingItem, setIsAddingItem] = useState<{ category: string | null } | null>(null);
 
-  useEffect(() => {
-    const fetchUserRole = async () => {
-      if (!currentWorkspace || !user) return;
-      const isOwner = currentWorkspace.owner_id === user.id;
-      if (isOwner) {
-        setCurrentUserRole('owner');
-      } else {
-        const { data } = await supabase
-          .from('workspace_members')
-          .select('role')
-          .eq('workspace_id', currentWorkspace.id)
-          .eq('user_id', user.id)
-          .eq('status', 'active')
-          .maybeSingle();
-        setCurrentUserRole((data?.role as any) || 'viewer');
-      }
-    };
-    fetchUserRole();
-  }, [currentWorkspace?.id, user?.id, currentWorkspace?.owner_id]);
+  // Role evaluation is now handled inside the fetchData effect
+
   const [selectedSubTab, setSelectedSubTab] = useState("");
   const [newItemTitle, setNewItemTitle] = useState("");
   const [renamingCategoryId, setRenamingCategoryId] = useState<string | null>(null);
@@ -508,7 +504,9 @@ export function WorkspacePage() {
   useEffect(() => {
     const fetchData = async () => {
       if (workspaceLoading) return;
-      if (!currentWorkspace) {
+      
+      const workspaceId = selectedId || currentWorkspace?.id;
+      if (!workspaceId) {
         setIsLoading(false);
         return;
       }
@@ -516,12 +514,11 @@ export function WorkspacePage() {
       setIsLoading(true);
       if (!user) return;
       
-      setIsLoading(true);
       try {
         const { data: wsData, error: wsError } = await supabase
           .from("workspaces")
           .select("id, name, owner_id")
-          .eq("id", selectedId)
+          .eq("id", workspaceId)
           .single();
 
         if (wsError) {
@@ -531,35 +528,44 @@ export function WorkspacePage() {
           return;
         }
 
-        // Get role and membership
-        const { data: memberData, error: memberError } = await supabase
-          .from("workspace_members")
-          .select("role, status")
-          .eq("workspace_id", selectedId)
-          .eq("user_id", user.id)
-          .single();
+        // The role is now managed by useWorkspaceRBAC
+        // Just verify access here for navigation
+        const ws = workspaces.find((w: any) => w.id === workspaceId);
+        const isOwner = ws?.owner_id === user.id;
         
-        const isOwner = wsData.owner_id === user.id;
-        const role = isOwner ? 'owner' : (memberData?.status === 'active' ? memberData.role : null);
-        
-        if (!isOwner && !role) {
+        // If we have no role and not owner after RBAC loaded, then no access
+        if (!rbacLoading && !isOwner && !rbacRole) {
           toast.error("Você não tem acesso a este workspace");
           navigate({ to: "/inicio" });
           return;
         }
 
-        setCurrentUserRole(role as any);
 
         // Batch data loading
         const [checklistsRes, categoriesRes, membersRes, assignmentsRes] = await Promise.all([
-          supabase.from("checklists").select("*").eq("workspace_id", selectedId),
-          supabase.from("categories").select("*").eq("workspace_id", selectedId),
-          supabase.from("workspace_members").select("*, profiles(*)").eq("workspace_id", selectedId).eq("status", "active"),
-          supabase.from("checklist_assignments").select("*").eq("workspace_id", selectedId)
+          supabase.from("checklists").select("*").eq("workspace_id", workspaceId),
+          supabase.from("workspace_categories").select("*").eq("workspace_id", workspaceId),
+          supabase.from("workspace_members").select("*, profiles!inner(*)").eq("workspace_id", workspaceId).eq("status", "active"),
+          supabase.from("checklist_assignments").select("*").eq("workspace_id", workspaceId)
         ]);
 
         if (checklistsRes.data) setChecklists(checklistsRes.data);
-        if (categoriesRes.data) setCategories(categoriesRes.data);
+        
+        // Handle categories and selectedSubTab
+        const finalCats = (categoriesRes.data || []) as any[];
+        setCategories(finalCats.map((c: any) => ({
+
+          id: c.id,
+          name: c.name,
+          workspace_id: c.workspace_id,
+          icon_name: c.icon_name,
+          created_at: c.created_at
+        })));
+        
+        if (finalCats.length > 0 && !selectedSubTab) {
+          setSelectedSubTab(finalCats[0].name);
+        }
+
         if (membersRes.data) setMembers(membersRes.data as any);
         if (assignmentsRes.data) setAssignments(assignmentsRes.data as any);
 
@@ -569,107 +575,11 @@ export function WorkspacePage() {
       } finally {
         setIsLoading(false);
       }
-
-
-      try {
-        const { data: cats } = await supabase
-          .from("workspace_categories")
-          .select("*")
-          .eq("workspace_id", currentWorkspace.id)
-          .order("created_at", { ascending: true });
-        // Limit to 4 categories (total 5 columns with 'Tarefas') and remove extras
-        let finalCats = cats || [];
-        if (canManage && finalCats.length > 4) {
-          try {
-            const extraIds = finalCats.slice(4).map(c => c.id);
-            await supabase.from("workspace_categories").delete().in("id", extraIds);
-            finalCats = finalCats.slice(0, 4);
-          } catch (deleteErr) {
-            console.error("Cleanup categories error (safe to ignore if Viewer):", deleteErr);
-          }
-        }
-        
-        setCategories(finalCats);
-        if (finalCats.length > 0 && !selectedSubTab) {
-          setSelectedSubTab(finalCats[0].name);
-        }
-
-
-        const { data: chks } = await supabase
-          .from("checklists")
-          .select("*")
-          .eq("workspace_id", currentWorkspace.id)
-          .order("updated_at", { ascending: false });
-        
-        setChecklists(chks || []);
-
-        let counts = null;
-        if (chks && chks.length > 0) {
-          const { data } = await supabase
-            .from("checklist_responses")
-            .select("checklist_id")
-            .in("checklist_id", chks.map(c => c.id));
-          counts = data;
-        }
-        
-        if (counts) {
-          const map = counts.reduce((acc: Record<string, number>, curr) => {
-            acc[curr.checklist_id] = (acc[curr.checklist_id] || 0) + 1;
-            return acc;
-          }, {});
-          setSubmissionCounts(map);
-        } else {
-          setSubmissionCounts({});
-        }
-
-        // Fetch members and assignments
-        const [membersRes, assignmentsRes] = await Promise.all([
-          supabase
-            .from('workspace_members')
-            .select(`
-              id,
-              role,
-              status,
-              created_at,
-              user_id,
-              email_normalized
-            `)
-            .eq('workspace_id', currentWorkspace.id),
-          supabase
-            .from('checklist_assignments')
-            .select('*')
-            .eq('workspace_id', currentWorkspace.id)
-        ]);
-
-        if (!membersRes.error && membersRes.data) {
-          const userIds = membersRes.data.map(m => m.user_id).filter((id): id is string => !!id);
-          const { data: profilesData } = await supabase
-            .from('profiles')
-            .select('id, display_name, avatar_url')
-            .in('id', userIds);
-
-          const membersWithProfiles: WorkspaceMemberView[] = membersRes.data.map(member => ({
-            ...member,
-            user_id: member.user_id as string,
-            role: member.role as any,
-            status: member.status as any,
-            is_owner: currentWorkspace.owner_id === member.user_id,
-            profiles: profilesData?.find(p => p.id === member.user_id)
-          }));
-          setMembers(membersWithProfiles);
-        }
-        if (!assignmentsRes.error) setAssignments(assignmentsRes.error ? [] : assignmentsRes.data);
-
-      } catch (error) {
-        console.error("Error fetching workspace data:", error);
-        toast.error("Falha ao carregar dados do workspace. Verifique sua conexão e permissões.");
-      } finally {
-        setIsLoading(false);
-      }
     };
 
     fetchData();
-  }, [currentWorkspace?.id, workspaceLoading]);
+  }, [selectedId, currentWorkspace?.id, user, workspaceLoading, navigate, selectedSubTab]);
+
 
   // Handle onboarding trigger
   useEffect(() => {
@@ -1066,9 +976,10 @@ export function WorkspacePage() {
       
       // If the deleted workspace was the active one, find another one to navigate to
       if (currentWorkspace?.id === id) {
-        const remainingWorkspaces = workspaces.filter(w => w.id !== id);
+        const remainingWorkspaces = workspaces.filter((w: any) => w.id !== id);
         if (remainingWorkspaces.length > 0) {
           const nextWorkspace = remainingWorkspaces[0];
+
           // Update the context state immediately
           setCurrentWorkspace(nextWorkspace);
           // Navigate to the same route but without the old workspace ID in search params
@@ -1178,7 +1089,8 @@ export function WorkspacePage() {
 
   const handlePrevTab = () => {
     if (workspaces.length <= 1) return;
-    const currentIndex = workspaces.findIndex(w => w.id === currentWorkspace?.id);
+    const currentIndex = workspaces.findIndex((w: any) => w.id === currentWorkspace?.id);
+
     if (currentIndex !== -1) {
       const prevIndex = (currentIndex - 1 + workspaces.length) % workspaces.length;
       setCurrentWorkspace(workspaces[prevIndex]);
@@ -1187,7 +1099,7 @@ export function WorkspacePage() {
 
   const handleNextTab = () => {
     if (workspaces.length <= 1) return;
-    const currentIndex = workspaces.findIndex(w => w.id === currentWorkspace?.id);
+    const currentIndex = workspaces.findIndex((w: any) => w.id === currentWorkspace?.id);
     if (currentIndex !== -1) {
       const nextIndex = (currentIndex + 1) % workspaces.length;
       setCurrentWorkspace(workspaces[nextIndex]);
@@ -1267,10 +1179,13 @@ export function WorkspacePage() {
     setIsEditingTitle(true);
   };
 
-  const filteredChecklists = checklists.filter(c => 
-    (c.title || "").toLowerCase().includes(searchQuery.toLowerCase()) &&
-    (selectedSubTab === "Atribuições" || c.view_type === selectedSubTab || (!c.view_type && (!selectedSubTab || selectedSubTab === "Tarefas")))
-  );
+  const filteredChecklists = checklists.filter(c => {
+    const matchesSearch = (c.title || "").toLowerCase().includes(searchQuery.toLowerCase());
+    const isUnassigned = !c.view_type && (!selectedSubTab || selectedSubTab === "Tarefas");
+    const matchesTab = selectedSubTab === "Atribuições" || c.view_type === selectedSubTab || isUnassigned;
+    return matchesSearch && matchesTab;
+  });
+
 
 
   if (workspaceLoading) return null;
@@ -1294,7 +1209,7 @@ export function WorkspacePage() {
               </div>
               
               <div className="flex items-center gap-1 h-8 overflow-x-auto overflow-y-hidden no-scrollbar max-w-full">
-                {workspaces.map((ws) => {
+                {workspaces.map((ws: any) => {
                   const isActive = ws.id === currentWorkspace?.id;
                   return (
                     <div 
@@ -1389,7 +1304,7 @@ export function WorkspacePage() {
                       { icon: Bell, name: 'Bell' },
                       { icon: Globe, name: 'Globe' },
                       { icon: Users, name: 'Users' }
-                    ].map((item, i) => (
+                    ].map((item: any, i) => (
                       <button 
                         key={i}
                         onClick={() => {
@@ -1440,7 +1355,7 @@ export function WorkspacePage() {
 
 
 
-                {categories.map((cat) => {
+                {categories.map((cat: any) => {
                   const IconMap: Record<string, any> = { Files, Layout, BarChart3, Settings, MessageSquare, Bell, Globe, Users, CheckSquare, Calendar, Clock, UserIcon, Rows };
                   const Icon = IconMap[cat.icon_name || 'Layout'] || Layout;
                   return (
@@ -1915,7 +1830,7 @@ export function WorkspacePage() {
             <DialogHeader>
               <DialogTitle className="text-2xl font-bold">Criar novo tópico</DialogTitle>
             </DialogHeader>
-            <form onSubmit={handleCreateCategory} className="space-y-8 pt-4">
+            <form onSubmit={(e) => handleCreateCategory(e)} className="space-y-8 pt-4">
               <div className="space-y-3">
                 <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-[0.2em] ml-1">Nome do Tópico</label>
                 <Input 
