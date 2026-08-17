@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
+import { z } from "zod";
 
 export const auditCasa2 = createServerFn({ method: "GET" })
   .handler(async () => {
@@ -15,8 +16,11 @@ export const auditCasa2 = createServerFn({ method: "GET" })
   });
 
 export const recoverCasa2 = createServerFn({ method: "POST" })
-  .handler(async ({ data }: { data: { checklistId: string, workspaceId: string } }) => {
-    const { checklistId, workspaceId } = data;
+  .validator((data: { checklistId: string, workspaceId: string }) => z.object({
+    checklistId: z.string(),
+    workspaceId: z.string()
+  }).parse(data))
+  .handler(async ({ data }) => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return { error: "No user authenticated" };
 
@@ -24,7 +28,7 @@ export const recoverCasa2 = createServerFn({ method: "POST" })
     const { data: checklist } = await supabase
       .from("checklists")
       .select("user_id, workspace_id")
-      .eq("id", checklistId)
+      .eq("id", data.checklistId)
       .single();
 
     if (!checklist || checklist.user_id !== user.id) {
@@ -35,7 +39,7 @@ export const recoverCasa2 = createServerFn({ method: "POST" })
     const { data: workspace } = await supabase
       .from("workspaces")
       .select("owner_id")
-      .eq("id", workspaceId)
+      .eq("id", data.workspaceId)
       .single();
 
     if (!workspace || workspace.owner_id !== user.id) {
@@ -44,8 +48,8 @@ export const recoverCasa2 = createServerFn({ method: "POST" })
 
     const { error } = await supabase
       .from("checklists")
-      .update({ workspace_id: workspaceId })
-      .eq("id", checklistId);
+      .update({ workspace_id: data.workspaceId })
+      .eq("id", data.checklistId);
 
     if (error) return { error: error.message };
     return { success: true };
