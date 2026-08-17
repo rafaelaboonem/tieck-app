@@ -8,7 +8,9 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { FileText, Clock, ChevronRight } from "lucide-react";
+import { FileText, Clock, ChevronRight, CalendarDays } from "lucide-react";
+import { getAssignmentStatus, getStatusBadge } from "@/utils/assignment-status";
+import { cn } from "@/lib/utils";
 import logoUrl from "../assets/local/logo-k.webp";
 import { toast } from "sonner";
 import {
@@ -71,7 +73,7 @@ export function Dashboard() {
       setIsLoading(true);
       
       try {
-        let query = supabase.from("checklists").select("*");
+        let query = supabase.from("checklists").select("*, checklist_assignments(*)");
         
         if (workspaceStatus === 'workspace' && currentWorkspace) {
           query = query.eq("workspace_id", currentWorkspace.id);
@@ -307,6 +309,27 @@ export function Dashboard() {
                             <Clock className="w-2.5 h-2.5" />
                             <span>{new Date(item.updated_at || item.created_at).toLocaleDateString("pt-BR")}</span>
                           </div>
+                          {item.checklist_assignments?.map((a: any) => {
+                            const status = getAssignmentStatus(a.due_at, a.completed_at);
+                            const badge = getStatusBadge(status);
+                            if (!badge) return null;
+                            return (
+                              <div key={a.id} className="flex items-center gap-1.5 ml-1">
+                                <span className={cn(
+                                  "px-2 py-0.5 rounded-full text-[9px] font-bold border flex items-center gap-1",
+                                  badge.className
+                                )}>
+                                  <CalendarDays className="w-2.5 h-2.5" />
+                                  {badge.label}
+                                  {a.due_at && (
+                                    <span className="opacity-70 ml-0.5 font-medium">
+                                      • {new Date(a.due_at).toLocaleDateString("pt-BR", { day: '2-digit', month: '2-digit' })}
+                                    </span>
+                                  )}
+                                </span>
+                              </div>
+                            );
+                          })}
                         </div>
                       </div>
 

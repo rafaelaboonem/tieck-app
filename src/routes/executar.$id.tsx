@@ -8,7 +8,9 @@ import { DashboardLayout } from "@/components/DashboardLayout";
 import { useWorkspaceRBAC } from "@/hooks/useWorkspaceRBAC";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { toast } from "sonner";
-import { Loader2, Ban, AlertCircle } from "lucide-react";
+import { Loader2, Ban, AlertCircle, CalendarDays, CheckCircle2 } from "lucide-react";
+import { getAssignmentStatus, getStatusBadge } from "@/utils/assignment-status";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/executar/$id")({
   component: AuthenticatedExecutionPage,
@@ -41,7 +43,7 @@ function AuthenticatedExecutionPage() {
       
       const { data, error } = await supabase
         .from("checklists")
-        .select("*")
+        .select("*, checklist_assignments(*)")
         .eq("id", id)
         .maybeSingle();
 
@@ -135,10 +137,34 @@ function AuthenticatedExecutionPage() {
   return (
     <DashboardLayout>
       <div className="flex flex-col w-full min-h-screen bg-neutral-50/30">
-        <header className="px-6 py-8">
-           <Link to="/inicio" className="text-sm text-neutral-400 hover:text-neutral-600 transition-colors mb-2 inline-block">
-             ← Voltar
-           </Link>
+        <header className="px-6 py-6 border-b border-neutral-100 bg-white">
+          <div className="max-w-4xl mx-auto flex items-center justify-between">
+            <Link to="/inicio" className="text-sm text-neutral-400 hover:text-neutral-600 transition-colors inline-block">
+              ← Voltar
+            </Link>
+            
+            {checklist.checklist_assignments?.filter((a: any) => a.workspace_member_id === user?.id).map((a: any) => {
+              const status = getAssignmentStatus(a.due_at, a.completed_at);
+              const badge = getStatusBadge(status);
+              if (!badge) return null;
+              return (
+                <div key={a.id} className="flex items-center gap-2">
+                  <span className={cn(
+                    "px-3 py-1 rounded-full text-[10px] font-bold border flex items-center gap-1.5",
+                    badge.className
+                  )}>
+                    <CalendarDays className="w-3.5 h-3.5" />
+                    {badge.label}
+                    {a.due_at && (
+                      <span className="opacity-70 ml-0.5 font-medium">
+                        • Prazo: {new Date(a.due_at).toLocaleString("pt-BR", { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    )}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
         </header>
         <main className="flex-1 pb-32">
           <ExecutionEngine 

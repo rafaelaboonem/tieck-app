@@ -11,8 +11,12 @@ import {
   LayoutTemplate, Files, ArrowLeft, ArrowRight, Star, MessageCircle,
   Calendar, User as UserIcon, ArrowUpDown, Maximize2, Rows,
   Edit2, Eye, Palette, Link as LinkIcon, Copy as CopyIcon2, Trash,
-  Smile, Briefcase, BookOpen, EyeOff, CheckCircle2, AlertCircle
+  Smile, Briefcase, BookOpen, EyeOff, CheckCircle2, AlertCircle,
+  CalendarDays
 } from "lucide-react";
+import { getAssignmentStatus, getStatusBadge } from "@/utils/assignment-status";
+import { AssignmentDeadlinePopover } from "@/components/AssignmentDeadlinePopover";
+import { cn } from "@/lib/utils";
 import type { WorkspaceMemberView } from "./equipe";
 import type { Database } from "@/integrations/supabase/types";
 
@@ -105,6 +109,8 @@ interface ChecklistAssignmentView {
   workspace_member_id: string;
   is_primary: boolean;
   workspace_id: string;
+  due_at: string | null;
+  completed_at: string | null;
 }
 
 interface Category {
@@ -132,6 +138,7 @@ function SortableChecklistCard({
   assignments,
   members,
   onAssign,
+  onSetDeadline,
   canManage,
 }: { 
   checklist: Checklist; 
@@ -149,6 +156,7 @@ function SortableChecklistCard({
   assignments: ChecklistAssignmentView[];
   members: WorkspaceMemberView[];
   onAssign: (checklistId: string, memberId: string | null) => void;
+  onSetDeadline: (assignmentId: string, dueAt: string | null) => void;
   canManage: boolean;
 }) {
 
@@ -273,6 +281,28 @@ function SortableChecklistCard({
                     </DropdownMenuContent>
                   )}
                 </DropdownMenu>
+
+                {assignments.filter(a => a.checklist_id === checklist.id).map(a => {
+                  const status = getAssignmentStatus(a.due_at, a.completed_at);
+                  const badge = getStatusBadge(status);
+                  return (
+                    <div key={a.id} className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                      <AssignmentDeadlinePopover 
+                        dueAt={a.due_at}
+                        disabled={!canManage}
+                        onUpdate={(dueAt) => onSetDeadline(a.id, dueAt)}
+                      />
+                      {badge && (
+                        <span className={cn(
+                          "px-1.5 py-0.5 rounded-full text-[9px] font-bold border",
+                          badge.className
+                        )}>
+                          {badge.label}
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -861,6 +891,25 @@ export function WorkspacePage() {
       console.error(err);
       const message = err instanceof Error ? err.message : 'Erro ao atribuir membro';
       toast.error(message);
+    }
+  };
+  
+  const handleSetDeadline = async (assignmentId: string, dueAt: string | null) => {
+    if (!canManage) return;
+    try {
+      const { error } = await supabase.rpc('set_assignment_deadline', {
+        p_assignment_id: assignmentId,
+        p_due_at: dueAt as string // Casting because migration allows NULL but types might be strict
+      });
+
+      if (error) throw error;
+      
+      setAssignments(prev => prev.map(a => 
+        a.id === assignmentId ? { ...a, due_at: dueAt } : a
+      ));
+      toast.success(dueAt ? "Prazo definido" : "Prazo removido");
+    } catch (err: any) {
+      toast.error("Erro ao definir prazo: " + err.message);
     }
   };
 
@@ -1727,6 +1776,7 @@ export function WorkspacePage() {
                               assignments={assignments}
                               members={members}
                               onAssign={handleAssignMember}
+                              onSetDeadline={handleSetDeadline}
                               canManage={canManage}
                             />
                           ))}
