@@ -1,7 +1,10 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
+import { useSidebar } from '@/contexts/SidebarContext';
+import { useIsMobile } from '@/hooks/use-mobile';
+import { cn } from '@/lib/utils';
 import { DashboardLayout } from '@/components/DashboardLayout';
-import { Users, UserPlus, Shield, Mail, Clock, MoreHorizontal, ShieldCheck, UserMinus, RefreshCw } from 'lucide-react';
+import { Users, UserPlus, Shield, Mail, Clock, MoreHorizontal, ShieldCheck, UserMinus, RefreshCw, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
@@ -78,6 +81,8 @@ export interface ChecklistAssignmentView {
 
 
 function TeamPage() {
+  const isMobile = useIsMobile();
+  const { sidebarOpen } = useSidebar();
   const { currentWorkspace } = useWorkspace();
   const [members, setMembers] = useState<WorkspaceMemberView[]>([]);
   const [invitations, setInvitations] = useState<WorkspaceInvitationView[]>([]);
@@ -377,26 +382,36 @@ function TeamPage() {
   return (
     <DashboardLayout>
       <div className="flex flex-col h-full bg-white">
-        <header className="px-6 py-8 border-b border-neutral-100 shrink-0">
-          <div className="flex items-center justify-between max-w-5xl mx-auto w-full">
+        <header className="px-4 sm:px-6 py-6 sm:py-8 border-b border-neutral-100 shrink-0">
+          <div className={cn(
+            "flex items-center justify-between max-w-5xl mx-auto w-full transition-all duration-300",
+            !sidebarOpen && !isMobile ? "pl-14" : "pl-0",
+            isMobile && !sidebarOpen ? "pl-12" : "pl-0"
+          )}>
             <div>
-              <h1 className="text-2xl font-bold text-neutral-900 flex items-center gap-2">
-                <Users className="w-6 h-6 text-neutral-400" />
+              <h1 className="text-xl sm:text-2xl font-bold text-neutral-900 flex items-center gap-2">
+                <Users className="w-5 h-5 sm:w-6 h-6 text-neutral-400" />
                 Equipe
               </h1>
-              <p className="text-sm text-neutral-500 mt-1">
-                Gerencie os membros e permissões do workspace <span className="font-semibold text-neutral-700">{currentWorkspace.name}</span>.
+              <p className="text-xs sm:text-sm text-neutral-500 mt-1 truncate max-w-[200px] sm:max-w-none">
+                Membros do workspace <span className="font-semibold text-neutral-700">{currentWorkspace.name}</span>
               </p>
             </div>
-            {(currentUserRole === 'admin' || currentUserRole === 'owner') && (
-              <Button 
-                className="bg-pink-500 hover:bg-pink-600 text-white gap-2"
-                onClick={() => setInviteModalOpen(true)}
-              >
-                <UserPlus className="w-4 h-4" />
-                Convidar
-              </Button>
-            )}
+            <div className="flex items-center gap-2 sm:gap-3">
+              <button className="flex items-center gap-1 text-xs sm:text-sm text-neutral-500 hover:text-neutral-900">
+                <Search className="w-4 h-4" /> <span className="hidden sm:inline">Buscar</span>
+              </button>
+              {(currentUserRole === 'admin' || currentUserRole === 'owner') && (
+                <Button 
+                  size={isMobile ? "sm" : "default"}
+                  className="bg-pink-500 hover:bg-pink-600 text-white gap-2"
+                  onClick={() => setInviteModalOpen(true)}
+                >
+                  <UserPlus className="w-4 h-4" />
+                  <span className="hidden sm:inline">Convidar</span>
+                </Button>
+              )}
+            </div>
           </div>
         </header>
 

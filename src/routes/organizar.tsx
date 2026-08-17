@@ -12,11 +12,12 @@ import {
   Calendar, User as UserIcon, ArrowUpDown, Maximize2, Rows,
   Edit2, Eye, Palette, Link as LinkIcon, Copy as CopyIcon2, Trash,
   Smile, Briefcase, BookOpen, EyeOff, CheckCircle2, AlertCircle,
-  CalendarDays
+  CalendarDays, Menu
 } from "lucide-react";
 import { getAssignmentStatus, getStatusBadge } from "@/utils/assignment-status";
 import { AssignmentDeadlinePopover } from "@/components/AssignmentDeadlinePopover";
 import { cn } from "@/lib/utils";
+import { useIsMobile } from "@/hooks/use-mobile";
 import type { WorkspaceMemberView } from "./equipe";
 import type { Database } from "@/integrations/supabase/types";
 
