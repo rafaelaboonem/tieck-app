@@ -43,7 +43,7 @@ export function useWorkspaceRBAC(workspaceId: string | undefined) {
     enabled: !!user && !!workspaceId,
     staleTime: 1000 * 60 * 5,
     gcTime: 1000 * 60 * 30,
-    placeholderData: (previousData) => previousData,
+    
   });
 
   // O loading só deve ser verdadeiro se não temos dados e estamos carregando pela primeira vez
