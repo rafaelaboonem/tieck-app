@@ -1325,7 +1325,7 @@ export function WorkspacePage() {
                     className="w-16 h-16 sm:w-24 sm:h-24 bg-neutral-50 rounded-2xl sm:rounded-3xl flex items-center justify-center shrink-0 cursor-pointer hover:bg-neutral-100 transition-colors group relative"
                     onClick={() => setIsIconPickerOpen(true)}
                   >
-                    <div className="w-14 h-14 bg-[#E16259] rounded-xl flex items-center justify-center overflow-hidden">
+                    <div className="w-10 h-10 sm:w-14 sm:h-14 bg-[#E16259] rounded-lg sm:rounded-xl flex items-center justify-center overflow-hidden">
                       {currentWorkspace?.icon_url ? (
                         <img src={currentWorkspace.icon_url} alt="Icon" className="w-full h-full object-cover" />
                       ) : (
@@ -1333,7 +1333,7 @@ export function WorkspacePage() {
                           const iconName = currentWorkspace?.icon || 'Files';
                           const IconMap: Record<string, any> = { Files, Layout, BarChart3, Settings, MessageSquare, Bell, Globe, Users };
                           const Icon = IconMap[iconName] || Files;
-                          return <Icon className="w-9 h-9 text-white" />;
+                          return <Icon className="w-6 h-6 sm:w-9 sm:h-9 text-white" />;
                         })()
                       )}
                     </div>
