@@ -414,7 +414,7 @@ import logoIcon from "../assets/local/logo-tieck.webp";
                             <li key={chk.id}>
                               <button
                                 type="button"
-                                onClick={() => navigate({ to: "/checklist", search: { id: chk.id, workspace: undefined, category: undefined } })}
+                                onClick={() => navigate({ to: "/checklist", search: { id: chk.id } as any })}
                                 className="w-full text-left py-1 text-[13px] text-neutral-400 hover:text-neutral-900 transition-colors truncate block font-medium"
                               >
                                 {chk.title || "Sem título"}
@@ -423,7 +423,7 @@ import logoIcon from "../assets/local/logo-tieck.webp";
                           ))
                         ) : (
                           <li className="py-1 text-[12px] text-neutral-400 italic font-medium">
-                            Nenhum checklist recente
+                            Nenhum recente neste contexto
                           </li>
                         )}
                       </ul>
