@@ -43,7 +43,7 @@ function AuthenticatedExecutionPage() {
       
       const { data, error } = await supabase
         .from("checklists")
-        .select("*")
+        .select("*, checklist_assignments(*)")
         .eq("id", id)
         .maybeSingle();
 
