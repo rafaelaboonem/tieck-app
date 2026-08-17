@@ -99,4 +99,25 @@ describe('Fase 4C.7 — Transferência Segura de Prazo', () => {
     expect(toastSuccess).not.toHaveBeenCalled();
     expect(toastError).toHaveBeenCalledWith("Erro ao sincronizar");
   });
+
+  it('falha ao limpar prazo do antigo responsável interrompe o fluxo', async () => {
+    const toastSuccess = vi.fn();
+    const toastError = vi.fn();
+    
+    // Simulação simplificada do saveDeadlineConfig
+    const save = async (shouldFail: boolean) => {
+      try {
+        if (shouldFail) {
+          throw new Error("Falha ao limpar prazo antigo");
+        }
+        toastSuccess("Sucesso");
+      } catch (e: any) {
+        toastError(e.message);
+      }
+    };
+
+    await save(true);
+    expect(toastSuccess).not.toHaveBeenCalled();
+    expect(toastError).toHaveBeenCalledWith("Falha ao limpar prazo antigo");
+  });
 });

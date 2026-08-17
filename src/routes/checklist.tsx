@@ -2567,9 +2567,7 @@ export function NovoChecklistPage() {
             p_assignment_id: existingPrimary.id,
             p_due_at: null as any
           });
-          if (clearOldError) {
-            console.error("Aviso: Falha ao limpar prazo do antigo responsável", clearOldError);
-          }
+          if (clearOldError) throw clearOldError;
         }
       }
 
