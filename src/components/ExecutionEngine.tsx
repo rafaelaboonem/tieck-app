@@ -92,11 +92,13 @@ const SUBMIT_ERROR_KEY: Record<string, Parameters<typeof t>[1]> = {
 export function ExecutionEngine({ 
   checklist, 
   onSubmitted,
-  analyticsId 
+  analyticsId,
+  mode = "public"
 }: { 
   checklist: any; 
   onSubmitted: () => void;
   analyticsId?: string | null;
+  mode?: "public" | "authenticated";
 }) {
   const [answers, setAnswers] = useState<Record<string, any>>({});
   const [uploading, setUploading] = useState(false);
@@ -317,7 +319,7 @@ export function ExecutionEngine({
                   key={block.id}
                   block={block}
                   settings={settings}
-                  mode="public"
+                  mode={mode === "authenticated" ? "preview" : "public"}
                   answers={answers}
                   setAnswer={setAnswer}
                   isDark={isDark}

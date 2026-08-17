@@ -35,7 +35,6 @@ function AuthenticatedExecutionPage() {
 
     const fetchChecklist = async () => {
       setLoading(true);
-      // We use a regular query since the user is authenticated
       const { data, error } = await supabase
         .from("checklists")
         .select("*")
@@ -48,7 +47,15 @@ function AuthenticatedExecutionPage() {
         return;
       }
 
-      setChecklist(data);
+      // Conforme contrato, Viewer deve ver APENAS a versão publicada
+      const published_content = data.published_content as any;
+      const publishedChecklist = {
+        ...data,
+        blocks: published_content?.blocks || [],
+        is_published: true
+      };
+
+      setChecklist(publishedChecklist);
       setLoading(false);
     };
 
@@ -132,6 +139,7 @@ function AuthenticatedExecutionPage() {
         <main className="flex-1 pb-32">
           <ExecutionEngine 
             checklist={checklist} 
+            mode="authenticated"
             onSubmitted={() => setSubmitted(true)}
             analyticsId={analyticsId}
           />

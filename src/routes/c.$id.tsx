@@ -183,6 +183,7 @@ function PublicChecklistPage() {
       <main className="pb-32 pt-12">
         <ExecutionEngine 
           checklist={checklist} 
+          mode="public"
           onSubmitted={() => setSubmitted(true)}
           analyticsId={analyticsId}
         />
