@@ -461,25 +461,8 @@ export function WorkspacePage() {
   const [checklistToDelete, setChecklistToDelete] = useState<Checklist | null>(null);
   const [isAddingItem, setIsAddingItem] = useState<{ category: string | null } | null>(null);
 
-  useEffect(() => {
-    const fetchUserRole = async () => {
-      if (!currentWorkspace || !user) return;
-      const isOwner = currentWorkspace.owner_id === user.id;
-      if (isOwner) {
-        setCurrentUserRole('owner');
-      } else {
-        const { data } = await supabase
-          .from('workspace_members')
-          .select('role')
-          .eq('workspace_id', currentWorkspace.id)
-          .eq('user_id', user.id)
-          .eq('status', 'active')
-          .maybeSingle();
-        setCurrentUserRole((data?.role as any) || 'viewer');
-      }
-    };
-    fetchUserRole();
-  }, [currentWorkspace?.id, user?.id, currentWorkspace?.owner_id]);
+  // Role evaluation is now handled inside the fetchData effect
+
   const [selectedSubTab, setSelectedSubTab] = useState("");
   const [newItemTitle, setNewItemTitle] = useState("");
   const [renamingCategoryId, setRenamingCategoryId] = useState<string | null>(null);
@@ -1184,10 +1167,13 @@ export function WorkspacePage() {
     setIsEditingTitle(true);
   };
 
-  const filteredChecklists = checklists.filter(c => 
-    (c.title || "").toLowerCase().includes(searchQuery.toLowerCase()) &&
-    (selectedSubTab === "Atribuições" || c.view_type === selectedSubTab || (!c.view_type && (!selectedSubTab || selectedSubTab === "Tarefas")))
-  );
+  const filteredChecklists = checklists.filter(c => {
+    const matchesSearch = (c.title || "").toLowerCase().includes(searchQuery.toLowerCase());
+    const isUnassigned = !c.view_type && (!selectedSubTab || selectedSubTab === "Tarefas");
+    const matchesTab = selectedSubTab === "Atribuições" || c.view_type === selectedSubTab || isUnassigned;
+    return matchesSearch && matchesTab;
+  });
+
 
 
   if (workspaceLoading) return null;
