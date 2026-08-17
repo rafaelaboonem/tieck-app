@@ -899,7 +899,7 @@ export function WorkspacePage() {
     try {
       const { error } = await supabase.rpc('set_assignment_deadline', {
         p_assignment_id: assignmentId,
-        p_due_at: dueAt
+        p_due_at: dueAt as string // Casting because migration allows NULL but types might be strict
       });
 
       if (error) throw error;
