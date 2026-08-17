@@ -297,7 +297,7 @@ export function Dashboard() {
                           onClick={() => {
                             if (isSelectionMode) return;
                             if (isViewer) {
-                              navigate({ to: `/c/${item.custom_slug || item.id}` as any });
+                              navigate({ to: `/executar/${item.id}` as any });
                             } else {
                               navigate({ to: "/checklist", search: { id: item.id } });
                             }
@@ -322,7 +322,7 @@ export function Dashboard() {
                               onClick={(e) => {
                                 e.stopPropagation();
                                 if (isViewer) {
-                                  navigate({ to: `/c/${item.custom_slug || item.id}` as any });
+                                  navigate({ to: `/executar/${item.id}` as any });
                                 } else {
                                   navigate({ to: "/checklist", search: { id: item.id } });
                                 }
