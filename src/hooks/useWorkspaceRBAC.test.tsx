@@ -76,6 +76,7 @@ describe("useWorkspaceRBAC Performance and Cache", () => {
     
     expect(result.current.loading).toBe(false);
     expect(result.current.role).toBe("owner");
+  });
 
   it("should return neutral state (loading=true, role=null) when switching workspace without cache", async () => {
     const mockUser = { id: "user-123" };
