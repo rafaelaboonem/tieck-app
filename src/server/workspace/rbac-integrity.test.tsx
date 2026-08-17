@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { WorkspacePage } from '../../routes/organizar';
+import { WorkspacePage, Route as WorkspaceRoute } from '../../routes/organizar';
 import { Dashboard } from '../../routes/inicio';
 import { supabase } from '@/integrations/supabase/client';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
@@ -9,9 +9,10 @@ import { useAuth } from '@/contexts/AuthContext';
 // Mocks
 vi.mock('@tanstack/react-router', () => ({
   createFileRoute: (path: string) => {
-    const route = () => ({});
-    (route as any).useSearch = () => ({ id: 'ws-123' });
-    return route;
+    const routeFunc = (opts: any) => ({
+      useSearch: () => ({ id: 'ws-123' })
+    });
+    return routeFunc;
   },
   useNavigate: () => vi.fn(),
   useLocation: () => ({ pathname: '/inicio' }),
