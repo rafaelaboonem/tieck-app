@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { getAssignmentStatus, getStatusBadge } from "@/utils/assignment-status";
 import { AssignmentDeadlinePopover } from "@/components/AssignmentDeadlinePopover";
+import { cn } from "@/lib/utils";
 import type { WorkspaceMemberView } from "./equipe";
 import type { Database } from "@/integrations/supabase/types";
 
