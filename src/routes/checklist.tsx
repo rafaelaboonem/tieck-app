@@ -766,6 +766,7 @@ function ChecklistAuthGuard({ children }: { children: React.ReactNode }) {
 }
 
 export function NovoChecklistPage() {
+  const isMobile = useIsMobile();
   const { sidebarOpen, setSidebarOpen } = useSidebar();
   const { currentWorkspace } = useWorkspace();
   const { user: authUser } = useAuth();
