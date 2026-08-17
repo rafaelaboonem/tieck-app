@@ -2903,11 +2903,11 @@ export function NovoChecklistPage() {
             <img src={logoUrl} alt="Logo" className={`${isMobile ? "w-8 h-8" : "w-14 h-14"} object-contain grayscale hover:grayscale-0 active:grayscale-0 transition-all cursor-pointer`} />
           </Link>
           <span className="text-neutral-400">›</span>
-          <Link to={user ? "/inicio" : "/"} className="text-neutral-600 hover:text-neutral-900 transition-colors text-sm">
+          <Link to={user ? "/inicio" : "/"} className="text-neutral-600 hover:text-neutral-900 transition-colors text-xs sm:text-sm truncate max-w-[80px] sm:max-w-none">
             {user ? (currentWorkspace?.name || "Meu workspace") : "Início"}
           </Link>
           <span className="text-neutral-400">›</span>
-          <span className="text-neutral-700 font-medium text-sm">{title || "Sem título"}</span>
+          <span className="text-neutral-700 font-medium text-xs sm:text-sm truncate max-w-[100px] sm:max-w-none">{title || "Sem título"}</span>
         </div>
 
         <div className="flex items-center gap-3 text-sm text-neutral-500">
