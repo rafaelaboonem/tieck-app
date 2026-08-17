@@ -104,6 +104,7 @@ export const Route = createFileRoute('/api/public/cron/overdue-assignments')({
                 workspaceName: (assignment.workspaces as any)?.name || 'Meu Workspace',
                 assigneeName: assigneeName,
                 dueAt: assignment.due_at!,
+                completedAt: assignment.completed_at,
                 ownerEmail: ownerEmail,
                 isStillPending: !assignment.completed_at
               });
