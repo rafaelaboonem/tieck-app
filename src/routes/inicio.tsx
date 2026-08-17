@@ -288,14 +288,15 @@ export function Dashboard() {
                   <div
                     key={item.id}
                     onClick={() => isSelectionMode && toggleSelection(item.id)}
-                    className={`group relative bg-white border rounded-xl p-4 pl-6 transition-all cursor-default min-h-[70px] flex items-center justify-between overflow-hidden shadow-sm ${
+                    className={cn(
+                      "group relative bg-white border rounded-xl p-3 sm:p-4 sm:pl-6 transition-all cursor-default min-h-[70px] flex flex-col sm:flex-row sm:items-center justify-between overflow-hidden shadow-sm gap-3",
                       isSelectionMode && selectedIds.includes(item.id) 
                         ? "border-pink-500 bg-pink-50/30" 
                         : "border-neutral-200 hover:border-pink-300 hover:shadow-md"
-                    }`}
+                    )}
                   >
-                    <div className="relative z-10 flex flex-row items-center justify-between w-full gap-4">
-                      <div className="flex items-center gap-4 min-w-0">
+                    <div className="relative z-10 flex flex-row items-center justify-between w-full gap-2 sm:gap-4">
+                      <div className="flex items-center gap-2 sm:gap-4 min-w-0 flex-1">
                         {isSelectionMode && (
                           <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${
                             selectedIds.includes(item.id) 
