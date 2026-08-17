@@ -115,6 +115,9 @@ import { toast } from "sonner";
 import { mapAuthError } from "@/utils/auth-errors";
 import { useQuery } from "@tanstack/react-query";
 import { useWorkspaceRBAC } from "@/hooks/useWorkspaceRBAC";
+import { toLocalISO, fromLocalISO } from "@/utils/date-helpers";
+import { getAssignmentStatus, getStatusBadge } from "@/utils/assignment-status";
+
 const InsightsTab = lazy(() => import("@/components/InsightsTab").then(m => ({ default: m.InsightsTab })));
 const SubmissionsTab = lazy(() => import("@/components/SubmissionsTab").then(m => ({ default: m.SubmissionsTab })));
 import { BlockRenderer, INTERACTIVE_BLOCK_TYPES } from "@/components/BlockRenderer";
@@ -1468,15 +1471,42 @@ export function NovoChecklistPage() {
       const wsId = currentWorkspace?.id || workspaceParam;
       if (!wsId || !user) return;
 
-      const { data: members } = await supabase
+      // 1. Buscar membros ativos
+      const { data: members, error: memErr } = await supabase
         .from("workspace_members")
-        .select("id, user_id, role, status, profiles(display_name, avatar_url)")
+        .select("id, user_id, role, status")
         .eq("workspace_id", wsId)
         .eq("status", "active");
       
-      if (members) setWorkspaceMembers(members);
+      if (memErr) {
+        console.error("Error fetching members:", memErr);
+        return;
+      }
+
+      if (members && members.length > 0) {
+        // 2. Resolver perfis separadamente (evitar nested profiles PostgREST invalid relation)
+        const userIds = members.map(m => m.user_id);
+        const { data: profiles, error: profErr } = await supabase
+          .from("profiles")
+          .select("id, display_name, avatar_url")
+          .in("id", userIds);
+
+        if (profErr) {
+          console.error("Error fetching profiles:", profErr);
+        }
+
+        const membersWithProfiles = members.map(m => ({
+          ...m,
+          profiles: profiles?.find(p => p.id === m.user_id) || null
+        }));
+
+        setWorkspaceMembers(membersWithProfiles);
+      } else {
+        setWorkspaceMembers([]);
+      }
     };
     fetchWorkspaceData();
+
   }, [user, currentWorkspace?.id, workspaceParam]);
 
   useEffect(() => {
@@ -1498,10 +1528,9 @@ export function NovoChecklistPage() {
             setDeadlineAlertEnabled(!!primary.due_at);
             
             if (primary.due_at) {
-              import("@/utils/assignment-status").then(({ getAssignmentStatus }) => {
-                setDeadlineStatus(getAssignmentStatus(primary.due_at, primary.completed_at));
-              });
+              setDeadlineStatus(getAssignmentStatus(primary.due_at, primary.completed_at));
             }
+
           }
         }
       } finally {
@@ -2467,15 +2496,20 @@ export function NovoChecklistPage() {
 
     try {
       const existingPrimary = checklistAssignments.find(a => a.is_primary);
+      const allCurrentMemberIds = checklistAssignments.map(a => a.workspace_member_id);
       
       if (!deadlineAlertEnabled) {
-        if (existingPrimary?.due_at) {
+        // Desligar alerta: manter assignment, apenas setar due_at = NULL
+        if (existingPrimary) {
           const { error } = await supabase.rpc('set_assignment_deadline', {
             p_assignment_id: existingPrimary.id,
             p_due_at: null as any
           });
           if (error) throw error;
           setAssignmentDeadline(null);
+          
+          // Refresh local state status
+          setDeadlineStatus(getAssignmentStatus(null, existingPrimary.completed_at));
         }
         return;
       }
@@ -2487,11 +2521,15 @@ export function NovoChecklistPage() {
 
       let targetAssignmentId = existingPrimary?.id;
 
+      // Se o responsável mudou ou não existe primary
       if (!existingPrimary || existingPrimary.workspace_member_id !== primaryMemberId) {
+        // Preservar outros membros: garantir que a lista contenha todos os atuais + o novo responsável
+        const newMemberList = Array.from(new Set([...allCurrentMemberIds, primaryMemberId]));
+
         const { error } = await supabase.rpc('update_checklist_assignments', {
           p_workspace_id: wsId,
           p_checklist_id: settingsChecklistId,
-          p_member_ids: [primaryMemberId],
+          p_member_ids: newMemberList,
           p_primary_member_id: primaryMemberId
         });
         if (error) throw error;
@@ -2512,6 +2550,10 @@ export function NovoChecklistPage() {
           p_due_at: assignmentDueAt
         });
         if (error) throw error;
+        
+        // Refresh local status
+        const currentAssignment = checklistAssignments.find(a => a.id === targetAssignmentId);
+        setDeadlineStatus(getAssignmentStatus(assignmentDueAt, currentAssignment?.completed_at || null));
       }
 
       toast.success("Configurações de prazo salvas");
@@ -2520,6 +2562,7 @@ export function NovoChecklistPage() {
       toast.error("Erro ao salvar prazo: " + err.message);
     }
   };
+
 
 
   // Auto-save to DB for logged in users
@@ -5824,11 +5867,14 @@ export function NovoChecklistPage() {
                             <input
                               type="date"
                               disabled={!canManage}
-                              value={assignmentDueAt ? assignmentDueAt.split('T')[0] : ""}
+                              value={assignmentDueAt ? toLocalISO(new Date(assignmentDueAt)).split('T')[0] : ""}
                               onChange={(e) => {
                                 const date = e.target.value;
-                                const time = assignmentDueAt ? assignmentDueAt.split('T')[1]?.slice(0, 5) : "23:59";
-                                if (date) setAssignmentDeadline(new Date(`${date}T${time}`).toISOString());
+                                const currentTime = assignmentDueAt ? toLocalISO(new Date(assignmentDueAt)).split('T')[1]?.slice(0, 5) : "23:59";
+                                if (date) {
+                                  const localISO = `${date}T${currentTime}`;
+                                  setAssignmentDeadline(fromLocalISO(localISO));
+                                }
                               }}
                               className="w-full text-sm border border-neutral-200 rounded-md px-3 py-2 outline-none focus:border-neutral-400"
                             />
@@ -5837,15 +5883,19 @@ export function NovoChecklistPage() {
                             <input
                               type="time"
                               disabled={!canManage}
-                              value={assignmentDueAt ? assignmentDueAt.split('T')[1]?.slice(0, 5) : ""}
+                              value={assignmentDueAt ? toLocalISO(new Date(assignmentDueAt)).split('T')[1]?.slice(0, 5) : ""}
                               onChange={(e) => {
                                 const time = e.target.value;
-                                const date = assignmentDueAt ? assignmentDueAt.split('T')[0] : new Date().toISOString().split('T')[0];
-                                if (time) setAssignmentDeadline(new Date(`${date}T${time}`).toISOString());
+                                const currentDate = assignmentDueAt ? toLocalISO(new Date(assignmentDueAt)).split('T')[0] : toLocalISO(new Date()).split('T')[0];
+                                if (time) {
+                                  const localISO = `${currentDate}T${time}`;
+                                  setAssignmentDeadline(fromLocalISO(localISO));
+                                }
                               }}
                               className="w-full text-sm border border-neutral-200 rounded-md px-3 py-2 outline-none focus:border-neutral-400"
                             />
                           </CustomField>
+
                         </div>
 
                         <div className="pt-2">
@@ -5858,9 +5908,16 @@ export function NovoChecklistPage() {
                           <div className="pt-2 mt-2 border-t border-neutral-100 flex items-center justify-between">
                             <div className="flex flex-col">
                               <span className="text-[10px] font-bold text-neutral-400 uppercase">Status do prazo</span>
-                              <span className="text-sm font-medium text-neutral-700">
-                                {deadlineStatus === 'completed' ? 'Concluído' : deadlineStatus === 'overdue' ? 'Atrasado' : 'Pendente'}
-                              </span>
+                              {(() => {
+                                const badge = getStatusBadge(deadlineStatus as any);
+                                return badge ? (
+                                  <span className={cn("text-[10px] font-bold px-2 py-0.5 rounded-full border self-start mt-1", badge.className)}>
+                                    {badge.label}
+                                  </span>
+                                ) : (
+                                  <span className="text-sm font-medium text-neutral-700">Pendente</span>
+                                );
+                              })()}
                             </div>
                             {assignmentDueAt && (
                               <div className="text-right">
@@ -5872,6 +5929,7 @@ export function NovoChecklistPage() {
                             )}
                           </div>
                         )}
+
                       </div>
                     )}
                   </div>
