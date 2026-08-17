@@ -704,7 +704,7 @@ function ChecklistAuthGuard({ children }: { children: React.ReactNode }) {
     if (authStatus === 'execution_only' && checklistId) {
       toast.info("Você possui acesso somente para execução.");
       navigate({ 
-        to: `/c/${checklistId}` as any, 
+        to: `/executar/${checklistId}` as any, 
         replace: true 
       });
     }
