@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Search, Sparkles, Settings, Plus, HelpCircle, Pencil, Link2, Trash2, MoreHorizontal, Copy as CopyIcon, CheckSquare, X } from "lucide-react";
+import { Search, Sparkles, Settings, Plus, HelpCircle, Pencil, Link2, Trash2, MoreHorizontal, Copy as CopyIcon, CheckSquare, X, Menu } from "lucide-react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { useWorkspaceRBAC } from "@/hooks/useWorkspaceRBAC";
 import { useSidebar } from "@/contexts/SidebarContext";
@@ -11,6 +11,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { FileText, Clock, ChevronRight, CalendarDays } from "lucide-react";
 import { getAssignmentStatus, getStatusBadge } from "@/utils/assignment-status";
 import { cn } from "@/lib/utils";
+import { useIsMobile } from "@/hooks/use-mobile";
 import logoUrl from "../assets/local/logo-k.webp";
 import { toast } from "sonner";
 import {
