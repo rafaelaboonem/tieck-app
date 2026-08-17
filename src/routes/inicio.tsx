@@ -37,6 +37,7 @@ export const Route = createFileRoute("/inicio")({
 });
 
 export function Dashboard() {
+  const isMobile = useIsMobile();
   const { sidebarOpen } = useSidebar();
   const { currentWorkspace, workspaceStatus } = useWorkspace();
   const { user, loading: authLoading, needsEmailConfirmation } = useAuth();
