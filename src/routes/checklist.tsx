@@ -6513,7 +6513,7 @@ function SettingsRow({
   badge?: { label: string; color: string };
 }) {
   return (
-    <div className="grid grid-cols-[1fr_auto] gap-6 py-5 border-b border-neutral-200 items-start">
+    <div className="flex flex-col sm:grid sm:grid-cols-[1fr_auto] gap-4 sm:gap-6 py-5 border-b border-neutral-200 items-start">
       <div>
         <div className="flex items-center gap-2">
           <h3 className="text-sm font-semibold text-neutral-900">{title}</h3>
