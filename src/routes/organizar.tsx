@@ -151,6 +151,7 @@ function SortableChecklistCard({
   assignments: ChecklistAssignmentView[];
   members: WorkspaceMemberView[];
   onAssign: (checklistId: string, memberId: string | null) => void;
+  onSetDeadline: (assignmentId: string, dueAt: string | null) => void;
   canManage: boolean;
 }) {
 
