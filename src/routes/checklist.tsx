@@ -1211,9 +1211,13 @@ export function NovoChecklistPage() {
   }, [user]);
 
   useEffect(() => {
-    // Ensure sidebar is open by default on this page for better UX
-    setSidebarOpen(true);
-  }, [setSidebarOpen]);
+    // Mobile-safe default sidebar state
+    if (!isMobile) {
+      setSidebarOpen(true);
+    } else {
+      setSidebarOpen(false);
+    }
+  }, [setSidebarOpen, isMobile]);
 
   const previewVersion = (versionId: string) => {
     if (versionId === "current") {
