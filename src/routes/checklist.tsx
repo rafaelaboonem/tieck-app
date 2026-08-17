@@ -2932,7 +2932,7 @@ export function NovoChecklistPage() {
             className="hover:text-neutral-900 flex items-center gap-1.5"
           >
             <Settings className="w-4 h-4" />
-            <span>Configuração</span>
+            <span className="hidden sm:inline">Configuração</span>
           </button>
           <button
             type="button"
