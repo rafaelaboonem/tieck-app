@@ -33,7 +33,7 @@ export const Route = createFileRoute("/inicio")({
   component: Dashboard,
 });
 
-function Dashboard() {
+export function Dashboard() {
   const { sidebarOpen } = useSidebar();
   const { currentWorkspace } = useWorkspace();
   const { user, loading, needsEmailConfirmation } = useAuth();

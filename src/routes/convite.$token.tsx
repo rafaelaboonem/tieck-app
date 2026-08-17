@@ -108,7 +108,7 @@ function InvitePage() {
 
       toast.success("Convite aceito com sucesso!");
       await refreshWorkspaces();
-      navigate({ to: '/inicio' });
+      navigate({ to: '/organizar', search: { id: result.workspace_id } });
     } catch (err) {
       console.error("Erro ao aceitar convite:", err);
       toast.error("Erro de conexão ao aceitar convite.");
