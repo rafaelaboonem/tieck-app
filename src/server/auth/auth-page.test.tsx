@@ -144,13 +144,23 @@ describe('AuthPage Phase 4B.1 (OTP Flow)', () => {
     const otpInput = Array.from(inputs).find(i => i.getAttribute('inputmode') === 'numeric');
     
     if (otpInput) {
-      // Test non-numeric filtering
-      fireEvent.change(otpInput, { target: { value: '12a3 4-5' } });
-      expect((otpInput as HTMLInputElement).value).toBe('12345');
+      // Test non-numeric filtering and normalization
+      const testValue = '12a3 4-5';
+      const expectedFiltered = '12345';
+      
+      fireEvent.change(otpInput, { target: { value: testValue } });
+      
+      // In vitest/react-testing-library, the value attribute might not update instantly 
+      // if the onChange handler filters it before setting state, but let's check the call
+      await waitFor(() => {
+        expect((otpInput as HTMLInputElement).value).toBe(expectedFiltered);
+      });
       
       // Test full numeric 6 digits
       fireEvent.change(otpInput, { target: { value: '123456' } });
-      expect((otpInput as HTMLInputElement).value).toBe('123456');
+      await waitFor(() => {
+        expect((otpInput as HTMLInputElement).value).toBe('123456');
+      });
     }
   });
 
@@ -168,9 +178,11 @@ describe('AuthPage Phase 4B.1 (OTP Flow)', () => {
     const otpInput = Array.from(document.querySelectorAll('input')).find(i => i.getAttribute('inputmode') === 'numeric');
     
     if (otpInput) {
-      // Simulate paste
+      // Simulate paste with spaces
       fireEvent.change(otpInput, { target: { value: ' 654 321 ' } });
-      expect((otpInput as HTMLInputElement).value).toBe('654321');
+      await waitFor(() => {
+        expect((otpInput as HTMLInputElement).value).toBe('654321');
+      });
     }
   });
 });
