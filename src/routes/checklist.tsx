@@ -3136,7 +3136,7 @@ export function NovoChecklistPage() {
                   </div>
                 </div>
               ) : (
-                <div className="mt-8 p-6 bg-neutral-50 rounded-xl border border-neutral-100 animate-in fade-in slide-in-from-top-2 duration-300">
+                <div className="mt-8 p-4 sm:p-6 bg-neutral-50 rounded-xl border border-neutral-100 animate-in fade-in slide-in-from-top-2 duration-300 w-full">
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="font-semibold text-neutral-900">Modelos Disponíveis</h3>
                     <button 
