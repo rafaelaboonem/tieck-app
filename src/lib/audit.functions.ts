@@ -15,7 +15,8 @@ export const auditCasa2 = createServerFn({ method: "GET" })
   });
 
 export const recoverCasa2 = createServerFn({ method: "POST" })
-  .handler(async ({ data: { checklistId, workspaceId } }: { data: { checklistId: string, workspaceId: string } }) => {
+  .handler(async ({ data }: { data: { checklistId: string, workspaceId: string } }) => {
+    const { checklistId, workspaceId } = data;
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return { error: "No user authenticated" };
 
