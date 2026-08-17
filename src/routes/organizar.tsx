@@ -515,6 +515,61 @@ export function WorkspacePage() {
 
       setIsLoading(true);
       if (!user) return;
+      
+      setIsLoading(true);
+      try {
+        const { data: wsData, error: wsError } = await supabase
+          .from("workspaces")
+          .select("id, name, owner_id")
+          .eq("id", selectedId)
+          .single();
+
+        if (wsError) {
+          console.error("Error fetching workspace:", wsError);
+          toast.error("Erro ao carregar workspace");
+          setIsLoading(false);
+          return;
+        }
+
+        // Get role and membership
+        const { data: memberData, error: memberError } = await supabase
+          .from("workspace_members")
+          .select("role, status")
+          .eq("workspace_id", selectedId)
+          .eq("user_id", user.id)
+          .single();
+        
+        const isOwner = wsData.owner_id === user.id;
+        const role = isOwner ? 'owner' : (memberData?.status === 'active' ? memberData.role : null);
+        
+        if (!isOwner && !role) {
+          toast.error("Você não tem acesso a este workspace");
+          navigate({ to: "/inicio" });
+          return;
+        }
+
+        setCurrentUserRole(role as any);
+
+        // Batch data loading
+        const [checklistsRes, categoriesRes, membersRes, assignmentsRes] = await Promise.all([
+          supabase.from("checklists").select("*").eq("workspace_id", selectedId),
+          supabase.from("categories").select("*").eq("workspace_id", selectedId),
+          supabase.from("workspace_members").select("*, profiles(*)").eq("workspace_id", selectedId).eq("status", "active"),
+          supabase.from("checklist_assignments").select("*").eq("workspace_id", selectedId)
+        ]);
+
+        if (checklistsRes.data) setChecklists(checklistsRes.data);
+        if (categoriesRes.data) setCategories(categoriesRes.data);
+        if (membersRes.data) setMembers(membersRes.data as any);
+        if (assignmentsRes.data) setAssignments(assignmentsRes.data as any);
+
+      } catch (err) {
+        console.error("Workspace initialization error:", err);
+        toast.error("Erro técnico no carregamento");
+      } finally {
+        setIsLoading(false);
+      }
+
 
       try {
         const { data: cats } = await supabase
