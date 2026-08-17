@@ -309,6 +309,27 @@ export function Dashboard() {
                             <Clock className="w-2.5 h-2.5" />
                             <span>{new Date(item.updated_at || item.created_at).toLocaleDateString("pt-BR")}</span>
                           </div>
+                          {item.checklist_assignments?.map((a: any) => {
+                            const status = getAssignmentStatus(a.due_at, a.completed_at);
+                            const badge = getStatusBadge(status);
+                            if (!badge) return null;
+                            return (
+                              <div key={a.id} className="flex items-center gap-1.5 ml-1">
+                                <span className={cn(
+                                  "px-2 py-0.5 rounded-full text-[9px] font-bold border flex items-center gap-1",
+                                  badge.className
+                                )}>
+                                  <CalendarDays className="w-2.5 h-2.5" />
+                                  {badge.label}
+                                  {a.due_at && (
+                                    <span className="opacity-70 ml-0.5 font-medium">
+                                      • {new Date(a.due_at).toLocaleDateString("pt-BR", { day: '2-digit', month: '2-digit' })}
+                                    </span>
+                                  )}
+                                </span>
+                              </div>
+                            );
+                          })}
                         </div>
                       </div>
 
