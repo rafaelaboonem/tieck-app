@@ -508,7 +508,8 @@ export function WorkspacePage() {
   useEffect(() => {
     const fetchData = async () => {
       if (workspaceLoading) return;
-      if (!currentWorkspace) {
+      const workspaceId = selectedId || currentWorkspace?.id;
+      if (!workspaceId) {
         setIsLoading(false);
         return;
       }
@@ -516,12 +517,11 @@ export function WorkspacePage() {
       setIsLoading(true);
       if (!user) return;
       
-      setIsLoading(true);
       try {
         const { data: wsData, error: wsError } = await supabase
           .from("workspaces")
           .select("id, name, owner_id")
-          .eq("id", selectedId)
+          .eq("id", workspaceId)
           .single();
 
         if (wsError) {
@@ -532,12 +532,12 @@ export function WorkspacePage() {
         }
 
         // Get role and membership
-        const { data: memberData, error: memberError } = await supabase
+        const { data: memberData } = await supabase
           .from("workspace_members")
           .select("role, status")
-          .eq("workspace_id", selectedId)
+          .eq("workspace_id", workspaceId)
           .eq("user_id", user.id)
-          .single();
+          .maybeSingle();
         
         const isOwner = wsData.owner_id === user.id;
         const role = isOwner ? 'owner' : (memberData?.status === 'active' ? memberData.role : null);
@@ -552,14 +552,28 @@ export function WorkspacePage() {
 
         // Batch data loading
         const [checklistsRes, categoriesRes, membersRes, assignmentsRes] = await Promise.all([
-          supabase.from("checklists").select("*").eq("workspace_id", selectedId),
-          supabase.from("categories").select("*").eq("workspace_id", selectedId),
-          supabase.from("workspace_members").select("*, profiles(*)").eq("workspace_id", selectedId).eq("status", "active"),
-          supabase.from("checklist_assignments").select("*").eq("workspace_id", selectedId)
+          supabase.from("checklists").select("*").eq("workspace_id", workspaceId),
+          supabase.from("workspace_categories").select("*").eq("workspace_id", workspaceId),
+          supabase.from("workspace_members").select("*, profiles!inner(*)").eq("workspace_id", workspaceId).eq("status", "active"),
+          supabase.from("checklist_assignments").select("*").eq("workspace_id", workspaceId)
         ]);
 
         if (checklistsRes.data) setChecklists(checklistsRes.data);
-        if (categoriesRes.data) setCategories(categoriesRes.data);
+        
+        // Handle categories and selectedSubTab
+        const finalCats = categoriesRes.data || [];
+        setCategories(finalCats.map(c => ({
+          id: c.id,
+          name: c.name,
+          workspace_id: c.workspace_id,
+          icon_name: c.icon_name,
+          created_at: c.created_at
+        })));
+        
+        if (finalCats.length > 0 && !selectedSubTab) {
+          setSelectedSubTab(finalCats[0].name);
+        }
+
         if (membersRes.data) setMembers(membersRes.data as any);
         if (assignmentsRes.data) setAssignments(assignmentsRes.data as any);
 
@@ -569,35 +583,11 @@ export function WorkspacePage() {
       } finally {
         setIsLoading(false);
       }
+    };
 
+    fetchData();
+  }, [selectedId, currentWorkspace?.id, user, workspaceLoading, navigate]);
 
-      try {
-        const { data: cats } = await supabase
-          .from("workspace_categories")
-          .select("*")
-          .eq("workspace_id", currentWorkspace.id)
-          .order("created_at", { ascending: true });
-        // Limit to 4 categories (total 5 columns with 'Tarefas') and remove extras
-        let finalCats = cats || [];
-        if (canManage && finalCats.length > 4) {
-          try {
-            const extraIds = finalCats.slice(4).map(c => c.id);
-            await supabase.from("workspace_categories").delete().in("id", extraIds);
-            finalCats = finalCats.slice(0, 4);
-          } catch (deleteErr) {
-            console.error("Cleanup categories error (safe to ignore if Viewer):", deleteErr);
-          }
-        }
-        
-        setCategories(finalCats);
-        if (finalCats.length > 0 && !selectedSubTab) {
-          setSelectedSubTab(finalCats[0].name);
-        }
-
-
-        const { data: chks } = await supabase
-          .from("checklists")
-          .select("*")
           .eq("workspace_id", currentWorkspace.id)
           .order("updated_at", { ascending: false });
         
