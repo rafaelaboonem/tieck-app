@@ -267,25 +267,23 @@ export function ExecutionEngine({
         setUploading(false); return;
       }
 
+      try { supabase.functions.invoke("send-submission-emails", { body: { checklistId: checklist.id, answers: resolved } }); } catch {}
+      if (analyticsId) await supabase.from("checklist_analytics").update({ submitted_at: new Date().toISOString() }).eq("id", analyticsId);
+
+      // Authenticated submission: mark assignment as complete BEFORE redirect
+      if (mode === 'authenticated') {
+        const { error: assignmentError } = await (supabase.rpc as any)("complete_assignment", { p_checklist_id: checklist.id });
+        if (assignmentError) {
+          console.error("Error marking assignment as complete:", assignmentError);
+        }
+      }
+
       if (checklist.settings?.redirectOnCompletion && checklist.settings?.redirectUrl) {
         let url = String(checklist.settings.redirectUrl).trim();
         if (!/^https?:\/\//i.test(url)) url = `https://${url}`;
         clearResponseSession();
         window.location.href = url;
         return;
-      }
-
-      try { supabase.functions.invoke("send-submission-emails", { body: { checklistId: checklist.id, answers: resolved } }); } catch {}
-      if (analyticsId) await supabase.from("checklist_analytics").update({ submitted_at: new Date().toISOString() }).eq("id", analyticsId);
-
-      // Authenticated submission: mark assignment as complete
-      if (mode === 'authenticated') {
-        try {
-          await (supabase.rpc as any)("complete_assignment", { p_checklist_id: checklist.id });
-        } catch (assignmentError) {
-          console.error("Error marking assignment as complete:", assignmentError);
-          // Don't block the user if this fails, the submission is already safe
-        }
       }
 
       clearResponseSession();

@@ -1,5 +1,5 @@
 import * as React from "react";
-import { format } from "date-fns";
+import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Calendar as CalendarIcon, Clock, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -17,26 +17,47 @@ interface AssignmentDeadlinePopoverProps {
   disabled?: boolean;
 }
 
+/**
+ * Helpers for UTC/Local conversions for native <input type="date|time">
+ */
+const toLocalISO = (date: Date) => {
+  const pad = (n: number) => n.toString().padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+};
+
 export function AssignmentDeadlinePopover({
   dueAt,
   onUpdate,
   disabled
 }: AssignmentDeadlinePopoverProps) {
-  const [date, setDate] = React.useState<string>(dueAt ? dueAt.split('T')[0] : "");
-  const [time, setTime] = React.useState<string>(dueAt ? dueAt.split('T')[1]?.slice(0, 5) : "23:59");
+  // Internal state for inputs (local time representation)
+  const [localDateTime, setLocalDateTime] = React.useState<string>("");
+
+  // Sync internal state when dueAt prop changes or popover is handled
+  React.useEffect(() => {
+    if (dueAt) {
+      const date = parseISO(dueAt);
+      setLocalDateTime(toLocalISO(date));
+    } else {
+      setLocalDateTime("");
+    }
+  }, [dueAt]);
 
   const handleSave = () => {
-    if (!date) {
+    if (!localDateTime) {
       onUpdate(null);
       return;
     }
-    const isoString = new Date(`${date}T${time}:00`).toISOString();
-    onUpdate(isoString);
+    // Date constructor with YYYY-MM-DDTHH:mm uses local timezone
+    const date = new Date(localDateTime);
+    onUpdate(date.toISOString());
   };
 
   const handleClear = () => {
     onUpdate(null);
   };
+
+  const [datePart, timePart] = localDateTime.split('T');
 
   return (
     <Popover>
@@ -50,7 +71,7 @@ export function AssignmentDeadlinePopover({
           )}
         >
           <CalendarIcon className="w-3 h-3 mr-1" />
-          {dueAt ? format(new Date(dueAt), "dd/MM 'às' HH:mm", { locale: ptBR }) : "Definir prazo"}
+          {dueAt ? format(parseISO(dueAt), "dd/MM 'às' HH:mm", { locale: ptBR }) : "Definir prazo"}
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-64 p-4 rounded-xl shadow-xl border-neutral-100" align="start">
@@ -59,8 +80,8 @@ export function AssignmentDeadlinePopover({
             <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">Data limite</label>
             <Input 
               type="date" 
-              value={date} 
-              onChange={(e) => setDate(e.target.value)}
+              value={datePart || ""} 
+              onChange={(e) => setLocalDateTime(`${e.target.value}T${timePart || "23:59"}`)}
               className="h-9 text-xs"
             />
           </div>
@@ -69,8 +90,8 @@ export function AssignmentDeadlinePopover({
             <div className="relative">
               <Input 
                 type="time" 
-                value={time} 
-                onChange={(e) => setTime(e.target.value)}
+                value={timePart || ""} 
+                onChange={(e) => setLocalDateTime(`${datePart || format(new Date(), 'yyyy-MM-dd')}T${e.target.value}`)}
                 className="h-9 text-xs pl-8"
               />
               <Clock className="w-3.5 h-3.5 text-neutral-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
