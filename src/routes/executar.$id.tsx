@@ -8,7 +8,9 @@ import { DashboardLayout } from "@/components/DashboardLayout";
 import { useWorkspaceRBAC } from "@/hooks/useWorkspaceRBAC";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { toast } from "sonner";
-import { Loader2, Ban, AlertCircle } from "lucide-react";
+import { Loader2, Ban, AlertCircle, CalendarDays, CheckCircle2 } from "lucide-react";
+import { getAssignmentStatus, getStatusBadge } from "@/utils/assignment-status";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/executar/$id")({
   component: AuthenticatedExecutionPage,
