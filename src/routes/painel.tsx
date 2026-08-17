@@ -57,6 +57,7 @@ export const Route = createFileRoute("/painel")({
 function PainelPage() {
   const { user, loading: authLoading } = useAuth();
   const { sidebarOpen } = useSidebar();
+  const isMobile = useIsMobile();
   const navigate = useNavigate();
   const search = Route.useSearch();
 
