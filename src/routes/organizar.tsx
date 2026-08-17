@@ -17,6 +17,8 @@ import { WorkspaceMemberView } from "./equipe";
 import { Database } from "@/integrations/supabase/types";
 
 
+
+
 import { supabase } from "@/integrations/supabase/client";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { useSidebar } from "@/contexts/SidebarContext";
