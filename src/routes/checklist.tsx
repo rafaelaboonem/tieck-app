@@ -5394,8 +5394,8 @@ export function NovoChecklistPage() {
             </button>
           </div>
 
-          <div className="max-w-3xl mx-auto px-8 pt-10 pb-20">
-            <h1 className="text-2xl font-bold text-neutral-900 mb-8">Configurações</h1>
+          <div className="max-w-3xl mx-auto px-4 sm:px-8 pt-10 pb-20 w-full overflow-x-hidden">
+            <h1 className="text-xl sm:text-2xl font-bold text-neutral-900 mb-6 sm:mb-8">Configurações</h1>
             
             <div className="flex items-center gap-1 bg-neutral-100 p-1 rounded-lg w-fit mb-10">
               <button 
