@@ -76,7 +76,6 @@ describe('AuthPage Phase 4B.2 (Redirect Integrity)', () => {
     (supabase.auth.signInWithOtp as any).mockResolvedValue({ data: {}, error: null });
     (supabase.auth.verifyOtp as any).mockResolvedValue({ data: { user: { id: '1' } }, error: null });
     
-    // Simulate successful verifyOtp triggering the effect
     const redirect = '/convite/abc-123';
     const { rerender } = render(<AuthPage mode="signup" redirect={redirect} />);
 
