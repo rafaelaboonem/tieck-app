@@ -18,6 +18,7 @@ interface WorkspaceContextType {
   setCurrentWorkspace: (ws: Workspace) => void;
   refreshWorkspaces: () => Promise<void>;
   isLoading: boolean;
+  workspaceStatus: 'loading' | 'personal' | 'workspace';
 }
 
 const WorkspaceContext = createContext<WorkspaceContextType | undefined>(undefined);
