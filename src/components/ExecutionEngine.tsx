@@ -319,7 +319,7 @@ export function ExecutionEngine({
                   key={block.id}
                   block={block}
                   settings={settings}
-                  mode={mode === "authenticated" ? "preview" : "public"}
+                  mode={mode === "authenticated" ? "public" : mode}
                   answers={answers}
                   setAnswer={setAnswer}
                   isDark={isDark}
