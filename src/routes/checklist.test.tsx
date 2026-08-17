@@ -2,8 +2,21 @@ import { describe, it, expect, vi } from 'vitest';
 import { toLocalISO, fromLocalISO } from '@/utils/date-helpers';
 
 describe('Fase 4C.7 — Transferência Segura de Prazo', () => {
+  it('converte corretamente Timezone entre LOCAL e UTC', () => {
+    const utcString = "2026-08-17T18:30:00.000Z";
+    const date = new Date(utcString);
+    const localISO = toLocalISO(date);
+    
+    const [d, t] = localISO.split('T');
+    expect(d).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(t).toMatch(/^\d{2}:\d{2}$/);
+    
+    const backToUTC = fromLocalISO(localISO);
+    expect(backToUTC).toBe(date.toISOString());
+  });
+
   it('trocar primary limpa due_at do antigo assignment simulado', () => {
-    let assignments = [
+    let assignments: any[] = [
       { id: 'a1', workspace_member_id: 'm1', is_primary: true, due_at: '2026-08-17T18:30:00Z' },
       { id: 'a2', workspace_member_id: 'm2', is_primary: false, due_at: null }
     ];
@@ -48,7 +61,7 @@ describe('Fase 4C.7 — Transferência Segura de Prazo', () => {
 
   it('antigo assignment não é deletado e mantem completed_at', () => {
     const completedAt = '2026-08-16T12:00:00Z';
-    let assignments = [
+    let assignments: any[] = [
       { id: 'a1', workspace_member_id: 'm1', is_primary: true, due_at: '2026-08-17T18:30:00Z', completed_at: completedAt }
     ];
 
