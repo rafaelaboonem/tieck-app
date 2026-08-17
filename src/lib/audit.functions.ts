@@ -16,7 +16,7 @@ export const auditCasa2 = createServerFn({ method: "GET" })
   });
 
 export const recoverCasa2 = createServerFn({ method: "POST" })
-  .validator((data: { checklistId: string, workspaceId: string }) => z.object({
+  .inputValidator((data: { checklistId: string, workspaceId: string }) => z.object({
     checklistId: z.string(),
     workspaceId: z.string()
   }).parse(data))
@@ -31,7 +31,7 @@ export const recoverCasa2 = createServerFn({ method: "POST" })
       .eq("id", data.checklistId)
       .single();
 
-    if (!checklist || checklist.user_id !== user.id) {
+    if (!checklist || (checklist as any).user_id !== user.id) {
       return { error: "Checklist not found or unauthorized" };
     }
 
@@ -42,7 +42,7 @@ export const recoverCasa2 = createServerFn({ method: "POST" })
       .eq("id", data.workspaceId)
       .single();
 
-    if (!workspace || workspace.owner_id !== user.id) {
+    if (!workspace || (workspace as any).owner_id !== user.id) {
       return { error: "Workspace not found or unauthorized" };
     }
 
