@@ -105,6 +105,8 @@ interface ChecklistAssignmentView {
   workspace_member_id: string;
   is_primary: boolean;
   workspace_id: string;
+  due_at: string | null;
+  completed_at: string | null;
 }
 
 interface Category {
