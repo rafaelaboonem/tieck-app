@@ -475,11 +475,11 @@ export function WorkspacePage() {
           .eq('user_id', user.id)
           .eq('status', 'active')
           .maybeSingle();
-        setCurrentUserRole(data?.role as any || 'viewer');
+        setCurrentUserRole((data?.role as any) || 'viewer');
       }
     };
     fetchUserRole();
-  }, [currentWorkspace?.id, user?.id]);
+  }, [currentWorkspace?.id, user?.id, currentWorkspace?.owner_id]);
   const [selectedSubTab, setSelectedSubTab] = useState("");
   const [newItemTitle, setNewItemTitle] = useState("");
   const [renamingCategoryId, setRenamingCategoryId] = useState<string | null>(null);
@@ -524,10 +524,14 @@ export function WorkspacePage() {
           .order("created_at", { ascending: true });
         // Limit to 4 categories (total 5 columns with 'Tarefas') and remove extras
         let finalCats = cats || [];
-        if (finalCats.length > 4) {
-          const extraIds = finalCats.slice(4).map(c => c.id);
-          await supabase.from("workspace_categories").delete().in("id", extraIds);
-          finalCats = finalCats.slice(0, 4);
+        if (canManage && finalCats.length > 4) {
+          try {
+            const extraIds = finalCats.slice(4).map(c => c.id);
+            await supabase.from("workspace_categories").delete().in("id", extraIds);
+            finalCats = finalCats.slice(0, 4);
+          } catch (deleteErr) {
+            console.error("Cleanup categories error (safe to ignore if Viewer):", deleteErr);
+          }
         }
         
         setCategories(finalCats);
@@ -544,10 +548,14 @@ export function WorkspacePage() {
         
         setChecklists(chks || []);
 
-        const { data: counts } = await supabase
-          .from("checklist_responses")
-          .select("checklist_id")
-          .in("checklist_id", (chks || []).map(c => c.id));
+        let counts = null;
+        if (chks && chks.length > 0) {
+          const { data } = await supabase
+            .from("checklist_responses")
+            .select("checklist_id")
+            .in("checklist_id", chks.map(c => c.id));
+          counts = data;
+        }
         
         if (counts) {
           const map = counts.reduce((acc: Record<string, number>, curr) => {
@@ -599,6 +607,7 @@ export function WorkspacePage() {
 
       } catch (error) {
         console.error("Error fetching workspace data:", error);
+        toast.error("Falha ao carregar dados do workspace. Verifique sua conexão e permissões.");
       } finally {
         setIsLoading(false);
       }
