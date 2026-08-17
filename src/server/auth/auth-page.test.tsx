@@ -186,5 +186,4 @@ describe('AuthPage Phase 4B.1 (OTP Flow)', () => {
       });
     }
   });
-  });
 });
