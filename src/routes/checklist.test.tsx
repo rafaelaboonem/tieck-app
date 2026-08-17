@@ -96,8 +96,9 @@ describe('Fase 4C.6 — Sincronização e Integridade de Prazos', () => {
   });
 
   it('valida que erro ao localizar assignment impede set_assignment_deadline', async () => {
-    const refreshedData: { id: string } | null = null;
+    const refreshedData = null as ({ id: string } | null);
     const targetAssignmentId = refreshedData?.id;
+
     
     let rpcCalled = false;
     if (targetAssignmentId) {
