@@ -2947,7 +2947,8 @@ export function NovoChecklistPage() {
             onClick={() => setIsPreviewMode(true)}
             className="hover:text-neutral-900"
           >
-            Pré-visualizar
+            <span className="hidden sm:inline">Pré-visualizar</span>
+            <span className="sm:hidden"><Eye className="w-4 h-4" /></span>
           </button>
           <button 
             type="button"
