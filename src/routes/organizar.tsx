@@ -1362,7 +1362,7 @@ function WorkspacePage() {
               ) : (
                 <h1 
                   className="text-5xl font-bold text-neutral-900 tracking-tight cursor-pointer hover:opacity-80"
-                  onClick={startEditingTitle}
+                  onClick={canManage ? startEditingTitle : undefined}
                 >
                   {currentWorkspace?.name || "Título aqui"}
                 </h1>
@@ -1452,7 +1452,7 @@ function WorkspacePage() {
                   <span>Atribuições</span>
                 </div>
 
-                {categories.length < 4 && (
+                {canManage && categories.length < 4 && (
                   <button 
                     onClick={() => setIsCategoryModalOpen(true)}
                     className="p-1.5 text-neutral-400 hover:bg-neutral-50 rounded-lg ml-1 shrink-0"
@@ -1468,20 +1468,22 @@ function WorkspacePage() {
                 <button className="p-2 text-neutral-400 hover:bg-neutral-50 rounded-lg"><Search className="w-4 h-4" /></button>
                 <button className="p-2 text-neutral-400 hover:bg-neutral-50 rounded-lg"><Maximize2 className="w-4 h-4" /></button>
                 <button className="p-2 text-neutral-400 hover:bg-neutral-50 rounded-lg"><MoreHorizontal className="w-4 h-4" /></button>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button className="bg-[#1D7AFC] hover:bg-[#1D7AFC]/90 text-white rounded-lg px-3 py-1.5 h-auto text-sm font-medium gap-1 ml-2">
-                      Novo
-                      <ChevronDown className="w-3.5 h-3.5" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent>
-                    <DropdownMenuItem onClick={() => navigate({ to: "/checklist", search: { workspace: currentWorkspace?.id } })}>Novo Checklist</DropdownMenuItem>
-                    {categories.length < 4 && (
-                      <DropdownMenuItem onClick={() => setIsCategoryModalOpen(true)}>Nova Categoria</DropdownMenuItem>
-                    )}
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                {canManage && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button className="bg-[#1D7AFC] hover:bg-[#1D7AFC]/90 text-white rounded-lg px-3 py-1.5 h-auto text-sm font-medium gap-1 ml-2">
+                        Novo
+                        <ChevronDown className="w-3.5 h-3.5" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent>
+                      <DropdownMenuItem onClick={() => navigate({ to: "/checklist", search: { workspace: currentWorkspace?.id } })}>Novo Checklist</DropdownMenuItem>
+                      {categories.length < 4 && (
+                        <DropdownMenuItem onClick={() => setIsCategoryModalOpen(true)}>Nova Categoria</DropdownMenuItem>
+                      )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
               </div>
             </div>
 
@@ -1633,7 +1635,7 @@ function WorkspacePage() {
                     <div key={cat.id} id={`cat-${cat.id}`} className={`w-[280px] flex-shrink-0 flex flex-col transition-colors duration-300 rounded-2xl`}>
                       <div className="flex items-center justify-between mb-4 px-1 group">
                         <div className="flex items-center gap-2">
-                          {categories.length < 4 && (
+                          {canManage && categories.length < 4 && (
                             <button 
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -1644,15 +1646,16 @@ function WorkspacePage() {
                               <Plus className="w-2.5 h-2.5 text-neutral-500" />
                             </button>
                           )}
+                          {/* Botão Plus da categoria só se canManage */}
                           <div 
                             className="px-2 py-0.5 rounded text-[11px] font-bold flex items-center gap-1.5 cursor-pointer"
                             style={{ backgroundColor: currentBg, color: currentText }}
-                            onClick={() => {
+                            onClick={canManage ? () => {
                               if (!isUnassigned) {
                                 setRenamingCategoryId(cat.id);
                                 setRenamingCategoryValue(cat.name);
                               }
-                            }}
+                            } : undefined}
                           >
                             <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: currentColor }} />
                             {renamingCategoryId === cat.id ? (
@@ -1673,40 +1676,44 @@ function WorkspacePage() {
                           <span className="text-xs font-medium text-neutral-400">{catItems.length}</span>
                         </div>
                         <div className="flex items-center gap-1">
-                          <button 
-                            onClick={() => handleAddItem(categoryName, "Nova tarefa")}
-                            className="p-1 text-neutral-300 hover:text-neutral-500 rounded hover:bg-neutral-50 transition-colors"
-                          >
-                            <Plus className="w-3.5 h-3.5" />
-                          </button>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <button className="p-1 text-neutral-300 hover:text-neutral-500 rounded hover:bg-neutral-50 transition-colors">
-                                <MoreHorizontal className="w-3.5 h-3.5" />
-                              </button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent className="w-48 bg-[#1a1a1a] border-neutral-800 text-neutral-300 p-1 rounded-xl shadow-2xl">
-                              <DropdownMenuItem className="gap-3 text-xs hover:bg-neutral-800 rounded-lg py-2">
-                                <Rows className="w-4 h-4" /> Editar grupos
-                              </DropdownMenuItem>
-                              <DropdownMenuItem className="gap-3 text-xs hover:bg-neutral-800 rounded-lg py-2">
-                                <EyeOff className="w-4 h-4" /> Ocultar agregação
-                              </DropdownMenuItem>
-                              <DropdownMenuItem className="gap-3 text-xs hover:bg-neutral-800 rounded-lg py-2">
-                                <EyeOff className="w-4 h-4" /> Ocultar grupo
-                              </DropdownMenuItem>
-                              <DropdownMenuItem 
-                                className="gap-3 text-xs text-red-400 hover:bg-red-950/30 hover:text-red-400 rounded-lg py-2"
-                                onClick={() => {
-                                  if (!isUnassigned) {
-                                    handleDeleteCategory(cat.id);
-                                  }
-                                }}
-                              >
-                                <Trash2 className="w-4 h-4" /> Mover para a lixeira
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
+                          {canManage && (
+                            <button 
+                              onClick={() => handleAddItem(categoryName, "Nova tarefa")}
+                              className="p-1 text-neutral-300 hover:text-neutral-500 rounded hover:bg-neutral-50 transition-colors"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                          {canManage && (
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <button className="p-1 text-neutral-300 hover:text-neutral-500 rounded hover:bg-neutral-50 transition-colors">
+                                  <MoreHorizontal className="w-3.5 h-3.5" />
+                                </button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent className="w-48 bg-[#1a1a1a] border-neutral-800 text-neutral-300 p-1 rounded-xl shadow-2xl">
+                                <DropdownMenuItem className="gap-3 text-xs hover:bg-neutral-800 rounded-lg py-2">
+                                  <Rows className="w-4 h-4" /> Editar grupos
+                                </DropdownMenuItem>
+                                <DropdownMenuItem className="gap-3 text-xs hover:bg-neutral-800 rounded-lg py-2">
+                                  <EyeOff className="w-4 h-4" /> Ocultar agregação
+                                </DropdownMenuItem>
+                                <DropdownMenuItem className="gap-3 text-xs hover:bg-neutral-800 rounded-lg py-2">
+                                  <EyeOff className="w-4 h-4" /> Ocultar grupo
+                                </DropdownMenuItem>
+                                <DropdownMenuItem 
+                                  className="gap-3 text-xs text-red-400 hover:bg-red-950/30 hover:text-red-400 rounded-lg py-2"
+                                  onClick={() => {
+                                    if (!isUnassigned) {
+                                      handleDeleteCategory(cat.id);
+                                    }
+                                  }}
+                                >
+                                  <Trash2 className="w-4 h-4" /> Mover para a lixeira
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          )}
                         </div>
                       </div>
 
@@ -1775,7 +1782,7 @@ function WorkspacePage() {
                           </div>
                         )}
 
-                        {!isAddingItem || isAddingItem.category !== categoryName ? (
+                        {canManage && (!isAddingItem || isAddingItem.category !== categoryName) ? (
                           <button 
                             onClick={() => {
                               setIsAddingItem({ category: categoryName });
@@ -1784,7 +1791,7 @@ function WorkspacePage() {
                             className="flex items-center gap-2 px-3 py-2 text-sm text-neutral-400 hover:bg-neutral-50 rounded-xl transition-colors mt-1"
                           >
                             <Plus className="w-4 h-4" />
-                            <span>Nova página</span>
+                            <span>Nova tarefa</span>
                           </button>
                         ) : null}
 
