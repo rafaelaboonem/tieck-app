@@ -1315,10 +1315,10 @@ export function WorkspacePage() {
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto bg-white pt-12">
-          <div className="max-w-full mx-auto px-[4.25rem] pb-20">
+        <div className="flex-1 overflow-y-auto bg-white pt-8 sm:pt-12">
+          <div className="max-w-full mx-auto px-4 sm:px-[4.25rem] pb-20">
             {/* Title Section */}
-            <div className="flex items-center gap-6 mb-12">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-6 mb-8 sm:mb-12">
               <DropdownMenu open={isIconPickerOpen} onOpenChange={setIsIconPickerOpen}>
                 <DropdownMenuTrigger asChild>
                   <div 
