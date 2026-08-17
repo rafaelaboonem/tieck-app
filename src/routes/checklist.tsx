@@ -1512,35 +1512,8 @@ export function NovoChecklistPage() {
   }, [user, currentWorkspace?.id, workspaceParam]);
 
   useEffect(() => {
-    const fetchAssignments = async () => {
-      if (!settingsChecklistId) return;
-      setIsDeadlineLoading(true);
-      try {
-        const { data, error } = await supabase
-          .from("checklist_assignments")
-          .select("*")
-          .eq("checklist_id", settingsChecklistId);
-        
-        if (data && !error) {
-          setChecklistAssignments(data);
-          const primary = data.find(a => a.is_primary);
-          if (primary) {
-            setPrimaryMemberId(primary.workspace_member_id);
-            setAssignmentDeadline(primary.due_at);
-            setDeadlineAlertEnabled(!!primary.due_at);
-            
-            if (primary.due_at) {
-              setDeadlineStatus(getAssignmentStatus(primary.due_at, primary.completed_at));
-            }
-
-          }
-        }
-      } finally {
-        setIsDeadlineLoading(false);
-      }
-    };
-    if (isSettingsOpen && settingsActiveTab === "emails") {
-      fetchAssignments();
+    if (isSettingsOpen && settingsActiveTab === "emails" && settingsChecklistId) {
+      loadDeadlineAssignmentState();
     }
   }, [settingsChecklistId, isSettingsOpen, settingsActiveTab]);
 
