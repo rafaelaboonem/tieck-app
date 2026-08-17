@@ -83,18 +83,36 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
 
   const [currentId, setCurrentId] = useState<string | null>(() => {
     if (typeof window === "undefined") return null;
+    
+    // Prioridade 1: Query string (útil pós-aceite de convite)
+    const urlParams = new URLSearchParams(window.location.search);
+    const wsParam = urlParams.get('workspace');
+    if (wsParam) return wsParam;
+
+    // Prioridade 2: LocalStorage
     return localStorage.getItem("currentWorkspaceId");
   });
 
   const currentWorkspace = useMemo(() => {
     if (!workspaces.length) return null;
-    return workspaces.find((w) => w.id === currentId) ?? workspaces[0];
+    const found = workspaces.find((w) => w.id === currentId);
+    
+    // Se não encontrou o ID solicitado (pode ser um workspace novo recém aceito), 
+    // mas temos workspaces, o primeiro da lista é o fallback seguro.
+    return found || workspaces[0];
   }, [workspaces, currentId]);
 
   useEffect(() => {
     if (currentWorkspace && currentWorkspace.id !== currentId) {
       setCurrentId(currentWorkspace.id);
       localStorage.setItem("currentWorkspaceId", currentWorkspace.id);
+      
+      // Limpar o parâmetro da URL após sincronizar com o estado
+      const url = new URL(window.location.href);
+      if (url.searchParams.has('workspace')) {
+        url.searchParams.delete('workspace');
+        window.history.replaceState({}, '', url.pathname + url.search);
+      }
     }
   }, [currentWorkspace, currentId]);
 
