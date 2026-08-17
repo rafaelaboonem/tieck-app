@@ -294,7 +294,14 @@ export function Dashboard() {
                         </div>
                         <div 
                           className="cursor-pointer flex items-center gap-3 min-w-0"
-                          onClick={() => !isSelectionMode && navigate({ to: "/checklist", search: { id: item.id } })}
+                          onClick={() => {
+                            if (isSelectionMode) return;
+                            if (isViewer) {
+                              navigate({ to: `/c/${item.custom_slug || item.id}` as any });
+                            } else {
+                              navigate({ to: "/checklist", search: { id: item.id } });
+                            }
+                          }}
                         >
                           <div 
                             className={`w-2 h-2 rounded-full shrink-0 ${item.is_published ? "bg-green-500" : "bg-yellow-400"}`}
@@ -314,7 +321,11 @@ export function Dashboard() {
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
-                                navigate({ to: "/checklist", search: { id: item.id } });
+                                if (isViewer) {
+                                  navigate({ to: `/c/${item.custom_slug || item.id}` as any });
+                                } else {
+                                  navigate({ to: "/checklist", search: { id: item.id } });
+                                }
                               }}
                               className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-neutral-500 hover:text-[#FF007F] hover:bg-pink-50 transition-all text-xs font-medium"
                               title="Editar"
