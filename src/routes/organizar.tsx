@@ -279,6 +279,28 @@ function SortableChecklistCard({
                     </DropdownMenuContent>
                   )}
                 </DropdownMenu>
+
+                {assignments.filter(a => a.checklist_id === checklist.id).map(a => {
+                  const status = getAssignmentStatus(a.due_at, a.completed_at);
+                  const badge = getStatusBadge(status);
+                  return (
+                    <div key={a.id} className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                      <AssignmentDeadlinePopover 
+                        dueAt={a.due_at}
+                        disabled={!canManage}
+                        onUpdate={(dueAt) => onSetDeadline(a.id, dueAt)}
+                      />
+                      {badge && (
+                        <span className={cn(
+                          "px-1.5 py-0.5 rounded-full text-[9px] font-bold border",
+                          badge.className
+                        )}>
+                          {badge.label}
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
