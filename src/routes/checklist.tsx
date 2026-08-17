@@ -597,11 +597,17 @@ export const Route = createFileRoute("/checklist")({
   component: NovoChecklistPage,
 });
 
+import { useWorkspaceRBAC } from "@/hooks/useWorkspaceRBAC";
+
 function NovoChecklistPage() {
   const { sidebarOpen, setSidebarOpen } = useSidebar();
   const { currentWorkspace } = useWorkspace();
   const navigate = useNavigate();
   const { id: checklistId, workspace: workspaceParam, category: categoryParam, settings: openSettingsParam } = Route.useSearch();
+  
+  // RBAC Gating
+  const { role, isViewer, loading: rbacLoading } = useWorkspaceRBAC(workspaceParam || currentWorkspace?.id);
+  
   const [user, setUser] = useState<any>(null);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [authEmail, setAuthEmail] = useState("");
