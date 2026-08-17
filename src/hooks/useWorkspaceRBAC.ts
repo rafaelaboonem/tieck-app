@@ -1,63 +1,70 @@
 import { useAuth } from "@/contexts/AuthContext";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
-import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+
+export type WorkspaceRole = 'owner' | 'admin' | 'editor' | 'viewer';
 
 export function useWorkspaceRBAC(workspaceId: string | undefined) {
   const { user } = useAuth();
   const { workspaces } = useWorkspace();
-  const [role, setRole] = useState<'owner' | 'admin' | 'editor' | 'viewer' | null>(null);
-  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    async function checkRole() {
-      if (!user || !workspaceId) {
-        setRole(null);
-        setLoading(false);
-        return;
+  // Encontrar o owner_id sem depender do array workspaces inteiro para evitar re-execuções desnecessárias
+  // se apenas a referência do array mudou mas o owner_id do workspace em questão é o mesmo.
+  const workspaceOwnerId = workspaceId 
+    ? workspaces.find(w => w.id === workspaceId)?.owner_id 
+    : undefined;
+
+  const { data: role, isLoading: isRoleLoading, isFetching } = useQuery({
+    queryKey: ["workspace-role", user?.id, workspaceId, workspaceOwnerId],
+    queryFn: async () => {
+      if (!user || !workspaceId) return null;
+
+      // Regra canônica: Proprietário do Workspace tem poder total
+      if (workspaceOwnerId === user.id) {
+        return 'owner' as WorkspaceRole;
       }
 
-      setLoading(true);
-      try {
-        // Regra canônica: Proprietário do Workspace tem poder total, 
-        // mesmo sem registro na tabela workspace_members.
-        const ws = workspaces.find(w => w.id === workspaceId);
-        if (ws && ws.owner_id === user.id) {
-          setRole('owner');
-          setLoading(false);
-          return;
-        }
+      // Consultar membership na tabela (Admin, Editor, Viewer)
+      const { data, error } = await supabase
+        .from("workspace_members")
+        .select("role, status")
+        .eq("workspace_id", workspaceId)
+        .eq("user_id", user.id)
+        .maybeSingle();
 
-        // Consultar membership na tabela (Admin, Editor, Viewer)
-        const { data, error } = await supabase
-          .from("workspace_members")
-          .select("role, status")
-          .eq("workspace_id", workspaceId)
-          .eq("user_id", user.id)
-          .maybeSingle();
-
-        if (error) throw error;
-
-        if (data && data.status === 'active') {
-          setRole(data.role as any);
-        } else {
-          // Fallback: se não é o owner e não tem membership ativo
-          setRole(null);
-        }
-      } catch (err) {
-        console.error("[useWorkspaceRBAC] Error:", err);
-        setRole(null);
-      } finally {
-        setLoading(false);
+      if (error) {
+        console.error("[useWorkspaceRBAC] Error fetching role:", error);
+        return null;
       }
-    }
 
-    checkRole();
-  }, [user, workspaceId, workspaces]);
+      if (data && data.status === 'active') {
+        return data.role as WorkspaceRole;
+      }
+
+      return null;
+    },
+    enabled: !!user && !!workspaceId,
+    staleTime: 1000 * 60 * 5, // 5 minutos de cache
+    gcTime: 1000 * 60 * 30,
+    // Mantém o estado anterior enquanto revalida no background (evita flash de loading)
+    placeholderData: (previousData) => previousData,
+  });
+
+  // O loading só deve ser verdadeiro se não temos dados e estamos carregando pela primeira vez
+  // ou se o workspaceId mudou e ainda não temos cache para ele.
+  const loading = isRoleLoading && !role;
 
   const canManage = role === 'owner' || role === 'admin' || role === 'editor';
   const isAdmin = role === 'owner' || role === 'admin';
   const isViewer = role === 'viewer';
 
-  return { role, canManage, isAdmin, isViewer, loading };
+  return { 
+    role, 
+    canManage, 
+    isAdmin, 
+    isViewer, 
+    loading,
+    isFetching // Útil se quisermos mostrar um indicador discreto de sync
+  };
 }
