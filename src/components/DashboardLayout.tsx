@@ -582,16 +582,20 @@ import logoIcon from "../assets/local/logo-tieck.webp";
        )}
  
        {/* Main Content Area */}
-       <div className="flex-1 flex flex-col min-h-screen">
+       <div className="flex-1 flex flex-col min-h-screen min-w-0 w-full max-w-full">
          {profile && !sidebarOpen && (
            <button
              type="button"
              onClick={() => setSidebarOpen(true)}
-             className="fixed top-[22px] left-6 z-[120] p-1 rounded-md text-neutral-400 hover:text-neutral-900 hover:bg-neutral-100 transition-colors animate-in fade-in bg-white/80 backdrop-blur-sm border border-neutral-200 shadow-sm"
+             className={cn(
+               "fixed z-[120] p-1 rounded-md text-neutral-400 hover:text-neutral-900 hover:bg-neutral-100 transition-colors animate-in fade-in bg-white/80 backdrop-blur-sm border border-neutral-200 shadow-sm",
+               isMobile ? "top-4 left-4 h-11 w-11 flex items-center justify-center" : "top-[22px] left-6"
+             )}
              title="Mostrar menu"
              aria-label="Mostrar menu"
+             aria-expanded={sidebarOpen}
            >
-             <ChevronsRight className="w-4 h-4" />
+             {isMobile ? <Menu className="w-6 h-6" /> : <ChevronsRight className="w-4 h-4" />}
            </button>
          )}
          {children}
