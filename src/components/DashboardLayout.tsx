@@ -415,7 +415,8 @@ import logoIcon from "../assets/local/logo-tieck.webp";
                               <button
                                 type="button"
                                 onClick={() => {
-                                  // O redirecionamento centralizado em /checklist cuidará do Viewer.
+                                  // Redirecionamento unificado: se for Viewer, ChecklistAuthGuard enviará para /executar.
+                                  // Mas forçamos a navegação direta aqui para evitar flash.
                                   navigate({ to: "/checklist", search: { id: chk.id } });
                                 }}
                                 className="w-full text-left py-1 text-[13px] text-neutral-400 hover:text-neutral-900 transition-colors truncate block font-medium"
