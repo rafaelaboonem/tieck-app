@@ -1,8 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Link, useNavigate, useLocation } from "@tanstack/react-router";
 import { useSidebar } from "@/contexts/SidebarContext";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { useAuth } from "@/contexts/AuthContext";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -32,7 +34,7 @@ import {
    LogOut, User, CheckSquare, PanelLeftClose, PanelLeftOpen, ChevronsLeft, ChevronsRight, LogIn,
    BarChart3, Share2, Inbox, MousePointer2, Image, Palette, Eye, ShieldCheck, Check, Briefcase, CreditCard,
    Clock, FileText, ChevronRight, MoreHorizontal, UserPlus, Files, Layout, Bell
-  , LayoutDashboard
+  , LayoutDashboard, Menu, X as CloseIcon
   } from "lucide-react";
  import { supabase } from "@/integrations/supabase/client";
  import {
