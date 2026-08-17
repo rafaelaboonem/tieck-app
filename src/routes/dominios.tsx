@@ -124,12 +124,23 @@ function DominiosPage() {
   return (
     <DashboardLayout>
       <header className="flex items-center justify-between px-6 py-4 border-b border-neutral-200 bg-white sticky top-0 z-10">
-        <div className={`flex items-center gap-2 text-sm transition-all duration-300 ${sidebarOpen ? "pl-0" : "pl-14"}`}>
-          <Link to="/inicio">
-            <img src={logo} alt="Logo" className="w-20 h-20 object-contain grayscale hover:grayscale-0 transition-all cursor-pointer" />
-          </Link>
-          <span className="text-neutral-400">›</span>
-          <span className="text-neutral-700 font-medium">Personalizar Links</span>
+        <div className={cn(
+          "flex items-center gap-2 text-sm transition-all duration-300",
+          sidebarOpen ? "pl-0" : "pl-14",
+          !sidebarOpen && "pl-14 sm:pl-14", // desktop collapse
+          "pl-0 sm:pl-0"
+        )}>
+          {/* O container acima já lida com o padding do botão desktop, mas vamos refinar */}
+          <div className={cn(
+            "flex items-center gap-2",
+            !sidebarOpen && "ml-12 sm:ml-0" // Compensa o botão mobile fixo se estiver visível
+          )}>
+            <Link to="/inicio">
+              <img src={logo} alt="Logo" className="w-10 h-10 sm:w-20 sm:h-20 object-contain grayscale hover:grayscale-0 transition-all cursor-pointer" />
+            </Link>
+            <span className="text-neutral-400">›</span>
+            <span className="text-neutral-700 font-medium truncate max-w-[150px] sm:max-w-none">Personalizar Links</span>
+          </div>
         </div>
         <button className="flex items-center gap-1 text-sm text-neutral-500 hover:text-neutral-900">
           <Search className="w-4 h-4" /> Buscar
