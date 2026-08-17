@@ -424,7 +424,7 @@ export const Route = createFileRoute("/organizar")({
   component: WorkspacePage,
 });
 
-function WorkspacePage() {
+export function WorkspacePage() {
   const { user, loading: authLoading } = useAuth();
   const { workspaces, currentWorkspace, isLoading: workspaceLoading, refreshWorkspaces, setCurrentWorkspace } = useWorkspace();
   const navigate = useNavigate();

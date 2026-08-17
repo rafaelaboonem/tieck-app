@@ -14,19 +14,29 @@ vi.mock('@tanstack/react-router', () => ({
   Link: ({ children }: any) => <div>{children}</div>,
 }));
 
+const mockQuery = {
+  select: vi.fn().mockReturnThis(),
+  eq: vi.fn().mockReturnThis(),
+  is: vi.fn().mockReturnThis(),
+  in: vi.fn().mockReturnThis(),
+  order: vi.fn().mockReturnThis(),
+  limit: vi.fn().mockReturnThis(),
+  maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+  single: vi.fn().mockResolvedValue({ data: null, error: null }),
+};
+
 vi.mock('@/integrations/supabase/client', () => ({
   supabase: {
     auth: {
       getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'user-123' } } }),
+      getSession: vi.fn().mockResolvedValue({ data: { session: null }, error: null }),
     },
-    from: vi.fn().mockReturnThis(),
-    select: vi.fn().mockReturnThis(),
-    eq: vi.fn().mockReturnThis(),
-    is: vi.fn().mockReturnThis(),
-    order: vi.fn().mockReturnThis(),
-    maybeSingle: vi.fn(),
+    from: vi.fn(() => mockQuery),
+    rpc: vi.fn().mockResolvedValue({ data: null, error: null }),
   },
 }));
+
+const mockSupabase = (supabase as any);
 
 vi.mock('@/contexts/WorkspaceContext', () => ({
   useWorkspace: vi.fn(),
@@ -57,8 +67,8 @@ describe('Workspace Context Isolation (Fase 4B.2)', () => {
     render(<WorkspacePage />);
 
     await waitFor(() => {
-      expect(supabase.from).toHaveBeenCalledWith('checklists');
-      expect(supabase.eq).toHaveBeenCalledWith('workspace_id', 'ws-123');
+      expect(mockSupabase.from).toHaveBeenCalledWith('checklists');
+      expect(mockQuery.eq).toHaveBeenCalledWith('workspace_id', 'ws-123');
     });
   });
 
@@ -69,8 +79,8 @@ describe('Workspace Context Isolation (Fase 4B.2)', () => {
     render(<Dashboard />);
 
     await waitFor(() => {
-      expect(supabase.from).toHaveBeenCalledWith('checklists');
-      expect(supabase.is).toHaveBeenCalledWith('workspace_id', null);
+      expect(mockSupabase.from).toHaveBeenCalledWith('checklists');
+      expect(mockQuery.is).toHaveBeenCalledWith('workspace_id', null);
     });
   });
 });
