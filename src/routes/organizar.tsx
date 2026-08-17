@@ -1399,8 +1399,8 @@ export function WorkspacePage() {
             </div>
 
             {/* Sub-nav Tabs */}
-            <div className="flex items-center justify-between mb-8">
-              <div className="flex items-center gap-1 overflow-x-auto overflow-y-hidden no-scrollbar pb-1">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">
+              <div className="flex items-center gap-1 overflow-x-auto overflow-y-hidden no-scrollbar pb-1 w-full sm:w-auto">
                 {/* Categorias dinâmicas */}
 
 
