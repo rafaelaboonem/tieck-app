@@ -1322,7 +1322,7 @@ export function WorkspacePage() {
               <DropdownMenu open={isIconPickerOpen} onOpenChange={setIsIconPickerOpen}>
                 <DropdownMenuTrigger asChild>
                   <div 
-                    className="w-24 h-24 bg-neutral-50 rounded-3xl flex items-center justify-center shrink-0 cursor-pointer hover:bg-neutral-100 transition-colors group relative"
+                    className="w-16 h-16 sm:w-24 sm:h-24 bg-neutral-50 rounded-2xl sm:rounded-3xl flex items-center justify-center shrink-0 cursor-pointer hover:bg-neutral-100 transition-colors group relative"
                     onClick={() => setIsIconPickerOpen(true)}
                   >
                     <div className="w-14 h-14 bg-[#E16259] rounded-xl flex items-center justify-center overflow-hidden">
