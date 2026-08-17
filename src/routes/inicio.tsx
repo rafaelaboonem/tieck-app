@@ -8,7 +8,9 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { FileText, Clock, ChevronRight } from "lucide-react";
+import { FileText, Clock, ChevronRight, CalendarDays } from "lucide-react";
+import { getAssignmentStatus, getStatusBadge } from "@/utils/assignment-status";
+import { cn } from "@/lib/utils";
 import logoUrl from "../assets/local/logo-k.webp";
 import { toast } from "sonner";
 import {
