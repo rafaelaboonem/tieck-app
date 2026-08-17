@@ -434,6 +434,9 @@ export function WorkspacePage() {
   const navigate = useNavigate();
   const { id: selectedId } = Route.useSearch();
   
+  const workspaceId = selectedId || currentWorkspace?.id;
+  const { canManage, role: rbacRole, loading: rbacLoading } = useWorkspaceRBAC(workspaceId);
+
   const [checklists, setChecklists] = useState<Checklist[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [submissionCounts, setSubmissionCounts] = useState<Record<string, number>>({});
@@ -447,6 +450,7 @@ export function WorkspacePage() {
       setCurrentUserRole(rbacRole);
     }
   }, [rbacRole, rbacLoading]);
+
 
 
   const [showOnboarding, setShowOnboarding] = useState(false);
