@@ -114,6 +114,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { mapAuthError } from "@/utils/auth-errors";
 import { useQuery } from "@tanstack/react-query";
+import { useWorkspaceRBAC } from "@/hooks/useWorkspaceRBAC";
 const InsightsTab = lazy(() => import("@/components/InsightsTab").then(m => ({ default: m.InsightsTab })));
 const SubmissionsTab = lazy(() => import("@/components/SubmissionsTab").then(m => ({ default: m.SubmissionsTab })));
 import { BlockRenderer, INTERACTIVE_BLOCK_TYPES } from "@/components/BlockRenderer";
@@ -758,7 +759,7 @@ function ChecklistAuthGuard({ children }: { children: React.ReactNode }) {
   return null;
 }
 
-function NovoChecklistPage() {
+export function NovoChecklistPage() {
   const { sidebarOpen, setSidebarOpen } = useSidebar();
   const { currentWorkspace } = useWorkspace();
   const { user: authUser } = useAuth();
@@ -1459,6 +1460,7 @@ function NovoChecklistPage() {
     fetchDomains();
   }, [user]);
 
+  const settingsChecklistId = currentChecklistId || sessionChecklistIdRef.current || checklistId || null;
   const { canManage } = useWorkspaceRBAC(currentWorkspace?.id || workspaceParam);
 
   useEffect(() => {
@@ -2716,7 +2718,6 @@ function NovoChecklistPage() {
     }
   };
 
-  const settingsChecklistId = currentChecklistId || sessionChecklistIdRef.current || checklistId || null;
 
   return (
     <>
