@@ -114,6 +114,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { mapAuthError } from "@/utils/auth-errors";
 import { useQuery } from "@tanstack/react-query";
+import { useWorkspaceRBAC } from "@/hooks/useWorkspaceRBAC";
 const InsightsTab = lazy(() => import("@/components/InsightsTab").then(m => ({ default: m.InsightsTab })));
 const SubmissionsTab = lazy(() => import("@/components/SubmissionsTab").then(m => ({ default: m.SubmissionsTab })));
 import { BlockRenderer, INTERACTIVE_BLOCK_TYPES } from "@/components/BlockRenderer";
@@ -758,7 +759,7 @@ function ChecklistAuthGuard({ children }: { children: React.ReactNode }) {
   return null;
 }
 
-function NovoChecklistPage() {
+export function NovoChecklistPage() {
   const { sidebarOpen, setSidebarOpen } = useSidebar();
   const { currentWorkspace } = useWorkspace();
   const { user: authUser } = useAuth();
@@ -849,6 +850,14 @@ function NovoChecklistPage() {
   const [thankYouDescription, setThankYouDescription] = useState("Feito com Tieck, a forma mais simples de criar checklists gratuitamente.");
   const [customEmailDomainId, setCustomEmailDomainId] = useState<string | null>(null);
   const [userDomains, setUserDomains] = useState<any[]>([]);
+  const [workspaceMembers, setWorkspaceMembers] = useState<any[]>([]);
+  const [checklistAssignments, setChecklistAssignments] = useState<any[]>([]);
+  const [isDeadlineLoading, setIsDeadlineLoading] = useState(false);
+  const [deadlineStatus, setDeadlineStatus] = useState<string | null>(null);
+  const [assignmentDueAt, setAssignmentDeadline] = useState<string | null>(null);
+  const [primaryMemberId, setPrimaryMemberId] = useState<string | null>(null);
+  const [deadlineAlertEnabled, setDeadlineAlertEnabled] = useState(false);
+
 
   const [passwordProtect, setPasswordProtect] = useState(false);
   const [formPassword, setFormPassword] = useState("");
@@ -1450,6 +1459,60 @@ function NovoChecklistPage() {
     };
     fetchDomains();
   }, [user]);
+
+  const settingsChecklistId = currentChecklistId || sessionChecklistIdRef.current || checklistId || null;
+  const { canManage } = useWorkspaceRBAC(currentWorkspace?.id || workspaceParam);
+
+  useEffect(() => {
+    const fetchWorkspaceData = async () => {
+      const wsId = currentWorkspace?.id || workspaceParam;
+      if (!wsId || !user) return;
+
+      const { data: members } = await supabase
+        .from("workspace_members")
+        .select("id, user_id, role, status, profiles(display_name, avatar_url)")
+        .eq("workspace_id", wsId)
+        .eq("status", "active");
+      
+      if (members) setWorkspaceMembers(members);
+    };
+    fetchWorkspaceData();
+  }, [user, currentWorkspace?.id, workspaceParam]);
+
+  useEffect(() => {
+    const fetchAssignments = async () => {
+      if (!settingsChecklistId) return;
+      setIsDeadlineLoading(true);
+      try {
+        const { data, error } = await supabase
+          .from("checklist_assignments")
+          .select("*")
+          .eq("checklist_id", settingsChecklistId);
+        
+        if (data && !error) {
+          setChecklistAssignments(data);
+          const primary = data.find(a => a.is_primary);
+          if (primary) {
+            setPrimaryMemberId(primary.workspace_member_id);
+            setAssignmentDeadline(primary.due_at);
+            setDeadlineAlertEnabled(!!primary.due_at);
+            
+            if (primary.due_at) {
+              import("@/utils/assignment-status").then(({ getAssignmentStatus }) => {
+                setDeadlineStatus(getAssignmentStatus(primary.due_at, primary.completed_at));
+              });
+            }
+          }
+        }
+      } finally {
+        setIsDeadlineLoading(false);
+      }
+    };
+    if (isSettingsOpen && settingsActiveTab === "emails") {
+      fetchAssignments();
+    }
+  }, [settingsChecklistId, isSettingsOpen, settingsActiveTab]);
+
 
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
 
@@ -2396,7 +2459,68 @@ function NovoChecklistPage() {
       isSavingRef.current = false;
       if (!silent) setIsPublishing(false);
     }
-  }, [user, title, blocks, theme, font, bgColor, textColor, accentColor, pageWidth, baseFontSize, language, redirectOnCompletion, redirectUrl, progressBar, btnBgColor, btnTextColor, btnText, btnIcon, btnIconPosition, checklistId, selfEmailNotif, respondentEmailNotif, respondentEmailFieldId, respondentEmailSubject, respondentEmailMessage, includeResponsesInEmail, ownerEmailAddress, dataRetention, retentionDays, partialSubmissions, checklistBranding, thankYouTitle, thankYouDescription, categoryParam, customDomain, passwordProtect, formPassword, closeForm, closeFormScheduled, closeFormDate, limitSubmissions, submissionLimit, closedFormMessage, closedMessageText]);
+  }, [user, title, blocks, theme, font, bgColor, textColor, accentColor, pageWidth, baseFontSize, language, redirectOnCompletion, redirectUrl, progressBar, btnBgColor, btnTextColor, btnText, btnIcon, btnIconPosition, checklistId, selfEmailNotif, respondentEmailNotif, respondentEmailFieldId, respondentEmailSubject, respondentEmailMessage, includeResponsesInEmail, ownerEmailAddress, dataRetention, retentionDays, partialSubmissions, checklistBranding, thankYouTitle, thankYouDescription, categoryParam, customDomain, passwordProtect, formPassword, closeForm, closeFormScheduled, closeFormDate, limitSubmissions, submissionLimit, closedFormMessage, closedMessageText, deadlineAlertEnabled, primaryMemberId, assignmentDueAt]);
+
+  const saveDeadlineConfig = async () => {
+    const wsId = currentWorkspace?.id || workspaceParam;
+    if (!settingsChecklistId || !wsId || !canManage) return;
+
+    try {
+      const existingPrimary = checklistAssignments.find(a => a.is_primary);
+      
+      if (!deadlineAlertEnabled) {
+        if (existingPrimary?.due_at) {
+          const { error } = await supabase.rpc('set_assignment_deadline', {
+            p_assignment_id: existingPrimary.id,
+            p_due_at: null as any
+          });
+          if (error) throw error;
+          setAssignmentDeadline(null);
+        }
+        return;
+      }
+
+      if (!primaryMemberId || !assignmentDueAt) {
+        toast.error("Selecione um responsável e defina um prazo");
+        return;
+      }
+
+      let targetAssignmentId = existingPrimary?.id;
+
+      if (!existingPrimary || existingPrimary.workspace_member_id !== primaryMemberId) {
+        const { error } = await supabase.rpc('update_checklist_assignments', {
+          p_workspace_id: wsId,
+          p_checklist_id: settingsChecklistId,
+          p_member_ids: [primaryMemberId],
+          p_primary_member_id: primaryMemberId
+        });
+        if (error) throw error;
+
+        const { data: refreshed } = await supabase
+          .from('checklist_assignments')
+          .select('id')
+          .eq('checklist_id', settingsChecklistId)
+          .eq('workspace_member_id', primaryMemberId)
+          .single();
+        
+        targetAssignmentId = refreshed?.id;
+      }
+
+      if (targetAssignmentId) {
+        const { error } = await supabase.rpc('set_assignment_deadline', {
+          p_assignment_id: targetAssignmentId,
+          p_due_at: assignmentDueAt
+        });
+        if (error) throw error;
+      }
+
+      toast.success("Configurações de prazo salvas");
+    } catch (err: any) {
+      console.error(err);
+      toast.error("Erro ao salvar prazo: " + err.message);
+    }
+  };
+
 
   // Auto-save to DB for logged in users
   useEffect(() => {
@@ -2594,7 +2718,6 @@ function NovoChecklistPage() {
     }
   };
 
-  const settingsChecklistId = currentChecklistId || sessionChecklistIdRef.current || checklistId || null;
 
   return (
     <>
@@ -5666,17 +5789,107 @@ function NovoChecklistPage() {
                       </div>
                     )}
                   </div>
+
+                  <div className="py-6 border-b border-neutral-200">
+                    <h3 className="text-sm font-semibold text-neutral-900 mb-4 uppercase tracking-wider text-[10px]">Alertas de Prazo</h3>
+                    <SettingsRow
+                      title="Receber alerta de prazo não cumprido"
+                      description="Você receberá um e-mail se o responsável não concluir este checklist até o prazo definido."
+                      control={<Switch checked={deadlineAlertEnabled} onCheckedChange={setDeadlineAlertEnabled} disabled={!canManage} />}
+                    />
+                    
+                    {deadlineAlertEnabled && (
+                      <div className="mt-4 space-y-4 pl-4 border-l-2 border-neutral-100 animate-in fade-in slide-in-from-left-1">
+                        <CustomField 
+                          label="Responsável" 
+                          description="Pessoa que deve concluir este checklist dentro do prazo."
+                        >
+                          <select
+                            value={primaryMemberId || ""}
+                            onChange={(e) => setPrimaryMemberId(e.target.value || null)}
+                            disabled={!canManage}
+                            className="w-full text-sm border border-neutral-200 rounded-md px-3 py-2 bg-white outline-none focus:border-neutral-400"
+                          >
+                            <option value="">Selecionar responsável</option>
+                            {workspaceMembers.map(m => (
+                              <option key={m.id} value={m.id}>
+                                {m.profiles?.display_name || "Membro"}
+                              </option>
+                            ))}
+                          </select>
+                        </CustomField>
+
+                        <div className="grid grid-cols-2 gap-4">
+                          <CustomField label="Data limite">
+                            <input
+                              type="date"
+                              disabled={!canManage}
+                              value={assignmentDueAt ? assignmentDueAt.split('T')[0] : ""}
+                              onChange={(e) => {
+                                const date = e.target.value;
+                                const time = assignmentDueAt ? assignmentDueAt.split('T')[1]?.slice(0, 5) : "23:59";
+                                if (date) setAssignmentDeadline(new Date(`${date}T${time}`).toISOString());
+                              }}
+                              className="w-full text-sm border border-neutral-200 rounded-md px-3 py-2 outline-none focus:border-neutral-400"
+                            />
+                          </CustomField>
+                          <CustomField label="Horário limite">
+                            <input
+                              type="time"
+                              disabled={!canManage}
+                              value={assignmentDueAt ? assignmentDueAt.split('T')[1]?.slice(0, 5) : ""}
+                              onChange={(e) => {
+                                const time = e.target.value;
+                                const date = assignmentDueAt ? assignmentDueAt.split('T')[0] : new Date().toISOString().split('T')[0];
+                                if (time) setAssignmentDeadline(new Date(`${date}T${time}`).toISOString());
+                              }}
+                              className="w-full text-sm border border-neutral-200 rounded-md px-3 py-2 outline-none focus:border-neutral-400"
+                            />
+                          </CustomField>
+                        </div>
+
+                        <div className="pt-2">
+                          <p className="text-xs font-bold text-neutral-700">Destinatário do alerta</p>
+                          <p className="text-sm text-neutral-900 mt-1">Proprietário do workspace</p>
+                          <p className="text-[11px] text-neutral-500 mt-1">O alerta será enviado automaticamente ao proprietário do espaço de trabalho.</p>
+                        </div>
+
+                        {deadlineStatus && (
+                          <div className="pt-2 mt-2 border-t border-neutral-100 flex items-center justify-between">
+                            <div className="flex flex-col">
+                              <span className="text-[10px] font-bold text-neutral-400 uppercase">Status do prazo</span>
+                              <span className="text-sm font-medium text-neutral-700">
+                                {deadlineStatus === 'completed' ? 'Concluído' : deadlineStatus === 'overdue' ? 'Atrasado' : 'Pendente'}
+                              </span>
+                            </div>
+                            {assignmentDueAt && (
+                              <div className="text-right">
+                                <span className="text-[10px] font-bold text-neutral-400 uppercase">Prazo</span>
+                                <p className="text-xs text-neutral-600">
+                                  {new Date(assignmentDueAt).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 <div className="mt-8 flex items-center justify-center gap-6">
                   <button
                     type="button"
-                    onClick={() => saveChecklist()}
+                    onClick={async () => {
+                      await saveChecklist();
+                      await saveDeadlineConfig();
+                    }}
                     className="text-sm bg-[#FF007F] text-white font-bold rounded-md px-6 py-2 hover:opacity-90 transition-opacity"
                   >
                     Salvar configurações
                   </button>
                 </div>
+
               </section>
             )}
 
