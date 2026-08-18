@@ -235,10 +235,11 @@ export function Dashboard() {
             <button 
               onClick={() => navigate({ to: "/configuracoes" })}
               className="hover:text-neutral-900"
-              title="Configurações"
+              title="Minha conta"
             >
-              <Settings className="w-4 h-4" />
+              <User className="w-4 h-4" />
             </button>
+
           </div>
         </header>
 

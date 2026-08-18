@@ -800,9 +800,10 @@ import logoIcon from "../assets/local/logo-tieck.webp";
               )}
 
               <CommandItem onSelect={() => { navigate({ to: "/configuracoes" }); setSearchOpen(false); }}>
-                <Settings className="mr-2 h-4 w-4" />
-                <span>Configurações</span>
+                <User className="mr-2 h-4 w-4" />
+                <span>Minha conta</span>
               </CommandItem>
+
             </CommandGroup>
            <CommandGroup heading="Ajuda e Suporte">
              <CommandItem onSelect={() => { setSearchOpen(false); }}>
