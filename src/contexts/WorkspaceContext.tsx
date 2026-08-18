@@ -15,7 +15,7 @@ export interface Workspace {
 interface WorkspaceContextType {
   workspaces: Workspace[];
   currentWorkspace: Workspace | null;
-  setCurrentWorkspace: (ws: Workspace) => void;
+  setCurrentWorkspace: (ws: Workspace | null) => void;
   refreshWorkspaces: () => Promise<void>;
   isLoading: boolean;
   workspaceStatus: 'loading' | 'personal' | 'workspace';
@@ -91,20 +91,39 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     if (wsParam) return wsParam;
 
     // Prioridade 2: LocalStorage
-    return localStorage.getItem("currentWorkspaceId");
+    const saved = localStorage.getItem("currentWorkspaceId");
+    if (saved === "personal") return null;
+    return saved;
   });
 
   const workspaceStatus = useMemo(() => {
     if (isLoading) return 'loading';
-    if (!currentId) return 'personal';
-    return 'workspace';
-  }, [isLoading, currentId]);
+    
+    const saved = typeof window !== "undefined" ? localStorage.getItem("currentWorkspaceId") : null;
+    
+    // Se escolheu pessoal explicitamente
+    if (saved === 'personal') return 'personal';
+    
+    // Se tem um ID (da URL ou salvo)
+    if (currentId) return 'workspace';
+    
+    // Se não tem ID mas tem workspaces acessíveis, faz bootstrap para o primeiro
+    if (workspaces.length > 0) return 'workspace';
+    
+    return 'personal';
+  }, [isLoading, currentId, workspaces.length]);
 
   const currentWorkspace = useMemo(() => {
-    if (!workspaces.length || workspaceStatus !== 'workspace') return null;
-    const found = workspaces.find((w) => w.id === currentId);
-    return found || workspaces[0];
-  }, [workspaces, currentId, workspaceStatus]);
+    if (isLoading || workspaceStatus !== 'workspace' || !workspaces.length) return null;
+    
+    if (currentId) {
+      const found = workspaces.find((w) => w.id === currentId);
+      if (found) return found;
+    }
+    
+    // Fallback: se status é workspace mas ID não bate, pega o primeiro
+    return workspaces[0];
+  }, [workspaces, currentId, workspaceStatus, isLoading]);
 
   useEffect(() => {
     if (currentWorkspace && currentWorkspace.id !== currentId) {
@@ -120,9 +139,14 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     }
   }, [currentWorkspace, currentId]);
 
-  const setCurrentWorkspace = (ws: Workspace) => {
-    setCurrentId(ws.id);
-    localStorage.setItem("currentWorkspaceId", ws.id);
+  const setCurrentWorkspace = (ws: Workspace | null) => {
+    if (ws) {
+      setCurrentId(ws.id);
+      localStorage.setItem("currentWorkspaceId", ws.id);
+    } else {
+      setCurrentId(null);
+      localStorage.setItem("currentWorkspaceId", "personal");
+    }
   };
 
   const refreshWorkspaces = async () => {
