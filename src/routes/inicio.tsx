@@ -85,24 +85,20 @@ export function Dashboard() {
       setIsLoading(true);
       
       try {
-        let query = supabase.from("checklists").select("*, checklist_assignments(*)");
+        let query;
         
         if (workspaceStatus === 'workspace' && currentWorkspace) {
-          query = query.eq("workspace_id", currentWorkspace.id);
-          
-          // FASE 5B.11: Viewer vê TODOS os checklists do workspace.
-          // O membership ativo já é garantido pelo fail-closed do hook useWorkspaceRBAC.
-          // REMOVIDO: Filtro por list_my_checklist_assignments.
-          
-          // Para Viewer, vamos carregar as atribuições separadamente para evitar leak de outros membros
           if (isViewer) {
-             // Modificamos a query para NÃO carregar checklist_assignments(*) via join
-             // para evitar ver assignments de terceiros.
-             query = supabase.from("checklists").select("*").eq("workspace_id", currentWorkspace.id);
+            // FASE 5B.11: Viewer vê TODOS os checklists do workspace, mas NÃO carregamos assignments via join
+            // para evitar vazar dados de terceiros. A associação será feita via RPC posteriormente.
+            query = supabase.from("checklists").select("*").eq("workspace_id", currentWorkspace.id);
+          } else {
+            // Outras roles carregam com assignments via join normalmente.
+            query = supabase.from("checklists").select("*, checklist_assignments(*)").eq("workspace_id", currentWorkspace.id);
           }
         } else {
           // Contexto Pessoal: apenas checklists sem workspace_id do próprio usuário
-          query = query.is("workspace_id", null).eq("user_id", user.id);
+          query = supabase.from("checklists").select("*, checklist_assignments(*)").is("workspace_id", null).eq("user_id", user.id);
         }
         
         const { data, error } = await query
@@ -111,7 +107,8 @@ export function Dashboard() {
           .order("created_at", { ascending: false });
         
         if (error) throw error;
-        let finalChecklists = data || [];
+        
+        let finalChecklists: any[] = data || [];
 
         // FASE 5B.11: Se for Viewer, buscar apenas os PRÓPRIOS assignments via RPC
         if (isViewer && workspaceStatus === 'workspace' && currentWorkspace) {
@@ -120,6 +117,7 @@ export function Dashboard() {
           });
 
           // Mapear os assignments para os checklists carregados
+          // Precisamos garantir que o formato do assignment da RPC seja compatível ou mapeado para o que o componente espera
           finalChecklists = finalChecklists.map(c => ({
             ...c,
             checklist_assignments: myAssignments?.filter((a: any) => a.checklist_id === c.id) || []
