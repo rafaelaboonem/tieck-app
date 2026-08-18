@@ -87,8 +87,8 @@ describe('Patch 5B.13: Search Button in /inicio', () => {
     render(<Dashboard />);
     
     const searchButton = screen.getByRole('button', { name: /buscar/i });
-    expect(searchButton).toBeInTheDocument();
-    expect(searchButton).toHaveAttribute('type', 'button');
+    expect(searchButton).toBeTruthy();
+    expect(searchButton.getAttribute('type')).toBe('button');
     
     fireEvent.click(searchButton);
     
