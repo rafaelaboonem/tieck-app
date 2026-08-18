@@ -121,12 +121,14 @@ export function AuthPage({ mode, redirect }: Props) {
   const handleRequestRecovery = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isLoading) return;
-    if (!normalizedEmail()) return toast.error("Informe seu e-mail");
+    const targetEmail = normalizedEmail();
+    if (!targetEmail) return toast.error("Informe seu e-mail");
     
     setIsLoading(true);
     try {
-      await requestPasswordResetFn({ data: { email: normalizedEmail() } });
+      await requestPasswordResetFn({ data: { email: targetEmail } });
       toast.success("Se o e-mail existir, um código foi enviado.");
+      setRecoveryEmail(targetEmail);
       setRecoveryStep(2);
       setResendCountdown(60);
       setOtp("");
@@ -146,7 +148,7 @@ export function AuthPage({ mode, redirect }: Props) {
     setIsLoading(true);
     try {
       const result = await verifyPasswordResetFn({ 
-        data: { email: normalizedEmail(), code: token } 
+        data: { email: recoveryEmail, code: token } 
       });
       setVerificationToken(result.resetToken);
       setRecoveryStep(3);
@@ -170,7 +172,7 @@ export function AuthPage({ mode, redirect }: Props) {
     try {
       await completePasswordResetFn({
         data: {
-          email: normalizedEmail(),
+          email: recoveryEmail,
           resetToken: verificationToken,
           newPassword: password
         }
