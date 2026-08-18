@@ -695,7 +695,7 @@ export function AuthPage({ mode, redirect }: Props) {
               </button>
             </form>
           )}
-        </div>
+
 
 
 
