@@ -428,51 +428,16 @@ import logoIcon from "../assets/local/logo-tieck.webp";
            <div className="mt-2 flex-1 overflow-y-auto no-scrollbar pb-8">
             {(profile || user) && (
               <div className="flex flex-col gap-6">
-                <ul className="space-y-0.5">
-                  {[
-                    { icon: Home, label: "Início", to: "/inicio" },
-                    { icon: LayoutDashboard, label: "Painel", to: "/painel", permission: "admin" },
-                    { icon: Search, label: "Buscar" },
-                    { icon: Globe, label: "Domínios", to: "/dominios", permission: "admin" },
-                    { icon: Settings, label: "Configurações", to: "/configuracoes", permission: "admin" },
-                    { icon: CreditCard, label: "Meu Plano", to: "/membros", permission: "admin" },
-                    { icon: Briefcase, label: "Espaço de Trabalho", to: "/organizar", permission: "manage" },
-                    { icon: Users, label: "Equipe", to: "/equipe", permission: "admin" },
-                  ].filter(item => {
-                    if (workspaceStatus !== "workspace") return true;
-                    if (item.permission === "admin") return isWsAdmin;
-                    if (item.permission === "manage") return canWsManage;
-                    return true;
-                  }).map((item: any) => {
-                    const Icon = item.icon;
-                    const isSearch = item.label === "Buscar";
-                    const isActive = item.to === location.pathname;
-                    
-                    return (
-                      <li key={item.label}>
-                        <button
-                          type="button"
-                          onClick={isSearch
-                            ? () => setSearchOpen(true)
-                            : item.to
-                            ? () => navigate({ to: item.to })
-                            : undefined}
-                          className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-sm transition-colors ${
-                            isActive 
-                              ? "bg-neutral-100 text-neutral-900 font-medium" 
-                              : `hover:bg-neutral-100 ${item.accent ?? "text-neutral-700"}`
-                          }`}
-                        >
-                          <Icon className="w-4 h-4" />
-                          <span className="truncate">{item.label}</span>
-                        </button>
-                      </li>
-                    );
-                  })}
+                <div className="px-1">
+                  <p className="px-2 text-xs font-medium text-neutral-500 mb-1">Pessoal</p>
+                  <NavList items={personalNav} />
+                </div>
 
-                  <li className="my-2 border-t border-neutral-100 mx-2" />
+                <div className="px-1">
+                  <p className="px-2 text-xs font-medium text-neutral-500 mb-1">Workspace</p>
+                  <NavList items={workspaceNav} />
                   
-                  <li key="Recentes" className="mb-2">
+                  <div className="mt-4 border-t border-neutral-100 pt-4">
                     <button
                       type="button"
                       onClick={() => setRecentOpen(!recentOpen)}
@@ -497,7 +462,6 @@ import logoIcon from "../assets/local/logo-tieck.webp";
                               <button
                                 type="button"
                                 onClick={() => {
-                                  // Redirecionamento unificado: ChecklistAuthGuard em /checklist resolverá.
                                   navigate({ to: "/checklist", search: { id: chk.id } });
                                 }}
                                 className="w-full text-left py-1 text-[13px] text-neutral-400 hover:text-neutral-900 transition-colors truncate block font-medium"
@@ -513,34 +477,25 @@ import logoIcon from "../assets/local/logo-tieck.webp";
                         )}
                       </ul>
                     </div>
-                  </li>
-                </ul>
-                  
-            <div className="px-1 mb-6">
-              <p className="px-2 text-xs font-medium text-neutral-500 mb-1">Pessoal</p>
-              <NavList items={personalNav} />
-            </div>
+                  </div>
 
-            <div className="px-1 mb-6">
-              <p className="px-2 text-xs font-medium text-neutral-500 mb-1">Workspace</p>
-              <NavList items={workspaceNav} />
-              {profile?.is_admin && (
-                <div className="mt-0.5">
-                  <button
-                    type="button"
-                    onClick={() => navigate({ to: "/admin" })}
-                    className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-sm transition-colors ${
-                      location.pathname === "/admin" 
-                        ? "bg-neutral-100 text-blue-600 font-medium" 
-                        : "hover:bg-neutral-100 text-blue-600"
-                    }`}
-                  >
-                    <ShieldCheck className="w-4 h-4" />
-                    <span>Painel Admin</span>
-                  </button>
+                  {profile?.is_admin && (
+                    <div className="mt-2">
+                      <button
+                        type="button"
+                        onClick={() => navigate({ to: "/admin" })}
+                        className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-sm transition-colors ${
+                          location.pathname === "/admin" 
+                            ? "bg-neutral-100 text-blue-600 font-medium" 
+                            : "hover:bg-neutral-100 text-blue-600"
+                        }`}
+                      >
+                        <ShieldCheck className="w-4 h-4" />
+                        <span>Painel Admin</span>
+                      </button>
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
 
             <div>
               <p className="px-2 text-xs font-medium text-neutral-500 mb-1">Ajuda</p>
