@@ -2412,6 +2412,8 @@ export function NovoChecklistPage() {
       if (data?.id) setCurrentChecklistId(data.id);
 
       // Publicação: delega ao backend a montagem do snapshot técnico.
+      let serverPublished: boolean = data?.is_published === true;
+      let serverSlug: string | null = data?.custom_slug ?? null;
       // PATCH CAMERA AI: Antes de publicar, garantimos que todas as policies estão sincronizadas.
       if (isPublishedOverride === true && data?.id) {
         const cameraBlocks = blocksWithIds.filter(b => b.type === 'camera');
