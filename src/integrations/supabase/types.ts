@@ -992,6 +992,54 @@ export type Database = {
           },
         ]
       }
+      password_reset_codes: {
+        Row: {
+          attempts: number | null
+          code_hash: string
+          consumed_at: string | null
+          created_at: string | null
+          email_normalized: string
+          expires_at: string
+          id: string
+          last_sent_at: string | null
+          updated_at: string | null
+          user_id: string
+          verification_expires_at: string | null
+          verification_token_hash: string | null
+          verified_at: string | null
+        }
+        Insert: {
+          attempts?: number | null
+          code_hash: string
+          consumed_at?: string | null
+          created_at?: string | null
+          email_normalized: string
+          expires_at: string
+          id?: string
+          last_sent_at?: string | null
+          updated_at?: string | null
+          user_id: string
+          verification_expires_at?: string | null
+          verification_token_hash?: string | null
+          verified_at?: string | null
+        }
+        Update: {
+          attempts?: number | null
+          code_hash?: string
+          consumed_at?: string | null
+          created_at?: string | null
+          email_normalized?: string
+          expires_at?: string
+          id?: string
+          last_sent_at?: string | null
+          updated_at?: string | null
+          user_id?: string
+          verification_expires_at?: string | null
+          verification_token_hash?: string | null
+          verified_at?: string | null
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -2598,12 +2646,7 @@ export type Database = {
         }[]
       }
       get_user_email_by_id: { Args: { user_uuid: string }; Returns: string }
-      get_user_id_by_email: {
-        Args: { email_to_find: string }
-        Returns: {
-          user_id: string
-        }[]
-      }
+      get_user_id_by_email: { Args: { p_email: string }; Returns: string }
       has_role_in_workspace: {
         Args: {
           _min_role: Database["public"]["Enums"]["app_role"]
