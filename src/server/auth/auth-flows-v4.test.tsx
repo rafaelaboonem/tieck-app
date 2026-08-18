@@ -71,15 +71,18 @@ describe('AuthPage Phase 4B.5 (Password-based Login & Signup Flow)', () => {
     });
   });
 
+  const getSubmitButton = (text: string) => {
+    const buttons = screen.getAllByRole('button');
+    return buttons.find(b => b.textContent?.trim() === text);
+  };
+
   it('1. LOGIN: should call signInWithPassword when valid credentials are provided', async () => {
     (supabase.auth.signInWithPassword as any).mockResolvedValue({ data: { user: {} }, error: null });
     render(<AuthPage mode="login" />);
     fireEvent.change(screen.getByPlaceholderText('seu@email.com'), { target: { value: 'test@example.com' } });
     fireEvent.change(screen.getByPlaceholderText('••••••••'), { target: { value: 'password123' } });
     
-    // Use getAllByText for 'Entrar' and find the one that is NOT 'Entrar com Google'
-    const submitButtons = screen.getAllByRole('button', { name: /Entrar/ });
-    const submitBtn = submitButtons.find(b => b.textContent === 'Entrar');
+    const submitBtn = getSubmitButton('Entrar');
     if (!submitBtn) throw new Error("Submit button not found");
     fireEvent.click(submitBtn);
 
@@ -97,8 +100,7 @@ describe('AuthPage Phase 4B.5 (Password-based Login & Signup Flow)', () => {
     fireEvent.change(screen.getByPlaceholderText('seu@email.com'), { target: { value: 'test@example.com' } });
     fireEvent.change(screen.getByPlaceholderText('••••••••'), { target: { value: 'password123' } });
     
-    const submitButtons = screen.getAllByRole('button', { name: /Entrar/ });
-    const submitBtn = submitButtons.find(b => b.textContent === 'Entrar');
+    const submitBtn = getSubmitButton('Entrar');
     if (submitBtn) fireEvent.click(submitBtn);
 
     await waitFor(() => {
@@ -120,8 +122,7 @@ describe('AuthPage Phase 4B.5 (Password-based Login & Signup Flow)', () => {
     fireEvent.change(screen.getByPlaceholderText('seu@email.com'), { target: { value: 'test@example.com' } });
     fireEvent.change(screen.getByPlaceholderText('••••••••'), { target: { value: 'wrong' } });
     
-    const submitButtons = screen.getAllByRole('button', { name: /Entrar/ });
-    const submitBtn = submitButtons.find(b => b.textContent === 'Entrar');
+    const submitBtn = getSubmitButton('Entrar');
     if (submitBtn) fireEvent.click(submitBtn);
 
     await waitFor(() => {
@@ -143,8 +144,10 @@ describe('AuthPage Phase 4B.5 (Password-based Login & Signup Flow)', () => {
     fireEvent.change(screen.getByPlaceholderText('seu@email.com'), { target: { value: 'test@example.com' } });
     fireEvent.change(screen.getByPlaceholderText('••••••••'), { target: { value: 'pass1234' } });
     fireEvent.change(screen.getByPlaceholderText('Repita sua senha'), { target: { value: 'pass5678' } });
-    const signupForm = screen.getByRole('button', { name: /Criar conta/ }).closest('form')!;
-    fireEvent.submit(signupForm);
+    
+    const submitBtn = getSubmitButton('Criar conta');
+    if (submitBtn) fireEvent.click(submitBtn);
+
     await waitFor(() => {
       expect(toast.error).toHaveBeenCalledWith('As senhas não conferem');
       expect(supabase.functions.invoke).not.toHaveBeenCalled();
@@ -157,8 +160,10 @@ describe('AuthPage Phase 4B.5 (Password-based Login & Signup Flow)', () => {
     fireEvent.change(screen.getByPlaceholderText('seu@email.com'), { target: { value: 'test@example.com' } });
     fireEvent.change(screen.getByPlaceholderText('••••••••'), { target: { value: 'short' } });
     fireEvent.change(screen.getByPlaceholderText('Repita sua senha'), { target: { value: 'short' } });
-    const signupForm = screen.getByRole('button', { name: /Criar conta/ }).closest('form')!;
-    fireEvent.submit(signupForm);
+    
+    const submitBtn = getSubmitButton('Criar conta');
+    if (submitBtn) fireEvent.click(submitBtn);
+
     await waitFor(() => {
       expect(toast.error).toHaveBeenCalledWith(expect.stringContaining('pelo menos 8 caracteres'));
     });
@@ -171,8 +176,10 @@ describe('AuthPage Phase 4B.5 (Password-based Login & Signup Flow)', () => {
     fireEvent.change(screen.getByPlaceholderText('seu@email.com'), { target: { value: 'test@example.com' } });
     fireEvent.change(screen.getByPlaceholderText('••••••••'), { target: { value: 'password123' } });
     fireEvent.change(screen.getByPlaceholderText('Repita sua senha'), { target: { value: 'password123' } });
-    const signupForm = screen.getByRole('button', { name: /Criar conta/ }).closest('form')!;
-    fireEvent.submit(signupForm);
+    
+    const submitBtn = getSubmitButton('Criar conta');
+    if (submitBtn) fireEvent.click(submitBtn);
+
     await waitFor(() => {
       expect(supabase.functions.invoke).toHaveBeenCalledWith('signup-request-otp', {
         body: { email: 'test@example.com' }
@@ -195,8 +202,9 @@ describe('AuthPage Phase 4B.5 (Password-based Login & Signup Flow)', () => {
     fireEvent.change(screen.getByPlaceholderText('seu@email.com'), { target: { value: 'test@example.com' } });
     fireEvent.change(screen.getByPlaceholderText('••••••••'), { target: { value: 'password123' } });
     fireEvent.change(screen.getByPlaceholderText('Repita sua senha'), { target: { value: 'password123' } });
-    const signupForm = screen.getByRole('button', { name: /Criar conta/ }).closest('form')!;
-    fireEvent.submit(signupForm);
+    
+    const submitBtn = getSubmitButton('Criar conta');
+    if (submitBtn) fireEvent.click(submitBtn);
 
     await waitFor(() => {
       expect(screen.getByText(/Verifique seu e-mail/i)).toBeDefined();
@@ -235,8 +243,7 @@ describe('AuthPage Phase 4B.5 (Password-based Login & Signup Flow)', () => {
     fireEvent.change(screen.getByPlaceholderText('••••••••'), { target: { value: 'password123' } });
     fireEvent.change(screen.getByPlaceholderText('Repita sua senha'), { target: { value: 'password123' } });
     
-    const submitButtons = screen.getAllByRole('button', { name: /Criar conta/ });
-    const submitBtn = submitButtons.find(b => b.textContent === 'Criar conta');
+    const submitBtn = getSubmitButton('Criar conta');
     if (submitBtn) fireEvent.click(submitBtn);
 
     await waitFor(() => {
@@ -262,8 +269,9 @@ describe('AuthPage Phase 4B.5 (Password-based Login & Signup Flow)', () => {
     fireEvent.change(screen.getByPlaceholderText('seu@email.com'), { target: { value: 'test@example.com' } });
     fireEvent.change(screen.getByPlaceholderText('••••••••'), { target: { value: 'password123' } });
     fireEvent.change(screen.getByPlaceholderText('Repita sua senha'), { target: { value: 'password123' } });
-    const signupForm = screen.getByRole('button', { name: /Criar conta/ }).closest('form')!;
-    fireEvent.submit(signupForm);
+    
+    const submitBtn = getSubmitButton('Criar conta');
+    if (submitBtn) fireEvent.click(submitBtn);
 
     await waitFor(() => {
       expect(screen.getByText(/E-mail já cadastrado/i)).toBeDefined();
