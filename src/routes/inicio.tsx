@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Search, Sparkles, Settings, Plus, HelpCircle, Pencil, Link2, Trash2, MoreHorizontal, Copy as CopyIcon, CheckSquare, X, Menu } from "lucide-react";
+import { Search, Sparkles, Settings, Plus, HelpCircle, Pencil, Link2, Trash2, MoreHorizontal, Copy as CopyIcon, CheckSquare, X, Menu, User } from "lucide-react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { useWorkspaceRBAC } from "@/hooks/useWorkspaceRBAC";
 import { useSidebar } from "@/contexts/SidebarContext";
@@ -235,10 +235,11 @@ export function Dashboard() {
             <button 
               onClick={() => navigate({ to: "/configuracoes" })}
               className="hover:text-neutral-900"
-              title="Configurações"
+              title="Minha conta"
             >
-              <Settings className="w-4 h-4" />
+              <User className="w-4 h-4" />
             </button>
+
           </div>
         </header>
 

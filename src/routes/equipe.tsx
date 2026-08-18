@@ -1,4 +1,6 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
+import { useAuth } from '@/contexts/AuthContext';
+
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { useWorkspaceRBAC } from '@/hooks/useWorkspaceRBAC';
 import { useSidebar } from '@/contexts/SidebarContext';
@@ -88,29 +90,28 @@ function TeamPage() {
   const { isAdmin, loading: rbacLoading } = useWorkspaceRBAC(currentWorkspace?.id);
   const isMobile = useIsMobile();
   const { sidebarOpen } = useSidebar();
+  const { user, loading: authLoading } = useAuth();
 
-  useEffect(() => {
-    if (!rbacLoading && !isAdmin) {
-      toast.error("Acesso restrito a administradores");
-      navigate({ to: "/inicio" });
-    }
-  }, [isAdmin, rbacLoading, navigate]);
-
-  if (rbacLoading || !isAdmin) {
-    return (
-      <DashboardLayout>
-        <div className="p-4 sm:p-8 space-y-6">
-          <Skeleton className="h-10 w-48" />
-          <Skeleton className="h-64 w-full" />
-        </div>
-      </DashboardLayout>
-    );
-  }
   const [members, setMembers] = useState<WorkspaceMemberView[]>([]);
   const [invitations, setInvitations] = useState<WorkspaceInvitationView[]>([]);
   const [assignments, setAssignments] = useState<ChecklistAssignmentView[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentUserRole, setCurrentUserRole] = useState<'owner' | 'admin' | 'editor' | 'viewer' | null>(null);
+
+  useEffect(() => {
+    if (!rbacLoading && !authLoading) {
+      if (!user) {
+        navigate({ to: "/login" });
+        return;
+      }
+      if (!isAdmin) {
+        toast.error("Acesso restrito a administradores");
+        navigate({ to: "/inicio" });
+        return;
+      }
+    }
+  }, [isAdmin, rbacLoading, authLoading, user, navigate]);
+
   
   // Modals state
   const [inviteModalOpen, setInviteModalOpen] = useState(false);
@@ -399,10 +400,23 @@ function TeamPage() {
     return roles[member.role] || member.role;
   };
 
+  if (rbacLoading) {
+    return (
+      <DashboardLayout>
+        <div className="p-4 sm:p-8 space-y-6">
+          <Skeleton className="h-10 w-48" />
+          <Skeleton className="h-64 w-full" />
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  if (!isAdmin) return null;
   if (!currentWorkspace) return null;
 
   return (
     <DashboardLayout>
+
       <div className="flex flex-col h-full bg-white">
         <header className="px-4 sm:px-6 py-6 sm:py-8 border-b border-neutral-100 shrink-0">
           <div className={cn(

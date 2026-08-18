@@ -32,28 +32,11 @@ interface Checklist {
 function DominiosPage() {
   const isMobile = useIsMobile();
   const { sidebarOpen } = useSidebar();
-  const { user, loading } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const { currentWorkspace } = useWorkspace();
   const { isAdmin, loading: rbacLoading } = useWorkspaceRBAC(currentWorkspace?.id);
 
-  useEffect(() => {
-    if (!rbacLoading && !isAdmin && !loading && user) {
-      toast.error("Acesso restrito a administradores");
-      navigate({ to: "/inicio" });
-    }
-  }, [isAdmin, rbacLoading, loading, user, navigate]);
-
-  if (rbacLoading) {
-    return (
-      <DashboardLayout>
-        <div className="p-4 sm:p-8 space-y-6">
-          <Skeleton className="h-10 w-48" />
-          <Skeleton className="h-64 w-full" />
-        </div>
-      </DashboardLayout>
-    );
-  }
   const [checklists, setChecklists] = useState<Checklist[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [profile, setProfile] = useState<any>(null);
@@ -62,12 +45,20 @@ function DominiosPage() {
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
-    if (!loading && !user) {
-      navigate({ to: "/login" });
-      return;
+    if (!rbacLoading && !authLoading) {
+      if (!user) {
+        navigate({ to: "/login" });
+        return;
+      }
+      if (!isAdmin) {
+        toast.error("Acesso restrito a administradores");
+        navigate({ to: "/inicio" });
+        return;
+      }
+      fetchData();
     }
-    fetchData();
-  }, [user, loading, navigate]);
+  }, [isAdmin, rbacLoading, authLoading, user, navigate]);
+
 
   const fetchData = async () => {
     setIsLoading(true);
@@ -146,8 +137,22 @@ function DominiosPage() {
 
   const isPro = profile?.plan_type === "pro";
 
+  if (rbacLoading) {
+    return (
+      <DashboardLayout>
+        <div className="p-4 sm:p-8 space-y-6">
+          <Skeleton className="h-10 w-48" />
+          <Skeleton className="h-64 w-full" />
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  if (!isAdmin) return null;
+
   return (
     <DashboardLayout>
+
       <header className="flex items-center justify-between px-4 sm:px-6 py-4 border-b border-neutral-200 bg-white sticky top-0 z-10">
         <div className={cn(
           "flex items-center gap-2 text-sm transition-all duration-300",
