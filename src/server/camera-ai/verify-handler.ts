@@ -57,6 +57,15 @@ export interface VerifyDependencies {
   claimAttempt: (params: { responseId: string; blockId: string; idempotencyKey: string }) => Promise<{ data: ClaimResult[] | null; error: unknown }>;
   hitRateLimit: (responseId: string) => Promise<{ data: RateLimitResult[] | null; error: unknown }>;
   analyzeImage: (question: string, buffer: ArrayBuffer, mimeType: string, policy?: CameraVerificationPolicyV1) => Promise<CameraVerification>;
+  analyzeImageWithReference: (
+    question: string,
+    candidateBuffer: ArrayBuffer,
+    candidateMime: string,
+    referenceBuffer: ArrayBuffer,
+    referenceMime: string,
+    policy?: CameraVerificationPolicyV1
+  ) => Promise<CameraReferenceVerification>;
+  loadReferenceImage: (storagePath: string) => Promise<{ buffer: ArrayBuffer; mimeType: string }>;
   markFailed: (params: { responseId: string; blockId: string; idempotencyKey: string; code: string }) => Promise<{ data: unknown; error: unknown }>;
   markCompleted: (params: {
     responseId: string;
