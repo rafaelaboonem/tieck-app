@@ -1,4 +1,3 @@
-// src/server/camera-ai/schema.ts
 import { z } from 'zod';
 
 export const CameraVerificationSchema = z.object({

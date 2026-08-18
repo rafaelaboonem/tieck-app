@@ -4,7 +4,7 @@ import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { AlertCircle, Loader2, Play, Upload, X, Camera } from "lucide-react";
-import { CameraVerificationPolicyV1, PublishedBlock, CameraBlockPatch, CameraReferenceImageV1 } from "@/server/camera-ai/schema";
+import { CameraVerificationPolicyV1, PublishedBlock, CameraBlockPatch, CameraReferenceImageV1 } from "@/lib/camera-ai/schema.functions";
 import { CameraVerificationTestDialog } from "./CameraVerificationTestDialog";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
