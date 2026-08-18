@@ -82,70 +82,72 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     gcTime: 30 * 60_000,
   });
 
-  const [currentId, setCurrentId] = useState<string | null>(() => {
-    if (typeof window === "undefined") return null;
+  // 1. O estado de seleção bruta (URL > localStorage > null)
+  const [selection, setSelection] = useState<{ type: 'workspace' | 'personal' | 'unresolved', id?: string }>(() => {
+    if (typeof window === "undefined") return { type: 'unresolved' };
     
-    // Prioridade 1: Query string (útil pós-aceite de convite)
     const urlParams = new URLSearchParams(window.location.search);
     const wsParam = urlParams.get('workspace');
-    if (wsParam) return wsParam;
+    if (wsParam) return { type: 'workspace', id: wsParam };
 
-    // Prioridade 2: LocalStorage
     const saved = localStorage.getItem("currentWorkspaceId");
-    if (saved === "personal") return null;
-    return saved;
+    if (saved === "personal") return { type: 'personal' };
+    if (saved) return { type: 'workspace', id: saved };
+    
+    return { type: 'unresolved' };
   });
 
-  const workspaceStatus = useMemo(() => {
-    if (isLoading) return 'loading';
+  // 2. Resolver o workspace real e o status final
+  const { currentWorkspace, workspaceStatus } = useMemo(() => {
+    if (isLoading) return { currentWorkspace: null, workspaceStatus: 'loading' as const };
     
-    const saved = typeof window !== "undefined" ? localStorage.getItem("currentWorkspaceId") : null;
-    
-    // Se escolheu pessoal explicitamente
-    if (saved === 'personal') return 'personal';
-    
-    // Se tem um ID (da URL ou salvo)
-    if (currentId) return 'workspace';
-    
-    // Se não tem ID mas tem workspaces acessíveis, faz bootstrap para o primeiro
-    if (workspaces.length > 0) return 'workspace';
-    
-    return 'personal';
-  }, [isLoading, currentId, workspaces.length]);
-
-  const currentWorkspace = useMemo(() => {
-    if (isLoading || workspaceStatus !== 'workspace' || !workspaces.length) return null;
-    
-    if (currentId) {
-      const found = workspaces.find((w) => w.id === currentId);
-      if (found) return found;
+    // Se a seleção for workspace, tentamos encontrar
+    if (selection.type === 'workspace' && selection.id) {
+      const found = workspaces.find(w => w.id === selection.id);
+      if (found) return { currentWorkspace: found, workspaceStatus: 'workspace' as const };
     }
     
-    // Fallback: se status é workspace mas ID não bate, pega o primeiro
-    return workspaces[0];
-  }, [workspaces, currentId, workspaceStatus, isLoading]);
+    // Se a seleção for pessoal ou (se for workspace mas não encontrado)
+    // Se não resolveu ou workspace inválido -> Bootstrap
+    if (selection.type === 'personal') {
+      return { currentWorkspace: null, workspaceStatus: 'personal' as const };
+    }
+
+    // Bootstrap: Prioriza o primeiro workspace se existir
+    if (workspaces.length > 0) {
+      return { currentWorkspace: workspaces[0], workspaceStatus: 'workspace' as const };
+    }
+
+    return { currentWorkspace: null, workspaceStatus: 'personal' as const };
+  }, [isLoading, selection, workspaces]);
 
   useEffect(() => {
-    if (currentWorkspace && currentWorkspace.id !== currentId) {
-      setCurrentId(currentWorkspace.id);
-      localStorage.setItem("currentWorkspaceId", currentWorkspace.id);
+    if (isLoading) return;
+
+    // Sincronizar a seleção com o localStorage para persistência
+    if (workspaceStatus === 'workspace' && currentWorkspace) {
+      if (localStorage.getItem("currentWorkspaceId") !== currentWorkspace.id) {
+        localStorage.setItem("currentWorkspaceId", currentWorkspace.id);
+      }
       
-      // Limpar o parâmetro da URL após sincronizar com o estado
+      // Limpar o parâmetro da URL se ele foi usado para bootstrap/seleção
       const url = new URL(window.location.href);
       if (url.searchParams.has('workspace') && url.pathname !== '/checklist') {
         url.searchParams.delete('workspace');
         window.history.replaceState({}, '', url.pathname + url.search);
       }
+    } else if (workspaceStatus === 'personal') {
+      if (localStorage.getItem("currentWorkspaceId") !== "personal") {
+        localStorage.setItem("currentWorkspaceId", "personal");
+      }
     }
-  }, [currentWorkspace, currentId]);
+  }, [currentWorkspace, workspaceStatus, isLoading]);
 
   const setCurrentWorkspace = (ws: Workspace | null) => {
     if (ws) {
-      setCurrentId(ws.id);
-      localStorage.setItem("currentWorkspaceId", ws.id);
+      setSelection({ type: 'workspace', id: ws.id });
     } else {
-      setCurrentId(null);
-      localStorage.setItem("currentWorkspaceId", "personal");
+      setSelection({ type: 'personal' });
     }
   };
 

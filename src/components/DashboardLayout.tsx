@@ -47,7 +47,13 @@ import {
 import { toast } from "sonner";
 import logoIcon from "../assets/local/logo-tieck.webp";
  
- type NavItem = { icon: React.ElementType; label: string; to?: string; accent?: string };
+  type NavItem = { 
+    icon: React.ElementType; 
+    label: string; 
+    to?: string; 
+    accent?: string;
+    permission?: "admin" | "manage";
+  };
  
  
  const productNav: NavItem[] = [
@@ -252,7 +258,7 @@ import logoIcon from "../assets/local/logo-tieck.webp";
       if (item.permission === 'admin') return isWsAdmin;
       if (item.permission === 'manage') return canWsManage;
       return true;
-    }) as NavItem[];
+    });
 
     return (
         <div className="min-h-screen bg-white text-neutral-900 flex overflow-x-hidden">
