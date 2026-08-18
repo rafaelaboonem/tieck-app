@@ -532,13 +532,6 @@ export function AuthPage({ mode, redirect }: Props) {
               </button>
             </form>
           )}
-
-
-
-
-
-
-
           {recoveryStep === 1 && (
             <form onSubmit={handleRequestRecovery} className="space-y-5 animate-in fade-in slide-in-from-bottom-2 duration-300">
               <div>
