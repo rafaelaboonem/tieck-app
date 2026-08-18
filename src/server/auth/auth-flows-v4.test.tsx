@@ -79,7 +79,7 @@ describe('AuthPage Phase 4B.5 (Password-based Login & Signup Flow)', () => {
     
     fireEvent.change(screen.getByPlaceholderText('seu@email.com'), { target: { value: 'test@example.com' } });
     fireEvent.change(screen.getByPlaceholderText('••••••••'), { target: { value: 'password123' } });
-    fireEvent.click(screen.getByRole('button', { name: /^Entrar$/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Entrar/ }).closest('form')!.querySelector('button[type="submit"]')!);
 
     await waitFor(() => {
       expect(supabase.auth.signInWithPassword).toHaveBeenCalledWith({
@@ -95,7 +95,7 @@ describe('AuthPage Phase 4B.5 (Password-based Login & Signup Flow)', () => {
     render(<AuthPage mode="login" />);
     fireEvent.change(screen.getByPlaceholderText('seu@email.com'), { target: { value: 'test@example.com' } });
     fireEvent.change(screen.getByPlaceholderText('••••••••'), { target: { value: 'password123' } });
-    fireEvent.click(screen.getByRole('button', { name: /^Entrar$/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Entrar/ }).closest('form')!.querySelector('button[type="submit"]')!);
 
     await waitFor(() => {
       expect(supabase.auth.signInWithOtp).not.toHaveBeenCalled();
@@ -120,7 +120,7 @@ describe('AuthPage Phase 4B.5 (Password-based Login & Signup Flow)', () => {
     render(<AuthPage mode="login" />);
     fireEvent.change(screen.getByPlaceholderText('seu@email.com'), { target: { value: 'test@example.com' } });
     fireEvent.change(screen.getByPlaceholderText('••••••••'), { target: { value: 'wrong' } });
-    fireEvent.click(screen.getByRole('button', { name: /^Entrar$/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Entrar/ }).closest('form')!.querySelector('button[type="submit"]')!);
 
     await waitFor(() => {
       expect(toast.error).toHaveBeenCalledWith(expect.stringContaining('E-mail ou senha incorretos'));
@@ -158,7 +158,7 @@ describe('AuthPage Phase 4B.5 (Password-based Login & Signup Flow)', () => {
     fireEvent.change(screen.getByPlaceholderText('seu@email.com'), { target: { value: 'test@example.com' } });
     fireEvent.change(screen.getByPlaceholderText('••••••••'), { target: { value: 'short' } });
     fireEvent.change(screen.getByPlaceholderText('Repita sua senha'), { target: { value: 'short' } });
-    fireEvent.click(screen.getByRole('button', { name: /^Criar conta$/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Criar conta/ }).closest('form')!.querySelector('button[type="submit"]')!);
 
     await waitFor(() => {
       expect(toast.error).toHaveBeenCalledWith(expect.stringContaining('pelo menos 8 caracteres'));
@@ -174,7 +174,7 @@ describe('AuthPage Phase 4B.5 (Password-based Login & Signup Flow)', () => {
     fireEvent.change(screen.getByPlaceholderText('seu@email.com'), { target: { value: 'test@example.com' } });
     fireEvent.change(screen.getByPlaceholderText('••••••••'), { target: { value: 'password123' } });
     fireEvent.change(screen.getByPlaceholderText('Repita sua senha'), { target: { value: 'password123' } });
-    fireEvent.click(screen.getByRole('button', { name: /^Criar conta$/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Criar conta/ }).closest('form')!.querySelector('button[type="submit"]')!);
 
     await waitFor(() => {
       expect(supabase.functions.invoke).toHaveBeenCalledWith('signup-request-otp', {
@@ -201,7 +201,7 @@ describe('AuthPage Phase 4B.5 (Password-based Login & Signup Flow)', () => {
     fireEvent.change(screen.getByPlaceholderText('seu@email.com'), { target: { value: 'test@example.com' } });
     fireEvent.change(screen.getByPlaceholderText('••••••••'), { target: { value: 'password123' } });
     fireEvent.change(screen.getByPlaceholderText('Repita sua senha'), { target: { value: 'password123' } });
-    fireEvent.click(screen.getByRole('button', { name: /^Criar conta$/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Criar conta/ }).closest('form')!.querySelector('button[type="submit"]')!);
 
     await waitFor(() => {
       expect(screen.getByText(/Verifique seu e-mail/i)).toBeDefined();
@@ -242,7 +242,7 @@ describe('AuthPage Phase 4B.5 (Password-based Login & Signup Flow)', () => {
     fireEvent.change(screen.getByPlaceholderText('seu@email.com'), { target: { value: 'test@example.com' } });
     fireEvent.change(screen.getByPlaceholderText('••••••••'), { target: { value: 'password123' } });
     fireEvent.change(screen.getByPlaceholderText('Repita sua senha'), { target: { value: 'password123' } });
-    fireEvent.click(screen.getByRole('button', { name: /^Criar conta$/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Criar conta/ }).closest('form')!.querySelector('button[type="submit"]')!);
 
     await waitFor(() => {
       const resendBtn = screen.getByRole('button', { name: /Reenviar e-mail/i });
@@ -269,7 +269,7 @@ describe('AuthPage Phase 4B.5 (Password-based Login & Signup Flow)', () => {
     fireEvent.change(screen.getByPlaceholderText('seu@email.com'), { target: { value: 'test@example.com' } });
     fireEvent.change(screen.getByPlaceholderText('••••••••'), { target: { value: 'password123' } });
     fireEvent.change(screen.getByPlaceholderText('Repita sua senha'), { target: { value: 'password123' } });
-    fireEvent.click(screen.getByRole('button', { name: /^Criar conta$/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Criar conta/ }).closest('form')!.querySelector('button[type="submit"]')!);
 
     await waitFor(() => {
       expect(screen.getByText(/E-mail já cadastrado/i)).toBeDefined();
