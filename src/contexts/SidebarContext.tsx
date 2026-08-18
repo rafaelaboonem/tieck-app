@@ -10,11 +10,15 @@ const SidebarContext = createContext<SidebarContextType | undefined>(undefined);
 
 export function SidebarProvider({ children }: { children: ReactNode }) {
   const isMobile = useIsMobile();
+  // Initialize with a state that doesn't conflict with the final resolved state
+  // We'll use an effect to sync it as soon as isMobile is resolved.
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
   useEffect(() => {
-    if (isMobile) {
+    if (isMobile === true) {
       setSidebarOpen(false);
+    } else if (isMobile === false) {
+      setSidebarOpen(true);
     }
   }, [isMobile]);
 
@@ -24,6 +28,7 @@ export function SidebarProvider({ children }: { children: ReactNode }) {
     </SidebarContext.Provider>
   );
 }
+
 
 export function useSidebar() {
   const context = useContext(SidebarContext);
