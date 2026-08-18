@@ -1,4 +1,4 @@
-import { VerifyPayload, Decision, VerificationResult, PublishedBlock, CameraVerification, CameraVerificationPolicyV1 } from './schema';
+import { VerifyPayload, Decision, VerificationResult, PublishedBlock, CameraVerification, CameraVerificationPolicyV1, CameraReferenceVerification } from './schema';
 import { createHash } from 'crypto';
 import { validateImageBuffer } from './image-validation';
 import { evaluateGate } from './gate';
