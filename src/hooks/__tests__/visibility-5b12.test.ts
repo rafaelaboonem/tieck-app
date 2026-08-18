@@ -58,7 +58,7 @@ describe("Phase 5B.12 - Viewer Navigation & Global Search", () => {
     const { result } = renderHook(() => useWorkspaceRBAC("ws-123"));
     
     // Condição da UI: !(workspaceStatus === "workspace" && isWsViewer)
-    const workspaceStatus = "personal"; // Sentinela de contexto pessoal
+    const workspaceStatus = "personal" as string; // Bypass TS overlap check
     const isWsViewer = result.current.isViewer;
     const shouldShowCreate = !(workspaceStatus === "workspace" && isWsViewer);
     
