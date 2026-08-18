@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Search, Sparkles, Settings, Plus, HelpCircle, Pencil, Link2, Trash2, MoreHorizontal, Copy as CopyIcon, CheckSquare, X, Menu } from "lucide-react";
+import { Search, Sparkles, Settings, Plus, HelpCircle, Pencil, Link2, Trash2, MoreHorizontal, Copy as CopyIcon, CheckSquare, X, Menu, User } from "lucide-react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { useWorkspaceRBAC } from "@/hooks/useWorkspaceRBAC";
 import { useSidebar } from "@/contexts/SidebarContext";
