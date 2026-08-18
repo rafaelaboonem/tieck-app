@@ -86,6 +86,75 @@ export function CameraSettingsPanel({ block, isOpen, onClose, onSave, isCompilin
     setHasChanges(false);
   };
 
+  const [isUploading, setIsUploading] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function loadPreview() {
+      if (draft.cameraReference && draft.mode === 'reference' && isOpen) {
+        try {
+          const { data: session } = await supabase.auth.getSession();
+          if (!session.session?.access_token) return;
+
+          const res = await fetch(`/api/camera-ai/reference-image/preview?checklistId=${checklistId}&storagePath=${encodeURIComponent(draft.cameraReference.storagePath)}`, {
+            headers: {
+              'Authorization': `Bearer ${session.session.access_token}`
+            }
+          });
+          if (res.ok) {
+            const data = await res.json();
+            setPreviewUrl(data.signedUrl);
+          }
+        } catch (e) {
+          console.error("Preview error:", e);
+        }
+      } else {
+        setPreviewUrl(null);
+      }
+    }
+    loadPreview();
+  }, [draft.cameraReference, draft.mode, checklistId, isOpen]);
+
+  const handleUploadReference = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploading(true);
+    try {
+      const { data: session } = await supabase.auth.getSession();
+      if (!session.session?.access_token) throw new Error("Não autenticado");
+
+      const formData = new FormData();
+      formData.append('checklistId', checklistId);
+      formData.append('blockId', block.id);
+      formData.append('reference', file);
+
+      const res = await fetch('/api/camera-ai/reference-image', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.session.access_token}`
+        },
+        body: formData
+      });
+
+      if (!res.ok) {
+        const errorText = await res.text();
+        throw new Error(errorText || "Falha no upload");
+      }
+
+      const metadata = await res.json();
+      handleFieldChange('cameraReference', metadata);
+      toast.success("Foto de referência adicionada!");
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err.message || "Erro ao fazer upload da referência");
+    } finally {
+      setIsUploading(false);
+      // Clear input
+      e.target.value = '';
+    }
+  };
+
   const requestClose = () => {
     if (hasChanges) {
       if (!confirm("Descartar alterações não salvas?")) return;
