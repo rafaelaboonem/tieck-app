@@ -2935,22 +2935,28 @@ export function NovoChecklistPage() {
               </button>
             </>
           )}
-          <button
-            type="button"
-            onClick={() => setIsSettingsOpen(true)}
-            className="hover:text-neutral-900 flex items-center gap-1 sm:gap-1.5"
-          >
-            <Settings className="w-4 h-4" />
-            <span className="hidden sm:inline">Configuração</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setIsCustomizeOpen((v) => !v)}
-            className={`hover:text-neutral-900 px-2 py-1 rounded-md ${isCustomizeOpen ? "ring-1 ring-blue-400 text-neutral-900" : ""}`}
-          >
-            <span className="hidden sm:inline">Personalizar</span>
-            <span className="sm:hidden"><Palette className="w-4 h-4" /></span>
-          </button>
+          
+          {canManage && (
+            <>
+              <button
+                type="button"
+                onClick={() => setIsSettingsOpen(true)}
+                className="hover:text-neutral-900 flex items-center gap-1 sm:gap-1.5"
+              >
+                <Settings className="w-4 h-4" />
+                <span className="hidden sm:inline">Configuração</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsCustomizeOpen((v) => !v)}
+                className={`hover:text-neutral-900 px-2 py-1 rounded-md ${isCustomizeOpen ? "ring-1 ring-blue-400 text-neutral-900" : ""}`}
+              >
+                <span className="hidden sm:inline">Personalizar</span>
+                <span className="sm:hidden"><Palette className="w-4 h-4" /></span>
+              </button>
+            </>
+          )}
+
           <button 
             type="button"
             onClick={() => setIsPreviewMode(true)}
@@ -2959,14 +2965,17 @@ export function NovoChecklistPage() {
             <span className="hidden sm:inline">Pré-visualizar</span>
             <span className="sm:hidden"><Eye className="w-4 h-4" /></span>
           </button>
-          <button 
-            type="button"
-            onClick={() => saveChecklist(undefined, true)}
-            disabled={isPublishing}
-            className="text-xs font-bold bg-[#FF007F] text-white rounded-md px-2.5 sm:px-4 py-1.5 hover:opacity-90 transition-opacity disabled:opacity-50 shadow-sm"
-          >
-            {isPublishing ? "Publicando..." : "Publicar"}
-          </button>
+
+          {canManage && (
+            <button 
+              type="button"
+              onClick={() => saveChecklist(undefined, true)}
+              disabled={isPublishing}
+              className="text-xs font-bold bg-[#FF007F] text-white rounded-md px-2.5 sm:px-4 py-1.5 hover:opacity-90 transition-opacity disabled:opacity-50 shadow-sm"
+            >
+              {isPublishing ? "Publicando..." : "Publicar"}
+            </button>
+          )}
         </div>
       </header>
 
