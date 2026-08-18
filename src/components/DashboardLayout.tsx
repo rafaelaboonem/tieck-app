@@ -247,13 +247,13 @@ import logoIcon from "../assets/local/logo-tieck.webp";
       { icon: User, label: "Minha conta", to: "/configuracoes" }
     ];
 
-    const workspaceNav: NavItem[] = [
+    const workspaceNav: NavItem[] = ([
       { icon: Home, label: "Início", to: "/inicio" },
       { icon: BarChart3, label: "Painel", to: "/painel", permission: "admin" },
       { icon: Layout, label: "Organizar", to: "/organizar", permission: "manage" },
       { icon: Globe, label: "Domínios", to: "/dominios", permission: "admin" },
       { icon: Users, label: "Equipe", to: "/equipe", permission: "admin" },
-    ].filter(item => {
+    ] as const).filter((item: any) => {
       if (!item.permission) return true;
       if (item.permission === 'admin') return isWsAdmin;
       if (item.permission === 'manage') return canWsManage;
