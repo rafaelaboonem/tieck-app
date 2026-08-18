@@ -42,7 +42,7 @@ export function Dashboard() {
   const { sidebarOpen } = useSidebar();
   const { currentWorkspace, workspaceStatus } = useWorkspace();
   const { user, loading: authLoading, needsEmailConfirmation } = useAuth();
-  const { canManage, isViewer, loading: rbacLoading } = useWorkspaceRBAC(currentWorkspace?.id);
+  const { canManage, isViewer, workspaceMemberId, role, loading: rbacLoading } = useWorkspaceRBAC(currentWorkspace?.id);
   const navigate = useNavigate();
   const [glow, setGlow] = useState(false);
   const [checklists, setChecklists] = useState<any[]>([]);
@@ -67,13 +67,20 @@ export function Dashboard() {
     const fetchChecklists = async () => {
       // Bloqueio determinístico: se estamos num workspace, ESPERAR RBAC resolver.
       // Se rbacLoading for true, não iniciamos a query para evitar leak de dados (fail-closed).
-      if (workspaceStatus === 'loading' || !user?.id || (workspaceStatus === 'workspace' && rbacLoading)) {
-        // Se mudamos de contexto e ainda está carregando, limpamos para evitar stale data
-        if (workspaceStatus === 'workspace' && rbacLoading) {
-           setChecklists([]);
-        }
+      // Fail-closed: se estamos num workspace, ESPERAR RBAC resolver.
+      if (workspaceStatus === 'workspace' && (rbacLoading || !user?.id)) {
+        setChecklists([]);
         return;
       }
+
+      // Fail-closed: se o RBAC resolveu e não temos role, bloquear.
+      if (workspaceStatus === 'workspace' && !rbacLoading && !role) {
+        setChecklists([]);
+        setIsLoading(false);
+        return;
+      }
+      
+      if (!user?.id) return;
       
       setIsLoading(true);
       
@@ -83,45 +90,29 @@ export function Dashboard() {
         if (workspaceStatus === 'workspace' && currentWorkspace) {
           query = query.eq("workspace_id", currentWorkspace.id);
           
-          // FASE 5B.6/7: Restrição para Viewer no Workspace (Fail-closed)
+          // FASE 5B.10: Restrição para Viewer usando RPC canônica (Fail-closed)
           if (isViewer) {
-            const { data: memberData, error: memberError } = await supabase
-              .from("workspace_members")
-              .select("id")
-              .eq("workspace_id", currentWorkspace.id)
-              .eq("user_id", user.id)
-              .eq("status", "active")
-              .maybeSingle();
-
-            if (memberError) {
-              console.error("[inicio] Erro ao resolver membro:", memberError);
+            if (!workspaceMemberId) {
               setChecklists([]);
               setIsLoading(false);
               return;
             }
 
-            if (memberData) {
-              const { data: assignments, error: assignError } = await supabase
-                .from("checklist_assignments")
-                .select("checklist_id")
-                .eq("workspace_member_id", memberData.id);
-              
-              if (assignError) {
-                console.error("[inicio] Erro ao buscar atribuições:", assignError);
-                setChecklists([]);
-                setIsLoading(false);
-                return;
-              }
+            const { data: assignments, error: assignError } = await supabase.rpc('list_my_checklist_assignments', {
+              p_workspace_id: currentWorkspace.id
+            });
+            
+            if (assignError) {
+              console.error("[inicio] Erro ao buscar atribuições canônicas:", assignError);
+              setChecklists([]);
+              setIsLoading(false);
+              return;
+            }
 
-              const assignedIds = assignments?.map(a => a.checklist_id) || [];
-              
-              if (assignedIds.length > 0) {
-                query = query.in("id", assignedIds);
-              } else {
-                setChecklists([]);
-                setIsLoading(false);
-                return;
-              }
+            const assignedIds = assignments?.map((a: any) => a.checklist_id) || [];
+            
+            if (assignedIds.length > 0) {
+              query = query.in("id", assignedIds);
             } else {
               setChecklists([]);
               setIsLoading(false);

@@ -2576,6 +2576,14 @@ export type Database = {
       }
       generate_dataset_public_id: { Args: never; Returns: string }
       generate_short_slug: { Args: { length?: number }; Returns: string }
+      get_my_workspace_access: {
+        Args: { p_workspace_id: string }
+        Returns: {
+          is_owner: boolean
+          role: Database["public"]["Enums"]["app_role"]
+          workspace_member_id: string
+        }[]
+      }
       get_public_checklist: {
         Args: { p_public_id: string }
         Returns: {
@@ -2623,6 +2631,18 @@ export type Database = {
           migrated: number
           skipped: number
           unmapped: number
+        }[]
+      }
+      list_my_checklist_assignments: {
+        Args: { p_workspace_id: string }
+        Returns: {
+          assignment_id: string
+          checklist_id: string
+          completed_at: string
+          due_at: string
+          is_primary: boolean
+          overdue_notified_at: string
+          workspace_member_id: string
         }[]
       }
       list_my_workspaces: {
