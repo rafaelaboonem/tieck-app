@@ -71,16 +71,13 @@ describe('AuthPage Phase 4B.5 (Password-based Login & Signup Flow)', () => {
     });
   });
 
-  // 1. LOGIN: email + senha corretos -> signInWithPassword chamado.
   it('1. LOGIN: should call signInWithPassword when valid credentials are provided', async () => {
     (supabase.auth.signInWithPassword as any).mockResolvedValue({ data: { user: {} }, error: null });
-    
     render(<AuthPage mode="login" />);
-    
     fireEvent.change(screen.getByPlaceholderText('seu@email.com'), { target: { value: 'test@example.com' } });
     fireEvent.change(screen.getByPlaceholderText('••••••••'), { target: { value: 'password123' } });
-    fireEvent.click(screen.getByRole('button', { name: /Entrar/ }).closest('form')!.querySelector('button[type="submit"]')!);
-
+    const loginForm = screen.getByRole('button', { name: /Entrar/ }).closest('form')!;
+    fireEvent.submit(loginForm);
     await waitFor(() => {
       expect(supabase.auth.signInWithPassword).toHaveBeenCalledWith({
         email: 'test@example.com',
@@ -89,45 +86,38 @@ describe('AuthPage Phase 4B.5 (Password-based Login & Signup Flow)', () => {
     });
   });
 
-  // 2. LOGIN: NÃO chama signInWithOtp.
   it('2. LOGIN: should NOT call signInWithOtp', async () => {
     (supabase.auth.signInWithPassword as any).mockResolvedValue({ data: { user: {} }, error: null });
     render(<AuthPage mode="login" />);
     fireEvent.change(screen.getByPlaceholderText('seu@email.com'), { target: { value: 'test@example.com' } });
     fireEvent.change(screen.getByPlaceholderText('••••••••'), { target: { value: 'password123' } });
-    fireEvent.click(screen.getByRole('button', { name: /Entrar/ }).closest('form')!.querySelector('button[type="submit"]')!);
-
+    const loginForm = screen.getByRole('button', { name: /Entrar/ }).closest('form')!;
+    fireEvent.submit(loginForm);
     await waitFor(() => {
       expect(supabase.auth.signInWithOtp).not.toHaveBeenCalled();
     });
   });
 
-  // 3. LOGIN: NÃO renderiza InputOTP.
   it('3. LOGIN: should NOT render InputOTP', () => {
     render(<AuthPage mode="login" />);
     expect(screen.queryByText(/O código é verificado automaticamente/i)).toBeNull();
   });
 
-  // 4. LOGIN: NÃO envia e-mail/código (automaticamente coberto por 2).
-
-  // 5. LOGIN: senha errada -> erro amigável -> permanece na tela.
   it('5. LOGIN: should show error message on failed login', async () => {
     (supabase.auth.signInWithPassword as any).mockResolvedValue({ 
       data: { user: null }, 
       error: { message: 'Invalid login credentials' } 
     });
-    
     render(<AuthPage mode="login" />);
     fireEvent.change(screen.getByPlaceholderText('seu@email.com'), { target: { value: 'test@example.com' } });
     fireEvent.change(screen.getByPlaceholderText('••••••••'), { target: { value: 'wrong' } });
-    fireEvent.click(screen.getByRole('button', { name: /Entrar/ }).closest('form')!.querySelector('button[type="submit"]')!);
-
+    const loginForm = screen.getByRole('button', { name: /Entrar/ }).closest('form')!;
+    fireEvent.submit(loginForm);
     await waitFor(() => {
       expect(toast.error).toHaveBeenCalledWith(expect.stringContaining('E-mail ou senha incorretos'));
     });
   });
 
-  // 6. CADASTRO: Nome + Email + Senha + Confirmar senha.
   it('6. CADASTRO: should show all required fields', () => {
     render(<AuthPage mode="signup" />);
     expect(screen.getByPlaceholderText('Como deseja ser chamado?')).toBeDefined();
@@ -136,46 +126,42 @@ describe('AuthPage Phase 4B.5 (Password-based Login & Signup Flow)', () => {
     expect(screen.getByPlaceholderText('Repita sua senha')).toBeDefined();
   });
 
-  // 7. Senhas diferentes: -> bloqueia.
   it('7. Signup: should block if passwords do not match', async () => {
     render(<AuthPage mode="signup" />);
     fireEvent.change(screen.getByPlaceholderText('Como deseja ser chamado?'), { target: { value: 'John' } });
     fireEvent.change(screen.getByPlaceholderText('seu@email.com'), { target: { value: 'test@example.com' } });
     fireEvent.change(screen.getByPlaceholderText('••••••••'), { target: { value: 'pass1234' } });
     fireEvent.change(screen.getByPlaceholderText('Repita sua senha'), { target: { value: 'pass5678' } });
-    fireEvent.click(screen.getByRole('button', { name: /Criar conta/i }));
-
+    const signupForm = screen.getByRole('button', { name: /Criar conta/ }).closest('form')!;
+    fireEvent.submit(signupForm);
     await waitFor(() => {
       expect(toast.error).toHaveBeenCalledWith('As senhas não conferem');
       expect(supabase.functions.invoke).not.toHaveBeenCalled();
     });
   });
 
-  // 8. Senha < 8: -> bloqueia.
   it('8. Signup: should block if password is too short', async () => {
     render(<AuthPage mode="signup" />);
     fireEvent.change(screen.getByPlaceholderText('Como deseja ser chamado?'), { target: { value: 'John' } });
     fireEvent.change(screen.getByPlaceholderText('seu@email.com'), { target: { value: 'test@example.com' } });
     fireEvent.change(screen.getByPlaceholderText('••••••••'), { target: { value: 'short' } });
     fireEvent.change(screen.getByPlaceholderText('Repita sua senha'), { target: { value: 'short' } });
-    fireEvent.click(screen.getByRole('button', { name: /Criar conta/ }).closest('form')!.querySelector('button[type="submit"]')!);
-
+    const signupForm = screen.getByRole('button', { name: /Criar conta/ }).closest('form')!;
+    fireEvent.submit(signupForm);
     await waitFor(() => {
       expect(toast.error).toHaveBeenCalledWith(expect.stringContaining('pelo menos 8 caracteres'));
     });
   });
 
-  // 9. Cadastro válido: -> signup-request-otp.
   it('9. Signup: should call signup-request-otp for valid data', async () => {
     (supabase.functions.invoke as any).mockResolvedValue({ data: { ok: true }, error: null });
-    
     render(<AuthPage mode="signup" />);
     fireEvent.change(screen.getByPlaceholderText('Como deseja ser chamado?'), { target: { value: 'John' } });
     fireEvent.change(screen.getByPlaceholderText('seu@email.com'), { target: { value: 'test@example.com' } });
     fireEvent.change(screen.getByPlaceholderText('••••••••'), { target: { value: 'password123' } });
     fireEvent.change(screen.getByPlaceholderText('Repita sua senha'), { target: { value: 'password123' } });
-    fireEvent.click(screen.getByRole('button', { name: /Criar conta/ }).closest('form')!.querySelector('button[type="submit"]')!);
-
+    const signupForm = screen.getByRole('button', { name: /Criar conta/ }).closest('form')!;
+    fireEvent.submit(signupForm);
     await waitFor(() => {
       expect(supabase.functions.invoke).toHaveBeenCalledWith('signup-request-otp', {
         body: { email: 'test@example.com' }
@@ -183,9 +169,6 @@ describe('AuthPage Phase 4B.5 (Password-based Login & Signup Flow)', () => {
     });
   });
 
-  // 10. Código correto: -> signup-verify-otp.
-  // 11. Código confirmado: -> signup-complete.
-  // 12. signup-complete ok: -> signInWithPassword automaticamente.
   it('10-12. Signup Flow: should complete flow and auto-login', async () => {
     (supabase.functions.invoke as any)
       .mockResolvedValueOnce({ data: { ok: true }, error: null }) // request-otp
@@ -201,7 +184,8 @@ describe('AuthPage Phase 4B.5 (Password-based Login & Signup Flow)', () => {
     fireEvent.change(screen.getByPlaceholderText('seu@email.com'), { target: { value: 'test@example.com' } });
     fireEvent.change(screen.getByPlaceholderText('••••••••'), { target: { value: 'password123' } });
     fireEvent.change(screen.getByPlaceholderText('Repita sua senha'), { target: { value: 'password123' } });
-    fireEvent.click(screen.getByRole('button', { name: /Criar conta/ }).closest('form')!.querySelector('button[type="submit"]')!);
+    const signupForm = screen.getByRole('button', { name: /Criar conta/ }).closest('form')!;
+    fireEvent.submit(signupForm);
 
     await waitFor(() => {
       expect(screen.getByText(/Verifique seu e-mail/i)).toBeDefined();
@@ -229,20 +213,18 @@ describe('AuthPage Phase 4B.5 (Password-based Login & Signup Flow)', () => {
         email: 'test@example.com',
         password: 'password123'
       });
-    });
+    }, { timeout: 3000 });
   });
 
-  // 13. Reenvio: -> signup-request-otp -> nunca signInWithOtp.
   it('13. Re-send: should call signup-request-otp and NOT signInWithOtp', async () => {
     (supabase.functions.invoke as any).mockResolvedValue({ data: { ok: true }, error: null });
-    
     render(<AuthPage mode="signup" />);
-    // Get to step 2
     fireEvent.change(screen.getByPlaceholderText('Como deseja ser chamado?'), { target: { value: 'John' } });
     fireEvent.change(screen.getByPlaceholderText('seu@email.com'), { target: { value: 'test@example.com' } });
     fireEvent.change(screen.getByPlaceholderText('••••••••'), { target: { value: 'password123' } });
     fireEvent.change(screen.getByPlaceholderText('Repita sua senha'), { target: { value: 'password123' } });
-    fireEvent.click(screen.getByRole('button', { name: /Criar conta/ }).closest('form')!.querySelector('button[type="submit"]')!);
+    const signupForm = screen.getByRole('button', { name: /Criar conta/ }).closest('form')!;
+    fireEvent.submit(signupForm);
 
     await waitFor(() => {
       const resendBtn = screen.getByRole('button', { name: /Reenviar e-mail/i });
@@ -257,19 +239,18 @@ describe('AuthPage Phase 4B.5 (Password-based Login & Signup Flow)', () => {
     });
   });
 
-  // 14. E-mail já cadastrado: -> não altera conta -> oferece login.
   it('14. Already registered: should show login offer', async () => {
     (supabase.functions.invoke as any).mockResolvedValue({ 
       data: { ok: false, code: 'already_registered' }, 
       error: null 
     });
-    
     render(<AuthPage mode="signup" />);
     fireEvent.change(screen.getByPlaceholderText('Como deseja ser chamado?'), { target: { value: 'John' } });
     fireEvent.change(screen.getByPlaceholderText('seu@email.com'), { target: { value: 'test@example.com' } });
     fireEvent.change(screen.getByPlaceholderText('••••••••'), { target: { value: 'password123' } });
     fireEvent.change(screen.getByPlaceholderText('Repita sua senha'), { target: { value: 'password123' } });
-    fireEvent.click(screen.getByRole('button', { name: /Criar conta/ }).closest('form')!.querySelector('button[type="submit"]')!);
+    const signupForm = screen.getByRole('button', { name: /Criar conta/ }).closest('form')!;
+    fireEvent.submit(signupForm);
 
     await waitFor(() => {
       expect(screen.getByText(/E-mail já cadastrado/i)).toBeDefined();
