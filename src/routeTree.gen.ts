@@ -32,6 +32,7 @@ import { Route as UnidadesUnitIdOperacaoRouteImport } from './routes/unidades.$u
 import { Route as ApiCameraAiVerifyRouteImport } from './routes/api/camera-ai/verify'
 import { Route as ApiCameraAiTestVerificationRouteImport } from './routes/api/camera-ai/test-verification'
 import { Route as ApiCameraAiSignedUrlRouteImport } from './routes/api/camera-ai/signed-url'
+import { Route as ApiCameraAiReferenceImageRouteImport } from './routes/api/camera-ai/reference-image'
 import { Route as ApiCameraAiCompilePolicyRouteImport } from './routes/api/camera-ai/compile-policy'
 import { Route as ApiTeamMembersUpdateRouteImport } from './routes/api/team/members/update'
 import { Route as ApiTeamInvitationsRevokeRouteImport } from './routes/api/team/invitations/revoke'
@@ -157,6 +158,12 @@ const ApiCameraAiSignedUrlRoute = ApiCameraAiSignedUrlRouteImport.update({
   path: '/api/camera-ai/signed-url',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiCameraAiReferenceImageRoute =
+  ApiCameraAiReferenceImageRouteImport.update({
+    id: '/api/camera-ai/reference-image',
+    path: '/api/camera-ai/reference-image',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiCameraAiCompilePolicyRoute =
   ApiCameraAiCompilePolicyRouteImport.update({
     id: '/api/camera-ai/compile-policy',
@@ -226,6 +233,7 @@ export interface FileRoutesByFullPath {
   '/convite/$token': typeof ConviteTokenRoute
   '/executar/$id': typeof ExecutarIdRoute
   '/api/camera-ai/compile-policy': typeof ApiCameraAiCompilePolicyRoute
+  '/api/camera-ai/reference-image': typeof ApiCameraAiReferenceImageRoute
   '/api/camera-ai/signed-url': typeof ApiCameraAiSignedUrlRoute
   '/api/camera-ai/test-verification': typeof ApiCameraAiTestVerificationRoute
   '/api/camera-ai/verify': typeof ApiCameraAiVerifyRoute
@@ -259,6 +267,7 @@ export interface FileRoutesByTo {
   '/convite/$token': typeof ConviteTokenRoute
   '/executar/$id': typeof ExecutarIdRoute
   '/api/camera-ai/compile-policy': typeof ApiCameraAiCompilePolicyRoute
+  '/api/camera-ai/reference-image': typeof ApiCameraAiReferenceImageRoute
   '/api/camera-ai/signed-url': typeof ApiCameraAiSignedUrlRoute
   '/api/camera-ai/test-verification': typeof ApiCameraAiTestVerificationRoute
   '/api/camera-ai/verify': typeof ApiCameraAiVerifyRoute
@@ -293,6 +302,7 @@ export interface FileRoutesById {
   '/convite/$token': typeof ConviteTokenRoute
   '/executar/$id': typeof ExecutarIdRoute
   '/api/camera-ai/compile-policy': typeof ApiCameraAiCompilePolicyRoute
+  '/api/camera-ai/reference-image': typeof ApiCameraAiReferenceImageRoute
   '/api/camera-ai/signed-url': typeof ApiCameraAiSignedUrlRoute
   '/api/camera-ai/test-verification': typeof ApiCameraAiTestVerificationRoute
   '/api/camera-ai/verify': typeof ApiCameraAiVerifyRoute
@@ -328,6 +338,7 @@ export interface FileRouteTypes {
     | '/convite/$token'
     | '/executar/$id'
     | '/api/camera-ai/compile-policy'
+    | '/api/camera-ai/reference-image'
     | '/api/camera-ai/signed-url'
     | '/api/camera-ai/test-verification'
     | '/api/camera-ai/verify'
@@ -361,6 +372,7 @@ export interface FileRouteTypes {
     | '/convite/$token'
     | '/executar/$id'
     | '/api/camera-ai/compile-policy'
+    | '/api/camera-ai/reference-image'
     | '/api/camera-ai/signed-url'
     | '/api/camera-ai/test-verification'
     | '/api/camera-ai/verify'
@@ -394,6 +406,7 @@ export interface FileRouteTypes {
     | '/convite/$token'
     | '/executar/$id'
     | '/api/camera-ai/compile-policy'
+    | '/api/camera-ai/reference-image'
     | '/api/camera-ai/signed-url'
     | '/api/camera-ai/test-verification'
     | '/api/camera-ai/verify'
@@ -428,6 +441,7 @@ export interface RootRouteChildren {
   ConviteTokenRoute: typeof ConviteTokenRoute
   ExecutarIdRoute: typeof ExecutarIdRoute
   ApiCameraAiCompilePolicyRoute: typeof ApiCameraAiCompilePolicyRoute
+  ApiCameraAiReferenceImageRoute: typeof ApiCameraAiReferenceImageRoute
   ApiCameraAiSignedUrlRoute: typeof ApiCameraAiSignedUrlRoute
   ApiCameraAiTestVerificationRoute: typeof ApiCameraAiTestVerificationRoute
   ApiCameraAiVerifyRoute: typeof ApiCameraAiVerifyRoute
@@ -604,6 +618,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiCameraAiSignedUrlRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/camera-ai/reference-image': {
+      id: '/api/camera-ai/reference-image'
+      path: '/api/camera-ai/reference-image'
+      fullPath: '/api/camera-ai/reference-image'
+      preLoaderRoute: typeof ApiCameraAiReferenceImageRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/camera-ai/compile-policy': {
       id: '/api/camera-ai/compile-policy'
       path: '/api/camera-ai/compile-policy'
@@ -684,6 +705,7 @@ const rootRouteChildren: RootRouteChildren = {
   ConviteTokenRoute: ConviteTokenRoute,
   ExecutarIdRoute: ExecutarIdRoute,
   ApiCameraAiCompilePolicyRoute: ApiCameraAiCompilePolicyRoute,
+  ApiCameraAiReferenceImageRoute: ApiCameraAiReferenceImageRoute,
   ApiCameraAiSignedUrlRoute: ApiCameraAiSignedUrlRoute,
   ApiCameraAiTestVerificationRoute: ApiCameraAiTestVerificationRoute,
   ApiCameraAiVerifyRoute: ApiCameraAiVerifyRoute,
