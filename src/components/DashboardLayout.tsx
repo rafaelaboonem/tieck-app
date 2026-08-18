@@ -114,155 +114,124 @@ import logoIcon from "../assets/local/logo-tieck.webp";
     const location = useLocation();
 
      useEffect(() => {
-      const fetchData = async () => {
-          if (user?.id) {
-            // Contagem real de membros ativos
-            if (currentWorkspace?.id) {
-              const { count, error: countError } = await supabase
-                .from("workspace_members")
-                .select("*", { count: 'exact', head: true })
-                .eq("workspace_id", currentWorkspace.id);
-              
-              if (!countError && count !== null) {
-                setMemberCount(count);
-              } else {
-                setMemberCount(0);
-              }
-            } else {
-              setMemberCount(0);
-            }
+       const fetchData = async () => {
+         // Fail-closed: Se estamos num workspace e o RBAC ainda está carregando, 
+         // limpamos estados contextuais e bloqueamos a execução.
+         if (workspaceStatus === 'workspace' && rbacLoading) {
+           setRecentChecklists([]);
+           setAllWorkspacesChecklists([]);
+           return;
+         }
 
+         if (user?.id) {
+           // 1. Contagem de membros (apenas se temos workspace e RBAC resolvido)
+           if (currentWorkspace?.id) {
+             const { count, error: countError } = await supabase
+               .from("workspace_members")
+               .select("*", { count: 'exact', head: true })
+               .eq("workspace_id", currentWorkspace.id);
+             
+             if (!countError && count !== null) {
+               setMemberCount(count);
+             } else {
+               setMemberCount(0);
+             }
+           } else {
+             setMemberCount(0);
+           }
 
-            // Fetch profile
-            const { data: profileData } = await supabase
-              .from("profiles")
-              .select("display_name, avatar_url, is_admin, plan_type")
-              .eq("id", user.id)
-              .maybeSingle(); // Use maybeSingle to prevent crash if profile doesn't exist yet
-            
-            if (profileData) {
-              setProfile({ ...profileData, email: user.email ?? null });
-            } else {
-              // Fallback identitário imediato para usuários autenticados sem profile
-              setProfile({
-                display_name: user.email?.split('@')[0] || "Usuário",
-                avatar_url: null,
-                is_admin: false,
-                plan_type: "free",
-                email: user.email ?? null
-              });
-            }
+           // 2. Perfil
+           const { data: profileData } = await supabase
+             .from("profiles")
+             .select("display_name, avatar_url, is_admin, plan_type")
+             .eq("id", user.id)
+             .maybeSingle();
+           
+           if (profileData) {
+             setProfile({ ...profileData, email: user.email ?? null });
+           } else {
+             setProfile({
+               display_name: user.email?.split('@')[0] || "Usuário",
+               avatar_url: null,
+               is_admin: false,
+               plan_type: "free",
+               email: user.email ?? null
+             });
+           }
 
-           // Check for published checklists
+           // 3. Flags globais (pode carregar independente do workspace)
            const { data: checklistsData } = await supabase
              .from("checklists")
              .select("id")
              .eq("user_id", user.id)
              .limit(1);
-           
            setHasChecklists(!!(checklistsData && checklistsData.length > 0));
 
-             // Fetch recent checklists - contextual
-             let recentQuery = supabase.from("checklists").select("id, title");
+           // 4. Resolução de Acesso Contextual (Recentes e Busca)
+           let contextualQuery = supabase.from("checklists").select("id, title, workspace_id, updated_at");
+           
+           if (workspaceStatus === 'workspace' && currentWorkspace?.id) {
+             contextualQuery = contextualQuery.eq("workspace_id", currentWorkspace.id);
              
-             if (workspaceStatus === 'workspace' && currentWorkspace?.id) {
-               recentQuery = recentQuery.eq("workspace_id", currentWorkspace.id);
-               
-               // FASE 5B.6: Restrição para Viewer em Recentes
-               if (isWsViewer) {
-                 const { data: memberData } = await supabase
-                   .from("workspace_members")
-                   .select("id")
-                   .eq("workspace_id", currentWorkspace.id)
-                   .eq("user_id", user.id)
-                   .eq("status", "active")
-                   .maybeSingle();
+             if (isWsViewer) {
+               // Helper interno para resolver assignments de Viewer uma única vez
+               const { data: memberData } = await supabase
+                 .from("workspace_members")
+                 .select("id")
+                 .eq("workspace_id", currentWorkspace.id)
+                 .eq("user_id", user.id)
+                 .eq("status", "active")
+                 .maybeSingle();
 
-                 if (memberData) {
-                   const { data: assignments } = await supabase
-                     .from("checklist_assignments")
-                     .select("checklist_id")
-                     .eq("workspace_member_id", memberData.id);
-                   
-                   const assignedIds = assignments?.map(a => a.checklist_id) || [];
-                   if (assignedIds.length > 0) {
-                     recentQuery = recentQuery.in("id", assignedIds);
-                   } else {
-                     setRecentChecklists([]);
-                     return;
-              }
-
-              // FASE 5B.6: Carregar todos os checklists permitidos para a Busca/CommandDialog
-              let searchContextQuery = supabase.from("checklists").select("id, title, workspace_id");
-              
-              if (workspaceStatus === 'workspace' && currentWorkspace?.id) {
-                searchContextQuery = searchContextQuery.eq("workspace_id", currentWorkspace.id);
-                
-                if (isWsViewer) {
-                  const { data: memberData } = await supabase
-                    .from("workspace_members")
-                    .select("id")
-                    .eq("workspace_id", currentWorkspace.id)
-                    .eq("user_id", user.id)
-                    .eq("status", "active")
-                    .maybeSingle();
-
-                  if (memberData) {
-                    const { data: assignments } = await supabase
-                      .from("checklist_assignments")
-                      .select("checklist_id")
-                      .eq("workspace_member_id", memberData.id);
-                    
-                    const assignedIds = assignments?.map(a => a.checklist_id) || [];
-                    if (assignedIds.length > 0) {
-                      searchContextQuery = searchContextQuery.in("id", assignedIds);
-                    } else {
-                      setAllWorkspacesChecklists([]);
-                      return;
-                    }
-                  } else {
-                    setAllWorkspacesChecklists([]);
-                    return;
-                  }
-                }
-              } else {
-                searchContextQuery = searchContextQuery.is("workspace_id", null)
-                  .eq("user_id", user.id);
-              }
-
-              const { data: searchData } = await searchContextQuery.limit(50);
-              setAllWorkspacesChecklists(searchData || []);
+               if (memberData) {
+                 const { data: assignments } = await supabase
+                   .from("checklist_assignments")
+                   .select("checklist_id")
+                   .eq("workspace_member_id", memberData.id);
+                 
+                 const assignedIds = assignments?.map(a => a.checklist_id) || [];
+                 if (assignedIds.length > 0) {
+                   contextualQuery = contextualQuery.in("id", assignedIds);
                  } else {
                    setRecentChecklists([]);
+                   setAllWorkspacesChecklists([]);
                    return;
                  }
+               } else {
+                 setRecentChecklists([]);
+                 setAllWorkspacesChecklists([]);
+                 return;
                }
-             } else {
-               recentQuery = recentQuery.is("workspace_id", null)
-                 .eq("user_id", user.id);
              }
+           } else {
+             // Contexto Pessoal
+             contextualQuery = contextualQuery.is("workspace_id", null).eq("user_id", user.id);
+           }
 
-             const { data: recentData } = await recentQuery
-               .order("updated_at", { ascending: false })
-               .limit(3);
-             
-              if (recentData) {
-                setRecentChecklists(recentData);
-              } else {
-                setRecentChecklists([]);
-              }
-          } else {
-            setProfile(null);
-            setRecentChecklists([]);
-            setHasChecklists(false);
-          }
-        };
+           // Executar buscas baseadas na query base filtrada
+           const [{ data: recentData }, { data: allData }] = await Promise.all([
+             contextualQuery.order("updated_at", { ascending: false }).limit(3),
+             // Note: a query de busca pode ser mais ampla se necessário, mas respeitando o filtro base
+             contextualQuery.limit(50) 
+           ]);
+
+           setRecentChecklists(recentData || []);
+           setAllWorkspacesChecklists(allData || []);
+
+         } else {
+           setProfile(null);
+           setRecentChecklists([]);
+           setAllWorkspacesChecklists([]);
+           setHasChecklists(false);
+         }
+       };
+
        fetchData();
- 
+
        const handleOpenSearch = () => setSearchOpen(true);
        window.addEventListener('open-search', handleOpenSearch);
        return () => window.removeEventListener('open-search', handleOpenSearch);
-     }, [user?.id, currentWorkspace?.id, workspaceStatus, isWsViewer]);
+     }, [user?.id, currentWorkspace?.id, workspaceStatus, isWsViewer, rbacLoading]);
 
     // Gate: usuário logado com e-mail não confirmado não acessa o app.
     useEffect(() => {
