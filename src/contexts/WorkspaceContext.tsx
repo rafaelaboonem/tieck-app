@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, ReactNode, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 
 export interface Workspace {
   id: string;
@@ -23,29 +24,30 @@ interface WorkspaceContextType {
 
 const WorkspaceContext = createContext<WorkspaceContextType | undefined>(undefined);
 
-async function fetchWorkspacesQuery(): Promise<Workspace[]> {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return [];
-
-  const { data, error } = await (supabase.rpc as any)("list_my_workspaces");
-
-  if (error) {
-    console.error("Error fetching workspaces via RPC:", error);
-    return [];
-  }
-
-  return (data as any as Workspace[]) || [];
-}
-
-
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
-  const { data: workspaces = [], isLoading } = useQuery({
-    queryKey: ["workspaces"],
-    queryFn: fetchWorkspacesQuery,
+  const { user, loading: authLoading } = useAuth();
+  
+  const { data: workspaces = [], isLoading: queryLoading } = useQuery({
+    queryKey: ["workspaces", user?.id],
+    queryFn: async (): Promise<Workspace[]> => {
+      if (!user) return [];
+
+      const { data, error } = await (supabase.rpc as any)("list_my_workspaces");
+
+      if (error) {
+        console.error("Error fetching workspaces via RPC:", error);
+        return [];
+      }
+
+      return (data as any as Workspace[]) || [];
+    },
+    enabled: !authLoading && !!user,
     staleTime: 5 * 60_000,
     gcTime: 30 * 60_000,
   });
+
+  const isLoading = authLoading || queryLoading;
 
   // 1. O estado de seleção bruta (URL > localStorage > null)
   const [selection, setSelection] = useState<{ type: 'workspace' | 'personal' | 'unresolved', id?: string }>(() => {
@@ -117,7 +119,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   };
 
   const refreshWorkspaces = async () => {
-    await queryClient.invalidateQueries({ queryKey: ["workspaces"] });
+    await queryClient.invalidateQueries({ queryKey: ["workspaces", user?.id] });
   };
 
   return (
