@@ -41,6 +41,7 @@ import { Route as ApiPublicInvitationsInspectRouteImport } from './routes/api/pu
 import { Route as ApiPublicInvitationsCreateRouteImport } from './routes/api/public/invitations/create'
 import { Route as ApiPublicInvitationsAcceptRouteImport } from './routes/api/public/invitations/accept'
 import { Route as ApiPublicCronOverdueAssignmentsRouteImport } from './routes/api/public/cron/overdue-assignments'
+import { Route as ApiCameraAiReferenceImagePreviewRouteImport } from './routes/api/camera-ai/reference-image/preview'
 
 const PainelRoute = PainelRouteImport.update({
   id: '/painel',
@@ -211,6 +212,12 @@ const ApiPublicCronOverdueAssignmentsRoute =
     path: '/api/public/cron/overdue-assignments',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiCameraAiReferenceImagePreviewRoute =
+  ApiCameraAiReferenceImagePreviewRouteImport.update({
+    id: '/preview',
+    path: '/preview',
+    getParentRoute: () => ApiCameraAiReferenceImageRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -233,11 +240,12 @@ export interface FileRoutesByFullPath {
   '/convite/$token': typeof ConviteTokenRoute
   '/executar/$id': typeof ExecutarIdRoute
   '/api/camera-ai/compile-policy': typeof ApiCameraAiCompilePolicyRoute
-  '/api/camera-ai/reference-image': typeof ApiCameraAiReferenceImageRoute
+  '/api/camera-ai/reference-image': typeof ApiCameraAiReferenceImageRouteWithChildren
   '/api/camera-ai/signed-url': typeof ApiCameraAiSignedUrlRoute
   '/api/camera-ai/test-verification': typeof ApiCameraAiTestVerificationRoute
   '/api/camera-ai/verify': typeof ApiCameraAiVerifyRoute
   '/unidades/$unitId/operacao': typeof UnidadesUnitIdOperacaoRoute
+  '/api/camera-ai/reference-image/preview': typeof ApiCameraAiReferenceImagePreviewRoute
   '/api/public/cron/overdue-assignments': typeof ApiPublicCronOverdueAssignmentsRoute
   '/api/public/invitations/accept': typeof ApiPublicInvitationsAcceptRoute
   '/api/public/invitations/create': typeof ApiPublicInvitationsCreateRoute
@@ -267,11 +275,12 @@ export interface FileRoutesByTo {
   '/convite/$token': typeof ConviteTokenRoute
   '/executar/$id': typeof ExecutarIdRoute
   '/api/camera-ai/compile-policy': typeof ApiCameraAiCompilePolicyRoute
-  '/api/camera-ai/reference-image': typeof ApiCameraAiReferenceImageRoute
+  '/api/camera-ai/reference-image': typeof ApiCameraAiReferenceImageRouteWithChildren
   '/api/camera-ai/signed-url': typeof ApiCameraAiSignedUrlRoute
   '/api/camera-ai/test-verification': typeof ApiCameraAiTestVerificationRoute
   '/api/camera-ai/verify': typeof ApiCameraAiVerifyRoute
   '/unidades/$unitId/operacao': typeof UnidadesUnitIdOperacaoRoute
+  '/api/camera-ai/reference-image/preview': typeof ApiCameraAiReferenceImagePreviewRoute
   '/api/public/cron/overdue-assignments': typeof ApiPublicCronOverdueAssignmentsRoute
   '/api/public/invitations/accept': typeof ApiPublicInvitationsAcceptRoute
   '/api/public/invitations/create': typeof ApiPublicInvitationsCreateRoute
@@ -302,11 +311,12 @@ export interface FileRoutesById {
   '/convite/$token': typeof ConviteTokenRoute
   '/executar/$id': typeof ExecutarIdRoute
   '/api/camera-ai/compile-policy': typeof ApiCameraAiCompilePolicyRoute
-  '/api/camera-ai/reference-image': typeof ApiCameraAiReferenceImageRoute
+  '/api/camera-ai/reference-image': typeof ApiCameraAiReferenceImageRouteWithChildren
   '/api/camera-ai/signed-url': typeof ApiCameraAiSignedUrlRoute
   '/api/camera-ai/test-verification': typeof ApiCameraAiTestVerificationRoute
   '/api/camera-ai/verify': typeof ApiCameraAiVerifyRoute
   '/unidades/$unitId/operacao': typeof UnidadesUnitIdOperacaoRoute
+  '/api/camera-ai/reference-image/preview': typeof ApiCameraAiReferenceImagePreviewRoute
   '/api/public/cron/overdue-assignments': typeof ApiPublicCronOverdueAssignmentsRoute
   '/api/public/invitations/accept': typeof ApiPublicInvitationsAcceptRoute
   '/api/public/invitations/create': typeof ApiPublicInvitationsCreateRoute
@@ -343,6 +353,7 @@ export interface FileRouteTypes {
     | '/api/camera-ai/test-verification'
     | '/api/camera-ai/verify'
     | '/unidades/$unitId/operacao'
+    | '/api/camera-ai/reference-image/preview'
     | '/api/public/cron/overdue-assignments'
     | '/api/public/invitations/accept'
     | '/api/public/invitations/create'
@@ -377,6 +388,7 @@ export interface FileRouteTypes {
     | '/api/camera-ai/test-verification'
     | '/api/camera-ai/verify'
     | '/unidades/$unitId/operacao'
+    | '/api/camera-ai/reference-image/preview'
     | '/api/public/cron/overdue-assignments'
     | '/api/public/invitations/accept'
     | '/api/public/invitations/create'
@@ -411,6 +423,7 @@ export interface FileRouteTypes {
     | '/api/camera-ai/test-verification'
     | '/api/camera-ai/verify'
     | '/unidades/$unitId/operacao'
+    | '/api/camera-ai/reference-image/preview'
     | '/api/public/cron/overdue-assignments'
     | '/api/public/invitations/accept'
     | '/api/public/invitations/create'
@@ -441,7 +454,7 @@ export interface RootRouteChildren {
   ConviteTokenRoute: typeof ConviteTokenRoute
   ExecutarIdRoute: typeof ExecutarIdRoute
   ApiCameraAiCompilePolicyRoute: typeof ApiCameraAiCompilePolicyRoute
-  ApiCameraAiReferenceImageRoute: typeof ApiCameraAiReferenceImageRoute
+  ApiCameraAiReferenceImageRoute: typeof ApiCameraAiReferenceImageRouteWithChildren
   ApiCameraAiSignedUrlRoute: typeof ApiCameraAiSignedUrlRoute
   ApiCameraAiTestVerificationRoute: typeof ApiCameraAiTestVerificationRoute
   ApiCameraAiVerifyRoute: typeof ApiCameraAiVerifyRoute
@@ -681,8 +694,30 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicCronOverdueAssignmentsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/camera-ai/reference-image/preview': {
+      id: '/api/camera-ai/reference-image/preview'
+      path: '/preview'
+      fullPath: '/api/camera-ai/reference-image/preview'
+      preLoaderRoute: typeof ApiCameraAiReferenceImagePreviewRouteImport
+      parentRoute: typeof ApiCameraAiReferenceImageRoute
+    }
   }
 }
+
+interface ApiCameraAiReferenceImageRouteChildren {
+  ApiCameraAiReferenceImagePreviewRoute: typeof ApiCameraAiReferenceImagePreviewRoute
+}
+
+const ApiCameraAiReferenceImageRouteChildren: ApiCameraAiReferenceImageRouteChildren =
+  {
+    ApiCameraAiReferenceImagePreviewRoute:
+      ApiCameraAiReferenceImagePreviewRoute,
+  }
+
+const ApiCameraAiReferenceImageRouteWithChildren =
+  ApiCameraAiReferenceImageRoute._addFileChildren(
+    ApiCameraAiReferenceImageRouteChildren,
+  )
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
@@ -705,7 +740,7 @@ const rootRouteChildren: RootRouteChildren = {
   ConviteTokenRoute: ConviteTokenRoute,
   ExecutarIdRoute: ExecutarIdRoute,
   ApiCameraAiCompilePolicyRoute: ApiCameraAiCompilePolicyRoute,
-  ApiCameraAiReferenceImageRoute: ApiCameraAiReferenceImageRoute,
+  ApiCameraAiReferenceImageRoute: ApiCameraAiReferenceImageRouteWithChildren,
   ApiCameraAiSignedUrlRoute: ApiCameraAiSignedUrlRoute,
   ApiCameraAiTestVerificationRoute: ApiCameraAiTestVerificationRoute,
   ApiCameraAiVerifyRoute: ApiCameraAiVerifyRoute,

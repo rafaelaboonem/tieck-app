@@ -19,6 +19,8 @@ export const Route = createFileRoute('/api/camera-ai/reference-image/preview')({
         const token = authHeader.replace('Bearer ', '');
 
         const supabase = createServerSupabaseClient();
+        if (!supabase) return new Response('Config error', { status: 500 });
+
         const { data: { user }, error: authError } = await supabase.auth.getUser(token);
         if (authError || !user) return new Response('Unauthorized', { status: 401 });
 
