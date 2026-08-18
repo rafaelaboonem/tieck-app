@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { renderHook, act } from '@testing-library/react';
+import { renderHook } from '@testing-library/react';
 import { useIsMobile } from './use-mobile';
 
 describe('useIsMobile', () => {
@@ -7,15 +7,11 @@ describe('useIsMobile', () => {
     vi.clearAllMocks();
   });
 
-  it('should return undefined initially (SSR safe)', () => {
-    const { result } = renderHook(() => useIsMobile());
-    // In our new implementation, it should stay undefined until effect runs
-    // But since renderHook runs effects, we need to check the very first value if possible
-    // Actually, we'll just check if it handles the undefined state correctly in components.
-  });
-
-  it('should return true for mobile viewports', () => {
+  it('should return mobile status based on window.innerWidth', () => {
+    // Mock window.innerWidth
     Object.defineProperty(window, 'innerWidth', { writable: true, configurable: true, value: 375 });
+    
+    // Mock matchMedia
     window.matchMedia = vi.fn().mockImplementation(query => ({
       matches: true,
       media: query,
@@ -28,6 +24,7 @@ describe('useIsMobile', () => {
     }));
 
     const { result } = renderHook(() => useIsMobile());
+    // In jsdom/vitest, useLayoutEffect runs immediately during renderHook
     expect(result.current).toBe(true);
   });
 
