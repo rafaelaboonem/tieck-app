@@ -65,7 +65,13 @@ export function Dashboard() {
     }
 
     const fetchChecklists = async () => {
-      if (workspaceStatus === 'loading' || !user?.id) {
+      // Bloqueio determinístico: se estamos num workspace, ESPERAR RBAC resolver.
+      // Se rbacLoading for true, não iniciamos a query para evitar leak de dados (fail-closed).
+      if (workspaceStatus === 'loading' || !user?.id || (workspaceStatus === 'workspace' && rbacLoading)) {
+        // Se mudamos de contexto e ainda está carregando, limpamos para evitar stale data
+        if (workspaceStatus === 'workspace' && rbacLoading) {
+           setChecklists([]);
+        }
         return;
       }
       
@@ -77,10 +83,9 @@ export function Dashboard() {
         if (workspaceStatus === 'workspace' && currentWorkspace) {
           query = query.eq("workspace_id", currentWorkspace.id);
           
-          // FASE 5B.6: Restrição para Viewer no Workspace
+          // FASE 5B.6/7: Restrição para Viewer no Workspace (Fail-closed)
           if (isViewer) {
-            // 1. Obter o workspace_member_id do usuário atual
-            const { data: memberData } = await supabase
+            const { data: memberData, error: memberError } = await supabase
               .from("workspace_members")
               .select("id")
               .eq("workspace_id", currentWorkspace.id)
@@ -88,32 +93,44 @@ export function Dashboard() {
               .eq("status", "active")
               .maybeSingle();
 
+            if (memberError) {
+              console.error("[inicio] Erro ao resolver membro:", memberError);
+              setChecklists([]);
+              setIsLoading(false);
+              return;
+            }
+
             if (memberData) {
-              // 2. Buscar checklists atribuídos a este membro
-              const { data: assignments } = await supabase
+              const { data: assignments, error: assignError } = await supabase
                 .from("checklist_assignments")
                 .select("checklist_id")
                 .eq("workspace_member_id", memberData.id);
               
+              if (assignError) {
+                console.error("[inicio] Erro ao buscar atribuições:", assignError);
+                setChecklists([]);
+                setIsLoading(false);
+                return;
+              }
+
               const assignedIds = assignments?.map(a => a.checklist_id) || [];
               
               if (assignedIds.length > 0) {
                 query = query.in("id", assignedIds);
               } else {
-                // Se não houver assignments, forçamos retorno vazio
                 setChecklists([]);
                 setIsLoading(false);
                 return;
               }
             } else {
-              // Se não é membro ativo, não deve ver nada do workspace
               setChecklists([]);
               setIsLoading(false);
               return;
             }
           }
         } else {
-          query = query.is("workspace_id", null);
+          // Contexto Pessoal: apenas checklists sem workspace_id do próprio usuário
+          query = query.is("workspace_id", null).eq("user_id", user.id);
         }
         
         const { data, error } = await query
@@ -132,7 +149,7 @@ export function Dashboard() {
     };
 
     fetchChecklists();
-  }, [authLoading, user?.id, workspaceStatus, currentWorkspace?.id, isViewer]);
+  }, [authLoading, user?.id, workspaceStatus, currentWorkspace?.id, isViewer, rbacLoading]);
 
   const handleNew = () => {
     setGlow(true);
