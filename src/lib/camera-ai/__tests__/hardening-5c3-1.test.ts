@@ -88,7 +88,7 @@ describe('Verify Handler 5C.3.1 - Reference Mode Hardening', () => {
       version: 1,
       storagePath: 'ref.jpg',
       mimeType: 'image/jpeg',
-      sha256: 'correct-sha-but-we-will-provide-wrong-buffer-later',
+      sha256: 'a'.repeat(64),
       sizeBytes: 10
     };
 
