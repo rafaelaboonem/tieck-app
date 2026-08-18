@@ -92,7 +92,7 @@ import {
   CollapsibleContent, 
   CollapsibleTrigger 
 } from "@/components/ui/collapsible";
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { cn } from "@/lib/utils";
 import { EditableBlock } from "@/components/EditableBlock";
 
@@ -602,12 +602,41 @@ export const Route = createFileRoute("/checklist")({
       settings: typeof search.settings === "boolean" ? search.settings : undefined,
     };
   },
-  component: () => (
-    <ChecklistAuthGuard>
-      <NovoChecklistPage />
-    </ChecklistAuthGuard>
-  ),
+  component: ChecklistPageWrapper,
 });
+
+function ChecklistPageWrapper() {
+  const search = useSearch({ from: "/checklist" });
+  const { currentWorkspace } = useWorkspace();
+  const { canManage, loading } = useWorkspaceRBAC(currentWorkspace?.id);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!loading && !canManage) {
+      const checklistId = search.id;
+      if (checklistId) {
+        navigate({ to: `/executar/${checklistId}` as any });
+      } else {
+        navigate({ to: "/inicio" });
+      }
+    }
+  }, [canManage, loading, search.id, navigate]);
+
+  if (loading) {
+    return (
+      <div className="flex h-screen w-full items-center justify-center bg-white">
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="h-8 w-8 animate-spin text-neutral-400" />
+          <p className="text-sm text-neutral-500">Verificando permissões...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!canManage) return null;
+
+  return <ChecklistAuthGuard><NovoChecklistPage /></ChecklistAuthGuard>;
+}
 
 
 import { useAuth } from "@/contexts/AuthContext";
@@ -771,6 +800,7 @@ export function NovoChecklistPage() {
   const { currentWorkspace } = useWorkspace();
   const { user: authUser } = useAuth();
   const navigate = useNavigate();
+  const { canManage } = useWorkspaceRBAC(currentWorkspace?.id);
   const { id: checklistId, workspace: workspaceParam, category: categoryParam, settings: openSettingsParam } = Route.useSearch();
 
 
