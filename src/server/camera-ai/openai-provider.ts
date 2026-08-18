@@ -1,5 +1,5 @@
 import OpenAI from 'openai';
-import { CameraVerification, CameraVerificationSchema, CameraVerificationPolicyV1 } from './schema';
+import { CameraVerification, CameraVerificationSchema, CameraVerificationPolicyV1, CameraReferenceVerification, CameraReferenceVerificationSchema } from './schema';
 import { zodTextFormat } from "openai/helpers/zod";
 
 const SYSTEM_PROMPT = `Você é um especialista em auditoria visual do sistema Tieck.
