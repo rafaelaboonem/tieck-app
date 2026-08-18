@@ -80,13 +80,17 @@ export function CameraSettingsPanel({ block, isOpen, onClose, onSave, isCompilin
     setHasChanges(false);
   };
 
+  const requestClose = () => {
+    if (hasChanges) {
+      if (!confirm("Descartar alterações não salvas?")) return;
+    }
+    onClose();
+  };
+
   return (
     <>
       <Sheet open={isOpen} onOpenChange={(open) => {
-        if (!open) {
-          if (hasChanges && !confirm("Descartar alterações não salvas?")) return;
-          onClose();
-        }
+        if (!open) requestClose();
       }}>
         <SheetContent className="w-full sm:max-w-[460px] overflow-y-auto">
           <SheetHeader className="pb-6 border-b">
