@@ -24,17 +24,17 @@ describe("PATCH 5B.8 - Segurança de Descoberta de Workspaces", () => {
 
     (supabase.rpc as any).mockResolvedValue({ data: mockWorkspaces, error: null });
 
-    const { data, error } = await supabase.rpc("list_my_workspaces");
+    const { data, error } = await (supabase.rpc as any)("list_my_workspaces");
     
     expect(error).toBeNull();
     expect(data).toHaveLength(2);
-    expect(data[0].name).toBe("Meu Workspace");
+    expect((data as any)[0].name).toBe("Meu Workspace");
   });
 
   it("deve retornar vazio se a RPC falhar", async () => {
     (supabase.rpc as any).mockResolvedValue({ data: null, error: { message: "Permission denied" } });
 
-    const { data, error } = await supabase.rpc("list_my_workspaces");
+    const { data, error } = await (supabase.rpc as any)("list_my_workspaces");
     
     expect(error).not.toBeNull();
     expect(data).toBeNull();

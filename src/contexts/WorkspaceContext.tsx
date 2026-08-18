@@ -27,14 +27,14 @@ async function fetchWorkspacesQuery(): Promise<Workspace[]> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return [];
 
-  const { data, error } = await supabase.rpc("list_my_workspaces");
+  const { data, error } = await (supabase.rpc as any)("list_my_workspaces");
 
   if (error) {
     console.error("Error fetching workspaces via RPC:", error);
     return [];
   }
 
-  return (data as Workspace[]) || [];
+  return (data as any as Workspace[]) || [];
 }
 
 
