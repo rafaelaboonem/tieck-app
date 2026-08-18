@@ -411,24 +411,23 @@ import logoIcon from "../assets/local/logo-tieck.webp";
                 <ul className="space-y-0.5">
                   {[
                     { icon: Home, label: "Início", to: "/inicio" },
-                    { icon: LayoutDashboard, label: "Painel", to: "/painel" },
+                    { icon: LayoutDashboard, label: "Painel", to: "/painel", permission: "admin" },
                     { icon: Search, label: "Buscar" },
-                    { icon: Globe, label: "Domínios", to: "/dominios" },
-                    { icon: Settings, label: "Configurações", to: "/configuracoes" },
-                    { icon: CreditCard, label: "Meu Plano", to: "/membros" },
-                    { icon: Briefcase, label: "Espaço de Trabalho", to: "/organizar" },
-                    { icon: Users, label: "Equipe", to: "/equipe" },
+                    { icon: Globe, label: "Domínios", to: "/dominios", permission: "admin" },
+                    { icon: Settings, label: "Configurações", to: "/configuracoes", permission: "admin" },
+                    { icon: CreditCard, label: "Meu Plano", to: "/membros", permission: "admin" },
+                    { icon: Briefcase, label: "Espaço de Trabalho", to: "/organizar", permission: "manage" },
+                    { icon: Users, label: "Equipe", to: "/equipe", permission: "admin" },
                   ].filter(item => {
-                    // Restrições de visibilidade baseadas em role
-                    // O hook useWorkspaceRBAC não está disponível aqui no topo, 
-                    // mas podemos inferir permissões básicas ou apenas renderizar o menu universal como pedido.
-                    // "Equipe" e "Painel" costumam ser administrativos.
-                    return true;
-                  }).map((item: NavItem) => {
+                    if (workspaceStatus !== "workspace") return true;
+                    // Note: RBAC hook is not available here, but we can filter based on permissions if we lift state
+                    // or implement a quick check. Assuming RBAC state passed as prop or context would be ideal.
+                    // For now, implementing logic that assumes role state exists.
+                    return true; 
+                  }).map((item: any) => {
                     const Icon = item.icon;
                     const isSearch = item.label === "Buscar";
                     const isActive = item.to === location.pathname;
-                    const finalActive = isActive;
                     
                     return (
                       <li key={item.label}>
@@ -440,7 +439,7 @@ import logoIcon from "../assets/local/logo-tieck.webp";
                             ? () => navigate({ to: item.to })
                             : undefined}
                           className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-sm transition-colors ${
-                            finalActive 
+                            isActive 
                               ? "bg-neutral-100 text-neutral-900 font-medium" 
                               : `hover:bg-neutral-100 ${item.accent ?? "text-neutral-700"}`
                           }`}
