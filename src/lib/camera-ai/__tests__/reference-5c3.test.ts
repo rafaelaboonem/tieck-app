@@ -21,7 +21,7 @@ describe('Camera AI Reference Mode Logic', () => {
     };
     
     const result = evaluateGate(analysis);
-    expect(result.passed).toBe(true);
+    expect(result.ok).toBe(true);
     expect(result.decision).toBe('approved');
   });
 
