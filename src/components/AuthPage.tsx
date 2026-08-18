@@ -341,8 +341,8 @@ export function AuthPage({ mode, redirect }: Props) {
         heading: recoveryStep === 1 ? "Recuperar senha" 
                : recoveryStep === 2 ? "Confirme o código"
                : "Nova senha",
-        subheading: recoveryStep === 1 ? "Enviaremos um código para o seu e-mail"
-                  : recoveryStep === 2 ? `Digite o código enviado para ${email}`
+        subheading: recoveryStep === 1 ? "Enviaremos um código de 6 dígitos para este e-mail."
+                  : recoveryStep === 2 ? `Enviamos um código de 6 dígitos para: ${recoveryEmail}`
                   : "Escolha uma senha forte para sua segurança"
       };
     }
