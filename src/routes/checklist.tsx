@@ -800,7 +800,7 @@ export function NovoChecklistPage() {
   const { currentWorkspace } = useWorkspace();
   const { user: authUser } = useAuth();
   const navigate = useNavigate();
-  const { canManage } = useWorkspaceRBAC(currentWorkspace?.id);
+  
   const { id: checklistId, workspace: workspaceParam, category: categoryParam, settings: openSettingsParam } = Route.useSearch();
 
 
@@ -1503,7 +1503,7 @@ export function NovoChecklistPage() {
   }, [user]);
 
   const settingsChecklistId = currentChecklistId || sessionChecklistIdRef.current || checklistId || null;
-  const { canManage } = useWorkspaceRBAC(currentWorkspace?.id || workspaceParam);
+  const { canManage: wsCanManage } = useWorkspaceRBAC(currentWorkspace?.id || workspaceParam);
 
   useEffect(() => {
     const fetchWorkspaceData = async () => {
