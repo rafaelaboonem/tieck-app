@@ -85,7 +85,7 @@ export interface ChecklistAssignmentView {
 function TeamPage() {
   const navigate = useNavigate();
   const { currentWorkspace } = useWorkspace();
-  const { isAdmin, isLoading: rbacLoading } = useWorkspaceRBAC(currentWorkspace?.id);
+  const { isAdmin, loading: rbacLoading } = useWorkspaceRBAC(currentWorkspace?.id);
   const isMobile = useIsMobile();
   const { sidebarOpen } = useSidebar();
 
@@ -106,7 +106,6 @@ function TeamPage() {
       </DashboardLayout>
     );
   }
-  const { currentWorkspace } = useWorkspace();
   const [members, setMembers] = useState<WorkspaceMemberView[]>([]);
   const [invitations, setInvitations] = useState<WorkspaceInvitationView[]>([]);
   const [assignments, setAssignments] = useState<ChecklistAssignmentView[]>([]);

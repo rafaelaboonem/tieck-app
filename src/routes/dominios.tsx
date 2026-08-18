@@ -35,7 +35,7 @@ function DominiosPage() {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
   const { currentWorkspace } = useWorkspace();
-  const { isAdmin, isLoading: rbacLoading } = useWorkspaceRBAC(currentWorkspace?.id);
+  const { isAdmin, loading: rbacLoading } = useWorkspaceRBAC(currentWorkspace?.id);
 
   useEffect(() => {
     if (!rbacLoading && !isAdmin && !loading && user) {
