@@ -65,13 +65,10 @@ export function Dashboard() {
     }
 
     const fetchChecklists = async () => {
-      // Bloqueio de flash: Não carregar até o contexto estar definido
       if (workspaceStatus === 'loading' || !user?.id) {
         return;
       }
       
-      // Só ativamos o loading bloqueante se for a primeira carga ou mudança de contexto real
-      // O TanStack Query (se usado) lidaria com isso, mas aqui usamos estado local.
       setIsLoading(true);
       
       try {
@@ -79,6 +76,42 @@ export function Dashboard() {
         
         if (workspaceStatus === 'workspace' && currentWorkspace) {
           query = query.eq("workspace_id", currentWorkspace.id);
+          
+          // FASE 5B.6: Restrição para Viewer no Workspace
+          if (isViewer) {
+            // 1. Obter o workspace_member_id do usuário atual
+            const { data: memberData } = await supabase
+              .from("workspace_members")
+              .select("id")
+              .eq("workspace_id", currentWorkspace.id)
+              .eq("user_id", user.id)
+              .eq("status", "active")
+              .maybeSingle();
+
+            if (memberData) {
+              // 2. Buscar checklists atribuídos a este membro
+              const { data: assignments } = await supabase
+                .from("checklist_assignments")
+                .select("checklist_id")
+                .eq("workspace_member_id", memberData.id);
+              
+              const assignedIds = assignments?.map(a => a.checklist_id) || [];
+              
+              if (assignedIds.length > 0) {
+                query = query.in("id", assignedIds);
+              } else {
+                // Se não houver assignments, forçamos retorno vazio
+                setChecklists([]);
+                setIsLoading(false);
+                return;
+              }
+            } else {
+              // Se não é membro ativo, não deve ver nada do workspace
+              setChecklists([]);
+              setIsLoading(false);
+              return;
+            }
+          }
         } else {
           query = query.is("workspace_id", null);
         }
@@ -99,7 +132,7 @@ export function Dashboard() {
     };
 
     fetchChecklists();
-  }, [authLoading, user?.id, workspaceStatus, currentWorkspace?.id]);
+  }, [authLoading, user?.id, workspaceStatus, currentWorkspace?.id, isViewer]);
 
   const handleNew = () => {
     setGlow(true);
@@ -314,7 +347,12 @@ export function Dashboard() {
                           className="cursor-pointer flex items-center gap-3 min-w-0"
                           onClick={() => {
                             if (isSelectionMode) return;
-                            navigate({ to: "/checklist", search: { id: item.id } });
+                            // FASE 5B.6: Viewer vai para execução, outros para editor
+                            if (workspaceStatus === 'workspace' && isViewer) {
+                              navigate({ to: "/executar/$id", params: { id: item.id } });
+                            } else {
+                              navigate({ to: "/checklist", search: { id: item.id } });
+                            }
                           }}
                         >
                           <div 
@@ -577,12 +615,16 @@ export function Dashboard() {
                   </svg>
                 </div>
                 <h2 className="text-base font-semibold text-neutral-900">
-                  {checklists.length === 0 ? (currentWorkspace ? "Nenhum checklist disponível neste workspace" : "Nenhum checklist ainda") : "Tudo pronto por aqui"}
+                  {workspaceStatus === 'workspace' && isViewer 
+                    ? "Nenhum checklist atribuído" 
+                    : (checklists.length === 0 ? (currentWorkspace ? "Nenhum checklist disponível neste workspace" : "Nenhum checklist ainda") : "Tudo pronto por aqui")}
                 </h2>
                 <p className="mt-1 text-sm text-neutral-500 mb-6">
-                  {checklists.length === 0 
-                    ? "Arregace as mangas e vamos começar. É simples como um, dois, três."
-                    : "Você não possui checklists individuais nesta visualização."}
+                  {workspaceStatus === 'workspace' && isViewer 
+                    ? "Quando um checklist for atribuído a você, ele aparecerá aqui."
+                    : (checklists.length === 0 
+                      ? "Arregace as mangas e vamos começar. É simples como um, dois, três."
+                      : "Você não possui checklists individuais nesta visualização.")}
                 </p>
                 {/* 
                   O botão Novo Checklist na Home (/inicio) é para checklists PESSOAIS (workspace_id IS NULL).
