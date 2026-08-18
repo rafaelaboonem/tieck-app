@@ -80,7 +80,8 @@ export function CameraSettingsPanel({ block, isOpen, onClose, onSave, isCompilin
       description: draft.description,
       required: draft.required,
       mode: draft.mode,
-      cameraAiPolicy: draft.policy
+      cameraAiPolicy: draft.policy,
+      cameraReference: draft.cameraReference || null
     });
     setHasChanges(false);
   };
