@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { mapAuthError } from "@/utils/auth-errors";
 import { useAuth } from "@/contexts/AuthContext";
-import { Loader2, ArrowRight, Mail, ArrowLeft } from "lucide-react";
+import { Loader2, ArrowRight, Mail, ArrowLeft, Eye, EyeOff, User, Lock } from "lucide-react";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import logoUrl from "../assets/local/logo-tieck.webp";
 
