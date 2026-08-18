@@ -625,7 +625,14 @@ export function AuthPage({ mode, redirect }: Props) {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setRecoveryStep(1)}
+                  onClick={() => {
+                    setEmail(recoveryEmail);
+                    setRecoveryStep(1);
+                    setOtp("");
+                    setVerificationToken("");
+                    setPassword("");
+                    setConfirmPassword("");
+                  }}
                   disabled={isLoading}
                   className="w-full text-sm text-neutral-400 hover:text-neutral-600 transition-colors py-2"
                 >
