@@ -212,6 +212,12 @@ export function AuthPage({ mode, redirect }: Props) {
   };
 
   useEffect(() => {
+    if (signupStep === 2 && otp.length === 6 && !isLoading && !otpVerified) {
+      handleVerifyCode(undefined, otp);
+    }
+  }, [otp, signupStep]);
+
+  useEffect(() => {
     if (otpVerified && verificationToken && !isLoading) {
       completeSignup();
     }
