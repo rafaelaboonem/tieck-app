@@ -27,35 +27,14 @@ async function fetchWorkspacesQuery(): Promise<Workspace[]> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return [];
 
-  const { data, error } = await supabase
-    .from("workspaces")
-    .select("*")
-    .order("created_at", { ascending: true });
+  const { data, error } = await (supabase.rpc as any)("list_my_workspaces");
 
   if (error) {
-    console.error("Error fetching workspaces:", error);
+    console.error("Error fetching workspaces via RPC:", error);
     return [];
   }
 
-  // Se o usuário tem acesso a workspaces, retorna eles
-  if (data && data.length > 0) return data;
-
-  // Tenta buscar associações explicitamente (membros)
-  const { data: memberships } = await supabase
-    .from("workspace_members")
-    .select("workspace_id")
-    .eq("user_id", user.id);
-
-  if (memberships && memberships.length > 0) {
-    const { data: sharedWs } = await supabase
-      .from("workspaces")
-      .select("*")
-      .in("id", memberships.map(m => m.workspace_id));
-    
-    if (sharedWs && sharedWs.length > 0) return sharedWs;
-  }
-
-  return [];
+  return (data as any as Workspace[]) || [];
 }
 
 
