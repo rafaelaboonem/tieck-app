@@ -90,8 +90,6 @@ function PainelPage() {
   const compliance = useUnitCompliance(filters);
   const rows = compliance.data;
 
-
-
   const setFilters = (next: DashboardFilters) => {
     navigate({
       to: "/painel",
@@ -120,8 +118,6 @@ function PainelPage() {
 
   if (!isAdmin) return null;
 
-  const compliance = useUnitCompliance(filters);
-  const rows = compliance.data;
 
 
   // Agregação central: pesos somados, fórmula reaplicada.

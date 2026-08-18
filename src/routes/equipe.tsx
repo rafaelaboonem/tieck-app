@@ -1,4 +1,6 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
+import { useAuth } from '@/contexts/AuthContext';
+
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { useWorkspaceRBAC } from '@/hooks/useWorkspaceRBAC';
 import { useSidebar } from '@/contexts/SidebarContext';
@@ -110,7 +112,6 @@ function TeamPage() {
     }
   }, [isAdmin, rbacLoading, authLoading, user, navigate]);
 
-  const [currentUserRole, setCurrentUserRole] = useState<'owner' | 'admin' | 'editor' | 'viewer' | null>(null);
   
   // Modals state
   const [inviteModalOpen, setInviteModalOpen] = useState(false);
