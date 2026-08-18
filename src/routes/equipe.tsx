@@ -1,10 +1,12 @@
-import { createFileRoute } from '@tanstack/react-router';
+import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
+import { useWorkspaceRBAC } from '@/hooks/useWorkspaceRBAC';
 import { useSidebar } from '@/contexts/SidebarContext';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { cn } from '@/lib/utils';
 import { DashboardLayout } from '@/components/DashboardLayout';
 import { Users, UserPlus, Shield, Mail, Clock, MoreHorizontal, ShieldCheck, UserMinus, RefreshCw, Search } from 'lucide-react';
+import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
@@ -81,9 +83,29 @@ export interface ChecklistAssignmentView {
 
 
 function TeamPage() {
+  const navigate = useNavigate();
+  const { currentWorkspace } = useWorkspace();
+  const { isAdmin, loading: rbacLoading } = useWorkspaceRBAC(currentWorkspace?.id);
   const isMobile = useIsMobile();
   const { sidebarOpen } = useSidebar();
-  const { currentWorkspace } = useWorkspace();
+
+  useEffect(() => {
+    if (!rbacLoading && !isAdmin) {
+      toast.error("Acesso restrito a administradores");
+      navigate({ to: "/inicio" });
+    }
+  }, [isAdmin, rbacLoading, navigate]);
+
+  if (rbacLoading || !isAdmin) {
+    return (
+      <DashboardLayout>
+        <div className="p-4 sm:p-8 space-y-6">
+          <Skeleton className="h-10 w-48" />
+          <Skeleton className="h-64 w-full" />
+        </div>
+      </DashboardLayout>
+    );
+  }
   const [members, setMembers] = useState<WorkspaceMemberView[]>([]);
   const [invitations, setInvitations] = useState<WorkspaceInvitationView[]>([]);
   const [assignments, setAssignments] = useState<ChecklistAssignmentView[]>([]);

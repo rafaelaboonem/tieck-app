@@ -3,7 +3,11 @@ import { useEffect, useMemo } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSidebar } from "@/contexts/SidebarContext";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useWorkspace } from "@/contexts/WorkspaceContext";
+import { useWorkspaceRBAC } from "@/hooks/useWorkspaceRBAC";
 import { DashboardLayout } from "@/components/DashboardLayout";
+import { toast } from "sonner";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Card } from "@/components/tremor/ui/Card";
 import { Badge } from "@/components/tremor/ui/Badge";
 import { Button } from "@/components/ui/button";
@@ -55,11 +59,33 @@ export const Route = createFileRoute("/painel")({
 });
 
 function PainelPage() {
+  const navigate = useNavigate();
+  const { currentWorkspace } = useWorkspace();
+  const { isAdmin, loading: rbacLoading } = useWorkspaceRBAC(currentWorkspace?.id);
   const { user, loading: authLoading } = useAuth();
   const { sidebarOpen } = useSidebar();
   const isMobile = useIsMobile();
-  const navigate = useNavigate();
   const search = Route.useSearch();
+
+  useEffect(() => {
+    if (!rbacLoading && !isAdmin && !authLoading && user) {
+      toast.error("Acesso restrito a administradores");
+      navigate({ to: "/inicio" });
+    }
+  }, [isAdmin, rbacLoading, authLoading, user, navigate]);
+
+  if (rbacLoading) {
+    return (
+      <DashboardLayout>
+        <div className="p-4 sm:p-8 space-y-8">
+          <Skeleton className="h-10 w-48" />
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-32 w-full" />)}
+          </div>
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   // Filtros centrais derivados da URL (fonte da verdade única, sem loop).
   const filters: DashboardFilters = useMemo(

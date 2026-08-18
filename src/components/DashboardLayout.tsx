@@ -4,6 +4,7 @@ import { useSidebar } from "@/contexts/SidebarContext";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useWorkspaceRBAC } from "@/hooks/useWorkspaceRBAC";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -98,6 +99,8 @@ import logoIcon from "../assets/local/logo-tieck.webp";
     const [profile, setProfile] = useState<{ display_name: string | null; avatar_url: string | null; is_admin: boolean | null; plan_type: string | null; email: string | null } | null>(null);
     const [memberCount, setMemberCount] = useState<number>(0);
     const [hasChecklists, setHasChecklists] = useState(false);
+    
+    const { isAdmin: isWsAdmin, canManage: canWsManage, isViewer: isWsViewer } = useWorkspaceRBAC(currentWorkspace?.id);
     const [recentChecklists, setRecentChecklists] = useState<{id: string, title: string | null}[]>([]);
     const [recentOpen, setRecentOpen] = useState(true);
     const navigate = useNavigate();
@@ -372,7 +375,7 @@ import logoIcon from "../assets/local/logo-tieck.webp";
                   </div>
                 </DropdownMenuItem>
 
-              {(profile?.is_admin || workspaces.length === 0 || workspaces.length > 0) && (
+              {(profile?.is_admin || workspaces.length === 0) && (
                 <button
                   onClick={() => { setCreateWsOpen(true); setNewWsName(""); setNewWsIcon("📁"); }}
                   className="w-full flex items-center gap-2 px-2 py-2 mb-1 text-[13px] font-semibold text-[#FF007F] hover:bg-[#FF007F]/5 rounded-md transition-all mx-0 text-left"
@@ -411,24 +414,22 @@ import logoIcon from "../assets/local/logo-tieck.webp";
                 <ul className="space-y-0.5">
                   {[
                     { icon: Home, label: "Início", to: "/inicio" },
-                    { icon: LayoutDashboard, label: "Painel", to: "/painel" },
+                    { icon: LayoutDashboard, label: "Painel", to: "/painel", permission: "admin" },
                     { icon: Search, label: "Buscar" },
-                    { icon: Globe, label: "Domínios", to: "/dominios" },
-                    { icon: Settings, label: "Configurações", to: "/configuracoes" },
-                    { icon: CreditCard, label: "Meu Plano", to: "/membros" },
-                    { icon: Briefcase, label: "Espaço de Trabalho", to: "/organizar" },
-                    { icon: Users, label: "Equipe", to: "/equipe" },
+                    { icon: Globe, label: "Domínios", to: "/dominios", permission: "admin" },
+                    { icon: Settings, label: "Configurações", to: "/configuracoes", permission: "admin" },
+                    { icon: CreditCard, label: "Meu Plano", to: "/membros", permission: "admin" },
+                    { icon: Briefcase, label: "Espaço de Trabalho", to: "/organizar", permission: "manage" },
+                    { icon: Users, label: "Equipe", to: "/equipe", permission: "admin" },
                   ].filter(item => {
-                    // Restrições de visibilidade baseadas em role
-                    // O hook useWorkspaceRBAC não está disponível aqui no topo, 
-                    // mas podemos inferir permissões básicas ou apenas renderizar o menu universal como pedido.
-                    // "Equipe" e "Painel" costumam ser administrativos.
+                    if (workspaceStatus !== "workspace") return true;
+                    if (item.permission === "admin") return isWsAdmin;
+                    if (item.permission === "manage") return canWsManage;
                     return true;
-                  }).map((item: NavItem) => {
+                  }).map((item: any) => {
                     const Icon = item.icon;
                     const isSearch = item.label === "Buscar";
                     const isActive = item.to === location.pathname;
-                    const finalActive = isActive;
                     
                     return (
                       <li key={item.label}>
@@ -440,7 +441,7 @@ import logoIcon from "../assets/local/logo-tieck.webp";
                             ? () => navigate({ to: item.to })
                             : undefined}
                           className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-sm transition-colors ${
-                            finalActive 
+                            isActive 
                               ? "bg-neutral-100 text-neutral-900 font-medium" 
                               : `hover:bg-neutral-100 ${item.accent ?? "text-neutral-700"}`
                           }`}
@@ -605,8 +606,40 @@ import logoIcon from "../assets/local/logo-tieck.webp";
              {isMobile ? <Menu className="w-6 h-6" /> : <ChevronsRight className="w-4 h-4" />}
            </button>
          )}
-         {children}
-       </div>
+          {profile && !sidebarOpen && (
+            <div className="fixed top-4 right-4 z-[120] flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setSearchOpen(true)}
+                className="p-2 rounded-full bg-white/80 backdrop-blur-sm border border-neutral-200 text-neutral-500 hover:text-neutral-900 shadow-sm transition-all"
+                title="Buscar"
+              >
+                <Search className="w-5 h-5" />
+              </button>
+              
+              {!isWsViewer && (
+                <>
+                  <button
+                    type="button"
+                    className="p-2 rounded-full bg-white/80 backdrop-blur-sm border border-neutral-200 text-neutral-500 hover:text-neutral-900 shadow-sm transition-all"
+                    title="Sparkles"
+                  >
+                    <Sparkles className="w-5 h-5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => navigate({ to: "/configuracoes" })}
+                    className="p-2 rounded-full bg-white/80 backdrop-blur-sm border border-neutral-200 text-neutral-500 hover:text-neutral-900 shadow-sm transition-all"
+                    title="Configurações"
+                  >
+                    <Settings className="w-5 h-5" />
+                  </button>
+                </>
+              )}
+            </div>
+          )}
+          {children}
+        </div>
  
        <button
          type="button"
@@ -740,58 +773,66 @@ import logoIcon from "../assets/local/logo-tieck.webp";
                     <Plus className="mr-2 h-4 w-4" />
                     <span>Criar novo checklist</span>
                   </CommandItem>
-                  <CommandItem onSelect={() => { navigate({ to: "/organizar", search: { id: currentWorkspace?.id } }); setSearchOpen(false); }}>
-                    <FolderPlus className="mr-2 h-4 w-4" />
-                    <span>Criar workspace</span>
-                  </CommandItem>
+                  {(profile?.is_admin || workspaces.length === 0) && (
+                    <CommandItem onSelect={() => { navigate({ to: "/organizar", search: { id: currentWorkspace?.id } }); setSearchOpen(false); }}>
+                      <FolderPlus className="mr-2 h-4 w-4" />
+                      <span>Criar workspace</span>
+                    </CommandItem>
+                  )}
                 </>
               )}
             </CommandGroup>
             <CommandGroup heading="Navegação">
-              <CommandItem onSelect={() => { navigate({ to: "/equipe" }); setSearchOpen(false); }}>
-                <Users className="mr-2 h-4 w-4" />
-                <span>Equipe</span>
-              </CommandItem>
-
-              <CommandItem onSelect={() => { navigate({ to: "/configuracoes" }); setSearchOpen(false); }}>
-                <Share2 className="mr-2 h-4 w-4" />
-                <span>Compartilhar</span>
-              </CommandItem>
-              <CommandItem onSelect={() => { navigate({ to: "/organizar", search: { id: currentWorkspace?.id } }); setSearchOpen(false); }}>
-                <Inbox className="mr-2 h-4 w-4" />
-                <span>Ver envios</span>
-              </CommandItem>
-              <CommandItem onSelect={() => { navigate({ to: "/organizar", search: { id: currentWorkspace?.id } }); setSearchOpen(false); }}>
-                <BarChart3 className="mr-2 h-4 w-4" />
-                <span>Ver insights</span>
-              </CommandItem>
               <CommandItem onSelect={() => { navigate({ to: "/inicio" }); setSearchOpen(false); }}>
                 <Home className="mr-2 h-4 w-4" />
                 <span>Início</span>
               </CommandItem>
-              <CommandItem onSelect={() => { navigate({ to: "/organizar", search: { id: currentWorkspace?.id } }); setSearchOpen(false); }}>
-                <CheckSquare className="mr-2 h-4 w-4" />
-                <span>Checklists</span>
-              </CommandItem>
-              <CommandItem onSelect={() => { navigate({ to: "/dominios" }); setSearchOpen(false); }}>
-                <Globe className="mr-2 h-4 w-4" />
-                <span>Domínios</span>
-              </CommandItem>
-              <CommandItem onSelect={() => { navigate({ to: "/membros" }); setSearchOpen(false); }}>
-                <Users className="mr-2 h-4 w-4" />
-                <span>Membros</span>
-              </CommandItem>
+
+              {isWsAdmin && (
+                <>
+                  <CommandItem onSelect={() => { navigate({ to: "/equipe" }); setSearchOpen(false); }}>
+                    <Users className="mr-2 h-4 w-4" />
+                    <span>Equipe</span>
+                  </CommandItem>
+                  <CommandItem onSelect={() => { navigate({ to: "/dominios" }); setSearchOpen(false); }}>
+                    <Globe className="mr-2 h-4 w-4" />
+                    <span>Domínios</span>
+                  </CommandItem>
+                  <CommandItem onSelect={() => { navigate({ to: "/membros" }); setSearchOpen(false); }}>
+                    <Users className="mr-2 h-4 w-4" />
+                    <span>Membros</span>
+                  </CommandItem>
+                  <CommandItem onSelect={() => { navigate({ to: "/membros" }); setSearchOpen(false); }}>
+                    <Sparkles className="mr-2 h-4 w-4" />
+                    <span>Atualizar plano</span>
+                  </CommandItem>
+                </>
+              )}
+
+              {canWsManage && (
+                <>
+                  <CommandItem onSelect={() => { navigate({ to: "/organizar", search: { id: currentWorkspace?.id } }); setSearchOpen(false); }}>
+                    <CheckSquare className="mr-2 h-4 w-4" />
+                    <span>Checklists</span>
+                  </CommandItem>
+                  <CommandItem onSelect={() => { navigate({ to: "/organizar", search: { id: currentWorkspace?.id } }); setSearchOpen(false); }}>
+                    <Inbox className="mr-2 h-4 w-4" />
+                    <span>Ver envios</span>
+                  </CommandItem>
+                  <CommandItem onSelect={() => { navigate({ to: "/organizar", search: { id: currentWorkspace?.id } }); setSearchOpen(false); }}>
+                    <BarChart3 className="mr-2 h-4 w-4" />
+                    <span>Ver insights</span>
+                  </CommandItem>
+                  <CommandItem onSelect={() => { navigate({ to: "/organizar", search: { id: currentWorkspace?.id } }); setSearchOpen(false); }}>
+                    <LayoutTemplate className="mr-2 h-4 w-4" />
+                    <span>Modelos</span>
+                  </CommandItem>
+                </>
+              )}
+
               <CommandItem onSelect={() => { navigate({ to: "/configuracoes" }); setSearchOpen(false); }}>
                 <Settings className="mr-2 h-4 w-4" />
                 <span>Configurações</span>
-              </CommandItem>
-              <CommandItem onSelect={() => { navigate({ to: "/organizar", search: { id: currentWorkspace?.id } }); setSearchOpen(false); }}>
-                <LayoutTemplate className="mr-2 h-4 w-4" />
-                <span>Modelos</span>
-              </CommandItem>
-              <CommandItem onSelect={() => { navigate({ to: "/membros" }); setSearchOpen(false); }}>
-                <Sparkles className="mr-2 h-4 w-4" />
-                <span>Atualizar plano</span>
               </CommandItem>
             </CommandGroup>
            <CommandGroup heading="Ajuda e Suporte">

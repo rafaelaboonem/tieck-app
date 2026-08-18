@@ -92,7 +92,7 @@ import {
   CollapsibleContent, 
   CollapsibleTrigger 
 } from "@/components/ui/collapsible";
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { cn } from "@/lib/utils";
 import { EditableBlock } from "@/components/EditableBlock";
 
@@ -602,12 +602,41 @@ export const Route = createFileRoute("/checklist")({
       settings: typeof search.settings === "boolean" ? search.settings : undefined,
     };
   },
-  component: () => (
-    <ChecklistAuthGuard>
-      <NovoChecklistPage />
-    </ChecklistAuthGuard>
-  ),
+  component: ChecklistPageWrapper,
 });
+
+function ChecklistPageWrapper() {
+  const search = useSearch({ from: "/checklist" });
+  const { currentWorkspace } = useWorkspace();
+  const { canManage, loading } = useWorkspaceRBAC(currentWorkspace?.id);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!loading && !canManage) {
+      const checklistId = search.id;
+      if (checklistId) {
+        navigate({ to: `/executar/${checklistId}` as any });
+      } else {
+        navigate({ to: "/inicio" });
+      }
+    }
+  }, [canManage, loading, search.id, navigate]);
+
+  if (loading) {
+    return (
+      <div className="flex h-screen w-full items-center justify-center bg-white">
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="h-8 w-8 animate-spin text-neutral-400" />
+          <p className="text-sm text-neutral-500">Verificando permissões...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!canManage) return null;
+
+  return <ChecklistAuthGuard><NovoChecklistPage /></ChecklistAuthGuard>;
+}
 
 
 import { useAuth } from "@/contexts/AuthContext";
@@ -771,6 +800,7 @@ export function NovoChecklistPage() {
   const { currentWorkspace } = useWorkspace();
   const { user: authUser } = useAuth();
   const navigate = useNavigate();
+  
   const { id: checklistId, workspace: workspaceParam, category: categoryParam, settings: openSettingsParam } = Route.useSearch();
 
 
@@ -800,6 +830,7 @@ export function NovoChecklistPage() {
     if (draftTitle) setTitle(draftTitle);
     if (localStorage.getItem("draft_checklist_started") === "true") setIsStarted(true);
   }, [checklistId]);
+  const { canManage } = useWorkspaceRBAC(currentWorkspace?.id);
   const [isTemplatesOpen, setIsTemplatesOpen] = useState(false);
   const [selectedFont, setSelectedFont] = useState("");
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
@@ -1473,7 +1504,7 @@ export function NovoChecklistPage() {
   }, [user]);
 
   const settingsChecklistId = currentChecklistId || sessionChecklistIdRef.current || checklistId || null;
-  const { canManage } = useWorkspaceRBAC(currentWorkspace?.id || workspaceParam);
+  
 
   useEffect(() => {
     const fetchWorkspaceData = async () => {
@@ -2935,22 +2966,28 @@ export function NovoChecklistPage() {
               </button>
             </>
           )}
-          <button
-            type="button"
-            onClick={() => setIsSettingsOpen(true)}
-            className="hover:text-neutral-900 flex items-center gap-1 sm:gap-1.5"
-          >
-            <Settings className="w-4 h-4" />
-            <span className="hidden sm:inline">Configuração</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setIsCustomizeOpen((v) => !v)}
-            className={`hover:text-neutral-900 px-2 py-1 rounded-md ${isCustomizeOpen ? "ring-1 ring-blue-400 text-neutral-900" : ""}`}
-          >
-            <span className="hidden sm:inline">Personalizar</span>
-            <span className="sm:hidden"><Palette className="w-4 h-4" /></span>
-          </button>
+          
+          {canManage && (
+            <>
+              <button
+                type="button"
+                onClick={() => setIsSettingsOpen(true)}
+                className="hover:text-neutral-900 flex items-center gap-1 sm:gap-1.5"
+              >
+                <Settings className="w-4 h-4" />
+                <span className="hidden sm:inline">Configuração</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsCustomizeOpen((v) => !v)}
+                className={`hover:text-neutral-900 px-2 py-1 rounded-md ${isCustomizeOpen ? "ring-1 ring-blue-400 text-neutral-900" : ""}`}
+              >
+                <span className="hidden sm:inline">Personalizar</span>
+                <span className="sm:hidden"><Palette className="w-4 h-4" /></span>
+              </button>
+            </>
+          )}
+
           <button 
             type="button"
             onClick={() => setIsPreviewMode(true)}
@@ -2959,14 +2996,17 @@ export function NovoChecklistPage() {
             <span className="hidden sm:inline">Pré-visualizar</span>
             <span className="sm:hidden"><Eye className="w-4 h-4" /></span>
           </button>
-          <button 
-            type="button"
-            onClick={() => saveChecklist(undefined, true)}
-            disabled={isPublishing}
-            className="text-xs font-bold bg-[#FF007F] text-white rounded-md px-2.5 sm:px-4 py-1.5 hover:opacity-90 transition-opacity disabled:opacity-50 shadow-sm"
-          >
-            {isPublishing ? "Publicando..." : "Publicar"}
-          </button>
+
+          {canManage && (
+            <button 
+              type="button"
+              onClick={() => saveChecklist(undefined, true)}
+              disabled={isPublishing}
+              className="text-xs font-bold bg-[#FF007F] text-white rounded-md px-2.5 sm:px-4 py-1.5 hover:opacity-90 transition-opacity disabled:opacity-50 shadow-sm"
+            >
+              {isPublishing ? "Publicando..." : "Publicar"}
+            </button>
+          )}
         </div>
       </header>
 

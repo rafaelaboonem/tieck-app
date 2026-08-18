@@ -3,6 +3,8 @@ import { Globe, Search, Copy, Edit2, Check, X, ExternalLink } from "lucide-react
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { useSidebar } from "@/contexts/SidebarContext";
 import { useAuth } from "@/contexts/AuthContext";
+import { useWorkspace } from "@/contexts/WorkspaceContext";
+import { useWorkspaceRBAC } from "@/hooks/useWorkspaceRBAC";
 import logo from "../assets/local/logo-k.webp";
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -32,6 +34,26 @@ function DominiosPage() {
   const { sidebarOpen } = useSidebar();
   const { user, loading } = useAuth();
   const navigate = useNavigate();
+  const { currentWorkspace } = useWorkspace();
+  const { isAdmin, loading: rbacLoading } = useWorkspaceRBAC(currentWorkspace?.id);
+
+  useEffect(() => {
+    if (!rbacLoading && !isAdmin && !loading && user) {
+      toast.error("Acesso restrito a administradores");
+      navigate({ to: "/inicio" });
+    }
+  }, [isAdmin, rbacLoading, loading, user, navigate]);
+
+  if (rbacLoading) {
+    return (
+      <DashboardLayout>
+        <div className="p-4 sm:p-8 space-y-6">
+          <Skeleton className="h-10 w-48" />
+          <Skeleton className="h-64 w-full" />
+        </div>
+      </DashboardLayout>
+    );
+  }
   const [checklists, setChecklists] = useState<Checklist[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [profile, setProfile] = useState<any>(null);
