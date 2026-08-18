@@ -783,50 +783,56 @@ import logoIcon from "../assets/local/logo-tieck.webp";
               )}
             </CommandGroup>
             <CommandGroup heading="Navegação">
-              <CommandItem onSelect={() => { navigate({ to: "/equipe" }); setSearchOpen(false); }}>
-                <Users className="mr-2 h-4 w-4" />
-                <span>Equipe</span>
-              </CommandItem>
-
-              <CommandItem onSelect={() => { navigate({ to: "/configuracoes" }); setSearchOpen(false); }}>
-                <Share2 className="mr-2 h-4 w-4" />
-                <span>Compartilhar</span>
-              </CommandItem>
-              <CommandItem onSelect={() => { navigate({ to: "/organizar", search: { id: currentWorkspace?.id } }); setSearchOpen(false); }}>
-                <Inbox className="mr-2 h-4 w-4" />
-                <span>Ver envios</span>
-              </CommandItem>
-              <CommandItem onSelect={() => { navigate({ to: "/organizar", search: { id: currentWorkspace?.id } }); setSearchOpen(false); }}>
-                <BarChart3 className="mr-2 h-4 w-4" />
-                <span>Ver insights</span>
-              </CommandItem>
               <CommandItem onSelect={() => { navigate({ to: "/inicio" }); setSearchOpen(false); }}>
                 <Home className="mr-2 h-4 w-4" />
                 <span>Início</span>
               </CommandItem>
-              <CommandItem onSelect={() => { navigate({ to: "/organizar", search: { id: currentWorkspace?.id } }); setSearchOpen(false); }}>
-                <CheckSquare className="mr-2 h-4 w-4" />
-                <span>Checklists</span>
-              </CommandItem>
-              <CommandItem onSelect={() => { navigate({ to: "/dominios" }); setSearchOpen(false); }}>
-                <Globe className="mr-2 h-4 w-4" />
-                <span>Domínios</span>
-              </CommandItem>
-              <CommandItem onSelect={() => { navigate({ to: "/membros" }); setSearchOpen(false); }}>
-                <Users className="mr-2 h-4 w-4" />
-                <span>Membros</span>
-              </CommandItem>
+
+              {isWsAdmin && (
+                <>
+                  <CommandItem onSelect={() => { navigate({ to: "/equipe" }); setSearchOpen(false); }}>
+                    <Users className="mr-2 h-4 w-4" />
+                    <span>Equipe</span>
+                  </CommandItem>
+                  <CommandItem onSelect={() => { navigate({ to: "/dominios" }); setSearchOpen(false); }}>
+                    <Globe className="mr-2 h-4 w-4" />
+                    <span>Domínios</span>
+                  </CommandItem>
+                  <CommandItem onSelect={() => { navigate({ to: "/membros" }); setSearchOpen(false); }}>
+                    <Users className="mr-2 h-4 w-4" />
+                    <span>Membros</span>
+                  </CommandItem>
+                  <CommandItem onSelect={() => { navigate({ to: "/membros" }); setSearchOpen(false); }}>
+                    <Sparkles className="mr-2 h-4 w-4" />
+                    <span>Atualizar plano</span>
+                  </CommandItem>
+                </>
+              )}
+
+              {canWsManage && (
+                <>
+                  <CommandItem onSelect={() => { navigate({ to: "/organizar", search: { id: currentWorkspace?.id } }); setSearchOpen(false); }}>
+                    <CheckSquare className="mr-2 h-4 w-4" />
+                    <span>Checklists</span>
+                  </CommandItem>
+                  <CommandItem onSelect={() => { navigate({ to: "/organizar", search: { id: currentWorkspace?.id } }); setSearchOpen(false); }}>
+                    <Inbox className="mr-2 h-4 w-4" />
+                    <span>Ver envios</span>
+                  </CommandItem>
+                  <CommandItem onSelect={() => { navigate({ to: "/organizar", search: { id: currentWorkspace?.id } }); setSearchOpen(false); }}>
+                    <BarChart3 className="mr-2 h-4 w-4" />
+                    <span>Ver insights</span>
+                  </CommandItem>
+                  <CommandItem onSelect={() => { navigate({ to: "/organizar", search: { id: currentWorkspace?.id } }); setSearchOpen(false); }}>
+                    <LayoutTemplate className="mr-2 h-4 w-4" />
+                    <span>Modelos</span>
+                  </CommandItem>
+                </>
+              )}
+
               <CommandItem onSelect={() => { navigate({ to: "/configuracoes" }); setSearchOpen(false); }}>
                 <Settings className="mr-2 h-4 w-4" />
                 <span>Configurações</span>
-              </CommandItem>
-              <CommandItem onSelect={() => { navigate({ to: "/organizar", search: { id: currentWorkspace?.id } }); setSearchOpen(false); }}>
-                <LayoutTemplate className="mr-2 h-4 w-4" />
-                <span>Modelos</span>
-              </CommandItem>
-              <CommandItem onSelect={() => { navigate({ to: "/membros" }); setSearchOpen(false); }}>
-                <Sparkles className="mr-2 h-4 w-4" />
-                <span>Atualizar plano</span>
               </CommandItem>
             </CommandGroup>
            <CommandGroup heading="Ajuda e Suporte">
