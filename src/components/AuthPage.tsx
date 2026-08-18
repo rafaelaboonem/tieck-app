@@ -568,7 +568,9 @@ export function AuthPage({ mode, redirect }: Props) {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setRecoveryStep(0)}
+                  onClick={() => {
+                    setRecoveryStep(0);
+                  }}
                   disabled={isLoading}
                   className={ghostBtn}
                 >
