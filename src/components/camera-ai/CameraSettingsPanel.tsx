@@ -48,7 +48,8 @@ export function CameraSettingsPanel({ block, isOpen, onClose, onSave, isCompilin
         description: block.description || "",
         required: block.required !== false,
         mode: block.mode || 'auto',
-        policy: block.cameraAiPolicy as CameraVerificationPolicyV1 | undefined
+        policy: block.cameraAiPolicy as CameraVerificationPolicyV1 | undefined,
+        cameraReference: block.cameraReference
       });
       setHasChanges(false);
     }
