@@ -263,7 +263,7 @@ import { CameraVerificationPolicyV1 } from "@/server/camera-ai/schema";
 import { CameraBlockCard } from "@/components/camera-ai/CameraBlockCard";
 import { CameraSettingsPanel } from "@/components/camera-ai/CameraSettingsPanel";
 
-function CameraBlockEditor({ 
+export function CameraBlockEditor({ 
   block, 
   isActive, 
   currentChecklistId, 
@@ -283,6 +283,7 @@ function CameraBlockEditor({
   textareaRefs: React.MutableRefObject<Record<string, HTMLElement | null>>;
 }) {
   const [isCompiling, setIsCompiling] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const compileTimeoutRef = useRef<any>(null);
   const requestedHashRef = useRef<string | null>(null);
   
@@ -313,7 +314,7 @@ function CameraBlockEditor({
       });
       const data = await res.json();
       
-      // PROBLEMA 1: Validar se a resposta ainda é válida para a pergunta atual
+      // Validar se a resposta ainda é válida para a pergunta atual
       if (data.ok && data.policy) {
         const nowHash = await hashQuestion(camTitle, camDescription);
         
@@ -378,13 +379,16 @@ function CameraBlockEditor({
         isActive={isActive}
         isCompiling={isCompiling}
         textColor={textColor}
-        onSelect={() => setActiveBlockId(block.id)}
+        onSelect={() => {
+          setActiveBlockId(block.id);
+          setIsSettingsOpen(true);
+        }}
       />
 
       <CameraSettingsPanel
         block={block}
-        isOpen={isActive}
-        onClose={() => setActiveBlockId(null)}
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
         isCompiling={isCompiling}
         onSave={(patch) => updateBlock(block.id, patch)}
         checklistId={currentChecklistId || ""}
