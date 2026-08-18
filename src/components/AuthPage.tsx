@@ -4,9 +4,15 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { mapAuthError } from "@/utils/auth-errors";
 import { useAuth } from "@/contexts/AuthContext";
-import { Loader2, ArrowRight, Mail, ArrowLeft, Eye, EyeOff, User, Lock } from "lucide-react";
+import { Loader2, ArrowRight, Mail, ArrowLeft, Eye, EyeOff, User, Lock, Key } from "lucide-react";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
+import { 
+  requestPasswordResetFn, 
+  verifyPasswordResetFn, 
+  completePasswordResetFn 
+} from "@/lib/auth-recovery/recovery.functions";
 import logoUrl from "../assets/local/logo-tieck.webp";
+
 
 type Props = {
   mode: "login" | "signup";
@@ -52,6 +58,8 @@ export function AuthPage({ mode, redirect }: Props) {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [signupStep, setSignupStep] = useState<1 | 2>(1);
+  const [recoveryStep, setRecoveryStep] = useState<any>(0);
+  const [showRecoveryLink, setShowRecoveryLink] = useState(false);
   const [otp, setOtp] = useState("");
   const [otpVerified, setOtpVerified] = useState(false);
   const [verificationToken, setVerificationToken] = useState("");
@@ -99,11 +107,86 @@ export function AuthPage({ mode, redirect }: Props) {
       goAfterAuth();
     } catch (err: any) {
       console.error("Login error:", err);
-      toast.error(mapAuthError(err.message));
+      const mapped = mapAuthError(err.message);
+      toast.error(mapped);
+      if (err.message?.includes("invalid_credentials") || err.message?.includes("Invalid login credentials")) {
+        setShowRecoveryLink(true);
+      }
     } finally {
       setIsLoading(false);
     }
   };
+
+  const handleRequestRecovery = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (isLoading) return;
+    if (!normalizedEmail()) return toast.error("Informe seu e-mail");
+    
+    setIsLoading(true);
+    try {
+      await requestPasswordResetFn({ data: { email: normalizedEmail() } });
+      toast.success("Se o e-mail existir, um código foi enviado.");
+      setRecoveryStep(2);
+      setResendCountdown(60);
+      setOtp("");
+    } catch (err: any) {
+      console.error("Recovery request error:", err);
+      toast.error("Erro ao solicitar recuperação. Tente novamente.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleVerifyRecovery = async (e?: React.FormEvent, codeOverride?: string) => {
+    e?.preventDefault();
+    const token = (codeOverride ?? otp).replace(/\D/g, "");
+    if (isLoading || token.length !== 6) return;
+    
+    setIsLoading(true);
+    try {
+      const result = await verifyPasswordResetFn({ 
+        data: { email: normalizedEmail(), code: token } 
+      });
+      setVerificationToken(result.resetToken);
+      setRecoveryStep(3);
+      toast.success("Código validado! Escolha sua nova senha.");
+    } catch (err: any) {
+      console.error("Verify recovery error:", err);
+      toast.error(err.message === "otp has expired" ? "Código expirado" : "Código inválido");
+      setOtp("");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleCompleteRecovery = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (isLoading) return;
+    if (password.length < 8) return toast.error("A senha deve ter pelo menos 8 caracteres");
+    if (password !== confirmPassword) return toast.error("As senhas não conferem");
+
+    setIsLoading(true);
+    try {
+      await completePasswordResetFn({
+        data: {
+          email: normalizedEmail(),
+          resetToken: verificationToken,
+          newPassword: password
+        }
+      });
+      toast.success("Senha alterada com sucesso! Faça login.");
+      setRecoveryStep(0);
+      setShowRecoveryLink(false);
+      setPassword("");
+      setConfirmPassword("");
+    } catch (err: any) {
+      console.error("Complete recovery error:", err);
+      toast.error("Erro ao alterar senha. O token pode ter expirado.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
 
   const handleSendCode = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -212,10 +295,13 @@ export function AuthPage({ mode, redirect }: Props) {
   };
 
   useEffect(() => {
-    if (signupStep === 2 && otp.length === 6 && !isLoading && !otpVerified) {
+    if (recoveryStep === 2 && otp.length === 6 && !isLoading) {
+      handleVerifyRecovery(undefined, otp);
+    } else if (signupStep === 2 && otp.length === 6 && !isLoading && !otpVerified) {
       handleVerifyCode(undefined, otp);
     }
-  }, [otp, signupStep]);
+  }, [otp, signupStep, recoveryStep]);
+
 
   useEffect(() => {
     if (otpVerified && verificationToken && !isLoading) {
@@ -246,17 +332,26 @@ export function AuthPage({ mode, redirect }: Props) {
   };
 
   // ---------- UI ----------
-  const heading = isSignUp
+  const heading = recoveryStep > 0
+    ? recoveryStep === 1 ? "Recuperar senha" 
+    : recoveryStep === 2 ? "Confirme o código"
+    : "Nova senha"
+    : isSignUp
     ? signupStep === 1
       ? "Crie sua conta"
       : "Verifique seu e-mail"
     : "Bem-vindo de volta";
 
-  const subheading = isSignUp
+  const subheading = recoveryStep > 0
+    ? recoveryStep === 1 ? "Enviaremos um código para o seu e-mail"
+    : recoveryStep === 2 ? `Digite o código enviado para ${email}`
+    : "Escolha uma senha forte para sua segurança"
+    : isSignUp
     ? signupStep === 1
       ? "Preencha os campos abaixo para criar sua conta"
       : `Enviamos um código de 6 dígitos para ${email}`
     : "Acesse sua conta para continuar";
+
 
   const inputClass =
     "w-full bg-white border border-neutral-200 text-neutral-900 placeholder:text-neutral-400 px-4 py-3.5 rounded-xl focus:outline-none focus:border-[#FF007F] focus:ring-1 focus:ring-[#FF007F] transition-all";
@@ -323,11 +418,12 @@ export function AuthPage({ mode, redirect }: Props) {
         )}
 
         <div className="space-y-5 relative">
-          {signupStep === 1 && (
+          {signupStep === 1 && recoveryStep === 0 && (
             <form 
               onSubmit={isSignUp ? handleSendCode : handleLogin} 
               className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300"
             >
+
               {isSignUp && (
                 <div>
                   <label className="block text-xs font-semibold text-neutral-500 uppercase tracking-wider mb-2">Nome Completo</label>
@@ -382,11 +478,24 @@ export function AuthPage({ mode, redirect }: Props) {
                     {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 </div>
+                {!isSignUp && (
+                  <div className="flex justify-end mt-1.5 min-h-[20px]">
+                    {showRecoveryLink && (
+                      <button 
+                        type="button" 
+                        onClick={() => setRecoveryStep(1)}
+                        className="text-xs font-semibold text-[#FF007F] hover:underline animate-in fade-in slide-in-from-right-2 duration-300"
+                      >
+                        Esqueci minha senha
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
 
               {isSignUp && (
                 <div>
-                  <label className="block text-xs font-semibold text-neutral-500 uppercase tracking-wider mb-2">Confirmar Senha</label>
+                  <label className="block text-xs font-semibold text-neutral-500 uppercase tracking-wider mb-2">Confirme a Senha</label>
                   <div className="relative">
                     <Lock className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400" />
                     <input
@@ -424,7 +533,173 @@ export function AuthPage({ mode, redirect }: Props) {
             </form>
           )}
 
-          {signupStep === 2 && (
+
+
+
+
+
+
+          {recoveryStep === 1 && (
+            <form onSubmit={handleRequestRecovery} className="space-y-5 animate-in fade-in slide-in-from-bottom-2 duration-300">
+              <div>
+                <label className="block text-xs font-semibold text-neutral-500 uppercase tracking-wider mb-2">E-mail de Recuperação</label>
+                <div className="relative">
+                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400" />
+                  <input
+                    type="email"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className={`${inputClass} pl-11`}
+                    placeholder="seu@email.com"
+                    autoFocus
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <button type="submit" disabled={isLoading} className={primaryBtn}>
+                  {isLoading ? <Loader2 className="animate-spin h-5 w-5" /> : (
+                    <>
+                      Enviar código
+                      <ArrowRight className="h-4 w-4" />
+                    </>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRecoveryStep(0)}
+                  disabled={isLoading}
+                  className={ghostBtn}
+                >
+                  <ArrowLeft className="h-4 w-4" /> Voltar ao login
+                </button>
+              </div>
+            </form>
+          )}
+
+          {recoveryStep === 2 && (
+            <form onSubmit={handleVerifyRecovery} className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+              <div className="flex justify-center">
+                <InputOTP 
+                  maxLength={6} 
+                  value={otp} 
+                  onChange={(val) => setOtp(val.replace(/\D/g, ""))} 
+                  disabled={isLoading} 
+                  autoFocus
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                >
+                  <InputOTPGroup className="gap-2 sm:gap-3">
+                    {[0, 1, 2, 3, 4, 5].map((i) => (
+                      <InputOTPSlot
+                        key={i}
+                        index={i}
+                        className="h-12 w-12 text-xl font-bold rounded-xl bg-white border-neutral-200 text-neutral-900 data-[active=true]:border-[#FF007F] data-[active=true]:ring-1 data-[active=true]:ring-[#FF007F]"
+                      />
+                    ))}
+                  </InputOTPGroup>
+                </InputOTP>
+              </div>
+
+              <div className="flex items-center justify-center min-h-[24px] text-sm text-neutral-500 text-center">
+                {isLoading ? (
+                  <span className="flex items-center gap-2">
+                    <Loader2 className="animate-spin h-4 w-4" /> Verificando…
+                  </span>
+                ) : (
+                  <span>Digite o código enviado para o seu e-mail</span>
+                )}
+              </div>
+
+              <div className="space-y-3">
+                <button
+                  type="button"
+                  onClick={handleRequestRecovery}
+                  disabled={isLoading || resendCountdown > 0}
+                  className={ghostBtn}
+                >
+                  {resendCountdown > 0
+                    ? `Reenviar em ${resendCountdown}s`
+                    : (<><ArrowLeft className="h-4 w-4" /> Reenviar e-mail</>)}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRecoveryStep(1)}
+                  disabled={isLoading}
+                  className="w-full text-sm text-neutral-400 hover:text-neutral-600 transition-colors py-2"
+                >
+                  Trocar e-mail
+                </button>
+              </div>
+            </form>
+          )}
+
+          {recoveryStep === 3 && (
+            <form onSubmit={handleCompleteRecovery} className="space-y-5 animate-in fade-in slide-in-from-bottom-2 duration-300">
+              <div className="p-3 bg-green-50 border border-green-100 rounded-xl flex items-center gap-3 mb-2">
+                <div className="h-8 w-8 rounded-full bg-green-500 flex items-center justify-center text-white shrink-0">
+                  <Key className="h-4 w-4" />
+                </div>
+                <div className="text-xs text-green-700">
+                  <p className="font-bold">Código validado!</p>
+                  <p>Agora crie sua nova senha de acesso.</p>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-neutral-500 uppercase tracking-wider mb-2">Nova Senha</label>
+                <div className="relative">
+                  <Lock className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400" />
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className={`${inputClass} pl-11 pr-11`}
+                    placeholder="Mínimo 8 caracteres"
+                    autoFocus
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600 transition-colors"
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-neutral-500 uppercase tracking-wider mb-2">Confirmar Nova Senha</label>
+                <div className="relative">
+                  <Lock className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400" />
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    required
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    className={`${inputClass} pl-11`}
+                    placeholder="Repita a nova senha"
+                  />
+                </div>
+              </div>
+
+              <button type="submit" disabled={isLoading} className={primaryBtn}>
+                {isLoading ? <Loader2 className="animate-spin h-5 w-5" /> : (
+                  <>
+                    Redefinir Senha
+                    <ArrowRight className="h-4 w-4" />
+                  </>
+                )}
+              </button>
+            </form>
+          )}
+        </div>
+
+
+
+          {signupStep === 2 && recoveryStep === 0 && (
             <form onSubmit={handleVerifyCode} className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
               <div className="flex justify-center">
                 <InputOTP 

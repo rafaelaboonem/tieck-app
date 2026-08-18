@@ -97,8 +97,10 @@ async function postResend(lovableApiKey: string, resendConnectionKey: string, fr
 }
 
 async function sendEmail(to: string, subject: string, html: string) {
-  const lovableApiKey = Deno.env.get("LOVABLE_API_KEY");
-  const resendConnectionKey = Deno.env.get("RESEND_API_KEY");
+  // @ts-ignore
+  const env = typeof Deno !== 'undefined' ? Deno.env.toObject() : process.env;
+  const lovableApiKey = env["LOVABLE_API_KEY"];
+  const resendConnectionKey = env["RESEND_API_KEY"];
   if (!lovableApiKey || !resendConnectionKey) {
     throw new Error("Serviço de e-mail indisponível: conexão Resend não configurada.");
   }
