@@ -244,7 +244,7 @@ export function AuthPage({ mode, redirect }: Props) {
 
   const subheading = isSignUp
     ? signupStep === 1
-      ? "Comece informando seu melhor e-mail"
+      ? "Preencha os campos abaixo para criar sua conta"
       : `Enviamos um código de 6 dígitos para ${email}`
     : "Acesse sua conta para continuar";
 
