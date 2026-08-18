@@ -2624,6 +2624,16 @@ export type Database = {
       }
       generate_dataset_public_id: { Args: never; Returns: string }
       generate_short_slug: { Args: { length?: number }; Returns: string }
+      get_checklist_access: {
+        Args: { p_checklist_id: string; p_user_id: string }
+        Returns: {
+          can_manage: boolean
+          is_owner: boolean
+          member_role: Database["public"]["Enums"]["app_role"]
+          owner_id: string
+          workspace_id: string
+        }[]
+      }
       get_my_workspace_access: {
         Args: { p_workspace_id: string }
         Returns: {

@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { createFileRoute } from '@tanstack/react-router';
 import { createServerSupabaseClient } from '@/integrations/supabase/client.server';
 import { CameraVerificationPolicyV1Schema, PublishedBlock, VerificationResult } from '@/server/camera-ai/schema';
-import { analyzeImage } from '@/server/camera-ai/openai-provider';
+import { analyzeImage, analyzeImageWithReference } from '@/server/camera-ai/openai-provider';
 import { evaluateGate } from '@/server/camera-ai/gate';
 import { validateImageBuffer } from '@/server/camera-ai/image-validation';
 import { createHash, randomUUID } from 'crypto';
@@ -162,15 +162,48 @@ export const Route = createFileRoute('/api/camera-ai/test-verification')({
           const { OpenAI } = await import('openai');
           const openaiClient = new OpenAI({ apiKey, dangerouslyAllowBrowser: process.env.NODE_ENV === 'test' });
 
-          const analysis = await analyzeImage(
-            openaiClient, 
-            process.env['OPENAI_VISION_MODEL'] || 'gpt-4o-mini', 
-            question, 
-            buffer, 
-            imgVal.mimeType || 'image/jpeg', 
-            20000, 
-            policyValidation.data
-          );
+          const model = process.env['OPENAI_VISION_MODEL'] || 'gpt-4o-mini';
+          let analysis;
+
+          if (block.mode === 'reference' && block.cameraReference) {
+            const { supabaseAdmin } = await import('@/integrations/supabase/client.server');
+            const { data: refData, error: refError } = await supabaseAdmin.storage
+              .from('camera-references')
+              .download(block.cameraReference.storagePath);
+            
+            if (refError || !refData) {
+              return Response.json({ ok: false, code: 'reference_not_found', requestId }, { status: 400 });
+            }
+
+            const refBuffer = await refData.arrayBuffer();
+            const refHash = createHash('sha256').update(new Uint8Array(refBuffer)).digest('hex');
+            
+            if (refHash !== block.cameraReference.sha256) {
+              return Response.json({ ok: false, code: 'reference_corrupted', requestId }, { status: 400 });
+            }
+
+            analysis = await analyzeImageWithReference(
+              openaiClient,
+              model,
+              question,
+              buffer,
+              imgVal.mimeType || 'image/jpeg',
+              refBuffer,
+              refData.type || 'image/jpeg',
+              25000,
+              policyValidation.data
+            );
+          } else {
+            analysis = await analyzeImage(
+              openaiClient, 
+              model, 
+              question, 
+              buffer, 
+              imgVal.mimeType || 'image/jpeg', 
+              20000, 
+              policyValidation.data
+            );
+          }
           
           const result = evaluateGate(analysis);
 

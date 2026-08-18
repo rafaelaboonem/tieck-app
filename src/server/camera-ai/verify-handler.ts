@@ -1,4 +1,4 @@
-import { VerifyPayload, Decision, VerificationResult, PublishedBlock, CameraVerification, CameraVerificationPolicyV1 } from './schema';
+import { VerifyPayload, Decision, VerificationResult, PublishedBlock, CameraVerification, CameraVerificationPolicyV1, CameraReferenceVerification } from './schema';
 import { createHash } from 'crypto';
 import { validateImageBuffer } from './image-validation';
 import { evaluateGate } from './gate';
@@ -57,6 +57,15 @@ export interface VerifyDependencies {
   claimAttempt: (params: { responseId: string; blockId: string; idempotencyKey: string }) => Promise<{ data: ClaimResult[] | null; error: unknown }>;
   hitRateLimit: (responseId: string) => Promise<{ data: RateLimitResult[] | null; error: unknown }>;
   analyzeImage: (question: string, buffer: ArrayBuffer, mimeType: string, policy?: CameraVerificationPolicyV1) => Promise<CameraVerification>;
+  analyzeImageWithReference: (
+    question: string,
+    candidateBuffer: ArrayBuffer,
+    candidateMime: string,
+    referenceBuffer: ArrayBuffer,
+    referenceMime: string,
+    policy?: CameraVerificationPolicyV1
+  ) => Promise<CameraReferenceVerification>;
+  loadReferenceImage: (storagePath: string) => Promise<{ buffer: ArrayBuffer; mimeType: string }>;
   markFailed: (params: { responseId: string; blockId: string; idempotencyKey: string; code: string }) => Promise<{ data: unknown; error: unknown }>;
   markCompleted: (params: {
     responseId: string;
@@ -323,11 +332,40 @@ export async function verifyCameraRequest(
     };
   }
 
-  // 10. OpenAI
+  // 10. Verification Flow (Auto vs Reference)
   const startTime = deps.now().getTime();
-  let analysis: CameraVerification;
+  let analysis: CameraVerification | CameraReferenceVerification;
+
   try {
-    analysis = await deps.analyzeImage(question, imageFile.buffer, mimeType, validatedPolicy);
+    if (block.mode === 'reference' && block.cameraReference) {
+      const ref = await deps.loadReferenceImage(block.cameraReference.storagePath);
+      
+      // SHA-256 validation of reference
+      const refHash = createHash('sha256').update(new Uint8Array(ref.buffer)).digest('hex');
+      if (refHash !== block.cameraReference.sha256) {
+        await deps.markFailed({
+          responseId: session.response_id,
+          blockId: payload.blockId,
+          idempotencyKey: payload.idempotencyKey,
+          code: 'reference_corrupted'
+        });
+        return { 
+          status: 400, 
+          body: { ok: false, code: 'reference_corrupted', message: 'A foto de referência está corrompida. Avise o administrador.', requestId } 
+        };
+      }
+
+      analysis = await deps.analyzeImageWithReference(
+        question,
+        imageFile.buffer,
+        mimeType,
+        ref.buffer,
+        ref.mimeType,
+        validatedPolicy
+      );
+    } else {
+      analysis = await deps.analyzeImage(question, imageFile.buffer, mimeType, validatedPolicy);
+    }
   } catch (aiError) {
     await deps.markFailed({
       responseId: session.response_id,

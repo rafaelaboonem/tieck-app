@@ -3,9 +3,11 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
-import { AlertCircle, Loader2, Play } from "lucide-react";
-import { CameraVerificationPolicyV1, PublishedBlock, CameraBlockPatch } from "@/server/camera-ai/schema";
+import { AlertCircle, Loader2, Play, Upload, X, Camera } from "lucide-react";
+import { CameraVerificationPolicyV1, PublishedBlock, CameraBlockPatch, CameraReferenceImageV1 } from "@/server/camera-ai/schema";
 import { CameraVerificationTestDialog } from "./CameraVerificationTestDialog";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 interface CameraDraft {
   title: string;
@@ -13,6 +15,7 @@ interface CameraDraft {
   required: boolean;
   mode: string;
   policy: CameraVerificationPolicyV1 | undefined;
+  cameraReference: CameraReferenceImageV1 | undefined;
 }
 
 interface CameraSettingsPanelProps {
@@ -31,7 +34,8 @@ export function CameraSettingsPanel({ block, isOpen, onClose, onSave, isCompilin
     description: block.description || "",
     required: block.required !== false,
     mode: block.mode || 'auto',
-    policy: block.cameraAiPolicy as CameraVerificationPolicyV1 | undefined
+    policy: block.cameraAiPolicy as CameraVerificationPolicyV1 | undefined,
+    cameraReference: block.cameraReference
   });
 
   const [isTestModalOpen, setIsTestModalOpen] = useState(false);
@@ -44,7 +48,8 @@ export function CameraSettingsPanel({ block, isOpen, onClose, onSave, isCompilin
         description: block.description || "",
         required: block.required !== false,
         mode: block.mode || 'auto',
-        policy: block.cameraAiPolicy as CameraVerificationPolicyV1 | undefined
+        policy: block.cameraAiPolicy as CameraVerificationPolicyV1 | undefined,
+        cameraReference: block.cameraReference
       });
       setHasChanges(false);
     }
@@ -75,9 +80,79 @@ export function CameraSettingsPanel({ block, isOpen, onClose, onSave, isCompilin
       description: draft.description,
       required: draft.required,
       mode: draft.mode,
-      cameraAiPolicy: draft.policy
+      cameraAiPolicy: draft.policy,
+      cameraReference: draft.cameraReference || null
     });
     setHasChanges(false);
+  };
+
+  const [isUploading, setIsUploading] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function loadPreview() {
+      if (draft.cameraReference && draft.mode === 'reference' && isOpen) {
+        try {
+          const { data: session } = await supabase.auth.getSession();
+          if (!session.session?.access_token) return;
+
+          const res = await fetch(`/api/camera-ai/reference-image/preview?checklistId=${checklistId}&storagePath=${encodeURIComponent(draft.cameraReference.storagePath)}`, {
+            headers: {
+              'Authorization': `Bearer ${session.session.access_token}`
+            }
+          });
+          if (res.ok) {
+            const data = await res.json();
+            setPreviewUrl(data.signedUrl);
+          }
+        } catch (e) {
+          console.error("Preview error:", e);
+        }
+      } else {
+        setPreviewUrl(null);
+      }
+    }
+    loadPreview();
+  }, [draft.cameraReference, draft.mode, checklistId, isOpen]);
+
+  const handleUploadReference = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploading(true);
+    try {
+      const { data: session } = await supabase.auth.getSession();
+      if (!session.session?.access_token) throw new Error("Não autenticado");
+
+      const formData = new FormData();
+      formData.append('checklistId', checklistId);
+      formData.append('blockId', block.id);
+      formData.append('reference', file);
+
+      const res = await fetch('/api/camera-ai/reference-image', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.session.access_token}`
+        },
+        body: formData
+      });
+
+      if (!res.ok) {
+        const errorText = await res.text();
+        throw new Error(errorText || "Falha no upload");
+      }
+
+      const metadata = await res.json();
+      handleFieldChange('cameraReference', metadata);
+      toast.success("Foto de referência adicionada!");
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err.message || "Erro ao fazer upload da referência");
+    } finally {
+      setIsUploading(false);
+      // Clear input
+      e.target.value = '';
+    }
   };
 
   const requestClose = () => {
@@ -125,9 +200,12 @@ export function CameraSettingsPanel({ block, isOpen, onClose, onSave, isCompilin
               <div className="space-y-3">
                 <label className="text-sm font-bold text-neutral-900">Modo de verificação</label>
                 <div className="grid grid-cols-1 gap-3">
-                  <div className="flex items-center justify-between p-3 border rounded-xl border-pink-200 bg-pink-50/30">
+                  <div 
+                    onClick={() => handleFieldChange('mode', 'auto')}
+                    className={`flex items-center justify-between p-3 border rounded-xl cursor-pointer transition-colors ${draft.mode === 'auto' ? 'border-pink-200 bg-pink-50/30' : 'border-neutral-100 hover:border-neutral-200'}`}
+                  >
                     <div className="flex items-center gap-3">
-                      <div className="w-4 h-4 rounded-full border-4 border-pink-500" />
+                      <div className={`w-4 h-4 rounded-full border-4 ${draft.mode === 'auto' ? 'border-pink-500' : 'border-neutral-200'}`} />
                       <div>
                         <div className="flex items-center gap-2">
                           <p className="text-sm font-bold text-neutral-900">Automático</p>
@@ -135,16 +213,22 @@ export function CameraSettingsPanel({ block, isOpen, onClose, onSave, isCompilin
                         </div>
                         <p className="text-[11px] text-neutral-500">A IA analisa e aprova em segundos.</p>
                       </div>
+                    </div>
+                  </div>
 
-                    </div>
-                  </div>
-                   <div className="flex items-center justify-between p-3 border border-neutral-100 rounded-xl opacity-50 bg-neutral-50">
+                  <div 
+                    onClick={() => handleFieldChange('mode', 'reference')}
+                    className={`flex items-center justify-between p-3 border rounded-xl cursor-pointer transition-colors ${draft.mode === 'reference' ? 'border-blue-200 bg-blue-50/30' : 'border-neutral-100 hover:border-neutral-200'}`}
+                  >
                     <div className="flex items-center gap-3">
-                      <div className="w-4 h-4 rounded-full border-2 border-neutral-300" />
-                      <p className="text-sm font-bold text-neutral-900">Comparar com referência</p>
+                      <div className={`w-4 h-4 rounded-full border-4 ${draft.mode === 'reference' ? 'border-blue-500' : 'border-neutral-200'}`} />
+                      <div>
+                        <p className="text-sm font-bold text-neutral-900">Comparar com referência</p>
+                        <p className="text-[11px] text-neutral-500">Compare com uma foto padrão esperada.</p>
+                      </div>
                     </div>
-                    <Badge variant="outline" className="text-[10px]">Em breve</Badge>
                   </div>
+
                   <div className="flex items-center justify-between p-3 border border-neutral-100 rounded-xl opacity-50 bg-neutral-50">
                     <div className="flex items-center gap-3">
                       <div className="w-4 h-4 rounded-full border-2 border-neutral-300" />
@@ -153,6 +237,63 @@ export function CameraSettingsPanel({ block, isOpen, onClose, onSave, isCompilin
                     <Badge variant="outline" className="text-[10px]">Em breve</Badge>
                   </div>
                 </div>
+
+                {draft.mode === 'reference' && (
+                  <div className="mt-4 p-4 border rounded-xl border-blue-100 bg-blue-50/20 space-y-4 animate-in fade-in slide-in-from-top-2 duration-200">
+                    <div className="space-y-1">
+                      <label className="text-xs font-bold text-blue-900">Foto de referência</label>
+                      <p className="text-[11px] text-blue-700/70">Adicione uma foto mostrando como o resultado esperado deve aparecer.</p>
+                    </div>
+
+                    {previewUrl ? (
+                      <div className="relative group rounded-lg overflow-hidden border border-blue-200 aspect-video bg-white">
+                        <img src={previewUrl} alt="Referência" className="w-full h-full object-cover" />
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                          <label className="cursor-pointer bg-white text-neutral-900 px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2 hover:bg-neutral-50">
+                            <Upload className="w-3 h-3" />
+                            Trocar foto
+                            <input type="file" className="hidden" accept="image/*" onChange={handleUploadReference} />
+                          </label>
+                          <button 
+                            onClick={() => {
+                              handleFieldChange('cameraReference', undefined);
+                              setPreviewUrl(null);
+                            }}
+                            className="bg-red-500 text-white px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2 hover:bg-red-600"
+                          >
+                            <X className="w-3 h-3" />
+                            Remover
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <label className={`flex flex-col items-center justify-center w-full aspect-video border-2 border-dashed rounded-lg cursor-pointer transition-colors ${isUploading ? 'bg-neutral-50 border-neutral-300 cursor-wait' : 'hover:bg-blue-50 border-blue-200 bg-white'}`}>
+                        {isUploading ? (
+                          <>
+                            <Loader2 className="w-6 h-6 text-blue-500 animate-spin mb-2" />
+                            <p className="text-[11px] text-blue-700 font-medium">Fazendo upload...</p>
+                          </>
+                        ) : (
+                          <>
+                            <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center mb-2">
+                              <Camera className="w-5 h-5 text-blue-600" />
+                            </div>
+                            <p className="text-[11px] text-blue-700 font-bold">Clique para adicionar foto</p>
+                            <p className="text-[9px] text-blue-500 uppercase font-bold mt-1 tracking-wider">PNG, JPG até 3MB</p>
+                          </>
+                        )}
+                        <input type="file" className="hidden" accept="image/*" onChange={handleUploadReference} disabled={isUploading} />
+                      </label>
+                    )}
+
+                    {!draft.cameraReference && (
+                      <div className="flex items-center gap-2 p-2 rounded-lg bg-red-50 text-red-700">
+                        <AlertCircle className="w-3 h-3 flex-shrink-0" />
+                        <p className="text-[10px] font-bold leading-tight">Adicione uma foto de referência para usar este modo.</p>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
 

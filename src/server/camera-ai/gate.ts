@@ -1,6 +1,6 @@
-import { CameraVerification, Decision, VerificationResult } from './schema';
+import { CameraVerification, CameraReferenceVerification, VerificationResult } from './schema';
 
-export function evaluateGate(analysis: CameraVerification): VerificationResult {
+export function evaluateGate(analysis: CameraVerification | CameraReferenceVerification): VerificationResult {
   // 1. Sanitize user_message
   const sanitizeMessage = (msg: string, isApproved: boolean): string => {
     if (!msg) return isApproved ? 'Foto verificada com sucesso.' : 'É necessário tirar outra foto.';
@@ -21,17 +21,26 @@ export function evaluateGate(analysis: CameraVerification): VerificationResult {
     return clean || (isApproved ? 'Foto verificada com sucesso.' : 'É necessário tirar outra foto.');
   };
 
-  const isApproved = 
-    analysis.target_visible === true &&
-    analysis.target_identity_confidence >= 0.90 &&
-    analysis.condition_observable === true &&
-    analysis.condition_met === true &&
-    analysis.image_quality_usable === true &&
-    analysis.positive_visible_evidence.length > 0 &&
-    analysis.contradictions.length === 0 &&
-    analysis.overall_confidence >= 0.90;
+  const v = analysis;
 
-  const sanitizedMessage = sanitizeMessage(analysis.user_message, isApproved);
+  // 2. Reference mode specific logic
+  const isReferenceMode = 'reference_match' in v;
+  const referencePassed = isReferenceMode 
+    ? (v.reference_match === true && v.reference_match_confidence >= 0.90)
+    : true;
+
+  const isApproved = 
+    referencePassed &&
+    v.target_visible === true &&
+    v.target_identity_confidence >= 0.90 &&
+    v.condition_observable === true &&
+    v.condition_met === true &&
+    v.image_quality_usable === true &&
+    v.positive_visible_evidence.length > 0 &&
+    v.contradictions.length === 0 &&
+    v.overall_confidence >= 0.90;
+
+  const sanitizedMessage = sanitizeMessage(v.user_message, isApproved);
 
   if (isApproved) {
     return {
@@ -39,55 +48,64 @@ export function evaluateGate(analysis: CameraVerification): VerificationResult {
       decision: 'approved',
       code: 'verified',
       message: sanitizedMessage,
-      evidence: analysis.positive_visible_evidence.join(', ').substring(0, 500)
+      evidence: v.positive_visible_evidence.join(', ').substring(0, 500)
     };
   }
 
-  // Mapeamento Fail-Closed
-  let code = 'retake_required';
-  let message = sanitizedMessage;
+  // 3. Fail-Closed Mapping
+
+  // Reference mismatch
+  if (isReferenceMode && (!v.reference_match || v.reference_match_confidence < 0.90)) {
+    return {
+      ok: true,
+      decision: 'retake',
+      code: 'reference_mismatch',
+      message: sanitizedMessage,
+      evidence: v.reference_differences?.join(', ') || 'A foto não coincide com o padrão de referência esperado.'
+    };
+  }
 
   // Objeto ausente ou incorreto
-  if (!analysis.target_visible || analysis.target_identity_confidence < 0.90) {
+  if (!v.target_visible || v.target_identity_confidence < 0.90) {
     return {
       ok: true,
       decision: 'retake',
       code: 'target_missing',
       message: sanitizedMessage,
-      evidence: analysis.negative_visible_evidence.join(', ')
+      evidence: v.negative_visible_evidence.join(', ')
     };
   }
 
   // Qualidade insuficiente
-  if (!analysis.image_quality_usable) {
+  if (!v.image_quality_usable) {
     return {
       ok: true,
       decision: 'retake',
       code: 'quality_failure',
       message: sanitizedMessage,
-      evidence: analysis.negative_visible_evidence.join(', ')
+      evidence: v.negative_visible_evidence.join(', ')
     };
   }
 
   // Condição não observável ou impossível de verificar
-  if (!analysis.condition_observable || analysis.contradictions.length > 0 || analysis.positive_visible_evidence.length === 0) {
+  if (!v.condition_observable || v.contradictions.length > 0 || v.positive_visible_evidence.length === 0) {
     return {
       ok: true,
       decision: 'not_observable',
       code: 'not_observable',
       message: sanitizedMessage,
-      evidence: [...analysis.negative_visible_evidence, ...analysis.contradictions].join(', ')
+      evidence: [...v.negative_visible_evidence, ...v.contradictions].join(', ')
     };
   }
 
   // Condição visivelmente não atendida
-  if (analysis.condition_met === false) {
+  if (v.condition_met === false) {
     return {
       ok: true,
       decision: 'retake',
       code: 'condition_not_met',
       message: sanitizedMessage,
-      evidence: analysis.negative_visible_evidence.join(', ')
+      evidence: v.negative_visible_evidence.join(', ')
     };
   }
 
@@ -97,6 +115,6 @@ export function evaluateGate(analysis: CameraVerification): VerificationResult {
     decision: 'retake',
     code: 'uncertain',
     message: sanitizedMessage,
-    evidence: analysis.overall_confidence.toString()
+    evidence: v.overall_confidence.toString()
   };
 }
