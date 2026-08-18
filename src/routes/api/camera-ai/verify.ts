@@ -165,6 +165,18 @@ export const Route = createFileRoute('/api/camera-ai/verify')({
               const openaiClient = new OpenAI({ apiKey });
               return analyzeImage(openaiClient, model, question, buffer, mimeType, 20000, policy);
             },
+            analyzeImageWithReference: async (question, candidateBuffer, candidateMime, referenceBuffer, referenceMime, policy) => {
+              const openaiClient = new OpenAI({ apiKey });
+              return analyzeImageWithReference(openaiClient, model, question, candidateBuffer, candidateMime, referenceBuffer, referenceMime, 25000, policy);
+            },
+            loadReferenceImage: async (storagePath: string) => {
+              const { supabaseAdmin } = await import('@/integrations/supabase/client.server');
+              const { data, error } = await supabaseAdmin.storage.from('camera-references').download(storagePath);
+              if (error || !data) throw new Error(`Reference download failed: ${error?.message}`);
+              
+              const buffer = await data.arrayBuffer();
+              return { buffer, mimeType: data.type };
+            },
             markFailed: async ({ responseId, blockId, idempotencyKey, code }: { responseId: string; blockId: string; idempotencyKey: string; code: string }) => {
               const client = createServerSupabaseClient();
               if (!client) throw new Error('Supabase client failed');
