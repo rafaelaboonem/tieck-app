@@ -59,8 +59,8 @@ export type CameraVerificationPolicyV1 = z.infer<typeof CameraVerificationPolicy
 export const CameraReferenceImageV1Schema = z.object({
   version: z.literal(1),
   storagePath: z.string().min(1),
-  mimeType: z.string().min(1),
-  sha256: z.string().length(64),
+  mimeType: z.enum(['image/jpeg', 'image/png', 'image/webp']),
+  sha256: z.string().regex(/^[a-f0-9]{64}$/i),
   sizeBytes: z.number().positive(),
 });
 

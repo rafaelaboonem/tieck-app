@@ -96,7 +96,7 @@ export function CameraSettingsPanel({ block, isOpen, onClose, onSave, isCompilin
           const { data: session } = await supabase.auth.getSession();
           if (!session.session?.access_token) return;
 
-          const res = await fetch(`/api/camera-ai/reference-image/preview?checklistId=${checklistId}&storagePath=${encodeURIComponent(draft.cameraReference.storagePath)}`, {
+          const res = await fetch(`/api/camera-ai/reference-image/preview?checklistId=${checklistId}&blockId=${block.id}&storagePath=${encodeURIComponent(draft.cameraReference.storagePath)}`, {
             headers: {
               'Authorization': `Bearer ${session.session.access_token}`
             }
@@ -201,7 +201,10 @@ export function CameraSettingsPanel({ block, isOpen, onClose, onSave, isCompilin
                 <label className="text-sm font-bold text-neutral-900">Modo de verificação</label>
                 <div className="grid grid-cols-1 gap-3">
                   <div 
-                    onClick={() => handleFieldChange('mode', 'auto')}
+                    onClick={() => {
+                      handleFieldChange('mode', 'auto');
+                      handleFieldChange('cameraReference', undefined);
+                    }}
                     className={`flex items-center justify-between p-3 border rounded-xl cursor-pointer transition-colors ${draft.mode === 'auto' ? 'border-pink-200 bg-pink-50/30' : 'border-neutral-100 hover:border-neutral-200'}`}
                   >
                     <div className="flex items-center gap-3">
