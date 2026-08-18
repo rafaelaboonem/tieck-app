@@ -56,6 +56,16 @@ export const CameraVerificationPolicyV1Schema = PolicyGenerationSchema.extend({
 
 export type CameraVerificationPolicyV1 = z.infer<typeof CameraVerificationPolicyV1Schema>;
 
+export const CameraReferenceImageV1Schema = z.object({
+  version: z.literal(1),
+  storagePath: z.string().min(1),
+  mimeType: z.string().min(1),
+  sha256: z.string().length(64),
+  sizeBytes: z.number().positive(),
+});
+
+export type CameraReferenceImageV1 = z.infer<typeof CameraReferenceImageV1Schema>;
+
 export interface PublishedBlock {
   id: string;
   type: string;
@@ -63,10 +73,11 @@ export interface PublishedBlock {
   subtitle?: string;
   description?: string;
   required?: boolean;
-  mode?: string;
+  mode?: 'auto' | 'reference' | string;
   instruction?: string;
   cameraAiPolicy?: CameraVerificationPolicyV1;
   cameraAiNeedsRevalidation?: boolean;
+  cameraReference?: CameraReferenceImageV1;
 }
 
 export interface CameraBlockPatch {
@@ -75,9 +86,10 @@ export interface CameraBlockPatch {
   description?: string;
   instruction?: string;
   required?: boolean;
-  mode?: string;
+  mode?: 'auto' | 'reference' | string;
   cameraAiPolicy?: CameraVerificationPolicyV1;
   cameraAiNeedsRevalidation?: boolean;
+  cameraReference?: CameraReferenceImageV1 | null;
 }
 
 
