@@ -106,7 +106,7 @@ import logoIcon from "../assets/local/logo-tieck.webp";
     const [memberCount, setMemberCount] = useState<number>(0);
     const [hasChecklists, setHasChecklists] = useState(false);
     
-    const { isAdmin: isWsAdmin, canManage: canWsManage, isViewer: isWsViewer, loading: rbacLoading } = useWorkspaceRBAC(currentWorkspace?.id);
+    const { isAdmin: isWsAdmin, canManage: canWsManage, isViewer: isWsViewer, workspaceMemberId, role: wsRole, loading: rbacLoading } = useWorkspaceRBAC(currentWorkspace?.id);
     const [recentChecklists, setRecentChecklists] = useState<{id: string, title: string | null}[]>([]);
     const [allWorkspacesChecklists, setAllWorkspacesChecklists] = useState<{id: string, title: string | null, workspace_id: string | null}[]>([]);
     const [recentOpen, setRecentOpen] = useState(true);
@@ -117,7 +117,14 @@ import logoIcon from "../assets/local/logo-tieck.webp";
        const fetchData = async () => {
          // Fail-closed: Se estamos num workspace e o RBAC ainda está carregando, 
          // limpamos estados contextuais e bloqueamos a execução.
-         if (workspaceStatus === 'workspace' && rbacLoading) {
+         if (workspaceStatus === 'workspace' && (rbacLoading || !user?.id)) {
+           setRecentChecklists([]);
+           setAllWorkspacesChecklists([]);
+           return;
+         }
+
+         // Fail-closed: se o RBAC resolveu e não temos role, bloquear.
+         if (workspaceStatus === 'workspace' && !rbacLoading && !wsRole) {
            setRecentChecklists([]);
            setAllWorkspacesChecklists([]);
            return;
@@ -174,29 +181,27 @@ import logoIcon from "../assets/local/logo-tieck.webp";
              contextualQuery = contextualQuery.eq("workspace_id", currentWorkspace.id);
              
              if (isWsViewer) {
-               // Helper interno para resolver assignments de Viewer uma única vez
-               const { data: memberData } = await supabase
-                 .from("workspace_members")
-                 .select("id")
-                 .eq("workspace_id", currentWorkspace.id)
-                 .eq("user_id", user.id)
-                 .eq("status", "active")
-                 .maybeSingle();
+               // FASE 5B.10: Resolução de assignments via RPC canônica
+               if (!workspaceMemberId) {
+                 setRecentChecklists([]);
+                 setAllWorkspacesChecklists([]);
+                 return;
+               }
 
-               if (memberData) {
-                 const { data: assignments } = await supabase
-                   .from("checklist_assignments")
-                   .select("checklist_id")
-                   .eq("workspace_member_id", memberData.id);
-                 
-                 const assignedIds = assignments?.map(a => a.checklist_id) || [];
-                 if (assignedIds.length > 0) {
-                   contextualQuery = contextualQuery.in("id", assignedIds);
-                 } else {
-                   setRecentChecklists([]);
-                   setAllWorkspacesChecklists([]);
-                   return;
-                 }
+               const { data: assignments, error: assignError } = await supabase.rpc('list_my_checklist_assignments', {
+                 p_workspace_id: currentWorkspace.id
+               });
+               
+               if (assignError) {
+                 console.error("[DashboardLayout] Erro ao buscar atribuições canônicas:", assignError);
+                 setRecentChecklists([]);
+                 setAllWorkspacesChecklists([]);
+                 return;
+               }
+
+               const assignedIds = assignments?.map((a: any) => a.checklist_id) || [];
+               if (assignedIds.length > 0) {
+                 contextualQuery = contextualQuery.in("id", assignedIds);
                } else {
                  setRecentChecklists([]);
                  setAllWorkspacesChecklists([]);
