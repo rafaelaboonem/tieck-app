@@ -615,12 +615,16 @@ export function Dashboard() {
                   </svg>
                 </div>
                 <h2 className="text-base font-semibold text-neutral-900">
-                  {checklists.length === 0 ? (currentWorkspace ? "Nenhum checklist disponível neste workspace" : "Nenhum checklist ainda") : "Tudo pronto por aqui"}
+                  {workspaceStatus === 'workspace' && isViewer 
+                    ? "Nenhum checklist atribuído" 
+                    : (checklists.length === 0 ? (currentWorkspace ? "Nenhum checklist disponível neste workspace" : "Nenhum checklist ainda") : "Tudo pronto por aqui")}
                 </h2>
                 <p className="mt-1 text-sm text-neutral-500 mb-6">
-                  {checklists.length === 0 
-                    ? "Arregace as mangas e vamos começar. É simples como um, dois, três."
-                    : "Você não possui checklists individuais nesta visualização."}
+                  {workspaceStatus === 'workspace' && isViewer 
+                    ? "Quando um checklist for atribuído a você, ele aparecerá aqui."
+                    : (checklists.length === 0 
+                      ? "Arregace as mangas e vamos começar. É simples como um, dois, três."
+                      : "Você não possui checklists individuais nesta visualização.")}
                 </p>
                 {/* 
                   O botão Novo Checklist na Home (/inicio) é para checklists PESSOAIS (workspace_id IS NULL).
