@@ -106,8 +106,9 @@ import logoIcon from "../assets/local/logo-tieck.webp";
     const [memberCount, setMemberCount] = useState<number>(0);
     const [hasChecklists, setHasChecklists] = useState(false);
     
-    const { isAdmin: isWsAdmin, canManage: canWsManage, isViewer: isWsViewer } = useWorkspaceRBAC(currentWorkspace?.id);
+    const { isAdmin: isWsAdmin, canManage: canWsManage, isViewer: isWsViewer, loading: rbacLoading } = useWorkspaceRBAC(currentWorkspace?.id);
     const [recentChecklists, setRecentChecklists] = useState<{id: string, title: string | null}[]>([]);
+    const [allWorkspacesChecklists, setAllWorkspacesChecklists] = useState<{id: string, title: string | null, workspace_id: string | null}[]>([]);
     const [recentOpen, setRecentOpen] = useState(true);
     const navigate = useNavigate();
     const location = useLocation();
@@ -189,7 +190,48 @@ import logoIcon from "../assets/local/logo-tieck.webp";
                    } else {
                      setRecentChecklists([]);
                      return;
-                   }
+              }
+
+              // FASE 5B.6: Carregar todos os checklists permitidos para a Busca/CommandDialog
+              let searchContextQuery = supabase.from("checklists").select("id, title, workspace_id");
+              
+              if (workspaceStatus === 'workspace' && currentWorkspace?.id) {
+                searchContextQuery = searchContextQuery.eq("workspace_id", currentWorkspace.id);
+                
+                if (isWsViewer) {
+                  const { data: memberData } = await supabase
+                    .from("workspace_members")
+                    .select("id")
+                    .eq("workspace_id", currentWorkspace.id)
+                    .eq("user_id", user.id)
+                    .eq("status", "active")
+                    .maybeSingle();
+
+                  if (memberData) {
+                    const { data: assignments } = await supabase
+                      .from("checklist_assignments")
+                      .select("checklist_id")
+                      .eq("workspace_member_id", memberData.id);
+                    
+                    const assignedIds = assignments?.map(a => a.checklist_id) || [];
+                    if (assignedIds.length > 0) {
+                      searchContextQuery = searchContextQuery.in("id", assignedIds);
+                    } else {
+                      setAllWorkspacesChecklists([]);
+                      return;
+                    }
+                  } else {
+                    setAllWorkspacesChecklists([]);
+                    return;
+                  }
+                }
+              } else {
+                searchContextQuery = searchContextQuery.is("workspace_id", null)
+                  .eq("user_id", user.id);
+              }
+
+              const { data: searchData } = await searchContextQuery.limit(50);
+              setAllWorkspacesChecklists(searchData || []);
                  } else {
                    setRecentChecklists([]);
                    return;
@@ -220,7 +262,7 @@ import logoIcon from "../assets/local/logo-tieck.webp";
        const handleOpenSearch = () => setSearchOpen(true);
        window.addEventListener('open-search', handleOpenSearch);
        return () => window.removeEventListener('open-search', handleOpenSearch);
-     }, [user?.id, currentWorkspace?.id, workspaceStatus]);
+     }, [user?.id, currentWorkspace?.id, workspaceStatus, isWsViewer]);
 
     // Gate: usuário logado com e-mail não confirmado não acessa o app.
     useEffect(() => {
@@ -773,7 +815,7 @@ import logoIcon from "../assets/local/logo-tieck.webp";
                     <Plus className="mr-2 h-4 w-4" />
                     <span>Criar novo checklist</span>
                   </CommandItem>
-                  {(profile?.is_admin || workspaces.length === 0) && (
+                  {((profile?.is_admin || workspaces.length === 0) && !isWsViewer) && (
                     <CommandItem onSelect={() => { navigate({ to: "/organizar", search: { id: currentWorkspace?.id } }); setSearchOpen(false); }}>
                       <FolderPlus className="mr-2 h-4 w-4" />
                       <span>Criar workspace</span>
@@ -808,6 +850,28 @@ import logoIcon from "../assets/local/logo-tieck.webp";
                   </CommandItem>
 
                 </>
+              )}
+
+              {allWorkspacesChecklists.length > 0 && (
+                <CommandGroup heading="Checklists">
+                  {allWorkspacesChecklists.map((c) => (
+                    <CommandItem 
+                      key={c.id} 
+                      onSelect={() => { 
+                        setSearchOpen(false);
+                        // FASE 5B.6: Redirecionamento condicional na busca também
+                        if (workspaceStatus === 'workspace' && isWsViewer) {
+                          navigate({ to: "/executar/$id", params: { id: c.id } });
+                        } else {
+                          navigate({ to: "/checklist", search: { id: c.id } });
+                        }
+                      }}
+                    >
+                      <FileText className="mr-2 h-4 w-4" />
+                      <span>{c.title}</span>
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
               )}
 
               {canWsManage && (
