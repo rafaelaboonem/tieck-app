@@ -177,7 +177,7 @@ export const Route = createFileRoute('/api/camera-ai/verify')({
               const buffer = await data.arrayBuffer();
               return { buffer, mimeType: data.type };
             },
-            markFailed: async ({ responseId, blockId, idempotencyKey, code }: { responseId: string; blockId: string; idempotencyKey: string; code: string }) => {
+            markFailed: async ({ response_id, blockId, idempotencyKey, code }: { response_id: string; blockId: string; idempotencyKey: string; code: string }) => {
               const client = createServerSupabaseClient();
               if (!client) throw new Error('Supabase client failed');
               return client
@@ -188,7 +188,8 @@ export const Route = createFileRoute('/api/camera-ai/verify')({
                   updated_at: new Date().toISOString() 
                 })
                 .match({ 
-                  response_id: responseId, 
+                  response_id: response_id, 
+
                   block_id: blockId, 
                   idempotency_key: idempotencyKey,
                   status: 'processing'

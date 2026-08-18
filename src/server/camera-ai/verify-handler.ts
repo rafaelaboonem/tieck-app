@@ -66,7 +66,7 @@ export interface VerifyDependencies {
     policy?: CameraVerificationPolicyV1
   ) => Promise<CameraReferenceVerification>;
   loadReferenceImage: (storagePath: string) => Promise<{ buffer: ArrayBuffer; mimeType: string }>;
-  markFailed: (params: { responseId: string; blockId: string; idempotencyKey: string; code: string }) => Promise<{ data: unknown; error: unknown }>;
+  markFailed: (params: { response_id: string; blockId: string; idempotencyKey: string; code: string }) => Promise<{ data: unknown; error: unknown }>;
   markCompleted: (params: {
     responseId: string;
     blockId: string;
@@ -179,7 +179,7 @@ export async function verifyCameraRequest(
     };
   }
 
-  const { CameraVerificationPolicyV1Schema } = await import('./schema');
+  const { CameraVerificationPolicyV1Schema } = await import('@/lib/camera-ai/schema.functions');
   const question = (String(block.title || '') + ' ' + String(block.description || '')).trim();
   const policy = block.cameraAiPolicy;
   
@@ -321,7 +321,7 @@ export async function verifyCameraRequest(
   const { data: limitData, error: limitError } = await deps.hitRateLimit(session.response_id);
   if (limitError || !limitData || !limitData[0]?.allowed) {
     await deps.markFailed({
-      responseId: session.response_id,
+      response_id: session.response_id,
       blockId: payload.blockId,
       idempotencyKey: payload.idempotencyKey,
       code: 'rate_limit'
@@ -337,14 +337,62 @@ export async function verifyCameraRequest(
   let analysis: CameraVerification | CameraReferenceVerification;
 
   try {
-    if (block.mode === 'reference' && block.cameraReference) {
-      const ref = await deps.loadReferenceImage(block.cameraReference.storagePath);
+    const effectiveMode = block.mode || 'auto';
+
+    if (effectiveMode === 'reference') {
+      const { CameraReferenceImageV1Schema } = await import('@/lib/camera-ai/schema.functions');
+      const refValidation = CameraReferenceImageV1Schema.safeParse(block.cameraReference);
       
+      if (!refValidation.success) {
+        await deps.markFailed({
+          response_id: session.response_id,
+          blockId: payload.blockId,
+          idempotencyKey: payload.idempotencyKey,
+          code: 'reference_unavailable'
+        });
+        return { 
+          status: 400, 
+          body: { ok: false, code: 'reference_unavailable', message: 'Não foi possível carregar a referência desta verificação. Tente novamente mais tarde.', requestId } 
+        };
+      }
+
+      const cameraReference = refValidation.data;
+      let ref;
+      try {
+        ref = await deps.loadReferenceImage(cameraReference.storagePath);
+      } catch (loadErr) {
+        await deps.markFailed({
+          response_id: session.response_id,
+          blockId: payload.blockId,
+          idempotencyKey: payload.idempotencyKey,
+          code: 'reference_unavailable'
+        });
+        return { 
+          status: 503, 
+          body: { ok: false, code: 'reference_unavailable', message: 'Não foi possível carregar a referência desta verificação. Tente novamente mais tarde.', requestId } 
+        };
+      }
+      
+      // Binary validation (magic bytes, size, mime)
+      const refVal = await validateImageBuffer(ref.buffer, cameraReference.mimeType);
+      if (!refVal.valid || ref.buffer.byteLength !== cameraReference.sizeBytes) {
+        await deps.markFailed({
+          response_id: session.response_id,
+          blockId: payload.blockId,
+          idempotencyKey: payload.idempotencyKey,
+          code: 'reference_corrupted'
+        });
+        return { 
+          status: 400, 
+          body: { ok: false, code: 'reference_corrupted', message: 'A foto de referência está corrompida. Avise o administrador.', requestId } 
+        };
+      }
+
       // SHA-256 validation of reference
       const refHash = createHash('sha256').update(new Uint8Array(ref.buffer)).digest('hex');
-      if (refHash !== block.cameraReference.sha256) {
+      if (refHash !== cameraReference.sha256) {
         await deps.markFailed({
-          responseId: session.response_id,
+          response_id: session.response_id,
           blockId: payload.blockId,
           idempotencyKey: payload.idempotencyKey,
           code: 'reference_corrupted'
@@ -363,12 +411,24 @@ export async function verifyCameraRequest(
         ref.mimeType,
         validatedPolicy
       );
-    } else {
+    } else if (effectiveMode === 'auto') {
       analysis = await deps.analyzeImage(question, imageFile.buffer, mimeType, validatedPolicy);
+    } else {
+      // Outros modos não suportados ou fallback
+      await deps.markFailed({
+        response_id: session.response_id,
+        blockId: payload.blockId,
+        idempotencyKey: payload.idempotencyKey,
+        code: 'invalid_mode'
+      });
+      return { 
+        status: 400, 
+        body: { ok: false, code: 'invalid_mode', message: 'Modo de verificação inválido.', requestId } 
+      };
     }
   } catch (aiError) {
     await deps.markFailed({
-      responseId: session.response_id,
+      response_id: session.response_id,
       blockId: payload.blockId,
       idempotencyKey: payload.idempotencyKey,
       code: 'provider_failure'

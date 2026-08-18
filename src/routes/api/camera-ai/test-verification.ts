@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { createFileRoute } from '@tanstack/react-router';
 import { createServerSupabaseClient } from '@/integrations/supabase/client.server';
-import { CameraVerificationPolicyV1Schema, PublishedBlock, VerificationResult } from '@/server/camera-ai/schema';
+import { CameraReferenceImageV1Schema, CameraVerificationPolicyV1Schema, PublishedBlock, VerificationResult } from '@/server/camera-ai/schema';
 import { analyzeImage, analyzeImageWithReference } from '@/server/camera-ai/openai-provider';
 import { evaluateGate } from '@/server/camera-ai/gate';
 import { validateImageBuffer } from '@/server/camera-ai/image-validation';
@@ -165,20 +165,34 @@ export const Route = createFileRoute('/api/camera-ai/test-verification')({
           const model = process.env['OPENAI_VISION_MODEL'] || 'gpt-4o-mini';
           let analysis;
 
-          if (block.mode === 'reference' && block.cameraReference) {
+          const effectiveMode = block.mode || 'auto';
+
+          if (effectiveMode === 'reference') {
+            const refValidation = CameraReferenceImageV1Schema.safeParse(block.cameraReference);
+            if (!refValidation.success) {
+              return Response.json({ ok: false, code: 'reference_unavailable', requestId }, { status: 400 });
+            }
+
+            const cameraReference = refValidation.data;
             const { supabaseAdmin } = await import('@/integrations/supabase/client.server');
             const { data: refData, error: refError } = await supabaseAdmin.storage
               .from('camera-references')
-              .download(block.cameraReference.storagePath);
+              .download(cameraReference.storagePath);
             
             if (refError || !refData) {
-              return Response.json({ ok: false, code: 'reference_not_found', requestId }, { status: 400 });
+              return Response.json({ ok: false, code: 'reference_unavailable', requestId }, { status: 400 });
             }
 
             const refBuffer = await refData.arrayBuffer();
-            const refHash = createHash('sha256').update(new Uint8Array(refBuffer)).digest('hex');
             
-            if (refHash !== block.cameraReference.sha256) {
+            // Binary and size validation
+            const refVal = await validateImageBuffer(refBuffer, cameraReference.mimeType);
+            if (!refVal.valid || refBuffer.byteLength !== cameraReference.sizeBytes) {
+              return Response.json({ ok: false, code: 'reference_corrupted', requestId }, { status: 400 });
+            }
+
+            const refHash = createHash('sha256').update(new Uint8Array(refBuffer)).digest('hex');
+            if (refHash !== cameraReference.sha256) {
               return Response.json({ ok: false, code: 'reference_corrupted', requestId }, { status: 400 });
             }
 
@@ -193,7 +207,7 @@ export const Route = createFileRoute('/api/camera-ai/test-verification')({
               25000,
               policyValidation.data
             );
-          } else {
+          } else if (effectiveMode === 'auto') {
             analysis = await analyzeImage(
               openaiClient, 
               model, 
@@ -203,6 +217,8 @@ export const Route = createFileRoute('/api/camera-ai/test-verification')({
               20000, 
               policyValidation.data
             );
+          } else {
+            return Response.json({ ok: false, code: 'invalid_mode', requestId }, { status: 400 });
           }
           
           const result = evaluateGate(analysis);

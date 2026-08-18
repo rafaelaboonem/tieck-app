@@ -2483,14 +2483,26 @@ export function NovoChecklistPage() {
         }
 
         // FINAL BLOCK ASSERT: Barreira final determinística para todos os blocos Camera.
+        const { CameraReferenceImageV1Schema } = await import('@/lib/camera-ai/schema.functions');
         for (const block of blocksWithIds) {
           if (block.type === 'camera') {
             const hash = await hashQuestion(block.title, block.description);
+            const mode = block.mode || 'auto';
+
+            // 1. Policy Integrity
             if (!block.cameraAiPolicy || 
                 block.cameraAiPolicy.version !== 1 || 
                 block.cameraAiPolicy.questionHash !== hash || 
                 block.cameraAiNeedsRevalidation === true) {
               throw new Error(`Integridade da câmera violada no bloco "${block.title || 'Sem título'}". Tente publicar novamente.`);
+            }
+
+            // 2. Reference Mode Integrity
+            if (mode === 'reference') {
+              const refValidation = CameraReferenceImageV1Schema.safeParse(block.cameraReference);
+              if (!refValidation.success) {
+                throw new Error(`Adicione uma foto de referência válida no bloco "${block.title || 'Sem título'}" antes de publicar.`);
+              }
             }
           }
         }
