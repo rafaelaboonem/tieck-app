@@ -1,62 +1,54 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { renderHook } from '@testing-library/react';
+import { useWorkspaceRBAC } from '../useWorkspaceRBAC';
+import { useAuth } from '@/contexts/AuthContext';
+import { useQuery } from '@tanstack/react-query';
 
-// Mock implementation helper to simulate hook results
-const simulateRBAC = (role: string | null, workspaceMemberId: string | null = null) => {
-  const isViewer = role === 'viewer';
-  const canManage = role === 'owner' || role === 'admin' || role === 'editor';
-  const isAdmin = role === 'owner' || role === 'admin';
-  const hasAccess = !!role;
-  
-  return { role, workspaceMemberId, hasAccess, canManage, isAdmin, isViewer };
-};
+vi.mock('@/contexts/AuthContext');
+vi.mock('@tanstack/react-query');
+vi.mock('@/integrations/supabase/client', () => ({
+  supabase: {
+    rpc: vi.fn(),
+  },
+}));
 
-describe('Phase 5B.10: Canonical RBAC & Fail-Closed Logic', () => {
-  it('should implement fail-closed when role is null', () => {
-    const rbac = simulateRBAC(null);
-    expect(rbac.hasAccess).toBe(false);
-    expect(rbac.isViewer).toBe(false);
-    expect(rbac.canManage).toBe(false);
+describe('useWorkspaceRBAC - Canonical Logic', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
   });
 
-  it('should identify owner correctly', () => {
-    const rbac = simulateRBAC('owner');
-    expect(rbac.role).toBe('owner');
-    expect(rbac.hasAccess).toBe(true);
-    expect(rbac.isAdmin).toBe(true);
-    expect(rbac.canManage).toBe(true);
-    expect(rbac.isViewer).toBe(false);
+  it('should return loading=true when role is still being fetched', async () => {
+    (useAuth as any).mockReturnValue({ user: { id: 'user-1' } });
+    (useQuery as any).mockReturnValue({
+      data: undefined,
+      isLoading: true,
+      isFetching: true,
+    });
+
+    const { result } = renderHook(() => useWorkspaceRBAC('ws-1'));
+
+    expect(result.current.loading).toBe(true);
+    expect(result.current.hasAccess).toBe(false);
   });
 
-  it('should identify viewer and provide memberId', () => {
-    const memberId = 'c027eab1-e9b6-493d-8029-1853bbb7975e';
-    const rbac = simulateRBAC('viewer', memberId);
-    expect(rbac.role).toBe('viewer');
-    expect(rbac.isViewer).toBe(true);
-    expect(rbac.workspaceMemberId).toBe(memberId);
-    expect(rbac.canManage).toBe(false);
-  });
+  it('should resolve to viewer role via RPC', async () => {
+    (useAuth as any).mockReturnValue({ user: { id: 'user-1' } });
+    (useQuery as any).mockReturnValue({
+      data: {
+        role: 'viewer',
+        workspaceMemberId: 'member-1',
+        isOwner: false
+      },
+      isLoading: false,
+      isFetching: false,
+    });
 
-  it('should differentiate between editor and viewer', () => {
-    const editor = simulateRBAC('editor');
-    const viewer = simulateRBAC('viewer');
-    
-    expect(editor.canManage).toBe(true);
-    expect(viewer.canManage).toBe(false);
-    expect(editor.isViewer).toBe(false);
-    expect(viewer.isViewer).toBe(true);
-  });
+    const { result } = renderHook(() => useWorkspaceRBAC('ws-1'));
 
-  it('should ensure fail-closed logic for visibility (conceptual)', () => {
-    const loadingState = { checklists: ['stale'], rbacLoading: true };
-    const unauthorizedState = { checklists: ['stale'], rbacLoading: false, role: null };
-    
-    // logic: if (rbacLoading || !role) setChecklists([])
-    const getVisibleChecklists = (state: any) => {
-      if (state.rbacLoading || !state.role) return [];
-      return state.checklists;
-    };
-
-    expect(getVisibleChecklists(loadingState)).toEqual([]);
-    expect(getVisibleChecklists(unauthorizedState)).toEqual([]);
+    expect(result.current.loading).toBe(false);
+    expect(result.current.isViewer).toBe(true);
+    expect(result.current.role).toBe('viewer');
+    expect(result.current.workspaceMemberId).toBe('member-1');
+    expect(result.current.hasAccess).toBe(true);
   });
 });
