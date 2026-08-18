@@ -305,7 +305,10 @@ function CameraBlockEditor({
       });
       const data = await res.json();
       if (data.ok && data.policy) {
-        updateBlock(blockId, { cameraAiPolicy: data.policy });
+        updateBlock(blockId, { 
+          cameraAiPolicy: data.policy,
+          cameraAiNeedsRevalidation: false
+        });
       }
     } catch (err) {
       console.error('Failed to compile policy:', err);
@@ -319,7 +322,11 @@ function CameraBlockEditor({
     
     const checkHash = async () => {
       const hash = await hashQuestion(camTitle, camDescription);
-      if (policy?.questionHash === hash) return;
+      if (policy?.questionHash === hash && !block.cameraAiNeedsRevalidation) return;
+
+      if (!block.cameraAiNeedsRevalidation) {
+        updateBlock(block.id, { cameraAiNeedsRevalidation: true });
+      }
 
       if (compileTimeoutRef.current) clearTimeout(compileTimeoutRef.current);
       compileTimeoutRef.current = setTimeout(() => {
@@ -2405,15 +2412,48 @@ export function NovoChecklistPage() {
       if (data?.id) setCurrentChecklistId(data.id);
 
       // Publicação: delega ao backend a montagem do snapshot técnico.
-      // Após salvar o rascunho, chamamos a RPC `publish_checklist`, que valida
-      // os padrões visuais ativos e grava `published_content`
-      // + `is_published = true` num único passo, sem confiar em valores técnicos
-      // enviados pelo navegador.
-      // Estado de publicação confirmado pelo SERVIDOR (nunca pelo cliente).
       let serverPublished: boolean = data?.is_published === true;
       let serverSlug: string | null = data?.custom_slug ?? null;
-
+      // PATCH CAMERA AI: Antes de publicar, garantimos que todas as policies estão sincronizadas.
       if (isPublishedOverride === true && data?.id) {
+        const cameraBlocks = blocksWithIds.filter(b => b.type === 'camera');
+        for (const cam of cameraBlocks) {
+          const expectedHash = await hashQuestion(cam.title || cam.subtitle, cam.description);
+          const needsCompile = !cam.cameraAiPolicy || 
+                              cam.cameraAiPolicy.questionHash !== expectedHash ||
+                              cam.cameraAiNeedsRevalidation;
+          
+          if (needsCompile) {
+            toast.info(`Atualizando critérios da câmera: ${cam.title || 'Bloco'}...`);
+            const token = (await supabase.auth.getSession()).data.session?.access_token;
+            const res = await fetch('/api/camera-ai/compile-policy', {
+              method: 'POST',
+              headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+              },
+              body: JSON.stringify({ checklistId: data.id, blockId: cam.id })
+            });
+            const compiled = await res.json();
+            if (!compiled.ok) {
+              throw new Error(`Falha ao atualizar critérios da câmera: ${compiled.code || 'Erro desconhecido'}. Tente publicar novamente.`);
+            }
+            // Update local state and re-save to ensure DB has the fresh policy before RPC
+            const updatedBlocks = blocksWithIds.map(b => 
+              b.id === cam.id ? { ...b, cameraAiPolicy: compiled.policy, cameraAiNeedsRevalidation: false } : b
+            );
+            
+            const { error: syncErr } = await supabase
+              .from("checklists")
+              .update({ blocks: updatedBlocks })
+              .eq("id", data.id);
+            
+            if (syncErr) throw syncErr;
+            // Update our local reference for the next steps in this function
+            blocksWithIds.splice(0, blocksWithIds.length, ...updatedBlocks);
+          }
+        }
+
         const { error: pubErr } = await (supabase.rpc as any)("publish_checklist", {
           p_checklist_id: data.id,
         });
