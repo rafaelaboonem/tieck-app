@@ -47,14 +47,20 @@ export function AuthPage({ mode, redirect }: Props) {
 
   const [isLoading, setIsLoading] = useState(false);
   const [email, setEmail] = useState("");
+  const [name, setName] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [signupStep, setSignupStep] = useState<1 | 2>(1);
   const [otp, setOtp] = useState("");
   const [otpVerified, setOtpVerified] = useState(false);
+  const [verificationToken, setVerificationToken] = useState("");
   const [alreadyRegistered, setAlreadyRegistered] = useState(false);
   const [resendCountdown, setResendCountdown] = useState(0);
 
-  // Guards against double-submission of the same OTP (auto-submit + Enter/form).
+  // Guards against double-submission
   const verifyingRef = useRef<string | null>(null);
+  const completingRef = useRef<boolean>(false);
 
   useEffect(() => {
     // Se o usuário estiver autenticado e não estivermos no meio da verificação OTP, redirecionar
