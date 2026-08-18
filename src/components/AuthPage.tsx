@@ -318,38 +318,89 @@ export function AuthPage({ mode, redirect }: Props) {
 
         <div className="space-y-5 relative">
           {signupStep === 1 && (
-            <form onSubmit={handleSendCode} className="space-y-5 animate-in fade-in slide-in-from-bottom-2 duration-300">
+            <form 
+              onSubmit={isSignUp ? handleSendCode : handleLogin} 
+              className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300"
+            >
+              {isSignUp && (
+                <div>
+                  <label className="block text-xs font-semibold text-neutral-500 uppercase tracking-wider mb-2">Nome Completo</label>
+                  <div className="relative">
+                    <User className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400" />
+                    <input
+                      type="text"
+                      required
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      className={`${inputClass} pl-11`}
+                      placeholder="Como deseja ser chamado?"
+                      autoFocus
+                    />
+                  </div>
+                </div>
+              )}
+
               <div>
                 <label className="block text-xs font-semibold text-neutral-500 uppercase tracking-wider mb-2">E-mail</label>
-                <input
-                  type="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className={inputClass}
-                  placeholder="seu@email.com"
-                  autoFocus
-                />
+                <div className="relative">
+                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400" />
+                  <input
+                    type="email"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className={`${inputClass} pl-11`}
+                    placeholder="seu@email.com"
+                    autoFocus={!isSignUp}
+                  />
+                </div>
               </div>
 
-              {!isSignUp && (
-                <div className="rounded-xl border border-blue-100 bg-blue-50 p-4 text-sm text-blue-700 flex items-start gap-3">
-                  <Mail className="h-5 w-5 mt-0.5 flex-shrink-0" />
-                  <div className="flex-1">
-                    <p className="font-medium">Login via código seguro</p>
-                    <p className="mt-1 text-xs text-blue-600/80 leading-relaxed">
-                      Enviaremos um código de acesso temporário para seu e-mail.
-                    </p>
+              <div>
+                <label className="block text-xs font-semibold text-neutral-500 uppercase tracking-wider mb-2">Senha</label>
+                <div className="relative">
+                  <Lock className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400" />
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className={`${inputClass} pl-11 pr-11`}
+                    placeholder="••••••••"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600 transition-colors"
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+              </div>
+
+              {isSignUp && (
+                <div>
+                  <label className="block text-xs font-semibold text-neutral-500 uppercase tracking-wider mb-2">Confirmar Senha</label>
+                  <div className="relative">
+                    <Lock className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400" />
+                    <input
+                      type={showPassword ? "text" : "password"}
+                      required
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      className={`${inputClass} pl-11`}
+                      placeholder="Repita sua senha"
+                    />
                   </div>
                 </div>
               )}
 
               {alreadyRegistered && isSignUp && (
-                <div className="rounded-xl border border-[#FF007F]/30 bg-[#FF007F]/10 p-3 text-sm text-[#FFB3D9] flex items-start gap-2">
+                <div className="rounded-xl border border-[#FF007F]/30 bg-[#FF007F]/5 p-3 text-sm text-[#FF007F] flex items-start gap-2">
                   <Mail className="h-4 w-4 mt-0.5 flex-shrink-0" />
                   <div className="flex-1">
                     <p className="font-medium">E-mail já cadastrado</p>
-                    <Link to="/login" className="mt-1 inline-block text-xs font-semibold text-white hover:underline">
+                    <Link to="/login" className="mt-1 inline-block text-xs font-semibold hover:underline">
                       Ir para o login →
                     </Link>
                   </div>
@@ -359,7 +410,7 @@ export function AuthPage({ mode, redirect }: Props) {
               <button type="submit" disabled={isLoading} className={primaryBtn}>
                 {isLoading ? <Loader2 className="animate-spin h-5 w-5" /> : (
                   <>
-                    {isSignUp ? "Enviar código" : "Receber código de acesso"}
+                    {isSignUp ? "Criar conta" : "Entrar"}
                     <ArrowRight className="h-4 w-4" />
                   </>
                 )}
