@@ -58,4 +58,47 @@ describe('useUnitCompliance with enabled flag', () => {
 
     expect(supabase.channel).not.toHaveBeenCalled();
   });
+
+  it('should handle transition false -> true -> false (stale closure test)', async () => {
+    const { rerender } = renderHook(
+      ({ enabled }) => useUnitCompliance({
+        startDate: '2026-01-01',
+        endDate: '2026-12-31',
+        enabled
+      }),
+      { initialProps: { enabled: false } }
+    );
+
+    // 1. Initially disabled
+    expect(supabase.from).not.toHaveBeenCalled();
+    expect(supabase.channel).not.toHaveBeenCalled();
+
+    // 2. Transition to enabled
+    await act(async () => {
+      rerender({ enabled: true });
+    });
+
+    // Should trigger query AND realtime
+    expect(supabase.from).toHaveBeenCalledWith('analytics_unit_daily_compliance');
+    expect(supabase.channel).toHaveBeenCalled();
+
+    const initialChannelCount = vi.mocked(supabase.channel).mock.calls.length;
+
+    // 3. Transition back to disabled
+    await act(async () => {
+      rerender({ enabled: false });
+    });
+
+    // Should remove channel
+    expect(supabase.removeChannel).toHaveBeenCalled();
+
+    // Clear mocks to check for new calls
+    vi.clearAllMocks();
+
+    // Should NOT trigger any new query even if something else changes while disabled
+    await act(async () => {
+      rerender({ enabled: false });
+    });
+    expect(supabase.from).not.toHaveBeenCalled();
+  });
 });

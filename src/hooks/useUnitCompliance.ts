@@ -173,7 +173,7 @@ export function useUnitCompliance(params: UseUnitComplianceParams): UseUnitCompl
       setData(aggregateByUnit((rows ?? []) as DailyRow[]));
     }
     setLoading(false);
-  }, [startDate, endDate, unitId]);
+  }, [startDate, endDate, unitId, enabled]);
 
   useEffect(() => {
     if (enabled) {
@@ -206,7 +206,7 @@ export function useUnitCompliance(params: UseUnitComplianceParams): UseUnitCompl
       if (timer) clearTimeout(timer);
       supabase.removeChannel(ch);
     };
-  }, [load, startDate, endDate, unitId]);
+  }, [load, startDate, endDate, unitId, enabled]);
 
   return { data, loading, error, refresh: load };
 }
