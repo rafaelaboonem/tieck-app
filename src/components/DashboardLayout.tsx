@@ -510,7 +510,17 @@ import logoIcon from "../assets/local/logo-tieck.webp";
                               <button
                                 type="button"
                                 onClick={() => {
-                                  navigate({ to: "/checklist", search: { id: chk.id } });
+                                  if (workspaceStatus === "workspace" && isWsViewer) {
+                                    navigate({
+                                      to: "/executar/$id",
+                                      params: { id: chk.id }
+                                    });
+                                  } else {
+                                    navigate({
+                                      to: "/checklist",
+                                      search: { id: chk.id }
+                                    });
+                                  }
                                 }}
                                 className="w-full text-left py-1 text-[13px] text-neutral-400 hover:text-neutral-900 transition-colors truncate block font-medium"
                               >
@@ -753,18 +763,20 @@ import logoIcon from "../assets/local/logo-tieck.webp";
                 </>
               ) : (
                 <>
-                  <CommandItem onSelect={() => {
-                    try {
-                      localStorage.removeItem("draft_checklist_title");
-                      localStorage.removeItem("draft_checklist_blocks");
-                      localStorage.removeItem("draft_checklist_started");
-                    } catch {}
-                    navigate({ to: "/checklist", search: { id: undefined, workspace: undefined, category: undefined } });
-                    setSearchOpen(false);
-                  }}>
-                    <Plus className="mr-2 h-4 w-4" />
-                    <span>Criar novo checklist</span>
-                  </CommandItem>
+                  {!(workspaceStatus === "workspace" && isWsViewer) && (
+                    <CommandItem onSelect={() => {
+                      try {
+                        localStorage.removeItem("draft_checklist_title");
+                        localStorage.removeItem("draft_checklist_blocks");
+                        localStorage.removeItem("draft_checklist_started");
+                      } catch {}
+                      navigate({ to: "/checklist", search: { id: undefined, workspace: undefined, category: undefined } });
+                      setSearchOpen(false);
+                    }}>
+                      <Plus className="mr-2 h-4 w-4" />
+                      <span>Criar novo checklist</span>
+                    </CommandItem>
+                  )}
                   {((profile?.is_admin || workspaces.length === 0) && !isWsViewer) && (
                     <CommandItem onSelect={() => { navigate({ to: "/organizar", search: { id: currentWorkspace?.id } }); setSearchOpen(false); }}>
                       <FolderPlus className="mr-2 h-4 w-4" />
