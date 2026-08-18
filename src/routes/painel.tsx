@@ -68,24 +68,18 @@ function PainelPage() {
   const search = Route.useSearch();
 
   useEffect(() => {
-    if (!rbacLoading && !isAdmin && !authLoading && user) {
-      toast.error("Acesso restrito a administradores");
-      navigate({ to: "/inicio" });
+    if (!rbacLoading && !authLoading) {
+      if (!user) {
+        navigate({ to: "/login" });
+        return;
+      }
+      if (!isAdmin) {
+        toast.error("Acesso restrito a administradores");
+        navigate({ to: "/inicio" });
+        return;
+      }
     }
   }, [isAdmin, rbacLoading, authLoading, user, navigate]);
-
-  if (rbacLoading) {
-    return (
-      <DashboardLayout>
-        <div className="p-4 sm:p-8 space-y-8">
-          <Skeleton className="h-10 w-48" />
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-32 w-full" />)}
-          </div>
-        </div>
-      </DashboardLayout>
-    );
-  }
 
   // Filtros centrais derivados da URL (fonte da verdade única, sem loop).
   const filters: DashboardFilters = useMemo(
@@ -93,9 +87,10 @@ function PainelPage() {
     [search.startDate, search.endDate, search.unitId], // eslint-disable-line react-hooks/exhaustive-deps
   );
 
-  useEffect(() => {
-    if (!authLoading && !user) navigate({ to: "/login" });
-  }, [authLoading, user, navigate]);
+  const compliance = useUnitCompliance(filters);
+  const rows = compliance.data;
+
+
 
   const setFilters = (next: DashboardFilters) => {
     navigate({
@@ -109,8 +104,25 @@ function PainelPage() {
     });
   };
 
+  // Move rbacLoading check here to follow hooks
+  if (rbacLoading) {
+    return (
+      <DashboardLayout>
+        <div className="p-4 sm:p-8 space-y-8">
+          <Skeleton className="h-10 w-48" />
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-32 w-full" />)}
+          </div>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  if (!isAdmin) return null;
+
   const compliance = useUnitCompliance(filters);
   const rows = compliance.data;
+
 
   // Agregação central: pesos somados, fórmula reaplicada.
   const dueCompliance = aggregateWeighted(
