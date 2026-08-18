@@ -63,6 +63,7 @@ export function AuthPage({ mode, redirect }: Props) {
   const [showRecoveryLink, setShowRecoveryLink] = useState(false);
   const [otp, setOtp] = useState("");
   const [otpVerified, setOtpVerified] = useState(false);
+  const [verificationToken, setVerificationToken] = useState("");
   const [alreadyRegistered, setAlreadyRegistered] = useState(false);
   const [resendCountdown, setResendCountdown] = useState(0);
 
