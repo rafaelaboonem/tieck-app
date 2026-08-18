@@ -699,6 +699,7 @@ export function AuthPage({ mode, redirect }: Props) {
 
 
 
+
           {signupStep === 2 && recoveryStep === 0 && (
             <form onSubmit={handleVerifyCode} className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
               <div className="flex justify-center">
