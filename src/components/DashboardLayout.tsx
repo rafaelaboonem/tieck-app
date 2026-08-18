@@ -99,6 +99,8 @@ import logoIcon from "../assets/local/logo-tieck.webp";
     const [profile, setProfile] = useState<{ display_name: string | null; avatar_url: string | null; is_admin: boolean | null; plan_type: string | null; email: string | null } | null>(null);
     const [memberCount, setMemberCount] = useState<number>(0);
     const [hasChecklists, setHasChecklists] = useState(false);
+    
+    const { isAdmin: isWsAdmin, canManage: canWsManage, isViewer: isWsViewer } = useWorkspaceRBAC(currentWorkspace?.id);
     const [recentChecklists, setRecentChecklists] = useState<{id: string, title: string | null}[]>([]);
     const [recentOpen, setRecentOpen] = useState(true);
     const navigate = useNavigate();
