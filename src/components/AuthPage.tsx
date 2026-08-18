@@ -59,6 +59,7 @@ export function AuthPage({ mode, redirect }: Props) {
   const [showPassword, setShowPassword] = useState(false);
   const [signupStep, setSignupStep] = useState<1 | 2>(1);
   const [recoveryStep, setRecoveryStep] = useState<any>(0);
+  const [recoveryEmail, setRecoveryEmail] = useState("");
   const [showRecoveryLink, setShowRecoveryLink] = useState(false);
   const [otp, setOtp] = useState("");
   const [otpVerified, setOtpVerified] = useState(false);
@@ -120,12 +121,14 @@ export function AuthPage({ mode, redirect }: Props) {
   const handleRequestRecovery = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isLoading) return;
-    if (!normalizedEmail()) return toast.error("Informe seu e-mail");
+    const targetEmail = normalizedEmail();
+    if (!targetEmail) return toast.error("Informe seu e-mail");
     
     setIsLoading(true);
     try {
-      await requestPasswordResetFn({ data: { email: normalizedEmail() } });
+      await requestPasswordResetFn({ data: { email: targetEmail } });
       toast.success("Se o e-mail existir, um código foi enviado.");
+      setRecoveryEmail(targetEmail);
       setRecoveryStep(2);
       setResendCountdown(60);
       setOtp("");
@@ -145,7 +148,7 @@ export function AuthPage({ mode, redirect }: Props) {
     setIsLoading(true);
     try {
       const result = await verifyPasswordResetFn({ 
-        data: { email: normalizedEmail(), code: token } 
+        data: { email: recoveryEmail, code: token } 
       });
       setVerificationToken(result.resetToken);
       setRecoveryStep(3);
@@ -169,7 +172,7 @@ export function AuthPage({ mode, redirect }: Props) {
     try {
       await completePasswordResetFn({
         data: {
-          email: normalizedEmail(),
+          email: recoveryEmail,
           resetToken: verificationToken,
           newPassword: password
         }
@@ -338,8 +341,8 @@ export function AuthPage({ mode, redirect }: Props) {
         heading: recoveryStep === 1 ? "Recuperar senha" 
                : recoveryStep === 2 ? "Confirme o código"
                : "Nova senha",
-        subheading: recoveryStep === 1 ? "Enviaremos um código para o seu e-mail"
-                  : recoveryStep === 2 ? `Digite o código enviado para ${email}`
+        subheading: recoveryStep === 1 ? "Enviaremos um código de 6 dígitos para este e-mail."
+                  : recoveryStep === 2 ? `Enviamos um código de 6 dígitos para: ${recoveryEmail}`
                   : "Escolha uma senha forte para sua segurança"
       };
     }
@@ -565,7 +568,9 @@ export function AuthPage({ mode, redirect }: Props) {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setRecoveryStep(0)}
+                  onClick={() => {
+                    setRecoveryStep(0);
+                  }}
                   disabled={isLoading}
                   className={ghostBtn}
                 >
@@ -599,13 +604,13 @@ export function AuthPage({ mode, redirect }: Props) {
                 </InputOTP>
               </div>
 
-              <div className="flex items-center justify-center min-h-[24px] text-sm text-neutral-500 text-center">
+              <div className="flex items-center justify-center min-h-[24px] text-sm text-neutral-500 text-center px-4">
                 {isLoading ? (
                   <span className="flex items-center gap-2">
                     <Loader2 className="animate-spin h-4 w-4" /> Verificando…
                   </span>
                 ) : (
-                  <span>Digite o código enviado para o seu e-mail</span>
+                  <span>O código é verificado automaticamente</span>
                 )}
               </div>
 
@@ -622,7 +627,14 @@ export function AuthPage({ mode, redirect }: Props) {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setRecoveryStep(1)}
+                  onClick={() => {
+                    setEmail(recoveryEmail);
+                    setRecoveryStep(1);
+                    setOtp("");
+                    setVerificationToken("");
+                    setPassword("");
+                    setConfirmPassword("");
+                  }}
                   disabled={isLoading}
                   className="w-full text-sm text-neutral-400 hover:text-neutral-600 transition-colors py-2"
                 >
