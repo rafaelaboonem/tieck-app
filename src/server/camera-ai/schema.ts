@@ -15,6 +15,14 @@ export const CameraVerificationSchema = z.object({
 
 export type CameraVerification = z.infer<typeof CameraVerificationSchema>;
 
+export const CameraReferenceVerificationSchema = CameraVerificationSchema.extend({
+  reference_match: z.boolean(),
+  reference_match_confidence: z.number().min(0).max(1),
+  reference_differences: z.array(z.string()),
+});
+
+export type CameraReferenceVerification = z.infer<typeof CameraReferenceVerificationSchema>;
+
 export const VerifyPayloadSchema = z.object({
   checklistId: z.string().uuid(),
   blockId: z.string().min(1),
