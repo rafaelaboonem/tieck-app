@@ -18,36 +18,18 @@ function getAdmin() {
   return createClient(supabaseUrl, serviceKey);
 }
 
-// Resend setup (reusing logic from edge functions logic conceptually)
-const RESEND_API_URL = "https://connector-gateway.lovable.dev/resend/emails";
 const FROM_ADDRESS = "Tieck <suporte@tieck.com.br>";
+const RESEND_API_URL = "https://api.resend.com/emails";
 
-async function sendEmail(to: string, subject: string, html: string) {
-  const lovableApiKey = process.env['LOVABLE_API_KEY'];
-  const resendConnectionKey = process.env['RESEND_API_KEY'];
-  if (!lovableApiKey || !resendConnectionKey) {
-    console.error("Resend keys missing for recovery email");
-    return; // Don't crash but email won't be sent
+async function sendRecoveryEmail(to: string, code: string) {
+  const resendApiKey = process.env['RESEND_API_KEY'];
+  if (!resendApiKey) {
+    console.error("[Recovery] RESEND_API_KEY is missing");
+    throw new Error("Email provider not configured");
   }
 
-  const res = await fetch(RESEND_API_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${lovableApiKey}`,
-      "X-Connection-Api-Key": resendConnectionKey,
-    },
-    body: JSON.stringify({ from: FROM_ADDRESS, to: [to], subject, html }),
-  });
-
-  if (!res.ok) {
-    const errorBody = await res.text();
-    console.error("Resend send failed", res.status, errorBody);
-  }
-}
-
-function resetEmailHtml(code: string) {
-  return `<!doctype html>
+  const subject = "Redefina sua senha Tieck";
+  const html = `<!doctype html>
 <html><body style="font-family:Arial,sans-serif;background:#f8fafc;padding:32px;color:#0f172a;margin:0">
   <div style="max-width:480px;margin:0 auto;background:#fff;border-radius:12px;padding:36px;border:1px solid #e2e8f0">
     <div style="text-align:center;margin-bottom:24px">
@@ -68,40 +50,80 @@ function resetEmailHtml(code: string) {
   </div>
   <p style="text-align:center;color:#94a3b8;font-size:11px;margin:16px 0 0">© Tieck · suporte@tieck.com.br</p>
 </body></html>`;
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+  try {
+    const res = await fetch(RESEND_API_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${resendApiKey}`,
+      },
+      body: JSON.stringify({ 
+        from: FROM_ADDRESS, 
+        to: [to], 
+        subject, 
+        html,
+        text: `Seu código de recuperação Tieck: ${code}`
+      }),
+      signal: controller.signal
+    });
+
+    if (!res.ok) {
+      throw new Error(`Resend non-2xx: ${res.status}`);
+    }
+  } catch (err: any) {
+    const isAbort = err.name === 'AbortError';
+    console.error("[Recovery] Email fetch failed:", isAbort ? 'timeout' : err.message);
+    throw new Error(isAbort ? "Timeout sending email" : "Failed to send email");
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }
 
 export async function requestPasswordReset(email: string) {
   const admin = getAdmin();
   const normalizedEmail = email.trim().toLowerCase();
 
-  // Find user via RPC
   const { data: userId, error: findError } = await admin.rpc('get_user_id_by_email', { p_email: normalizedEmail });
   
   if (findError || !userId) {
-    // Reveal nothing to frontend
     return { ok: true };
+  }
+
+  // Cooldown server-side 60s
+  const { data: recentCode } = await admin
+    .from('password_reset_codes')
+    .select('last_sent_at')
+    .eq('user_id', userId)
+    .gt('last_sent_at', new Date(Date.now() - 60_000).toISOString())
+    .limit(1)
+    .maybeSingle();
+
+  if (recentCode) {
+    return { ok: true }; // Silently ignore within cooldown
   }
 
   const code = generateCode();
   const codeHash = await hashCode(code, normalizedEmail);
   const expiresAt = new Date(Date.now() + 10 * 60_000).toISOString();
 
-  // Invalidate previous codes
-  await admin.from('password_reset_codes').delete().eq('user_id', userId).eq('consumed_at', null);
+  // Invalidate previous
+  await admin.from('password_reset_codes').delete().eq('user_id', userId).is('consumed_at', null);
 
   const { error: insertErr } = await admin.from('password_reset_codes').insert({
     user_id: userId,
     email_normalized: normalizedEmail,
     code_hash: codeHash,
     expires_at: expiresAt,
+    last_sent_at: new Date().toISOString(),
   });
 
-  if (insertErr) {
-    console.error("Insert reset code error", insertErr);
-    throw new Error("Failed to generate reset code");
-  }
+  if (insertErr) throw new Error("Database insert failed");
 
-  await sendEmail(normalizedEmail, "Redefina sua senha Tieck", resetEmailHtml(code));
+  await sendRecoveryEmail(normalizedEmail, code);
 
   return { ok: true };
 }
@@ -110,18 +132,16 @@ export async function verifyPasswordReset(email: string, code: string) {
   const admin = getAdmin();
   const normalizedEmail = email.trim().toLowerCase();
 
-  const { data: rows, error } = await admin
+  const { data: row, error } = await admin
     .from("password_reset_codes")
     .select("*")
     .eq("email_normalized", normalizedEmail)
     .is("consumed_at", null)
     .order("created_at", { ascending: false })
-    .limit(1);
+    .limit(1)
+    .maybeSingle();
 
-  if (error) throw new Error("Failed to verify code");
-  const row = rows?.[0];
-
-  if (!row) throw new Error("code is invalid");
+  if (error || !row) throw new Error("code is invalid");
   if (new Date(row.expires_at).getTime() < Date.now()) throw new Error("otp has expired");
   if (row.attempts >= 5) throw new Error("too many requests");
 
@@ -152,41 +172,41 @@ export async function completePasswordReset(email: string, resetToken: string, n
   const admin = getAdmin();
   const normalizedEmail = email.trim().toLowerCase();
   const tokenHash = await sha256Hex(resetToken);
+  const claimTime = new Date().toISOString();
 
-  // Atomic check and consume
-  const { data: row, error: selectErr } = await admin
+  // Atomic Claim via conditional update
+  const { data: claimedRows, error: claimErr } = await admin
     .from("password_reset_codes")
-    .select("*")
-    .eq("email_normalized", normalizedEmail)
-    .eq("verification_token_hash", tokenHash)
+    .update({ consumed_at: claimTime })
+    .match({ 
+      email_normalized: normalizedEmail,
+      verification_token_hash: tokenHash
+    })
     .is("consumed_at", null)
-    .single();
+    .not("verified_at", "is", null)
+    .gt("verification_expires_at", new Date().toISOString())
+    .select("id, user_id");
 
-  if (selectErr || !row) throw new Error("invalid token");
-  if (new Date(row.verification_expires_at).getTime() < Date.now()) throw new Error("token has expired");
-  if (!row.verified_at) throw new Error("invalid token");
-
-  // Consume token first (atomic-ish since it's one row)
-  const { error: consumeErr } = await admin
-    .from("password_reset_codes")
-    .update({ consumed_at: new Date().toISOString() })
-    .eq("id", row.id)
-    .is("consumed_at", null);
-
-  if (consumeErr) throw new Error("token already used");
-
-  // Update auth password
-  const { error: authErr } = await admin.auth.admin.updateUserById(row.user_id, {
-    password: newPassword,
-  });
-
-  if (authErr) {
-    // Rollback consumed_at if auth fails? 
-    // Instruction says "Avoid reset token reusable... avoid loss unjustified".
-    // If Admin API fails, user might be stuck. 
-    await admin.from("password_reset_codes").update({ consumed_at: null }).eq("id", row.id);
-    throw authErr;
+  if (claimErr || !claimedRows || claimedRows.length !== 1) {
+    throw new Error("token invalid or expired");
   }
 
-  return { ok: true };
+  const claimed = claimedRows[0];
+
+  try {
+    const { error: authErr } = await admin.auth.admin.updateUserById(claimed.user_id, {
+      password: newPassword,
+    });
+
+    if (authErr) throw authErr;
+
+    return { ok: true };
+  } catch (err) {
+    // Rollback claim ONLY for this execution
+    await admin.from("password_reset_codes")
+      .update({ consumed_at: null })
+      .match({ id: claimed.id, consumed_at: claimTime });
+    
+    throw err;
+  }
 }
