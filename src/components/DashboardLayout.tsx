@@ -606,8 +606,40 @@ import logoIcon from "../assets/local/logo-tieck.webp";
              {isMobile ? <Menu className="w-6 h-6" /> : <ChevronsRight className="w-4 h-4" />}
            </button>
          )}
-         {children}
-       </div>
+          {profile && !sidebarOpen && (
+            <div className="fixed top-4 right-4 z-[120] flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setSearchOpen(true)}
+                className="p-2 rounded-full bg-white/80 backdrop-blur-sm border border-neutral-200 text-neutral-500 hover:text-neutral-900 shadow-sm transition-all"
+                title="Buscar"
+              >
+                <Search className="w-5 h-5" />
+              </button>
+              
+              {!isWsViewer && (
+                <>
+                  <button
+                    type="button"
+                    className="p-2 rounded-full bg-white/80 backdrop-blur-sm border border-neutral-200 text-neutral-500 hover:text-neutral-900 shadow-sm transition-all"
+                    title="Sparkles"
+                  >
+                    <Sparkles className="w-5 h-5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => navigate({ to: "/configuracoes" })}
+                    className="p-2 rounded-full bg-white/80 backdrop-blur-sm border border-neutral-200 text-neutral-500 hover:text-neutral-900 shadow-sm transition-all"
+                    title="Configurações"
+                  >
+                    <Settings className="w-5 h-5" />
+                  </button>
+                </>
+              )}
+            </div>
+          )}
+          {children}
+        </div>
  
        <button
          type="button"
