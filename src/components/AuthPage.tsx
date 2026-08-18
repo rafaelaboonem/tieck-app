@@ -59,10 +59,10 @@ export function AuthPage({ mode, redirect }: Props) {
   const [showPassword, setShowPassword] = useState(false);
   const [signupStep, setSignupStep] = useState<1 | 2>(1);
   const [recoveryStep, setRecoveryStep] = useState<any>(0);
+  const [recoveryEmail, setRecoveryEmail] = useState("");
   const [showRecoveryLink, setShowRecoveryLink] = useState(false);
   const [otp, setOtp] = useState("");
   const [otpVerified, setOtpVerified] = useState(false);
-  const [verificationToken, setVerificationToken] = useState("");
   const [alreadyRegistered, setAlreadyRegistered] = useState(false);
   const [resendCountdown, setResendCountdown] = useState(0);
 
