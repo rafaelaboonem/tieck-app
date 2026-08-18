@@ -126,10 +126,11 @@ describe('WorkspaceContext Determinístico (Patch 5B.5)', () => {
   });
 
   it('deve resultar em Pessoal se não houver workspaces', async () => {
-    // Override do mock para retornar vazio
-    vi.mocked(supabase.from).mockReturnValueOnce({
+    // Override do mock para retornar vazio em todas as chamadas deste teste
+    vi.mocked(supabase.from).mockReturnValue({
       select: vi.fn().mockReturnThis(),
       order: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
       then: vi.fn().mockImplementation((cb) => cb({ data: [], error: null })),
     } as any);
 

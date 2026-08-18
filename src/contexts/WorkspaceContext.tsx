@@ -27,8 +27,6 @@ async function fetchWorkspacesQuery(): Promise<Workspace[]> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return [];
 
-  // Fetch workspaces where user is owner OR a member
-  // RLS handles the filtration server-side
   const { data, error } = await supabase
     .from("workspaces")
     .select("*")
@@ -39,17 +37,16 @@ async function fetchWorkspacesQuery(): Promise<Workspace[]> {
     return [];
   }
 
-  // If the user has access to workspaces (owned or as member), return them
+  // Se o usuário tem acesso a workspaces, retorna eles
   if (data && data.length > 0) return data;
 
-  // Check if user has ANY memberships (even if workspace didn't return above)
+  // Tenta buscar associações explicitamente (membros)
   const { data: memberships } = await supabase
     .from("workspace_members")
     .select("workspace_id")
     .eq("user_id", user.id);
 
   if (memberships && memberships.length > 0) {
-    // Re-fetch using explicit IDs if the general select failed for any reason
     const { data: sharedWs } = await supabase
       .from("workspaces")
       .select("*")
@@ -58,18 +55,7 @@ async function fetchWorkspacesQuery(): Promise<Workspace[]> {
     if (sharedWs && sharedWs.length > 0) return sharedWs;
   }
 
-  // Create default workspace ONLY if user has no owned workspaces AND no memberships
-  const { data: newWs, error: createError } = await supabase
-    .from("workspaces")
-    .insert([{ owner_id: user.id, name: "Meu Workspace", icon: "📁" }])
-    .select()
-    .single();
-
-  if (createError) {
-    console.error("Error creating default workspace:", createError);
-    return [];
-  }
-  return newWs ? [newWs] : [];
+  return [];
 }
 
 
