@@ -166,12 +166,41 @@ import logoIcon from "../assets/local/logo-tieck.webp";
              
              if (workspaceStatus === 'workspace' && currentWorkspace?.id) {
                recentQuery = recentQuery.eq("workspace_id", currentWorkspace.id);
+               
+               // FASE 5B.6: Restrição para Viewer em Recentes
+               if (isWsViewer) {
+                 const { data: memberData } = await supabase
+                   .from("workspace_members")
+                   .select("id")
+                   .eq("workspace_id", currentWorkspace.id)
+                   .eq("user_id", user.id)
+                   .eq("status", "active")
+                   .maybeSingle();
+
+                 if (memberData) {
+                   const { data: assignments } = await supabase
+                     .from("checklist_assignments")
+                     .select("checklist_id")
+                     .eq("workspace_member_id", memberData.id);
+                   
+                   const assignedIds = assignments?.map(a => a.checklist_id) || [];
+                   if (assignedIds.length > 0) {
+                     recentQuery = recentQuery.in("id", assignedIds);
+                   } else {
+                     setRecentChecklists([]);
+                     return;
+                   }
+                 } else {
+                   setRecentChecklists([]);
+                   return;
+                 }
+               }
              } else {
-               recentQuery = recentQuery.is("workspace_id", null);
+               recentQuery = recentQuery.is("workspace_id", null)
+                 .eq("user_id", user.id);
              }
 
              const { data: recentData } = await recentQuery
-               .eq("user_id", user.id)
                .order("updated_at", { ascending: false })
                .limit(3);
              
