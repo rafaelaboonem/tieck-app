@@ -180,34 +180,10 @@ import logoIcon from "../assets/local/logo-tieck.webp";
            if (workspaceStatus === 'workspace' && currentWorkspace?.id) {
              contextualQuery = contextualQuery.eq("workspace_id", currentWorkspace.id);
              
-             if (isWsViewer) {
-               // FASE 5B.10: Resolução de assignments via RPC canônica
-               if (!workspaceMemberId) {
-                 setRecentChecklists([]);
-                 setAllWorkspacesChecklists([]);
-                 return;
-               }
-
-               const { data: assignments, error: assignError } = await supabase.rpc('list_my_checklist_assignments', {
-                 p_workspace_id: currentWorkspace.id
-               });
-               
-               if (assignError) {
-                 console.error("[DashboardLayout] Erro ao buscar atribuições canônicas:", assignError);
-                 setRecentChecklists([]);
-                 setAllWorkspacesChecklists([]);
-                 return;
-               }
-
-               const assignedIds = assignments?.map((a: any) => a.checklist_id) || [];
-               if (assignedIds.length > 0) {
-                 contextualQuery = contextualQuery.in("id", assignedIds);
-               } else {
-                 setRecentChecklists([]);
-                 setAllWorkspacesChecklists([]);
-                 return;
-               }
-             }
+              if (isWsViewer) {
+                // FASE 5B.11: Viewer vê todos os checklists do workspace.
+                // O filtro por assignments foi removido da visibilidade.
+              }
            } else {
              // Contexto Pessoal
              contextualQuery = contextualQuery.is("workspace_id", null).eq("user_id", user.id);

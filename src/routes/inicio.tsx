@@ -90,34 +90,15 @@ export function Dashboard() {
         if (workspaceStatus === 'workspace' && currentWorkspace) {
           query = query.eq("workspace_id", currentWorkspace.id);
           
-          // FASE 5B.10: Restrição para Viewer usando RPC canônica (Fail-closed)
+          // FASE 5B.11: Viewer vê TODOS os checklists do workspace.
+          // O membership ativo já é garantido pelo fail-closed do hook useWorkspaceRBAC.
+          // REMOVIDO: Filtro por list_my_checklist_assignments.
+          
+          // Para Viewer, vamos carregar as atribuições separadamente para evitar leak de outros membros
           if (isViewer) {
-            if (!workspaceMemberId) {
-              setChecklists([]);
-              setIsLoading(false);
-              return;
-            }
-
-            const { data: assignments, error: assignError } = await supabase.rpc('list_my_checklist_assignments', {
-              p_workspace_id: currentWorkspace.id
-            });
-            
-            if (assignError) {
-              console.error("[inicio] Erro ao buscar atribuições canônicas:", assignError);
-              setChecklists([]);
-              setIsLoading(false);
-              return;
-            }
-
-            const assignedIds = assignments?.map((a: any) => a.checklist_id) || [];
-            
-            if (assignedIds.length > 0) {
-              query = query.in("id", assignedIds);
-            } else {
-              setChecklists([]);
-              setIsLoading(false);
-              return;
-            }
+             // Modificamos a query para NÃO carregar checklist_assignments(*) via join
+             // para evitar ver assignments de terceiros.
+             query = supabase.from("checklists").select("*").eq("workspace_id", currentWorkspace.id);
           }
         } else {
           // Contexto Pessoal: apenas checklists sem workspace_id do próprio usuário
@@ -130,7 +111,22 @@ export function Dashboard() {
           .order("created_at", { ascending: false });
         
         if (error) throw error;
-        setChecklists(data || []);
+        let finalChecklists = data || [];
+
+        // FASE 5B.11: Se for Viewer, buscar apenas os PRÓPRIOS assignments via RPC
+        if (isViewer && workspaceStatus === 'workspace' && currentWorkspace) {
+          const { data: myAssignments } = await supabase.rpc('list_my_checklist_assignments', {
+            p_workspace_id: currentWorkspace.id
+          });
+
+          // Mapear os assignments para os checklists carregados
+          finalChecklists = finalChecklists.map(c => ({
+            ...c,
+            checklist_assignments: myAssignments?.filter((a: any) => a.checklist_id === c.id) || []
+          }));
+        }
+
+        setChecklists(finalChecklists);
       } catch (error) {
         console.error("Erro ao carregar checklists:", error);
         toast.error("Erro ao carregar checklists");
