@@ -82,6 +82,10 @@ export function AuthPage({ mode, redirect }: Props) {
 
   const normalizedEmail = () => email.trim().toLowerCase();
 
+  const handleGoogle = async () => {
+    toast.error("O cadastro com Google está temporariamente desativado. Use e-mail.");
+  };
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isLoading) return;
