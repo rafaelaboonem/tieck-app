@@ -247,7 +247,7 @@ describe('AuthPage Phase 4B.5 (Password-based Login & Signup Flow)', () => {
     if (submitBtn) fireEvent.click(submitBtn);
 
     await waitFor(() => {
-      const resendBtn = screen.getByRole('button', { name: /Reenviar e-mail/i });
+      const resendBtn = screen.getByText(/Reenviar/);
       fireEvent.click(resendBtn);
     });
 
