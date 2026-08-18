@@ -202,7 +202,7 @@ import logoIcon from "../assets/local/logo-tieck.webp";
   
     // Close sidebar on navigation (mobile only)
     useEffect(() => {
-      if (isMobile && sidebarOpen) {
+      if (isMobile === true && sidebarOpen) {
         setSidebarOpen(false);
       }
     }, [location.pathname, isMobile]);
@@ -210,7 +210,7 @@ import logoIcon from "../assets/local/logo-tieck.webp";
     // Handle Escape key to close sidebar
     useEffect(() => {
       const handleEsc = (e: KeyboardEvent) => {
-        if (e.key === "Escape" && sidebarOpen && isMobile) {
+        if (e.key === "Escape" && sidebarOpen && isMobile === true) {
           setSidebarOpen(false);
         }
       };
@@ -220,7 +220,7 @@ import logoIcon from "../assets/local/logo-tieck.webp";
 
     // Scroll lock when mobile sidebar is open
     useEffect(() => {
-      if (isMobile && sidebarOpen) {
+      if (isMobile === true && sidebarOpen) {
         document.body.style.overflow = "hidden";
       } else {
         document.body.style.overflow = "";
@@ -230,10 +230,14 @@ import logoIcon from "../assets/local/logo-tieck.webp";
       };
     }, [sidebarOpen, isMobile]);
 
+    // If viewport is not yet resolved, we render a stable skeleton to avoid flash.
+    // We assume desktop by default for classes but don't show the sidebar if it's undecided.
+    const isUndecided = isMobile === undefined;
+
     return (
         <div className="min-h-screen bg-white text-neutral-900 flex overflow-x-hidden">
        {/* Mobile Backdrop */}
-       {isMobile && sidebarOpen && (
+       {isMobile === true && sidebarOpen && (
          <div 
            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40 animate-in fade-in duration-200"
            onClick={() => setSidebarOpen(false)}
@@ -245,12 +249,13 @@ import logoIcon from "../assets/local/logo-tieck.webp";
        <aside
          className={cn(
            "border-r border-neutral-200 flex flex-col py-4 shrink-0 transition-all duration-300 ease-in-out bg-white shadow-xl shadow-neutral-200/20",
-           isMobile 
+           isMobile === true 
              ? "fixed top-0 left-0 h-[100dvh] z-50 w-[288px] max-w-[85vw]" 
              : "sticky top-0 h-screen w-64 px-3",
-           !sidebarOpen && (isMobile ? "-translate-x-full" : "w-0 px-0 overflow-hidden opacity-0")
+           (!sidebarOpen || isUndecided) && (isMobile === true ? "-translate-x-full" : "w-0 px-0 overflow-hidden opacity-0")
          )}
        >
+
          {isMobile && (
            <button
              onClick={() => setSidebarOpen(false)}
