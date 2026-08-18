@@ -263,7 +263,7 @@ import { CameraVerificationPolicyV1 } from "@/server/camera-ai/schema";
 import { CameraBlockCard } from "@/components/camera-ai/CameraBlockCard";
 import { CameraSettingsPanel } from "@/components/camera-ai/CameraSettingsPanel";
 
-function CameraBlockEditor({ 
+export function CameraBlockEditor({ 
   block, 
   isActive, 
   currentChecklistId, 
