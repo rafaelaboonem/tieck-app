@@ -332,25 +332,29 @@ export function AuthPage({ mode, redirect }: Props) {
   };
 
   // ---------- UI ----------
-  const heading = recoveryStep > 0
-    ? recoveryStep === 1 ? "Recuperar senha" 
-    : recoveryStep === 2 ? "Confirme o código"
-    : "Nova senha"
-    : isSignUp
-    ? signupStep === 1
-      ? "Crie sua conta"
-      : "Verifique seu e-mail"
-    : "Bem-vindo de volta";
+  const { heading, subheading } = useMemo(() => {
+    if (recoveryStep > 0) {
+      return {
+        heading: recoveryStep === 1 ? "Recuperar senha" 
+               : recoveryStep === 2 ? "Confirme o código"
+               : "Nova senha",
+        subheading: recoveryStep === 1 ? "Enviaremos um código para o seu e-mail"
+                  : recoveryStep === 2 ? `Digite o código enviado para ${email}`
+                  : "Escolha uma senha forte para sua segurança"
+      };
+    }
+    if (isSignUp) {
+      return {
+        heading: signupStep === 1 ? "Crie sua conta" : "Verifique seu e-mail",
+        subheading: signupStep === 1 ? "Preencha os campos abaixo para criar sua conta" : `Enviamos um código de 6 dígitos para ${email}`
+      };
+    }
+    return {
+      heading: "Bem-vindo de volta",
+      subheading: "Acesse sua conta para continuar"
+    };
+  }, [recoveryStep, signupStep, isSignUp, email]);
 
-  const subheading = recoveryStep > 0
-    ? recoveryStep === 1 ? "Enviaremos um código para o seu e-mail"
-    : recoveryStep === 2 ? `Digite o código enviado para ${email}`
-    : "Escolha uma senha forte para sua segurança"
-    : isSignUp
-    ? signupStep === 1
-      ? "Preencha os campos abaixo para criar sua conta"
-      : `Enviamos um código de 6 dígitos para ${email}`
-    : "Acesse sua conta para continuar";
 
 
   const inputClass =
