@@ -82,28 +82,49 @@ export function AuthPage({ mode, redirect }: Props) {
 
   const normalizedEmail = () => email.trim().toLowerCase();
 
-  const handleGoogle = async () => {
-    // Hidden temporarily while provider is not configured
-    toast.error("O cadastro com Google está temporariamente desativado. Use e-mail.");
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (isLoading) return;
+    setIsLoading(true);
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
+        email: normalizedEmail(),
+        password,
+      });
+      if (error) throw error;
+      goAfterAuth();
+    } catch (err: any) {
+      console.error("Login error:", err);
+      toast.error(mapAuthError(err.message));
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleSendCode = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isLoading) return;
+
+    if (isSignUp) {
+      if (!name.trim()) return toast.error("Informe seu nome");
+      if (password.length < 8) return toast.error("A senha deve ter pelo menos 8 caracteres");
+      if (password !== confirmPassword) return toast.error("As senhas não conferem");
+    }
+
     setAlreadyRegistered(false);
     setIsLoading(true);
     try {
-      // Use standard Supabase signInWithOtp. 
-      // OTP verification automatically handles signup vs login based on shouldCreateUser.
-      const { error } = await supabase.auth.signInWithOtp({
-        email: normalizedEmail(),
-        options: {
-          shouldCreateUser: isSignUp,
-          emailRedirectTo: window.location.origin + (safeRedirect || "/inicio"),
-        }
+      const { data, error } = await supabase.functions.invoke('signup-request-otp', {
+        body: { email: normalizedEmail() }
       });
       
       if (error) throw error;
+      if (data?.ok === false && data?.code === 'already_registered') {
+        setAlreadyRegistered(true);
+        setIsLoading(false);
+        return;
+      }
+      if (data?.error) throw new Error(data.error);
       
       toast.success("Código enviado! Verifique seu e-mail.");
       setSignupStep(2);
@@ -124,54 +145,86 @@ export function AuthPage({ mode, redirect }: Props) {
     verifyingRef.current = token;
     setIsLoading(true);
     try {
-      const { error } = await supabase.auth.verifyOtp({
-        email: normalizedEmail(),
-        token,
-        type: isSignUp ? 'signup' : 'magiclink',
+      const { data, error } = await supabase.functions.invoke('signup-verify-otp', {
+        body: { email: normalizedEmail(), code: token }
       });
       
-      if (error) {
-        const { error: secondTryError } = await supabase.auth.verifyOtp({
-          email: normalizedEmail(),
-          token,
-          type: isSignUp ? 'magiclink' : 'signup',
-        });
-        if (secondTryError) throw secondTryError;
-      }
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
 
+      setVerificationToken(data.verificationToken);
       setOtpVerified(true);
       toast.success("E-mail verificado!");
     } catch (err: any) {
       console.error("Verify OTP error:", err);
       toast.error(mapAuthError(err.message));
       setOtp("");
-    } finally {
       verifyingRef.current = null;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const completeSignup = async () => {
+    if (completingRef.current || !verificationToken) return;
+    completingRef.current = true;
+    setIsLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('signup-complete', {
+        body: { 
+          email: normalizedEmail(), 
+          verificationToken,
+          password,
+          displayName: name.trim()
+        }
+      });
+
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+
+      // Auto login
+      const { error: loginErr } = await supabase.auth.signInWithPassword({
+        email: normalizedEmail(),
+        password,
+      });
+
+      if (loginErr) throw loginErr;
+
+      // Clear sensitive data
+      setPassword("");
+      setConfirmPassword("");
+      setVerificationToken("");
+      setOtp("");
+      
+      toast.success("Conta criada com sucesso!");
+      goAfterAuth();
+    } catch (err: any) {
+      console.error("Complete signup error:", err);
+      toast.error(mapAuthError(err.message));
+      completingRef.current = false;
+    } finally {
       setIsLoading(false);
     }
   };
 
   useEffect(() => {
-    if (signupStep === 2 && otp.length === 6 && !isLoading && !otpVerified) {
-      handleVerifyCode(undefined, otp);
+    if (otpVerified && verificationToken && !isLoading) {
+      completeSignup();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [otp, signupStep]);
+  }, [otpVerified, verificationToken]);
 
   const handleResendCode = async () => {
     if (isLoading || !email || resendCountdown > 0) return;
     setOtp("");
     setOtpVerified(false);
+    setVerificationToken("");
     setIsLoading(true);
     try {
-      const { error } = await supabase.auth.signInWithOtp({
-        email: normalizedEmail(),
-        options: {
-          shouldCreateUser: isSignUp,
-          emailRedirectTo: window.location.origin + (safeRedirect || "/inicio"),
-        }
+      const { data, error } = await supabase.functions.invoke('signup-request-otp', {
+        body: { email: normalizedEmail() }
       });
       if (error) throw error;
+      if (data?.error) throw new Error(data.error);
       toast.success("Novo código enviado! Verifique seu e-mail.");
       setResendCountdown(60);
     } catch (err: any) {
