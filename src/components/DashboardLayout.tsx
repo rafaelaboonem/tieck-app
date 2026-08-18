@@ -498,33 +498,36 @@ import logoIcon from "../assets/local/logo-tieck.webp";
                     </div>
                   </li>
                   
-                  {profile?.is_admin && (
-                    <li key="Admin">
-                      <button
-                        type="button"
-                        onClick={() => navigate({ to: "/admin" })}
-                        className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-sm transition-colors ${
-                          location.pathname === "/admin" 
-                            ? "bg-neutral-100 text-blue-600 font-medium" 
-                            : "hover:bg-neutral-100 text-blue-600"
-                        }`}
-                      >
-                        <ShieldCheck className="w-4 h-4" />
-                        <span>Painel Admin</span>
-                      </button>
-                    </li>
-                  )}
-                </ul>
+            <div className="px-1 mb-6">
+              <p className="px-2 text-xs font-medium text-neutral-500 mb-1">Pessoal</p>
+              <NavList items={personalNav} />
+            </div>
 
-                <div>
-                  <p className="px-2 text-xs font-medium text-neutral-500 mb-1">Produto</p>
-                  <NavList items={productNav} />
+            <div className="px-1 mb-6">
+              <p className="px-2 text-xs font-medium text-neutral-500 mb-1">Workspace</p>
+              <NavList items={workspaceNav} />
+              {profile?.is_admin && (
+                <div className="mt-0.5">
+                  <button
+                    type="button"
+                    onClick={() => navigate({ to: "/admin" })}
+                    className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-sm transition-colors ${
+                      location.pathname === "/admin" 
+                        ? "bg-neutral-100 text-blue-600 font-medium" 
+                        : "hover:bg-neutral-100 text-blue-600"
+                    }`}
+                  >
+                    <ShieldCheck className="w-4 h-4" />
+                    <span>Painel Admin</span>
+                  </button>
                 </div>
-        
-                <div>
-                  <p className="px-2 text-xs font-medium text-neutral-500 mb-1">Ajuda</p>
-                  <NavList items={helpNav} />
-                </div>
+              )}
+            </div>
+
+            <div>
+              <p className="px-2 text-xs font-medium text-neutral-500 mb-1">Ajuda</p>
+              <NavList items={helpNav} />
+            </div>
               </div>
             )}
           </div>

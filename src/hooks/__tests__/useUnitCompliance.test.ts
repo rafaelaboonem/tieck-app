@@ -1,32 +1,42 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { renderHook } from '@testing-library/react';
+import { renderHook, act } from '@testing-library/react';
 import { useUnitCompliance } from '../useUnitCompliance';
 import { supabase } from '@/integrations/supabase/client';
 
 // Mock Supabase
+const mockSupabase = {
+  from: vi.fn().mockReturnThis(),
+  select: vi.fn().mockReturnThis(),
+  gte: vi.fn().mockReturnThis(),
+  lte: vi.fn().mockReturnThis(),
+  eq: vi.fn().mockReturnValue(Promise.resolve({ data: [], error: null })),
+  channel: vi.fn().mockReturnThis(),
+  on: vi.fn().mockReturnThis(),
+  subscribe: vi.fn().mockReturnThis(),
+  removeChannel: vi.fn()
+};
+
 vi.mock('@/integrations/supabase/client', () => ({
   supabase: {
-    from: vi.fn(() => ({
-      select: vi.fn(() => ({
-        gte: vi.fn(() => ({
-          lte: vi.fn(() => ({
-            eq: vi.fn(() => Promise.resolve({ data: [], error: null })),
-            then: vi.fn((cb) => cb({ data: [], error: null }))
-          }))
-        }))
-      })),
-      channel: vi.fn(() => ({
-        on: vi.fn().mockReturnThis(),
-        subscribe: vi.fn().mockReturnThis()
-      })),
-      removeChannel: vi.fn()
-    }))
+    from: vi.fn(),
+    channel: vi.fn(),
+    removeChannel: vi.fn()
   }
 }));
 
 describe('useUnitCompliance with enabled flag', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    (supabase.from as any).mockReturnValue({
+      select: vi.fn().mockReturnThis(),
+      gte: vi.fn().mockReturnThis(),
+      lte: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnValue(Promise.resolve({ data: [], error: null }))
+    });
+    (supabase.channel as any).mockReturnValue({
+      on: vi.fn().mockReturnThis(),
+      subscribe: vi.fn().mockReturnThis()
+    });
   });
 
   it('should not query supabase when enabled is false', async () => {
@@ -42,11 +52,13 @@ describe('useUnitCompliance with enabled flag', () => {
   });
 
   it('should query supabase when enabled is true', async () => {
-    renderHook(() => useUnitCompliance({
-      startDate: '2026-01-01',
-      endDate: '2026-01-01',
-      enabled: true
-    }));
+    await act(async () => {
+      renderHook(() => useUnitCompliance({
+        startDate: '2026-01-01',
+        endDate: '2026-01-01',
+        enabled: true
+      }));
+    });
 
     expect(supabase.from).toHaveBeenCalledWith('analytics_unit_daily_compliance');
   });
