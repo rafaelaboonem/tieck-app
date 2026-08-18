@@ -222,7 +222,7 @@ export function Dashboard() {
             />
             <span className="text-neutral-400">›</span>
             <span className="text-neutral-600 font-medium truncate max-w-[120px] sm:max-w-none">
-              {currentWorkspace?.name || "Meu workspace"}
+              {workspaceStatus === 'workspace' ? (currentWorkspace?.name || "Workspace") : "Pessoal"}
             </span>
           </div>
           <div className="flex items-center gap-2 sm:gap-3 text-neutral-500">
