@@ -1,5 +1,5 @@
 import { useNavigate, Link } from "@tanstack/react-router";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { mapAuthError } from "@/utils/auth-errors";
