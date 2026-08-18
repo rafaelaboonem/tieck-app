@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
-import { analyzeImageWithReference } from '../openai-provider';
-import { evaluateGate } from '../gate';
+import { analyzeImageWithReference } from '../../../server/camera-ai/openai-provider';
+import { evaluateGate } from '../../../server/camera-ai/gate';
 
 describe('Camera AI Reference Mode Logic', () => {
   it('should accept a high confidence match', () => {
