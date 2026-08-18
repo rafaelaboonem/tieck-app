@@ -830,6 +830,7 @@ export function NovoChecklistPage() {
     if (draftTitle) setTitle(draftTitle);
     if (localStorage.getItem("draft_checklist_started") === "true") setIsStarted(true);
   }, [checklistId]);
+  const { canManage } = useWorkspaceRBAC(currentWorkspace?.id);
   const [isTemplatesOpen, setIsTemplatesOpen] = useState(false);
   const [selectedFont, setSelectedFont] = useState("");
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
@@ -1503,7 +1504,7 @@ export function NovoChecklistPage() {
   }, [user]);
 
   const settingsChecklistId = currentChecklistId || sessionChecklistIdRef.current || checklistId || null;
-  const { canManage: wsCanManage } = useWorkspaceRBAC(currentWorkspace?.id || workspaceParam);
+  
 
   useEffect(() => {
     const fetchWorkspaceData = async () => {
