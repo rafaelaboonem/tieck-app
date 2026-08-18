@@ -773,10 +773,12 @@ import logoIcon from "../assets/local/logo-tieck.webp";
                     <Plus className="mr-2 h-4 w-4" />
                     <span>Criar novo checklist</span>
                   </CommandItem>
-                  <CommandItem onSelect={() => { navigate({ to: "/organizar", search: { id: currentWorkspace?.id } }); setSearchOpen(false); }}>
-                    <FolderPlus className="mr-2 h-4 w-4" />
-                    <span>Criar workspace</span>
-                  </CommandItem>
+                  {(profile?.is_admin || workspaces.length === 0) && (
+                    <CommandItem onSelect={() => { navigate({ to: "/organizar", search: { id: currentWorkspace?.id } }); setSearchOpen(false); }}>
+                      <FolderPlus className="mr-2 h-4 w-4" />
+                      <span>Criar workspace</span>
+                    </CommandItem>
+                  )}
                 </>
               )}
             </CommandGroup>
