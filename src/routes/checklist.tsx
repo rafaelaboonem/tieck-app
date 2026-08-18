@@ -305,7 +305,10 @@ function CameraBlockEditor({
       });
       const data = await res.json();
       if (data.ok && data.policy) {
-        updateBlock(blockId, { cameraAiPolicy: data.policy });
+        updateBlock(blockId, { 
+          cameraAiPolicy: data.policy,
+          cameraAiNeedsRevalidation: false
+        });
       }
     } catch (err) {
       console.error('Failed to compile policy:', err);
@@ -319,7 +322,11 @@ function CameraBlockEditor({
     
     const checkHash = async () => {
       const hash = await hashQuestion(camTitle, camDescription);
-      if (policy?.questionHash === hash) return;
+      if (policy?.questionHash === hash && !block.cameraAiNeedsRevalidation) return;
+
+      if (!block.cameraAiNeedsRevalidation) {
+        updateBlock(block.id, { cameraAiNeedsRevalidation: true });
+      }
 
       if (compileTimeoutRef.current) clearTimeout(compileTimeoutRef.current);
       compileTimeoutRef.current = setTimeout(() => {
