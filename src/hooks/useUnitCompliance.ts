@@ -14,6 +14,7 @@ export interface UseUnitComplianceParams {
   startDate: string; // YYYY-MM-DD (inclusivo)
   endDate: string; // YYYY-MM-DD (inclusivo)
   unitId?: string;
+  enabled?: boolean;
 }
 
 interface DailyRow {
@@ -145,12 +146,13 @@ function aggregateByUnit(rows: DailyRow[]): UnitComplianceRow[] {
 }
 
 export function useUnitCompliance(params: UseUnitComplianceParams): UseUnitComplianceResult {
-  const { startDate, endDate, unitId } = params;
+  const { startDate, endDate, unitId, enabled = true } = params;
   const [data, setData] = useState<UnitComplianceRow[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(enabled);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
+    if (!enabled) return;
     setLoading(true);
     setError(null);
     let q = supabase
@@ -174,12 +176,17 @@ export function useUnitCompliance(params: UseUnitComplianceParams): UseUnitCompl
   }, [startDate, endDate, unitId]);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    if (enabled) {
+      load();
+    } else {
+      setLoading(false);
+      setData([]);
+    }
+  }, [load, enabled]);
 
-  // Realtime debounced: só quando a janela inclui hoje. Períodos totalmente
-  // históricos não recebem invalidação contínua.
+  // Realtime debounced: só quando a janela inclui hoje e está habilitado.
   useEffect(() => {
+    if (!enabled) return;
     const today = new Date().toISOString().slice(0, 10);
     if (endDate < today) return;
     let timer: ReturnType<typeof setTimeout> | null = null;

@@ -316,8 +316,8 @@ import logoIcon from "../assets/local/logo-tieck.webp";
                     className="flex-1 text-[11px] h-8 gap-1.5 bg-white hover:bg-[#FF007F]/5 hover:text-[#FF007F] hover:border-[#FF007F]/20 transition-all justify-center px-1"
                     onClick={() => navigate({ to: "/configuracoes" })}
                   >
-                    <Settings className="w-3.5 h-3.5 shrink-0" />
-                    <span className="truncate">Configurações</span>
+                    <User className="w-3.5 h-3.5 shrink-0" />
+                    <span className="truncate">Minha conta</span>
                   </Button>
                 </div>
               </div>
