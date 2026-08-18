@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { mapAuthError } from "@/utils/auth-errors";
 import { useAuth } from "@/contexts/AuthContext";
-import { Loader2, ArrowRight, Mail, ArrowLeft } from "lucide-react";
+import { Loader2, ArrowRight, Mail, ArrowLeft, Eye, EyeOff, User, Lock } from "lucide-react";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import logoUrl from "../assets/local/logo-tieck.webp";
 
@@ -47,14 +47,20 @@ export function AuthPage({ mode, redirect }: Props) {
 
   const [isLoading, setIsLoading] = useState(false);
   const [email, setEmail] = useState("");
+  const [name, setName] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [signupStep, setSignupStep] = useState<1 | 2>(1);
   const [otp, setOtp] = useState("");
   const [otpVerified, setOtpVerified] = useState(false);
+  const [verificationToken, setVerificationToken] = useState("");
   const [alreadyRegistered, setAlreadyRegistered] = useState(false);
   const [resendCountdown, setResendCountdown] = useState(0);
 
-  // Guards against double-submission of the same OTP (auto-submit + Enter/form).
+  // Guards against double-submission
   const verifyingRef = useRef<string | null>(null);
+  const completingRef = useRef<boolean>(false);
 
   useEffect(() => {
     // Se o usuário estiver autenticado e não estivermos no meio da verificação OTP, redirecionar
@@ -77,27 +83,52 @@ export function AuthPage({ mode, redirect }: Props) {
   const normalizedEmail = () => email.trim().toLowerCase();
 
   const handleGoogle = async () => {
-    // Hidden temporarily while provider is not configured
     toast.error("O cadastro com Google está temporariamente desativado. Use e-mail.");
+  };
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (isLoading) return;
+    setIsLoading(true);
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
+        email: normalizedEmail(),
+        password,
+      });
+      if (error) throw error;
+      goAfterAuth();
+    } catch (err: any) {
+      console.error("Login error:", err);
+      toast.error(mapAuthError(err.message));
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleSendCode = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isLoading) return;
+
+    if (isSignUp) {
+      if (!name.trim()) return toast.error("Informe seu nome");
+      if (password.length < 8) return toast.error("A senha deve ter pelo menos 8 caracteres");
+      if (password !== confirmPassword) return toast.error("As senhas não conferem");
+    }
+
     setAlreadyRegistered(false);
     setIsLoading(true);
     try {
-      // Use standard Supabase signInWithOtp. 
-      // OTP verification automatically handles signup vs login based on shouldCreateUser.
-      const { error } = await supabase.auth.signInWithOtp({
-        email: normalizedEmail(),
-        options: {
-          shouldCreateUser: isSignUp,
-          emailRedirectTo: window.location.origin + (safeRedirect || "/inicio"),
-        }
+      const { data, error } = await supabase.functions.invoke('signup-request-otp', {
+        body: { email: normalizedEmail() }
       });
       
       if (error) throw error;
+      if (data?.ok === false && data?.code === 'already_registered') {
+        setAlreadyRegistered(true);
+        setIsLoading(false);
+        return;
+      }
+      if (data?.error) throw new Error(data.error);
       
       toast.success("Código enviado! Verifique seu e-mail.");
       setSignupStep(2);
@@ -118,29 +149,64 @@ export function AuthPage({ mode, redirect }: Props) {
     verifyingRef.current = token;
     setIsLoading(true);
     try {
-      const { error } = await supabase.auth.verifyOtp({
-        email: normalizedEmail(),
-        token,
-        type: isSignUp ? 'signup' : 'magiclink',
+      const { data, error } = await supabase.functions.invoke('signup-verify-otp', {
+        body: { email: normalizedEmail(), code: token }
       });
       
-      if (error) {
-        const { error: secondTryError } = await supabase.auth.verifyOtp({
-          email: normalizedEmail(),
-          token,
-          type: isSignUp ? 'magiclink' : 'signup',
-        });
-        if (secondTryError) throw secondTryError;
-      }
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
 
+      setVerificationToken(data.verificationToken);
       setOtpVerified(true);
       toast.success("E-mail verificado!");
     } catch (err: any) {
       console.error("Verify OTP error:", err);
       toast.error(mapAuthError(err.message));
       setOtp("");
-    } finally {
       verifyingRef.current = null;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const completeSignup = async () => {
+    if (completingRef.current || !verificationToken) return;
+    completingRef.current = true;
+    setIsLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('signup-complete', {
+        body: { 
+          email: normalizedEmail(), 
+          verificationToken,
+          password,
+          displayName: name.trim()
+        }
+      });
+
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+
+      // Auto login
+      const { error: loginErr } = await supabase.auth.signInWithPassword({
+        email: normalizedEmail(),
+        password,
+      });
+
+      if (loginErr) throw loginErr;
+
+      // Clear sensitive data
+      setPassword("");
+      setConfirmPassword("");
+      setVerificationToken("");
+      setOtp("");
+      
+      toast.success("Conta criada com sucesso!");
+      goAfterAuth();
+    } catch (err: any) {
+      console.error("Complete signup error:", err);
+      toast.error(mapAuthError(err.message));
+      completingRef.current = false;
+    } finally {
       setIsLoading(false);
     }
   };
@@ -149,23 +215,26 @@ export function AuthPage({ mode, redirect }: Props) {
     if (signupStep === 2 && otp.length === 6 && !isLoading && !otpVerified) {
       handleVerifyCode(undefined, otp);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [otp, signupStep]);
+
+  useEffect(() => {
+    if (otpVerified && verificationToken && !isLoading) {
+      completeSignup();
+    }
+  }, [otpVerified, verificationToken]);
 
   const handleResendCode = async () => {
     if (isLoading || !email || resendCountdown > 0) return;
     setOtp("");
     setOtpVerified(false);
+    setVerificationToken("");
     setIsLoading(true);
     try {
-      const { error } = await supabase.auth.signInWithOtp({
-        email: normalizedEmail(),
-        options: {
-          shouldCreateUser: isSignUp,
-          emailRedirectTo: window.location.origin + (safeRedirect || "/inicio"),
-        }
+      const { data, error } = await supabase.functions.invoke('signup-request-otp', {
+        body: { email: normalizedEmail() }
       });
       if (error) throw error;
+      if (data?.error) throw new Error(data.error);
       toast.success("Novo código enviado! Verifique seu e-mail.");
       setResendCountdown(60);
     } catch (err: any) {
@@ -185,7 +254,7 @@ export function AuthPage({ mode, redirect }: Props) {
 
   const subheading = isSignUp
     ? signupStep === 1
-      ? "Comece informando seu melhor e-mail"
+      ? "Preencha os campos abaixo para criar sua conta"
       : `Enviamos um código de 6 dígitos para ${email}`
     : "Acesse sua conta para continuar";
 
@@ -255,38 +324,89 @@ export function AuthPage({ mode, redirect }: Props) {
 
         <div className="space-y-5 relative">
           {signupStep === 1 && (
-            <form onSubmit={handleSendCode} className="space-y-5 animate-in fade-in slide-in-from-bottom-2 duration-300">
+            <form 
+              onSubmit={isSignUp ? handleSendCode : handleLogin} 
+              className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300"
+            >
+              {isSignUp && (
+                <div>
+                  <label className="block text-xs font-semibold text-neutral-500 uppercase tracking-wider mb-2">Nome Completo</label>
+                  <div className="relative">
+                    <User className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400" />
+                    <input
+                      type="text"
+                      required
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      className={`${inputClass} pl-11`}
+                      placeholder="Como deseja ser chamado?"
+                      autoFocus
+                    />
+                  </div>
+                </div>
+              )}
+
               <div>
                 <label className="block text-xs font-semibold text-neutral-500 uppercase tracking-wider mb-2">E-mail</label>
-                <input
-                  type="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className={inputClass}
-                  placeholder="seu@email.com"
-                  autoFocus
-                />
+                <div className="relative">
+                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400" />
+                  <input
+                    type="email"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className={`${inputClass} pl-11`}
+                    placeholder="seu@email.com"
+                    autoFocus={!isSignUp}
+                  />
+                </div>
               </div>
 
-              {!isSignUp && (
-                <div className="rounded-xl border border-blue-100 bg-blue-50 p-4 text-sm text-blue-700 flex items-start gap-3">
-                  <Mail className="h-5 w-5 mt-0.5 flex-shrink-0" />
-                  <div className="flex-1">
-                    <p className="font-medium">Login via código seguro</p>
-                    <p className="mt-1 text-xs text-blue-600/80 leading-relaxed">
-                      Enviaremos um código de acesso temporário para seu e-mail.
-                    </p>
+              <div>
+                <label className="block text-xs font-semibold text-neutral-500 uppercase tracking-wider mb-2">Senha</label>
+                <div className="relative">
+                  <Lock className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400" />
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className={`${inputClass} pl-11 pr-11`}
+                    placeholder="••••••••"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600 transition-colors"
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+              </div>
+
+              {isSignUp && (
+                <div>
+                  <label className="block text-xs font-semibold text-neutral-500 uppercase tracking-wider mb-2">Confirmar Senha</label>
+                  <div className="relative">
+                    <Lock className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400" />
+                    <input
+                      type={showPassword ? "text" : "password"}
+                      required
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      className={`${inputClass} pl-11`}
+                      placeholder="Repita sua senha"
+                    />
                   </div>
                 </div>
               )}
 
               {alreadyRegistered && isSignUp && (
-                <div className="rounded-xl border border-[#FF007F]/30 bg-[#FF007F]/10 p-3 text-sm text-[#FFB3D9] flex items-start gap-2">
+                <div className="rounded-xl border border-[#FF007F]/30 bg-[#FF007F]/5 p-3 text-sm text-[#FF007F] flex items-start gap-2">
                   <Mail className="h-4 w-4 mt-0.5 flex-shrink-0" />
                   <div className="flex-1">
                     <p className="font-medium">E-mail já cadastrado</p>
-                    <Link to="/login" className="mt-1 inline-block text-xs font-semibold text-white hover:underline">
+                    <Link to="/login" className="mt-1 inline-block text-xs font-semibold hover:underline">
                       Ir para o login →
                     </Link>
                   </div>
@@ -296,7 +416,7 @@ export function AuthPage({ mode, redirect }: Props) {
               <button type="submit" disabled={isLoading} className={primaryBtn}>
                 {isLoading ? <Loader2 className="animate-spin h-5 w-5" /> : (
                   <>
-                    {isSignUp ? "Enviar código" : "Receber código de acesso"}
+                    {isSignUp ? "Criar conta" : "Entrar"}
                     <ArrowRight className="h-4 w-4" />
                   </>
                 )}
