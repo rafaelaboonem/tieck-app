@@ -3,7 +3,7 @@ import { VerifyPayloadSchema } from '@/server/camera-ai/schema';
 import OpenAI from 'openai';
 import { createServerSupabaseClient } from '@/integrations/supabase/client.server';
 import { verifyCameraRequest, VerifyDependencies } from '@/server/camera-ai/verify-handler';
-import { analyzeImage } from '@/server/camera-ai/openai-provider';
+import { analyzeImage, analyzeImageWithReference } from '@/server/camera-ai/openai-provider';
 
 export const Route = createFileRoute('/api/camera-ai/verify')({
   server: {
