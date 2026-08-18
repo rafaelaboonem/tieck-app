@@ -332,11 +332,40 @@ export async function verifyCameraRequest(
     };
   }
 
-  // 10. OpenAI
+  // 10. Verification Flow (Auto vs Reference)
   const startTime = deps.now().getTime();
-  let analysis: CameraVerification;
+  let analysis: CameraVerification | CameraReferenceVerification;
+
   try {
-    analysis = await deps.analyzeImage(question, imageFile.buffer, mimeType, validatedPolicy);
+    if (block.mode === 'reference' && block.cameraReference) {
+      const ref = await deps.loadReferenceImage(block.cameraReference.storagePath);
+      
+      // SHA-256 validation of reference
+      const refHash = createHash('sha256').update(new Uint8Array(ref.buffer)).digest('hex');
+      if (refHash !== block.cameraReference.sha256) {
+        await deps.markFailed({
+          responseId: session.response_id,
+          blockId: payload.blockId,
+          idempotencyKey: payload.idempotencyKey,
+          code: 'reference_corrupted'
+        });
+        return { 
+          status: 400, 
+          body: { ok: false, code: 'reference_corrupted', message: 'A foto de referência está corrompida. Avise o administrador.', requestId } 
+        };
+      }
+
+      analysis = await deps.analyzeImageWithReference(
+        question,
+        imageFile.buffer,
+        mimeType,
+        ref.buffer,
+        ref.mimeType,
+        validatedPolicy
+      );
+    } else {
+      analysis = await deps.analyzeImage(question, imageFile.buffer, mimeType, validatedPolicy);
+    }
   } catch (aiError) {
     await deps.markFailed({
       responseId: session.response_id,
