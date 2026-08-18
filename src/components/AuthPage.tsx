@@ -602,13 +602,13 @@ export function AuthPage({ mode, redirect }: Props) {
                 </InputOTP>
               </div>
 
-              <div className="flex items-center justify-center min-h-[24px] text-sm text-neutral-500 text-center">
+              <div className="flex items-center justify-center min-h-[24px] text-sm text-neutral-500 text-center px-4">
                 {isLoading ? (
                   <span className="flex items-center gap-2">
                     <Loader2 className="animate-spin h-4 w-4" /> Verificando…
                   </span>
                 ) : (
-                  <span>Digite o código enviado para o seu e-mail</span>
+                  <span>O código é verificado automaticamente</span>
                 )}
               </div>
 
