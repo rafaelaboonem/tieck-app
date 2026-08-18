@@ -3,9 +3,11 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
-import { AlertCircle, Loader2, Play } from "lucide-react";
-import { CameraVerificationPolicyV1, PublishedBlock, CameraBlockPatch } from "@/server/camera-ai/schema";
+import { AlertCircle, Loader2, Play, Upload, X, Camera } from "lucide-react";
+import { CameraVerificationPolicyV1, PublishedBlock, CameraBlockPatch, CameraReferenceImageV1 } from "@/server/camera-ai/schema";
 import { CameraVerificationTestDialog } from "./CameraVerificationTestDialog";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 interface CameraDraft {
   title: string;
@@ -13,6 +15,7 @@ interface CameraDraft {
   required: boolean;
   mode: string;
   policy: CameraVerificationPolicyV1 | undefined;
+  cameraReference: CameraReferenceImageV1 | undefined;
 }
 
 interface CameraSettingsPanelProps {
@@ -31,7 +34,8 @@ export function CameraSettingsPanel({ block, isOpen, onClose, onSave, isCompilin
     description: block.description || "",
     required: block.required !== false,
     mode: block.mode || 'auto',
-    policy: block.cameraAiPolicy as CameraVerificationPolicyV1 | undefined
+    policy: block.cameraAiPolicy as CameraVerificationPolicyV1 | undefined,
+    cameraReference: block.cameraReference
   });
 
   const [isTestModalOpen, setIsTestModalOpen] = useState(false);
