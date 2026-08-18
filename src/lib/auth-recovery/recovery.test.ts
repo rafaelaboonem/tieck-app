@@ -9,7 +9,6 @@ vi.mock('@/integrations/supabase/client.server', () => ({
   supabaseAdmin: {
     rpc: vi.fn(),
     from: vi.fn(() => ({
-      select: vi.fn().mockReturnThis(),
       insert: vi.fn().mockReturnThis(),
       update: vi.fn().mockReturnThis(),
       delete: vi.fn().mockReturnThis(),
