@@ -387,8 +387,10 @@ function TeamPage() {
 
 
   useEffect(() => {
-    fetchTeamData();
-  }, [currentWorkspace?.id]);
+    if (!rbacLoading && !authLoading && user && isAdmin && currentWorkspace?.id) {
+      fetchTeamData();
+    }
+  }, [currentWorkspace?.id, isAdmin, rbacLoading, authLoading, user]);
 
   const getRoleLabel = (member: WorkspaceMemberView) => {
     if (member.is_owner) return 'Proprietário';

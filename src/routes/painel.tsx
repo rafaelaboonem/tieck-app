@@ -67,66 +67,27 @@ function PainelPage() {
   const isMobile = useIsMobile();
   const search = Route.useSearch();
 
-  useEffect(() => {
-    if (!rbacLoading && !authLoading) {
-      if (!user) {
-        navigate({ to: "/login" });
-        return;
-      }
-      if (!isAdmin) {
-        toast.error("Acesso restrito a administradores");
-        navigate({ to: "/inicio" });
-        return;
-      }
-    }
-  }, [isAdmin, rbacLoading, authLoading, user, navigate]);
-
   // Filtros centrais derivados da URL (fonte da verdade única, sem loop).
   const filters: DashboardFilters = useMemo(
     () => sanitizeFilters(search),
     [search.startDate, search.endDate, search.unitId], // eslint-disable-line react-hooks/exhaustive-deps
   );
 
-  const compliance = useUnitCompliance(filters);
+  const canLoadOperationalData = !rbacLoading && !authLoading && !!user && isAdmin;
+
+  const compliance = useUnitCompliance({
+    ...filters,
+    enabled: canLoadOperationalData
+  });
   const rows = compliance.data;
 
-  const setFilters = (next: DashboardFilters) => {
-    navigate({
-      to: "/painel",
-      search: {
-        startDate: next.startDate,
-        endDate: next.endDate,
-        ...(next.unitId ? { unitId: next.unitId } : {}),
-      },
-      replace: false,
-    });
-  };
-
-  // Move rbacLoading check here to follow hooks
-  if (rbacLoading) {
-    return (
-      <DashboardLayout>
-        <div className="p-4 sm:p-8 space-y-8">
-          <Skeleton className="h-10 w-48" />
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-32 w-full" />)}
-          </div>
-        </div>
-      </DashboardLayout>
-    );
-  }
-
-  if (!isAdmin) return null;
-
-
-
-  // Agregação central: pesos somados, fórmula reaplicada.
-  const dueCompliance = aggregateWeighted(
+  const dueCompliance = useMemo(() => aggregateWeighted(
     rows.map((r) => ({ weightDone: r.dueWeightDone, weightTotal: r.dueWeightTotal })),
-  );
-  const plannedCompliance = aggregateWeighted(
+  ), [rows]);
+
+  const plannedCompliance = useMemo(() => aggregateWeighted(
     rows.map((r) => ({ weightDone: r.weightDone, weightTotal: r.weightTotal })),
-  );
+  ), [rows]);
 
   const kpis = useMemo(() => {
     let scheduled = 0,
@@ -158,6 +119,47 @@ function PainelPage() {
     }
     return { scheduled, due, done, onTime, late, overdueOpen, critical, pendingEv, attention };
   }, [rows]);
+
+  useEffect(() => {
+    if (!rbacLoading && !authLoading) {
+      if (!user) {
+        navigate({ to: "/login" });
+        return;
+      }
+      if (!isAdmin) {
+        toast.error("Acesso restrito a administradores");
+        navigate({ to: "/inicio" });
+        return;
+      }
+    }
+  }, [isAdmin, rbacLoading, authLoading, user, navigate]);
+
+  const setFilters = (next: DashboardFilters) => {
+    navigate({
+      to: "/painel",
+      search: {
+        startDate: next.startDate,
+        endDate: next.endDate,
+        ...(next.unitId ? { unitId: next.unitId } : {}),
+      },
+      replace: false,
+    });
+  };
+
+  if (rbacLoading) {
+    return (
+      <DashboardLayout>
+        <div className="p-4 sm:p-8 space-y-8">
+          <Skeleton className="h-10 w-48" />
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-32 w-full" />)}
+          </div>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  if (!isAdmin) return null;
 
   const empty = !compliance.loading && rows.length === 0;
   const noDueYet = !empty && rows.every((r) => r.dueWeightTotal === 0);
