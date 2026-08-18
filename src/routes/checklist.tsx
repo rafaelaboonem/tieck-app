@@ -284,12 +284,20 @@ function CameraBlockEditor({
 }) {
   const [isCompiling, setIsCompiling] = useState(false);
   const compileTimeoutRef = useRef<any>(null);
-  const camTitle = String(block.title || block.subtitle || "");
+  const requestedHashRef = useRef<string | null>(null);
+  
+  // Canonical title/description mapping
+  const camTitle = String(block.title || "");
   const camDescription = String(block.description ?? "");
   const policy = block.cameraAiPolicy as CameraVerificationPolicyV1 | undefined;
 
   const triggerCompile = async (checklistId: string, blockId: string) => {
     if (isCompiling) return;
+    
+    // Capture the exact hash we are requesting for
+    const currentHash = await hashQuestion(camTitle, camDescription);
+    requestedHashRef.current = currentHash;
+    
     setIsCompiling(true);
     try {
       const token = (await supabase.auth.getSession()).data.session?.access_token;
@@ -304,11 +312,21 @@ function CameraBlockEditor({
         body: JSON.stringify({ checklistId, blockId })
       });
       const data = await res.json();
+      
+      // PROBLEMA 1: Validar se a resposta ainda é válida para a pergunta atual
       if (data.ok && data.policy) {
-        updateBlock(blockId, { 
-          cameraAiPolicy: data.policy,
-          cameraAiNeedsRevalidation: false
-        });
+        const nowHash = await hashQuestion(camTitle, camDescription);
+        
+        // 1. A resposta deve corresponder ao que pedimos
+        // 2. O bloco não pode ter mudado enquanto a rede trabalhava
+        if (data.policy.questionHash === currentHash && currentHash === nowHash) {
+          updateBlock(blockId, { 
+            cameraAiPolicy: data.policy,
+            cameraAiNeedsRevalidation: false
+          });
+        } else {
+          console.warn('[Camera AI] Stale compile response discarded due to text change.');
+        }
       }
     } catch (err) {
       console.error('Failed to compile policy:', err);
@@ -322,11 +340,13 @@ function CameraBlockEditor({
     
     const checkHash = async () => {
       const hash = await hashQuestion(camTitle, camDescription);
-      if (policy?.questionHash === hash && !block.cameraAiNeedsRevalidation) return;
-
-      if (!block.cameraAiNeedsRevalidation) {
+      
+      // Imediatamente marca como necessitando revalidação se o texto não bate com a policy
+      if (policy?.questionHash !== hash && !block.cameraAiNeedsRevalidation) {
         updateBlock(block.id, { cameraAiNeedsRevalidation: true });
       }
+
+      if (policy?.questionHash === hash && !block.cameraAiNeedsRevalidation) return;
 
       if (compileTimeoutRef.current) clearTimeout(compileTimeoutRef.current);
       compileTimeoutRef.current = setTimeout(() => {
@@ -336,7 +356,7 @@ function CameraBlockEditor({
 
     checkHash();
     return () => clearTimeout(compileTimeoutRef.current);
-  }, [camTitle, camDescription, currentChecklistId, policy?.questionHash]);
+  }, [camTitle, camDescription, currentChecklistId, policy?.questionHash, block.cameraAiNeedsRevalidation]);
 
   return (
     <div
@@ -2418,7 +2438,8 @@ export function NovoChecklistPage() {
       if (isPublishedOverride === true && data?.id) {
         const cameraBlocks = blocksWithIds.filter(b => b.type === 'camera');
         for (const cam of cameraBlocks) {
-          const expectedHash = await hashQuestion(cam.title || cam.subtitle, cam.description);
+          // CANONICAL QUESTION: Usar title e description, ignorando subtitle.
+          const expectedHash = await hashQuestion(cam.title, cam.description);
           const needsCompile = !cam.cameraAiPolicy || 
                               cam.cameraAiPolicy.questionHash !== expectedHash ||
                               cam.cameraAiNeedsRevalidation;
@@ -2435,9 +2456,12 @@ export function NovoChecklistPage() {
               body: JSON.stringify({ checklistId: data.id, blockId: cam.id })
             });
             const compiled = await res.json();
-            if (!compiled.ok) {
-              throw new Error(`Falha ao atualizar critérios da câmera: ${compiled.code || 'Erro desconhecido'}. Tente publicar novamente.`);
+            
+            // PROBLEMA 2: Validar o retorno da compilação antes de persistir
+            if (!compiled.ok || !compiled.policy || compiled.policy.version !== 1 || compiled.policy.questionHash !== expectedHash) {
+              throw new Error(`Não foi possível atualizar os critérios da câmera. Tente publicar novamente.`);
             }
+
             // Update local state and re-save to ensure DB has the fresh policy before RPC
             const updatedBlocks = blocksWithIds.map(b => 
               b.id === cam.id ? { ...b, cameraAiPolicy: compiled.policy, cameraAiNeedsRevalidation: false } : b
@@ -2451,6 +2475,19 @@ export function NovoChecklistPage() {
             if (syncErr) throw syncErr;
             // Update our local reference for the next steps in this function
             blocksWithIds.splice(0, blocksWithIds.length, ...updatedBlocks);
+          }
+        }
+
+        // FINAL BLOCK ASSERT: Barreira final determinística para todos os blocos Camera.
+        for (const block of blocksWithIds) {
+          if (block.type === 'camera') {
+            const hash = await hashQuestion(block.title, block.description);
+            if (!block.cameraAiPolicy || 
+                block.cameraAiPolicy.version !== 1 || 
+                block.cameraAiPolicy.questionHash !== hash || 
+                block.cameraAiNeedsRevalidation === true) {
+              throw new Error(`Integridade da câmera violada no bloco "${block.title || 'Sem título'}". Tente publicar novamente.`);
+            }
           }
         }
 
