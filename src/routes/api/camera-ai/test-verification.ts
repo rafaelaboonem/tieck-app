@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { createFileRoute } from '@tanstack/react-router';
 import { createServerSupabaseClient } from '@/integrations/supabase/client.server';
 import { CameraVerificationPolicyV1Schema, PublishedBlock, VerificationResult } from '@/server/camera-ai/schema';
-import { analyzeImage } from '@/server/camera-ai/openai-provider';
+import { analyzeImage, analyzeImageWithReference } from '@/server/camera-ai/openai-provider';
 import { evaluateGate } from '@/server/camera-ai/gate';
 import { validateImageBuffer } from '@/server/camera-ai/image-validation';
 import { createHash, randomUUID } from 'crypto';
