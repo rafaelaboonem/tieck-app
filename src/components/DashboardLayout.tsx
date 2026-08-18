@@ -423,10 +423,9 @@ import logoIcon from "../assets/local/logo-tieck.webp";
                     { icon: Users, label: "Equipe", to: "/equipe", permission: "admin" },
                   ].filter(item => {
                     if (workspaceStatus !== "workspace") return true;
-                    // Note: RBAC hook is not available here, but we can filter based on permissions if we lift state
-                    // or implement a quick check. Assuming RBAC state passed as prop or context would be ideal.
-                    // For now, implementing logic that assumes role state exists.
-                    return true; 
+                    if (item.permission === "admin") return isWsAdmin;
+                    if (item.permission === "manage") return canWsManage;
+                    return true;
                   }).map((item: any) => {
                     const Icon = item.icon;
                     const isSearch = item.label === "Buscar";
