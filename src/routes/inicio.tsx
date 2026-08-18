@@ -261,7 +261,14 @@ export function Dashboard() {
             </span>
           </div>
           <div className="flex items-center gap-2 sm:gap-3 text-neutral-500">
-             <button className="flex items-center gap-1 text-xs sm:text-sm hover:text-neutral-900">
+             <button 
+               type="button"
+               aria-label="Buscar"
+               onClick={() => {
+                 window.dispatchEvent(new CustomEvent('open-search'));
+               }}
+               className="flex items-center gap-1 text-xs sm:text-sm hover:text-neutral-900"
+             >
               <Search className="w-4 h-4" /> <span className="hidden sm:inline">Buscar</span>
             </button>
             <button className="hover:text-neutral-900">
