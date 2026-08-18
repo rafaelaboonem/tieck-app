@@ -2625,6 +2625,18 @@ export type Database = {
           unmapped: number
         }[]
       }
+      list_my_workspaces: {
+        Args: never
+        Returns: {
+          created_at: string
+          icon: string
+          icon_url: string
+          id: string
+          name: string
+          owner_id: string
+          updated_at: string
+        }[]
+      }
       materialize_task_executions: { Args: never; Returns: number }
       provision_signup_account: {
         Args: { p_display_name: string; p_user_id: string }
