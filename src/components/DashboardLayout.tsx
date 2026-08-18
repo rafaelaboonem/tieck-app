@@ -237,6 +237,23 @@ import logoIcon from "../assets/local/logo-tieck.webp";
     // We assume desktop by default for classes but don't show the sidebar if it's undecided.
     const isUndecided = isMobile === undefined;
 
+    const personalNav: NavItem[] = [
+      { icon: User, label: "Minha conta", to: "/configuracoes" }
+    ];
+
+    const workspaceNav: NavItem[] = [
+      { icon: Home, label: "Início", to: "/inicio" },
+      { icon: BarChart3, label: "Painel", to: "/painel", permission: "admin" },
+      { icon: Layout, label: "Organizar", to: "/organizar", permission: "manage" },
+      { icon: Globe, label: "Domínios", to: "/dominios", permission: "admin" },
+      { icon: Users, label: "Equipe", to: "/equipe", permission: "admin" },
+    ].filter(item => {
+      if (!item.permission) return true;
+      if (item.permission === 'admin') return isWsAdmin;
+      if (item.permission === 'manage') return canWsManage;
+      return true;
+    }) as NavItem[];
+
     return (
         <div className="min-h-screen bg-white text-neutral-900 flex overflow-x-hidden">
        {/* Mobile Backdrop */}
@@ -497,6 +514,7 @@ import logoIcon from "../assets/local/logo-tieck.webp";
                       </ul>
                     </div>
                   </li>
+                </ul>
                   
             <div className="px-1 mb-6">
               <p className="px-2 text-xs font-medium text-neutral-500 mb-1">Pessoal</p>
