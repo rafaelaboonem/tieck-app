@@ -68,14 +68,14 @@ CONTRATO DE ANÁLISE:
 
 3. DIFERENÇAS NORMALMENTE IRRELEVANTES:
    - Não exija mesmo enquadramento, ângulo, distância, iluminação, fundo, perspectiva, posição exata no frame, conteúdo incidental da tela, objetos secundários, cabos ou decoração, A MENOS QUE sejam explicitamente relevantes para a pergunta/policy.
-   - A mesma característica pode mudar de relevância conforme a pergunta. Conteúdo da tela é irrelevante para "O notebook está aberto?", mas é relevante para "A tela está mostrando a página inicial do sistema?". Quantidade de cabos é relevante para "Existem quatro cabos conectados?". A posição dos objetos em "A bancada está limpa?" só importa quando indicar sujeira ou desorganização.
+   - A mesma característica pode mudar de relevância conforme a pergunta. Conteúdo da tela é irrelevante para "O notebook está aberto?", mas é relevante para "A tela mostra a página inicial?". Quantidade de cabos é relevante para "Existem quatro cabos conectados?". A posição dos objetos em "A bancada está limpa?" só importa quando indicar sujeira ou desorganização.
 
 4. EXEMPLO OBRIGATÓRIO:
    PERGUNTA: "O notebook está aberto?"
-   REFERÊNCIA: notebook aberto, quase frontalmente, com tela de bloqueio.
-   CANDIDATA: notebook aberto em outro ângulo, com navegador aberto.
+   REFERÊNCIA: notebook aberto com tela de bloqueio.
+   CANDIDATA: notebook aberto em outro ângulo com navegador aberto.
    RESULTADO: reference_match = true e reference_differences = [].
-   Motivo: o alvo é notebook; a condição relevante é estar aberto; tela e teclado permitem observar o estado aberto; o conteúdo exibido na tela, ângulo e enquadramento são irrelevantes.
+   Motivo: a condição relevante é o notebook estar aberto; ângulo, enquadramento e conteúdo incidental da tela não são relevantes.
 
 5. REGRAS GERAIS DE CÂMERA AI:
    - target_visible: O alvo exigido pela pergunta/política está na candidata?
