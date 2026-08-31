@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Camera, Upload, Play, Loader2, CheckCircle2, AlertCircle, XCircle } from "lucide-react";
-import { CameraVerificationPolicyV1, Decision } from "@/server/camera-ai/schema";
+import { Decision } from "@/server/camera-ai/schema";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -20,9 +20,10 @@ interface Props {
   onClose: () => void;
   blockId: string;
   checklistId: string;
+  isReferenceMode?: boolean;
 }
 
-export function CameraVerificationTestDialog({ isOpen, onClose, blockId, checklistId }: Props) {
+export function CameraVerificationTestDialog({ isOpen, onClose, blockId, checklistId, isReferenceMode = false }: Props) {
   const [step, setStep] = useState<"upload" | "preview" | "analyzing" | "result">("upload");
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -46,7 +47,6 @@ export function CameraVerificationTestDialog({ isOpen, onClose, blockId, checkli
       abortControllerRef.current = null;
     }
   };
-
 
   useEffect(() => {
     if (!isOpen) reset();
@@ -109,7 +109,7 @@ export function CameraVerificationTestDialog({ isOpen, onClose, blockId, checkli
       setStep("result");
     } catch (err: unknown) {
       if (err instanceof Error && err.name === 'AbortError') return;
-      
+
       const errorKey = err instanceof Error ? err.message : "tech_failure";
       const messages: Record<string, string> = {
         "401": "Sessão expirada. Faça login novamente.",
@@ -121,7 +121,6 @@ export function CameraVerificationTestDialog({ isOpen, onClose, blockId, checkli
       toast.error(messages[errorKey] || messages["tech_failure"]);
       setStep("upload");
     } finally {
-
       setIsLoading(false);
       abortControllerRef.current = null;
     }
@@ -140,6 +139,9 @@ export function CameraVerificationTestDialog({ isOpen, onClose, blockId, checkli
           <DialogDescription>Simule como a IA analisa esta pergunta em tempo real. Este teste executa uma análise de IA e pode gerar consumo.</DialogDescription>
         </DialogHeader>
         <div className="py-4">
+          {isReferenceMode && (
+            <p className="mb-4 text-xs font-medium text-muted-foreground">Comparando com a foto de referência configurada.</p>
+          )}
           {step === "upload" && (
             <button
               onClick={() => fileInputRef.current?.click()}
@@ -153,7 +155,7 @@ export function CameraVerificationTestDialog({ isOpen, onClose, blockId, checkli
           {(step === "preview" || step === "analyzing") && (
             <div className="space-y-6">
               <div className="relative aspect-video bg-neutral-900 rounded-2xl overflow-hidden">
-                {previewUrl && <img src={previewUrl} className="w-full h-full object-cover" alt="Preview" />}
+                {previewUrl && <img src={previewUrl} className="w-full h-full object-cover" alt="Imagem candidata para teste" />}
                 {step === "analyzing" && (
                   <div className="absolute inset-0 bg-black/60 backdrop-blur-sm flex flex-col items-center justify-center text-white">
                     <Loader2 className="w-10 h-10 animate-spin mb-4 text-pink-400" />
@@ -172,19 +174,19 @@ export function CameraVerificationTestDialog({ isOpen, onClose, blockId, checkli
           {step === "result" && result && (
             <div className="space-y-6">
               <div className={cn(
-                "p-6 rounded-2xl border flex flex-col items-center text-center gap-4", 
-                result.decision === 'approved' ? 'bg-green-50 border-green-100 text-green-800' : 
+                "p-6 rounded-2xl border flex flex-col items-center text-center gap-4",
+                result.decision === 'approved' ? 'bg-green-50 border-green-100 text-green-800' :
                 result.decision === 'retake' ? 'bg-amber-50 border-amber-100 text-amber-800' :
                 'bg-neutral-50 border-neutral-100 text-neutral-800'
               )}>
-                {result.decision === 'approved' ? <CheckCircle2 className="w-12 h-12 text-green-500" /> : 
-                 result.decision === 'retake' ? <AlertCircle className="w-12 h-12 text-amber-500" /> :
-                 <XCircle className="w-12 h-12 text-neutral-500" />}
-                
+                {result.decision === 'approved' ? <CheckCircle2 className="w-12 h-12 text-green-500" /> :
+                  result.decision === 'retake' ? <AlertCircle className="w-12 h-12 text-amber-500" /> :
+                    <XCircle className="w-12 h-12 text-neutral-500" />}
+
                 <h4 className="text-lg font-bold">
-                  {result.decision === 'approved' ? 'Imagem Aprovada' : 
-                   result.decision === 'retake' ? 'Exigir nova foto' : 
-                   'Não observável'}
+                  {result.decision === 'approved' ? 'Imagem Aprovada' :
+                    result.decision === 'retake' ? 'Exigir nova foto' :
+                      'Não observável'}
                 </h4>
                 <p className="text-sm opacity-90">{result.message}</p>
               </div>
@@ -201,7 +203,6 @@ export function CameraVerificationTestDialog({ isOpen, onClose, blockId, checkli
               <button onClick={reset} className="w-full py-3 bg-neutral-900 text-white rounded-xl font-bold">Fazer novo teste</button>
             </div>
           )}
-
         </div>
       </DialogContent>
     </Dialog>

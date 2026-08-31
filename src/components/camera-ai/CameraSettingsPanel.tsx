@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion";
 import { Switch } from "@/components/ui/switch";
@@ -27,7 +27,6 @@ interface CameraSettingsPanelProps {
   checklistId: string;
 }
 
-
 export function CameraSettingsPanel({ block, isOpen, onClose, onSave, isCompiling, checklistId }: CameraSettingsPanelProps) {
   const [draft, setDraft] = useState<CameraDraft>({
     title: block.title || block.subtitle || "",
@@ -40,9 +39,20 @@ export function CameraSettingsPanel({ block, isOpen, onClose, onSave, isCompilin
 
   const [isTestModalOpen, setIsTestModalOpen] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const localReferencePreviewUrlRef = useRef<string | null>(null);
+
+  const revokeLocalReferencePreview = () => {
+    if (localReferencePreviewUrlRef.current) {
+      URL.revokeObjectURL(localReferencePreviewUrlRef.current);
+      localReferencePreviewUrlRef.current = null;
+    }
+  };
 
   useEffect(() => {
     if (isOpen) {
+      revokeLocalReferencePreview();
       setDraft({
         title: block.title || block.subtitle || "",
         description: block.description || "",
@@ -51,9 +61,12 @@ export function CameraSettingsPanel({ block, isOpen, onClose, onSave, isCompilin
         policy: block.cameraAiPolicy as CameraVerificationPolicyV1 | undefined,
         cameraReference: block.cameraReference
       });
+      setPreviewUrl(null);
       setHasChanges(false);
     }
   }, [isOpen, block]);
+
+  useEffect(() => () => revokeLocalReferencePreview(), []);
 
   const handleFieldChange = <K extends keyof CameraDraft>(
     field: K,
@@ -62,7 +75,6 @@ export function CameraSettingsPanel({ block, isOpen, onClose, onSave, isCompilin
     setDraft((previous) => ({ ...previous, [field]: value }));
     setHasChanges(true);
   };
-
 
   const handlePolicyChange = (patch: Partial<CameraVerificationPolicyV1>) => {
     if (!draft.policy) return;
@@ -86,11 +98,12 @@ export function CameraSettingsPanel({ block, isOpen, onClose, onSave, isCompilin
     setHasChanges(false);
   };
 
-  const [isUploading, setIsUploading] = useState(false);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-
   useEffect(() => {
     async function loadPreview() {
+      if (localReferencePreviewUrlRef.current) {
+        return;
+      }
+
       if (draft.cameraReference && draft.mode === 'reference' && isOpen) {
         try {
           const { data: session } = await supabase.auth.getSession();
@@ -113,7 +126,7 @@ export function CameraSettingsPanel({ block, isOpen, onClose, onSave, isCompilin
       }
     }
     loadPreview();
-  }, [draft.cameraReference, draft.mode, checklistId, isOpen]);
+  }, [draft.cameraReference, draft.mode, checklistId, block.id, isOpen]);
 
   const handleUploadReference = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -143,6 +156,10 @@ export function CameraSettingsPanel({ block, isOpen, onClose, onSave, isCompilin
       }
 
       const metadata = await res.json();
+      revokeLocalReferencePreview();
+      const localPreviewUrl = URL.createObjectURL(file);
+      localReferencePreviewUrlRef.current = localPreviewUrl;
+      setPreviewUrl(localPreviewUrl);
       handleFieldChange('cameraReference', metadata);
       toast.success("Foto de referência adicionada!");
     } catch (err: any) {
@@ -150,15 +167,21 @@ export function CameraSettingsPanel({ block, isOpen, onClose, onSave, isCompilin
       toast.error(err.message || "Erro ao fazer upload da referência");
     } finally {
       setIsUploading(false);
-      // Clear input
       e.target.value = '';
     }
+  };
+
+  const removeReference = () => {
+    revokeLocalReferencePreview();
+    handleFieldChange('cameraReference', undefined);
+    setPreviewUrl(null);
   };
 
   const requestClose = () => {
     if (hasChanges) {
       if (!confirm("Descartar alterações não salvas?")) return;
     }
+    revokeLocalReferencePreview();
     onClose();
   };
 
@@ -196,14 +219,15 @@ export function CameraSettingsPanel({ block, isOpen, onClose, onSave, isCompilin
                 />
               </div>
 
-
               <div className="space-y-3">
                 <label className="text-sm font-bold text-neutral-900">Modo de verificação</label>
                 <div className="grid grid-cols-1 gap-3">
-                  <div 
+                  <div
                     onClick={() => {
+                      revokeLocalReferencePreview();
                       handleFieldChange('mode', 'auto');
                       handleFieldChange('cameraReference', undefined);
+                      setPreviewUrl(null);
                     }}
                     className={`flex items-center justify-between p-3 border rounded-xl cursor-pointer transition-colors ${draft.mode === 'auto' ? 'border-pink-200 bg-pink-50/30' : 'border-neutral-100 hover:border-neutral-200'}`}
                   >
@@ -219,7 +243,7 @@ export function CameraSettingsPanel({ block, isOpen, onClose, onSave, isCompilin
                     </div>
                   </div>
 
-                  <div 
+                  <div
                     onClick={() => handleFieldChange('mode', 'reference')}
                     className={`flex items-center justify-between p-3 border rounded-xl cursor-pointer transition-colors ${draft.mode === 'reference' ? 'border-blue-200 bg-blue-50/30' : 'border-neutral-100 hover:border-neutral-200'}`}
                   >
@@ -257,11 +281,8 @@ export function CameraSettingsPanel({ block, isOpen, onClose, onSave, isCompilin
                             Trocar foto
                             <input type="file" className="hidden" accept="image/*" onChange={handleUploadReference} />
                           </label>
-                          <button 
-                            onClick={() => {
-                              handleFieldChange('cameraReference', undefined);
-                              setPreviewUrl(null);
-                            }}
+                          <button
+                            onClick={removeReference}
                             className="bg-red-500 text-white px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2 hover:bg-red-600"
                           >
                             <X className="w-3 h-3" />
@@ -372,9 +393,7 @@ export function CameraSettingsPanel({ block, isOpen, onClose, onSave, isCompilin
                       </div>
                     </div>
                   </div>
-
                 </AccordionContent>
-
               </AccordionItem>
             </Accordion>
             <div className="flex items-center justify-between p-4 border rounded-xl bg-neutral-50/50">
@@ -389,11 +408,10 @@ export function CameraSettingsPanel({ block, isOpen, onClose, onSave, isCompilin
             </div>
           </div>
 
-
           <div className="sticky bottom-0 bg-white pt-6 pb-2 border-t flex flex-col gap-3">
             <button onClick={handleSave} disabled={!hasChanges} className="w-full py-3 bg-pink-500 text-white rounded-xl font-bold text-sm disabled:opacity-50">Salvar bloco</button>
-            <button 
-              onClick={() => setIsTestModalOpen(true)} 
+            <button
+              onClick={() => setIsTestModalOpen(true)}
               disabled={hasChanges || isCompiling}
               className="w-full py-3 bg-white text-neutral-700 border rounded-xl font-bold text-sm flex flex-col items-center justify-center gap-0.5 disabled:opacity-50"
             >
@@ -404,7 +422,6 @@ export function CameraSettingsPanel({ block, isOpen, onClose, onSave, isCompilin
                 <span className="text-[10px] text-neutral-400 font-normal italic">Salve as alterações antes de testar</span>
               )}
             </button>
-
           </div>
         </SheetContent>
       </Sheet>
@@ -414,6 +431,7 @@ export function CameraSettingsPanel({ block, isOpen, onClose, onSave, isCompilin
         onClose={() => setIsTestModalOpen(false)}
         blockId={block.id}
         checklistId={checklistId}
+        isReferenceMode={block.mode === 'reference'}
       />
     </>
   );
