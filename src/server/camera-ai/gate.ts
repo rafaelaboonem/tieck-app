@@ -49,19 +49,18 @@ export function evaluateGate(analysis: CameraVerification | CameraReferenceVerif
 
   if (isReferenceMode && (!v.reference_match || v.reference_match_confidence < 0.90)) {
     const relevantDifferences = v.reference_differences
-      ?.map((difference) => sanitizeMessage(difference, false))
-      .filter(Boolean) ?? [];
+      .map((difference) => sanitizeMessage(difference, false))
+      .filter(Boolean);
     const evidence = relevantDifferences.join(', ');
     const firstDifference = relevantDifferences[0];
-    const message = firstDifference
-      ? `Tire outra foto. ${firstDifference.replace(/diferente do estado aberto mostrado na referência\.?$/i, 'precisa estar aberto como na referência.')}`
-      : 'Tire outra foto. O resultado não corresponde aos critérios relevantes da referência.';
 
     return {
       ok: true,
       decision: 'retake',
       code: 'reference_mismatch',
-      message,
+      message: firstDifference
+        ? `Tire outra foto. ${firstDifference}`
+        : 'Tire outra foto. O resultado não corresponde aos critérios relevantes da referência.',
       evidence: evidence || 'O resultado não corresponde aos critérios relevantes da referência.'
     };
   }

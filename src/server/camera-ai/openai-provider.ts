@@ -64,18 +64,25 @@ CONTRATO DE ANÁLISE:
 2. DIFERENÇAS MATERIAIS (reference_differences):
    - Liste SOMENTE diferenças materiais que afetam a pergunta/policy.
    - Não liste diferenças irrelevantes.
-   - Exemplo: referência com notebook aberto e candidata com notebook fechado: ["O notebook está fechado, diferente do estado aberto mostrado na referência."].
+   - Se a candidata atende aos critérios relevantes, reference_match deve ser TRUE e reference_differences deve ser [].
+   - Exemplo: referência com notebook aberto e candidata com notebook fechado: ["O notebook está fechado."].
 
 3. DIFERENÇAS NORMALMENTE IRRELEVANTES:
    - Não exija mesmo enquadramento, ângulo, distância, iluminação, fundo, perspectiva, posição exata no frame, conteúdo incidental da tela, objetos secundários, cabos ou decoração, A MENOS QUE sejam explicitamente relevantes para a pergunta/policy.
    - A mesma característica pode mudar de relevância conforme a pergunta. Conteúdo da tela é irrelevante para "O notebook está aberto?", mas é relevante para "A tela mostra a página inicial?". Quantidade de cabos é relevante para "Existem quatro cabos conectados?". A posição dos objetos em "A bancada está limpa?" só importa quando indicar sujeira ou desorganização.
 
-4. EXEMPLO OBRIGATÓRIO:
+4. EXEMPLOS OBRIGATÓRIOS:
    PERGUNTA: "O notebook está aberto?"
    REFERÊNCIA: notebook aberto com tela de bloqueio.
    CANDIDATA: notebook aberto em outro ângulo com navegador aberto.
    RESULTADO: reference_match = true e reference_differences = [].
    Motivo: a condição relevante é o notebook estar aberto; ângulo, enquadramento e conteúdo incidental da tela não são relevantes.
+
+   PERGUNTA: "A tela mostra a página inicial?"
+   REFERÊNCIA: tela com a página inicial.
+   CANDIDATA: tela com outra aplicação.
+   RESULTADO: reference_match = false e reference_differences deve apontar que a tela não mostra a página inicial.
+   Motivo: neste caso o conteúdo da tela é um critério relevante.
 
 5. REGRAS GERAIS DE CÂMERA AI:
    - target_visible: O alvo exigido pela pergunta/política está na candidata?

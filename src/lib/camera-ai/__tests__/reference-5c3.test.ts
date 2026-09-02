@@ -27,6 +27,19 @@ describe('Camera AI Reference Mode Logic', () => {
     expect(result.code).toBe('verified');
   });
 
+  it('não reprova por diferença de ângulo quando a condição relevante é atendida', () => {
+    const result = evaluateGate({
+      ...baseAnalysis,
+      user_message: 'O notebook está aberto.',
+      reference_match: true,
+      reference_match_confidence: 0.92,
+      reference_differences: []
+    });
+
+    expect(result.decision).toBe('approved');
+    expect(result.evidence).toContain('notebook aberto');
+  });
+
   it('reprova notebook fechado por diferença material relevante', () => {
     const result = evaluateGate({
       ...baseAnalysis,
@@ -34,11 +47,12 @@ describe('Camera AI Reference Mode Logic', () => {
       user_message: 'O notebook está fechado.',
       reference_match: false,
       reference_match_confidence: 0.98,
-      reference_differences: ['O notebook está fechado, diferente do estado aberto mostrado na referência.']
+      reference_differences: ['O notebook está fechado.']
     });
 
     expect(result.decision).toBe('retake');
     expect(result.code).toBe('reference_mismatch');
+    expect(result.message).toBe('Tire outra foto. O notebook está fechado.');
   });
 
   it('mantém conteúdo de tela como diferença relevante quando a política o exige', () => {
@@ -52,18 +66,6 @@ describe('Camera AI Reference Mode Logic', () => {
 
     expect(result.decision).toBe('retake');
     expect(result.code).toBe('reference_mismatch');
-  });
-
-  it('não reprova apenas por ângulo diferente quando a condição relevante é atendida', () => {
-    const result = evaluateGate({
-      ...baseAnalysis,
-      user_message: 'Condição observada.',
-      reference_match: true,
-      reference_match_confidence: 0.92,
-      reference_differences: []
-    });
-
-    expect(result.decision).toBe('approved');
   });
 
   it('mantém o threshold de 0.90 para referência', () => {
