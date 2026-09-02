@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Camera, Upload, Play, Loader2, CheckCircle2, AlertCircle, XCircle } from "lucide-react";
+import { Upload, Loader2, CheckCircle2, AlertCircle, XCircle } from "lucide-react";
 import { Decision } from "@/server/camera-ai/schema";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -101,7 +101,8 @@ export function CameraVerificationTestDialog({ isOpen, onClose, blockId, checkli
         if (res.status === 401) throw new Error("401");
         if (res.status === 403) throw new Error("403");
         if (res.status === 429) throw new Error("429");
-        if (errorData.code === "invalid_policy" || errorData.code === "checklist_update_required") throw new Error("policy_error");
+        if (errorData.code === "invalid_policy") throw new Error("invalid_policy");
+        if (errorData.code === "checklist_update_required") throw new Error("checklist_update_required");
         throw new Error("tech_failure");
       }
 
@@ -115,7 +116,8 @@ export function CameraVerificationTestDialog({ isOpen, onClose, blockId, checkli
         "401": "Sessão expirada. Faça login novamente.",
         "403": "Você não tem permissão para testar este checklist.",
         "429": "Limite de testes atingido. Tente novamente em 10 minutos.",
-        "policy_error": "Configuração da política inválida ou desatualizada.",
+        "invalid_policy": "Não foi possível validar a configuração desta pergunta. Salve o bloco novamente.",
+        "checklist_update_required": "Esta verificação foi alterada e ainda não terminou de atualizar. Aguarde a atualização antes de testar.",
         "tech_failure": "Falha técnica ao processar a IA. Tente novamente."
       };
       toast.error(messages[errorKey] || messages["tech_failure"]);
