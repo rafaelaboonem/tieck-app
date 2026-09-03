@@ -6,21 +6,11 @@ export interface CameraPolicyReadyInput {
   description?: string;
   policy?: CameraVerificationPolicyV1;
   needsRevalidation?: boolean;
-  hasUnsavedChanges?: boolean;
   isCompiling?: boolean;
-  isPersisted?: boolean;
 }
 
+/** Barreira fail-closed para liberar o teste somente da pergunta atual. */
 export async function isCameraPolicyReady(input: CameraPolicyReadyInput): Promise<boolean> {
-  if (
-    input.hasUnsavedChanges === true ||
-    input.isCompiling === true ||
-    input.needsRevalidation === true ||
-    input.isPersisted !== true ||
-    !input.policy
-  ) {
-    return false;
-  }
-
+  if (input.isCompiling === true || input.needsRevalidation === true || !input.policy) return false;
   return input.policy.questionHash === await hashQuestion(input.title, input.description);
 }

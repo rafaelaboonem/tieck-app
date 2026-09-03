@@ -18,24 +18,24 @@ const policyFor = async (title: string, description: string) => ({
 });
 
 describe("Camera AI 5C.3.3 policy ready barrier", () => {
-  it("permite testar com policy válida e hash atual", async () => {
+  it("libera policy válida com hash atual", async () => {
     const policy = await policyFor("Pergunta", "Descrição");
-    expect(await isCameraPolicyReady({ title: "Pergunta", description: "Descrição", policy, isPersisted: true })).toBe(true);
+    expect(await isCameraPolicyReady({ title: "Pergunta", description: "Descrição", policy })).toBe(true);
   });
 
   it("bloqueia policy stale", async () => {
     const policy = await policyFor("Pergunta antiga", "Descrição");
-    expect(await isCameraPolicyReady({ title: "Pergunta atual", description: "Descrição", policy, isPersisted: true })).toBe(false);
+    expect(await isCameraPolicyReady({ title: "Pergunta atual", description: "Descrição", policy })).toBe(false);
   });
 
-  it("bloqueia durante compile", async () => {
+  it("bloqueia durante compile em andamento", async () => {
     const policy = await policyFor("Pergunta", "Descrição");
-    expect(await isCameraPolicyReady({ title: "Pergunta", description: "Descrição", policy, isCompiling: true, isPersisted: true })).toBe(false);
+    expect(await isCameraPolicyReady({ title: "Pergunta", description: "Descrição", policy, isCompiling: true })).toBe(false);
   });
 
-  it("bloqueia quando precisa de revalidação ou não está persistida", async () => {
+  it("bloqueia quando precisa de revalidação ou não existe policy", async () => {
     const policy = await policyFor("Pergunta", "Descrição");
-    expect(await isCameraPolicyReady({ title: "Pergunta", description: "Descrição", policy, needsRevalidation: true, isPersisted: true })).toBe(false);
-    expect(await isCameraPolicyReady({ title: "Pergunta", description: "Descrição", policy, isPersisted: false })).toBe(false);
+    expect(await isCameraPolicyReady({ title: "Pergunta", description: "Descrição", policy, needsRevalidation: true })).toBe(false);
+    expect(await isCameraPolicyReady({ title: "Pergunta", description: "Descrição" })).toBe(false);
   });
 });
