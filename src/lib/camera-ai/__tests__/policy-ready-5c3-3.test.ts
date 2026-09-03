@@ -18,7 +18,7 @@ const policyFor = async (title: string, description: string) => ({
 });
 
 describe("Camera AI 5C.3.3 policy ready barrier", () => {
-  it("libera policy válida com hash atual", async () => {
+  it("libera policy atualizada e permite o teste", async () => {
     const policy = await policyFor("Pergunta", "Descrição");
     expect(await isCameraPolicyReady({ title: "Pergunta", description: "Descrição", policy })).toBe(true);
   });
@@ -28,7 +28,7 @@ describe("Camera AI 5C.3.3 policy ready barrier", () => {
     expect(await isCameraPolicyReady({ title: "Pergunta atual", description: "Descrição", policy })).toBe(false);
   });
 
-  it("bloqueia durante compile em andamento", async () => {
+  it("bloqueia durante compilação em andamento", async () => {
     const policy = await policyFor("Pergunta", "Descrição");
     expect(await isCameraPolicyReady({ title: "Pergunta", description: "Descrição", policy, isCompiling: true })).toBe(false);
   });
