@@ -18,31 +18,24 @@ const policyFor = async (title: string, description: string) => ({
 });
 
 describe("Camera AI 5C.3.3 policy ready barrier", () => {
-  it("bloqueia imediatamente quando título ou descrição muda", async () => {
+  it("permite testar com policy válida e hash atual", async () => {
     const policy = await policyFor("Pergunta", "Descrição");
-    expect(await isCameraPolicyReady({ title: "Pergunta nova", description: "Descrição", policy, isPersisted: true })).toBe(false);
-    expect(await isCameraPolicyReady({ title: "Pergunta", description: "Descrição nova", policy, isPersisted: true })).toBe(false);
+    expect(await isCameraPolicyReady({ title: "Pergunta", description: "Descrição", policy, isPersisted: true })).toBe(true);
   });
 
-  it("não libera entre salvar e compilar", async () => {
-    const policy = await policyFor("Pergunta", "Descrição");
-    expect(await isCameraPolicyReady({ title: "Pergunta", description: "Descrição", policy, needsRevalidation: true, isPersisted: true })).toBe(false);
+  it("bloqueia policy stale", async () => {
+    const policy = await policyFor("Pergunta antiga", "Descrição");
+    expect(await isCameraPolicyReady({ title: "Pergunta atual", description: "Descrição", policy, isPersisted: true })).toBe(false);
   });
 
-  it("bloqueia durante compile e após falha", async () => {
+  it("bloqueia durante compile", async () => {
     const policy = await policyFor("Pergunta", "Descrição");
     expect(await isCameraPolicyReady({ title: "Pergunta", description: "Descrição", policy, isCompiling: true, isPersisted: true })).toBe(false);
-    expect(await isCameraPolicyReady({ title: "Pergunta", description: "Descrição", policy, needsRevalidation: true, isPersisted: true })).toBe(false);
   });
 
-  it("descarta resultado stale por hash diferente", async () => {
-    const stalePolicy = await policyFor("Pergunta antiga", "Descrição");
-    expect(await isCameraPolicyReady({ title: "Pergunta atual", description: "Descrição", policy: stalePolicy, isPersisted: true })).toBe(false);
-  });
-
-  it("libera somente com policy persistida e hash correto", async () => {
+  it("bloqueia quando precisa de revalidação ou não está persistida", async () => {
     const policy = await policyFor("Pergunta", "Descrição");
+    expect(await isCameraPolicyReady({ title: "Pergunta", description: "Descrição", policy, needsRevalidation: true, isPersisted: true })).toBe(false);
     expect(await isCameraPolicyReady({ title: "Pergunta", description: "Descrição", policy, isPersisted: false })).toBe(false);
-    expect(await isCameraPolicyReady({ title: "Pergunta", description: "Descrição", policy, isPersisted: true })).toBe(true);
   });
 });

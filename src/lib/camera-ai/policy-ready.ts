@@ -8,11 +8,9 @@ export interface CameraPolicyReadyInput {
   needsRevalidation?: boolean;
   hasUnsavedChanges?: boolean;
   isCompiling?: boolean;
-  /** Confirma que title/description e a policy vieram da última leitura persistida. */
   isPersisted?: boolean;
 }
 
-/** Barreira fail-closed para liberar o teste somente da versão persistida atual. */
 export async function isCameraPolicyReady(input: CameraPolicyReadyInput): Promise<boolean> {
   if (
     input.hasUnsavedChanges === true ||
@@ -24,6 +22,5 @@ export async function isCameraPolicyReady(input: CameraPolicyReadyInput): Promis
     return false;
   }
 
-  const currentHash = await hashQuestion(input.title, input.description);
-  return input.policy.questionHash === currentHash;
+  return input.policy.questionHash === await hashQuestion(input.title, input.description);
 }
