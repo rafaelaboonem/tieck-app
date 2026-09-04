@@ -9,188 +9,43 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as IndexRouteImport } from './routes/index'
-import { Route as AdminRouteImport } from './routes/admin'
-import { Route as ApiCameraAiCompilePolicyRouteImport } from './routes/api/camera-ai/compile-policy'
-import { Route as ApiCameraAiReferenceImageRouteImport } from './routes/api/camera-ai/reference-image'
-import { Route as ApiCameraAiReferenceImagePreviewRouteImport } from './routes/api/camera-ai/reference-image/preview'
-import { Route as ApiCameraAiSignedUrlRouteImport } from './routes/api/camera-ai/signed-url'
-import { Route as ApiCameraAiTestVerificationRouteImport } from './routes/api/camera-ai/test-verification'
-import { Route as ApiCameraAiVerifyRouteImport } from './routes/api/camera-ai/verify'
-import { Route as ApiPublicCronOverdueAssignmentsRouteImport } from './routes/api/public/cron/overdue-assignments'
-import { Route as ApiPublicInvitationsAcceptRouteImport } from './routes/api/public/invitations/accept'
-import { Route as ApiPublicInvitationsCreateRouteImport } from './routes/api/public/invitations/create'
-import { Route as ApiPublicInvitationsInspectRouteImport } from './routes/api/public/invitations/inspect'
-import { Route as ApiTeamInvitationsResendRouteImport } from './routes/api/team/invitations/resend'
-import { Route as ApiTeamInvitationsRevokeRouteImport } from './routes/api/team/invitations/revoke'
-import { Route as ApiTeamMembersUpdateRouteImport } from './routes/api/team/members/update'
-import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
-import { Route as CIdRouteImport } from './routes/c.$id'
-import { Route as CadastrarRouteImport } from './routes/cadastrar'
-import { Route as CadastroRouteImport } from './routes/cadastro'
-import { Route as ChecklistRouteImport } from './routes/checklist'
-import { Route as ConfiguracoesRouteImport } from './routes/configuracoes'
-import { Route as ConfirmarEmailRouteImport } from './routes/confirmar-email'
-import { Route as ConviteTokenRouteImport } from './routes/convite.$token'
-import { Route as DominiosRouteImport } from './routes/dominios'
-import { Route as EquipeRouteImport } from './routes/equipe'
-import { Route as ExecutarIdRouteImport } from './routes/executar.$id'
-import { Route as InicioRouteImport } from './routes/inicio'
-import { Route as InsightsRouteImport } from './routes/insights'
-import { Route as LoginRouteImport } from './routes/login'
-import { Route as MembrosRouteImport } from './routes/membros'
-import { Route as OrganizarRouteImport } from './routes/organizar'
 import { Route as PainelRouteImport } from './routes/painel'
+import { Route as OrganizarRouteImport } from './routes/organizar'
+import { Route as MembrosRouteImport } from './routes/membros'
+import { Route as LoginRouteImport } from './routes/login'
+import { Route as InsightsRouteImport } from './routes/insights'
+import { Route as InicioRouteImport } from './routes/inicio'
+import { Route as EquipeRouteImport } from './routes/equipe'
+import { Route as DominiosRouteImport } from './routes/dominios'
+import { Route as ConfirmarEmailRouteImport } from './routes/confirmar-email'
+import { Route as ConfiguracoesRouteImport } from './routes/configuracoes'
+import { Route as ChecklistRouteImport } from './routes/checklist'
+import { Route as CadastroRouteImport } from './routes/cadastro'
+import { Route as CadastrarRouteImport } from './routes/cadastrar'
+import { Route as AdminRouteImport } from './routes/admin'
+import { Route as IndexRouteImport } from './routes/index'
+import { Route as ExecutarIdRouteImport } from './routes/executar.$id'
+import { Route as ConviteTokenRouteImport } from './routes/convite.$token'
+import { Route as CIdRouteImport } from './routes/c.$id'
+import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
 import { Route as UnidadesUnitIdOperacaoRouteImport } from './routes/unidades.$unitId.operacao'
+import { Route as ApiCameraAiVerifyRouteImport } from './routes/api/camera-ai/verify'
+import { Route as ApiCameraAiTestVerificationRouteImport } from './routes/api/camera-ai/test-verification'
+import { Route as ApiCameraAiSignedUrlRouteImport } from './routes/api/camera-ai/signed-url'
+import { Route as ApiCameraAiReferenceImageRouteImport } from './routes/api/camera-ai/reference-image'
+import { Route as ApiCameraAiCompilePolicyRouteImport } from './routes/api/camera-ai/compile-policy'
+import { Route as ApiTeamMembersUpdateRouteImport } from './routes/api/team/members/update'
+import { Route as ApiTeamInvitationsRevokeRouteImport } from './routes/api/team/invitations/revoke'
+import { Route as ApiTeamInvitationsResendRouteImport } from './routes/api/team/invitations/resend'
+import { Route as ApiPublicInvitationsInspectRouteImport } from './routes/api/public/invitations/inspect'
+import { Route as ApiPublicInvitationsCreateRouteImport } from './routes/api/public/invitations/create'
+import { Route as ApiPublicInvitationsAcceptRouteImport } from './routes/api/public/invitations/accept'
+import { Route as ApiPublicCronOverdueAssignmentsRouteImport } from './routes/api/public/cron/overdue-assignments'
+import { Route as ApiCameraAiReferenceImagePreviewRouteImport } from './routes/api/camera-ai/reference-image/preview'
 
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AdminRoute = AdminRouteImport.update({
-  id: '/admin',
-  path: '/admin',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiCameraAiCompilePolicyRoute = ApiCameraAiCompilePolicyRouteImport.update({
-  id: '/api/camera-ai/compile-policy',
-  path: '/api/camera-ai/compile-policy',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiCameraAiReferenceImageRoute = ApiCameraAiReferenceImageRouteImport.update({
-  id: '/api/camera-ai/reference-image',
-  path: '/api/camera-ai/reference-image',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiCameraAiReferenceImagePreviewRoute = ApiCameraAiReferenceImagePreviewRouteImport.update({
-  id: '/api/camera-ai/reference-image/preview',
-  path: '/preview',
-  getParentRoute: () => ApiCameraAiReferenceImageRoute,
-} as any)
-const ApiCameraAiSignedUrlRoute = ApiCameraAiSignedUrlRouteImport.update({
-  id: '/api/camera-ai/signed-url',
-  path: '/api/camera-ai/signed-url',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiCameraAiTestVerificationRoute = ApiCameraAiTestVerificationRouteImport.update({
-  id: '/api/camera-ai/test-verification',
-  path: '/api/camera-ai/test-verification',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiCameraAiVerifyRoute = ApiCameraAiVerifyRouteImport.update({
-  id: '/api/camera-ai/verify',
-  path: '/api/camera-ai/verify',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiPublicCronOverdueAssignmentsRoute = ApiPublicCronOverdueAssignmentsRouteImport.update({
-  id: '/api/public/cron/overdue-assignments',
-  path: '/api/public/cron/overdue-assignments',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiPublicInvitationsAcceptRoute = ApiPublicInvitationsAcceptRouteImport.update({
-  id: '/api/public/invitations/accept',
-  path: '/api/public/invitations/accept',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiPublicInvitationsCreateRoute = ApiPublicInvitationsCreateRouteImport.update({
-  id: '/api/public/invitations/create',
-  path: '/api/public/invitations/create',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiPublicInvitationsInspectRoute = ApiPublicInvitationsInspectRouteImport.update({
-  id: '/api/public/invitations/inspect',
-  path: '/api/public/invitations/inspect',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiTeamInvitationsResendRoute = ApiTeamInvitationsResendRouteImport.update({
-  id: '/api/team/invitations/resend',
-  path: '/api/team/invitations/resend',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiTeamInvitationsRevokeRoute = ApiTeamInvitationsRevokeRouteImport.update({
-  id: '/api/team/invitations/revoke',
-  path: '/api/team/invitations/revoke',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiTeamMembersUpdateRoute = ApiTeamMembersUpdateRouteImport.update({
-  id: '/api/team/members/update',
-  path: '/api/team/members/update',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AuthCallbackRoute = AuthCallbackRouteImport.update({
-  id: '/auth/callback',
-  path: '/auth/callback',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const CIdRoute = CIdRouteImport.update({
-  id: '/c/$id',
-  path: '/c/$id',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const CadastrarRoute = CadastrarRouteImport.update({
-  id: '/cadastrar',
-  path: '/cadastrar',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const CadastroRoute = CadastroRouteImport.update({
-  id: '/cadastro',
-  path: '/cadastro',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ChecklistRoute = ChecklistRouteImport.update({
-  id: '/checklist',
-  path: '/checklist',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ConfiguracoesRoute = ConfiguracoesRouteImport.update({
-  id: '/configuracoes',
-  path: '/configuracoes',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ConfirmarEmailRoute = ConfirmarEmailRouteImport.update({
-  id: '/confirmar-email',
-  path: '/confirmar-email',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ConviteTokenRoute = ConviteTokenRouteImport.update({
-  id: '/convite/$token',
-  path: '/convite/$token',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const DominiosRoute = DominiosRouteImport.update({
-  id: '/dominios',
-  path: '/dominios',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const EquipeRoute = EquipeRouteImport.update({
-  id: '/equipe',
-  path: '/equipe',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ExecutarIdRoute = ExecutarIdRouteImport.update({
-  id: '/executar/$id',
-  path: '/executar/$id',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const InicioRoute = InicioRouteImport.update({
-  id: '/inicio',
-  path: '/inicio',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const InsightsRoute = InsightsRouteImport.update({
-  id: '/insights',
-  path: '/insights',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const LoginRoute = LoginRouteImport.update({
-  id: '/login',
-  path: '/login',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const MembrosRoute = MembrosRouteImport.update({
-  id: '/membros',
-  path: '/membros',
+const PainelRoute = PainelRouteImport.update({
+  id: '/painel',
+  path: '/painel',
   getParentRoute: () => rootRouteImport,
 } as any)
 const OrganizarRoute = OrganizarRouteImport.update({
@@ -198,9 +53,89 @@ const OrganizarRoute = OrganizarRouteImport.update({
   path: '/organizar',
   getParentRoute: () => rootRouteImport,
 } as any)
-const PainelRoute = PainelRouteImport.update({
-  id: '/painel',
-  path: '/painel',
+const MembrosRoute = MembrosRouteImport.update({
+  id: '/membros',
+  path: '/membros',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const InsightsRoute = InsightsRouteImport.update({
+  id: '/insights',
+  path: '/insights',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const InicioRoute = InicioRouteImport.update({
+  id: '/inicio',
+  path: '/inicio',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const EquipeRoute = EquipeRouteImport.update({
+  id: '/equipe',
+  path: '/equipe',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DominiosRoute = DominiosRouteImport.update({
+  id: '/dominios',
+  path: '/dominios',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ConfirmarEmailRoute = ConfirmarEmailRouteImport.update({
+  id: '/confirmar-email',
+  path: '/confirmar-email',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ConfiguracoesRoute = ConfiguracoesRouteImport.update({
+  id: '/configuracoes',
+  path: '/configuracoes',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ChecklistRoute = ChecklistRouteImport.update({
+  id: '/checklist',
+  path: '/checklist',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CadastroRoute = CadastroRouteImport.update({
+  id: '/cadastro',
+  path: '/cadastro',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CadastrarRoute = CadastrarRouteImport.update({
+  id: '/cadastrar',
+  path: '/cadastrar',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminRoute = AdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const IndexRoute = IndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ExecutarIdRoute = ExecutarIdRouteImport.update({
+  id: '/executar/$id',
+  path: '/executar/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ConviteTokenRoute = ConviteTokenRouteImport.update({
+  id: '/convite/$token',
+  path: '/convite/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CIdRoute = CIdRouteImport.update({
+  id: '/c/$id',
+  path: '/c/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthCallbackRoute = AuthCallbackRouteImport.update({
+  id: '/auth/callback',
+  path: '/auth/callback',
   getParentRoute: () => rootRouteImport,
 } as any)
 const UnidadesUnitIdOperacaoRoute = UnidadesUnitIdOperacaoRouteImport.update({
@@ -208,16 +143,109 @@ const UnidadesUnitIdOperacaoRoute = UnidadesUnitIdOperacaoRouteImport.update({
   path: '/unidades/$unitId/operacao',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiCameraAiVerifyRoute = ApiCameraAiVerifyRouteImport.update({
+  id: '/api/camera-ai/verify',
+  path: '/api/camera-ai/verify',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiCameraAiTestVerificationRoute =
+  ApiCameraAiTestVerificationRouteImport.update({
+    id: '/api/camera-ai/test-verification',
+    path: '/api/camera-ai/test-verification',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiCameraAiSignedUrlRoute = ApiCameraAiSignedUrlRouteImport.update({
+  id: '/api/camera-ai/signed-url',
+  path: '/api/camera-ai/signed-url',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiCameraAiReferenceImageRoute =
+  ApiCameraAiReferenceImageRouteImport.update({
+    id: '/api/camera-ai/reference-image',
+    path: '/api/camera-ai/reference-image',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiCameraAiCompilePolicyRoute =
+  ApiCameraAiCompilePolicyRouteImport.update({
+    id: '/api/camera-ai/compile-policy',
+    path: '/api/camera-ai/compile-policy',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiTeamMembersUpdateRoute = ApiTeamMembersUpdateRouteImport.update({
+  id: '/api/team/members/update',
+  path: '/api/team/members/update',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiTeamInvitationsRevokeRoute =
+  ApiTeamInvitationsRevokeRouteImport.update({
+    id: '/api/team/invitations/revoke',
+    path: '/api/team/invitations/revoke',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiTeamInvitationsResendRoute =
+  ApiTeamInvitationsResendRouteImport.update({
+    id: '/api/team/invitations/resend',
+    path: '/api/team/invitations/resend',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiPublicInvitationsInspectRoute =
+  ApiPublicInvitationsInspectRouteImport.update({
+    id: '/api/public/invitations/inspect',
+    path: '/api/public/invitations/inspect',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiPublicInvitationsCreateRoute =
+  ApiPublicInvitationsCreateRouteImport.update({
+    id: '/api/public/invitations/create',
+    path: '/api/public/invitations/create',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiPublicInvitationsAcceptRoute =
+  ApiPublicInvitationsAcceptRouteImport.update({
+    id: '/api/public/invitations/accept',
+    path: '/api/public/invitations/accept',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiPublicCronOverdueAssignmentsRoute =
+  ApiPublicCronOverdueAssignmentsRouteImport.update({
+    id: '/api/public/cron/overdue-assignments',
+    path: '/api/public/cron/overdue-assignments',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiCameraAiReferenceImagePreviewRoute =
+  ApiCameraAiReferenceImagePreviewRouteImport.update({
+    id: '/preview',
+    path: '/preview',
+    getParentRoute: () => ApiCameraAiReferenceImageRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
+  '/cadastrar': typeof CadastrarRoute
+  '/cadastro': typeof CadastroRoute
+  '/checklist': typeof ChecklistRoute
+  '/configuracoes': typeof ConfiguracoesRoute
+  '/confirmar-email': typeof ConfirmarEmailRoute
+  '/dominios': typeof DominiosRoute
+  '/equipe': typeof EquipeRoute
+  '/inicio': typeof InicioRoute
+  '/insights': typeof InsightsRoute
+  '/login': typeof LoginRoute
+  '/membros': typeof MembrosRoute
+  '/organizar': typeof OrganizarRoute
+  '/painel': typeof PainelRoute
+  '/auth/callback': typeof AuthCallbackRoute
+  '/c/$id': typeof CIdRoute
+  '/convite/$token': typeof ConviteTokenRoute
+  '/executar/$id': typeof ExecutarIdRoute
   '/api/camera-ai/compile-policy': typeof ApiCameraAiCompilePolicyRoute
-  '/api/camera-ai/reference-image': typeof ApiCameraAiReferenceImageRoute
-  '/api/camera-ai/reference-image/preview': typeof ApiCameraAiReferenceImagePreviewRoute
+  '/api/camera-ai/reference-image': typeof ApiCameraAiReferenceImageRouteWithChildren
   '/api/camera-ai/signed-url': typeof ApiCameraAiSignedUrlRoute
   '/api/camera-ai/test-verification': typeof ApiCameraAiTestVerificationRoute
   '/api/camera-ai/verify': typeof ApiCameraAiVerifyRoute
+  '/unidades/$unitId/operacao': typeof UnidadesUnitIdOperacaoRoute
+  '/api/camera-ai/reference-image/preview': typeof ApiCameraAiReferenceImagePreviewRoute
   '/api/public/cron/overdue-assignments': typeof ApiPublicCronOverdueAssignmentsRoute
   '/api/public/invitations/accept': typeof ApiPublicInvitationsAcceptRoute
   '/api/public/invitations/create': typeof ApiPublicInvitationsCreateRoute
@@ -225,34 +253,34 @@ export interface FileRoutesByFullPath {
   '/api/team/invitations/resend': typeof ApiTeamInvitationsResendRoute
   '/api/team/invitations/revoke': typeof ApiTeamInvitationsRevokeRoute
   '/api/team/members/update': typeof ApiTeamMembersUpdateRoute
-  '/auth/callback': typeof AuthCallbackRoute
-  '/c/$id': typeof CIdRoute
-  '/cadastrar': typeof CadastrarRoute
-  '/cadastro': typeof CadastroRoute
-  '/checklist': typeof ChecklistRoute
-  '/configuracoes': typeof ConfiguracoesRoute
-  '/confirmar-email': typeof ConfirmarEmailRoute
-  '/convite/$token': typeof ConviteTokenRoute
-  '/dominios': typeof DominiosRoute
-  '/equipe': typeof EquipeRoute
-  '/executar/$id': typeof ExecutarIdRoute
-  '/inicio': typeof InicioRoute
-  '/insights': typeof InsightsRoute
-  '/login': typeof LoginRoute
-  '/membros': typeof MembrosRoute
-  '/organizar': typeof OrganizarRoute
-  '/painel': typeof PainelRoute
-  '/unidades/$unitId/operacao': typeof UnidadesUnitIdOperacaoRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
+  '/cadastrar': typeof CadastrarRoute
+  '/cadastro': typeof CadastroRoute
+  '/checklist': typeof ChecklistRoute
+  '/configuracoes': typeof ConfiguracoesRoute
+  '/confirmar-email': typeof ConfirmarEmailRoute
+  '/dominios': typeof DominiosRoute
+  '/equipe': typeof EquipeRoute
+  '/inicio': typeof InicioRoute
+  '/insights': typeof InsightsRoute
+  '/login': typeof LoginRoute
+  '/membros': typeof MembrosRoute
+  '/organizar': typeof OrganizarRoute
+  '/painel': typeof PainelRoute
+  '/auth/callback': typeof AuthCallbackRoute
+  '/c/$id': typeof CIdRoute
+  '/convite/$token': typeof ConviteTokenRoute
+  '/executar/$id': typeof ExecutarIdRoute
   '/api/camera-ai/compile-policy': typeof ApiCameraAiCompilePolicyRoute
-  '/api/camera-ai/reference-image': typeof ApiCameraAiReferenceImageRoute
-  '/api/camera-ai/reference-image/preview': typeof ApiCameraAiReferenceImagePreviewRoute
+  '/api/camera-ai/reference-image': typeof ApiCameraAiReferenceImageRouteWithChildren
   '/api/camera-ai/signed-url': typeof ApiCameraAiSignedUrlRoute
   '/api/camera-ai/test-verification': typeof ApiCameraAiTestVerificationRoute
   '/api/camera-ai/verify': typeof ApiCameraAiVerifyRoute
+  '/unidades/$unitId/operacao': typeof UnidadesUnitIdOperacaoRoute
+  '/api/camera-ai/reference-image/preview': typeof ApiCameraAiReferenceImagePreviewRoute
   '/api/public/cron/overdue-assignments': typeof ApiPublicCronOverdueAssignmentsRoute
   '/api/public/invitations/accept': typeof ApiPublicInvitationsAcceptRoute
   '/api/public/invitations/create': typeof ApiPublicInvitationsCreateRoute
@@ -260,35 +288,35 @@ export interface FileRoutesByTo {
   '/api/team/invitations/resend': typeof ApiTeamInvitationsResendRoute
   '/api/team/invitations/revoke': typeof ApiTeamInvitationsRevokeRoute
   '/api/team/members/update': typeof ApiTeamMembersUpdateRoute
-  '/auth/callback': typeof AuthCallbackRoute
-  '/c/$id': typeof CIdRoute
-  '/cadastrar': typeof CadastrarRoute
-  '/cadastro': typeof CadastroRoute
-  '/checklist': typeof ChecklistRoute
-  '/configuracoes': typeof ConfiguracoesRoute
-  '/confirmar-email': typeof ConfirmarEmailRoute
-  '/convite/$token': typeof ConviteTokenRoute
-  '/dominios': typeof DominiosRoute
-  '/equipe': typeof EquipeRoute
-  '/executar/$id': typeof ExecutarIdRoute
-  '/inicio': typeof InicioRoute
-  '/insights': typeof InsightsRoute
-  '/login': typeof LoginRoute
-  '/membros': typeof MembrosRoute
-  '/organizar': typeof OrganizarRoute
-  '/painel': typeof PainelRoute
-  '/unidades/$unitId/operacao': typeof UnidadesUnitIdOperacaoRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
+  '/cadastrar': typeof CadastrarRoute
+  '/cadastro': typeof CadastroRoute
+  '/checklist': typeof ChecklistRoute
+  '/configuracoes': typeof ConfiguracoesRoute
+  '/confirmar-email': typeof ConfirmarEmailRoute
+  '/dominios': typeof DominiosRoute
+  '/equipe': typeof EquipeRoute
+  '/inicio': typeof InicioRoute
+  '/insights': typeof InsightsRoute
+  '/login': typeof LoginRoute
+  '/membros': typeof MembrosRoute
+  '/organizar': typeof OrganizarRoute
+  '/painel': typeof PainelRoute
+  '/auth/callback': typeof AuthCallbackRoute
+  '/c/$id': typeof CIdRoute
+  '/convite/$token': typeof ConviteTokenRoute
+  '/executar/$id': typeof ExecutarIdRoute
   '/api/camera-ai/compile-policy': typeof ApiCameraAiCompilePolicyRoute
-  '/api/camera-ai/reference-image': typeof ApiCameraAiReferenceImageRoute
-  '/api/camera-ai/reference-image/preview': typeof ApiCameraAiReferenceImagePreviewRoute
+  '/api/camera-ai/reference-image': typeof ApiCameraAiReferenceImageRouteWithChildren
   '/api/camera-ai/signed-url': typeof ApiCameraAiSignedUrlRoute
   '/api/camera-ai/test-verification': typeof ApiCameraAiTestVerificationRoute
   '/api/camera-ai/verify': typeof ApiCameraAiVerifyRoute
+  '/unidades/$unitId/operacao': typeof UnidadesUnitIdOperacaoRoute
+  '/api/camera-ai/reference-image/preview': typeof ApiCameraAiReferenceImagePreviewRoute
   '/api/public/cron/overdue-assignments': typeof ApiPublicCronOverdueAssignmentsRoute
   '/api/public/invitations/accept': typeof ApiPublicInvitationsAcceptRoute
   '/api/public/invitations/create': typeof ApiPublicInvitationsCreateRoute
@@ -296,41 +324,141 @@ export interface FileRoutesById {
   '/api/team/invitations/resend': typeof ApiTeamInvitationsResendRoute
   '/api/team/invitations/revoke': typeof ApiTeamInvitationsRevokeRoute
   '/api/team/members/update': typeof ApiTeamMembersUpdateRoute
-  '/auth/callback': typeof AuthCallbackRoute
-  '/c/$id': typeof CIdRoute
-  '/cadastrar': typeof CadastrarRoute
-  '/cadastro': typeof CadastroRoute
-  '/checklist': typeof ChecklistRoute
-  '/configuracoes': typeof ConfiguracoesRoute
-  '/confirmar-email': typeof ConfirmarEmailRoute
-  '/convite/$token': typeof ConviteTokenRoute
-  '/dominios': typeof DominiosRoute
-  '/equipe': typeof EquipeRoute
-  '/executar/$id': typeof ExecutarIdRoute
-  '/inicio': typeof InicioRoute
-  '/insights': typeof InsightsRoute
-  '/login': typeof LoginRoute
-  '/membros': typeof MembrosRoute
-  '/organizar': typeof OrganizarRoute
-  '/painel': typeof PainelRoute
-  '/unidades/$unitId/operacao': typeof UnidadesUnitIdOperacaoRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/admin' | '/api/camera-ai/compile-policy' | '/api/camera-ai/reference-image' | '/api/camera-ai/reference-image/preview' | '/api/camera-ai/signed-url' | '/api/camera-ai/test-verification' | '/api/camera-ai/verify' | '/api/public/cron/overdue-assignments' | '/api/public/invitations/accept' | '/api/public/invitations/create' | '/api/public/invitations/inspect' | '/api/team/invitations/resend' | '/api/team/invitations/revoke' | '/api/team/members/update' | '/auth/callback' | '/c/$id' | '/cadastrar' | '/cadastro' | '/checklist' | '/configuracoes' | '/confirmar-email' | '/convite/$token' | '/dominios' | '/equipe' | '/executar/$id' | '/inicio' | '/insights' | '/login' | '/membros' | '/organizar' | '/painel' | '/unidades/$unitId/operacao'
+  fullPaths:
+    | '/'
+    | '/admin'
+    | '/cadastrar'
+    | '/cadastro'
+    | '/checklist'
+    | '/configuracoes'
+    | '/confirmar-email'
+    | '/dominios'
+    | '/equipe'
+    | '/inicio'
+    | '/insights'
+    | '/login'
+    | '/membros'
+    | '/organizar'
+    | '/painel'
+    | '/auth/callback'
+    | '/c/$id'
+    | '/convite/$token'
+    | '/executar/$id'
+    | '/api/camera-ai/compile-policy'
+    | '/api/camera-ai/reference-image'
+    | '/api/camera-ai/signed-url'
+    | '/api/camera-ai/test-verification'
+    | '/api/camera-ai/verify'
+    | '/unidades/$unitId/operacao'
+    | '/api/camera-ai/reference-image/preview'
+    | '/api/public/cron/overdue-assignments'
+    | '/api/public/invitations/accept'
+    | '/api/public/invitations/create'
+    | '/api/public/invitations/inspect'
+    | '/api/team/invitations/resend'
+    | '/api/team/invitations/revoke'
+    | '/api/team/members/update'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/admin' | '/api/camera-ai/compile-policy' | '/api/camera-ai/reference-image' | '/api/camera-ai/reference-image/preview' | '/api/camera-ai/signed-url' | '/api/camera-ai/test-verification' | '/api/camera-ai/verify' | '/api/public/cron/overdue-assignments' | '/api/public/invitations/accept' | '/api/public/invitations/create' | '/api/public/invitations/inspect' | '/api/team/invitations/resend' | '/api/team/invitations/revoke' | '/api/team/members/update' | '/auth/callback' | '/c/$id' | '/cadastrar' | '/cadastro' | '/checklist' | '/configuracoes' | '/confirmar-email' | '/convite/$token' | '/dominios' | '/equipe' | '/executar/$id' | '/inicio' | '/insights' | '/login' | '/membros' | '/organizar' | '/painel' | '/unidades/$unitId/operacao'
-  id: '__root__' | '/' | '/admin' | '/api/camera-ai/compile-policy' | '/api/camera-ai/reference-image' | '/api/camera-ai/reference-image/preview' | '/api/camera-ai/signed-url' | '/api/camera-ai/test-verification' | '/api/camera-ai/verify' | '/api/public/cron/overdue-assignments' | '/api/public/invitations/accept' | '/api/public/invitations/create' | '/api/public/invitations/inspect' | '/api/team/invitations/resend' | '/api/team/invitations/revoke' | '/api/team/members/update' | '/auth/callback' | '/c/$id' | '/cadastrar' | '/cadastro' | '/checklist' | '/configuracoes' | '/confirmar-email' | '/convite/$token' | '/dominios' | '/equipe' | '/executar/$id' | '/inicio' | '/insights' | '/login' | '/membros' | '/organizar' | '/painel' | '/unidades/$unitId/operacao'
+  to:
+    | '/'
+    | '/admin'
+    | '/cadastrar'
+    | '/cadastro'
+    | '/checklist'
+    | '/configuracoes'
+    | '/confirmar-email'
+    | '/dominios'
+    | '/equipe'
+    | '/inicio'
+    | '/insights'
+    | '/login'
+    | '/membros'
+    | '/organizar'
+    | '/painel'
+    | '/auth/callback'
+    | '/c/$id'
+    | '/convite/$token'
+    | '/executar/$id'
+    | '/api/camera-ai/compile-policy'
+    | '/api/camera-ai/reference-image'
+    | '/api/camera-ai/signed-url'
+    | '/api/camera-ai/test-verification'
+    | '/api/camera-ai/verify'
+    | '/unidades/$unitId/operacao'
+    | '/api/camera-ai/reference-image/preview'
+    | '/api/public/cron/overdue-assignments'
+    | '/api/public/invitations/accept'
+    | '/api/public/invitations/create'
+    | '/api/public/invitations/inspect'
+    | '/api/team/invitations/resend'
+    | '/api/team/invitations/revoke'
+    | '/api/team/members/update'
+  id:
+    | '__root__'
+    | '/'
+    | '/admin'
+    | '/cadastrar'
+    | '/cadastro'
+    | '/checklist'
+    | '/configuracoes'
+    | '/confirmar-email'
+    | '/dominios'
+    | '/equipe'
+    | '/inicio'
+    | '/insights'
+    | '/login'
+    | '/membros'
+    | '/organizar'
+    | '/painel'
+    | '/auth/callback'
+    | '/c/$id'
+    | '/convite/$token'
+    | '/executar/$id'
+    | '/api/camera-ai/compile-policy'
+    | '/api/camera-ai/reference-image'
+    | '/api/camera-ai/signed-url'
+    | '/api/camera-ai/test-verification'
+    | '/api/camera-ai/verify'
+    | '/unidades/$unitId/operacao'
+    | '/api/camera-ai/reference-image/preview'
+    | '/api/public/cron/overdue-assignments'
+    | '/api/public/invitations/accept'
+    | '/api/public/invitations/create'
+    | '/api/public/invitations/inspect'
+    | '/api/team/invitations/resend'
+    | '/api/team/invitations/revoke'
+    | '/api/team/members/update'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AdminRoute: typeof AdminRoute
+  CadastrarRoute: typeof CadastrarRoute
+  CadastroRoute: typeof CadastroRoute
+  ChecklistRoute: typeof ChecklistRoute
+  ConfiguracoesRoute: typeof ConfiguracoesRoute
+  ConfirmarEmailRoute: typeof ConfirmarEmailRoute
+  DominiosRoute: typeof DominiosRoute
+  EquipeRoute: typeof EquipeRoute
+  InicioRoute: typeof InicioRoute
+  InsightsRoute: typeof InsightsRoute
+  LoginRoute: typeof LoginRoute
+  MembrosRoute: typeof MembrosRoute
+  OrganizarRoute: typeof OrganizarRoute
+  PainelRoute: typeof PainelRoute
+  AuthCallbackRoute: typeof AuthCallbackRoute
+  CIdRoute: typeof CIdRoute
+  ConviteTokenRoute: typeof ConviteTokenRoute
+  ExecutarIdRoute: typeof ExecutarIdRoute
   ApiCameraAiCompilePolicyRoute: typeof ApiCameraAiCompilePolicyRoute
   ApiCameraAiReferenceImageRoute: typeof ApiCameraAiReferenceImageRouteWithChildren
   ApiCameraAiSignedUrlRoute: typeof ApiCameraAiSignedUrlRoute
   ApiCameraAiTestVerificationRoute: typeof ApiCameraAiTestVerificationRoute
   ApiCameraAiVerifyRoute: typeof ApiCameraAiVerifyRoute
+  UnidadesUnitIdOperacaoRoute: typeof UnidadesUnitIdOperacaoRoute
   ApiPublicCronOverdueAssignmentsRoute: typeof ApiPublicCronOverdueAssignmentsRoute
   ApiPublicInvitationsAcceptRoute: typeof ApiPublicInvitationsAcceptRoute
   ApiPublicInvitationsCreateRoute: typeof ApiPublicInvitationsCreateRoute
@@ -338,236 +466,15 @@ export interface RootRouteChildren {
   ApiTeamInvitationsResendRoute: typeof ApiTeamInvitationsResendRoute
   ApiTeamInvitationsRevokeRoute: typeof ApiTeamInvitationsRevokeRoute
   ApiTeamMembersUpdateRoute: typeof ApiTeamMembersUpdateRoute
-  AuthCallbackRoute: typeof AuthCallbackRoute
-  CIdRoute: typeof CIdRoute
-  CadastrarRoute: typeof CadastrarRoute
-  CadastroRoute: typeof CadastroRoute
-  ChecklistRoute: typeof ChecklistRoute
-  ConfiguracoesRoute: typeof ConfiguracoesRoute
-  ConfirmarEmailRoute: typeof ConfirmarEmailRoute
-  ConviteTokenRoute: typeof ConviteTokenRoute
-  DominiosRoute: typeof DominiosRoute
-  EquipeRoute: typeof EquipeRoute
-  ExecutarIdRoute: typeof ExecutarIdRoute
-  InicioRoute: typeof InicioRoute
-  InsightsRoute: typeof InsightsRoute
-  LoginRoute: typeof LoginRoute
-  MembrosRoute: typeof MembrosRoute
-  OrganizarRoute: typeof OrganizarRoute
-  PainelRoute: typeof PainelRoute
-  UnidadesUnitIdOperacaoRoute: typeof UnidadesUnitIdOperacaoRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/admin': {
-      id: '/admin'
-      path: '/admin'
-      fullPath: '/admin'
-      preLoaderRoute: typeof AdminRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/camera-ai/compile-policy': {
-      id: '/api/camera-ai/compile-policy'
-      path: '/compile-policy'
-      fullPath: '/api/camera-ai/compile-policy'
-      preLoaderRoute: typeof ApiCameraAiCompilePolicyRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/camera-ai/reference-image': {
-      id: '/api/camera-ai/reference-image'
-      path: '/reference-image'
-      fullPath: '/api/camera-ai/reference-image'
-      preLoaderRoute: typeof ApiCameraAiReferenceImageRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/camera-ai/reference-image/preview': {
-      id: '/api/camera-ai/reference-image/preview'
-      path: '/preview'
-      fullPath: '/api/camera-ai/reference-image/preview'
-      preLoaderRoute: typeof ApiCameraAiReferenceImagePreviewRouteImport
-      parentRoute: typeof ApiCameraAiReferenceImageRoute
-    }
-    '/api/camera-ai/signed-url': {
-      id: '/api/camera-ai/signed-url'
-      path: '/signed-url'
-      fullPath: '/api/camera-ai/signed-url'
-      preLoaderRoute: typeof ApiCameraAiSignedUrlRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/camera-ai/test-verification': {
-      id: '/api/camera-ai/test-verification'
-      path: '/test-verification'
-      fullPath: '/api/camera-ai/test-verification'
-      preLoaderRoute: typeof ApiCameraAiTestVerificationRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/camera-ai/verify': {
-      id: '/api/camera-ai/verify'
-      path: '/verify'
-      fullPath: '/api/camera-ai/verify'
-      preLoaderRoute: typeof ApiCameraAiVerifyRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/public/cron/overdue-assignments': {
-      id: '/api/public/cron/overdue-assignments'
-      path: '/overdue-assignments'
-      fullPath: '/api/public/cron/overdue-assignments'
-      preLoaderRoute: typeof ApiPublicCronOverdueAssignmentsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/public/invitations/accept': {
-      id: '/api/public/invitations/accept'
-      path: '/accept'
-      fullPath: '/api/public/invitations/accept'
-      preLoaderRoute: typeof ApiPublicInvitationsAcceptRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/public/invitations/create': {
-      id: '/api/public/invitations/create'
-      path: '/create'
-      fullPath: '/api/public/invitations/create'
-      preLoaderRoute: typeof ApiPublicInvitationsCreateRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/public/invitations/inspect': {
-      id: '/api/public/invitations/inspect'
-      path: '/inspect'
-      fullPath: '/api/public/invitations/inspect'
-      preLoaderRoute: typeof ApiPublicInvitationsInspectRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/team/invitations/resend': {
-      id: '/api/team/invitations/resend'
-      path: '/resend'
-      fullPath: '/api/team/invitations/resend'
-      preLoaderRoute: typeof ApiTeamInvitationsResendRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/team/invitations/revoke': {
-      id: '/api/team/invitations/revoke'
-      path: '/revoke'
-      fullPath: '/api/team/invitations/revoke'
-      preLoaderRoute: typeof ApiTeamInvitationsRevokeRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/team/members/update': {
-      id: '/api/team/members/update'
-      path: '/update'
-      fullPath: '/api/team/members/update'
-      preLoaderRoute: typeof ApiTeamMembersUpdateRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/auth/callback': {
-      id: '/auth/callback'
-      path: '/callback'
-      fullPath: '/auth/callback'
-      preLoaderRoute: typeof AuthCallbackRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/c/$id': {
-      id: '/c/$id'
-      path: '/$id'
-      fullPath: '/c/$id'
-      preLoaderRoute: typeof CIdRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/cadastrar': {
-      id: '/cadastrar'
-      path: '/cadastrar'
-      fullPath: '/cadastrar'
-      preLoaderRoute: typeof CadastrarRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/cadastro': {
-      id: '/cadastro'
-      path: '/cadastro'
-      fullPath: '/cadastro'
-      preLoaderRoute: typeof CadastroRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/checklist': {
-      id: '/checklist'
-      path: '/checklist'
-      fullPath: '/checklist'
-      preLoaderRoute: typeof ChecklistRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/configuracoes': {
-      id: '/configuracoes'
-      path: '/configuracoes'
-      fullPath: '/configuracoes'
-      preLoaderRoute: typeof ConfiguracoesRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/confirmar-email': {
-      id: '/confirmar-email'
-      path: '/confirmar-email'
-      fullPath: '/confirmar-email'
-      preLoaderRoute: typeof ConfirmarEmailRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/convite/$token': {
-      id: '/convite/$token'
-      path: '/$token'
-      fullPath: '/convite/$token'
-      preLoaderRoute: typeof ConviteTokenRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/dominios': {
-      id: '/dominios'
-      path: '/dominios'
-      fullPath: '/dominios'
-      preLoaderRoute: typeof DominiosRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/equipe': {
-      id: '/equipe'
-      path: '/equipe'
-      fullPath: '/equipe'
-      preLoaderRoute: typeof EquipeRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/executar/$id': {
-      id: '/executar/$id'
-      path: '/$id'
-      fullPath: '/executar/$id'
-      preLoaderRoute: typeof ExecutarIdRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/inicio': {
-      id: '/inicio'
-      path: '/inicio'
-      fullPath: '/inicio'
-      preLoaderRoute: typeof InicioRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/insights': {
-      id: '/insights'
-      path: '/insights'
-      fullPath: '/insights'
-      preLoaderRoute: typeof InsightsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/login': {
-      id: '/login'
-      path: '/login'
-      fullPath: '/login'
-      preLoaderRoute: typeof LoginRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/membros': {
-      id: '/membros'
-      path: '/membros'
-      fullPath: '/membros'
-      preLoaderRoute: typeof MembrosRouteImport
+    '/painel': {
+      id: '/painel'
+      path: '/painel'
+      fullPath: '/painel'
+      preLoaderRoute: typeof PainelRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/organizar': {
@@ -577,19 +484,222 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OrganizarRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/painel': {
-      id: '/painel'
-      path: '/painel'
-      fullPath: '/painel'
-      preLoaderRoute: typeof PainelRouteImport
+    '/membros': {
+      id: '/membros'
+      path: '/membros'
+      fullPath: '/membros'
+      preLoaderRoute: typeof MembrosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/insights': {
+      id: '/insights'
+      path: '/insights'
+      fullPath: '/insights'
+      preLoaderRoute: typeof InsightsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/inicio': {
+      id: '/inicio'
+      path: '/inicio'
+      fullPath: '/inicio'
+      preLoaderRoute: typeof InicioRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/equipe': {
+      id: '/equipe'
+      path: '/equipe'
+      fullPath: '/equipe'
+      preLoaderRoute: typeof EquipeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dominios': {
+      id: '/dominios'
+      path: '/dominios'
+      fullPath: '/dominios'
+      preLoaderRoute: typeof DominiosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/confirmar-email': {
+      id: '/confirmar-email'
+      path: '/confirmar-email'
+      fullPath: '/confirmar-email'
+      preLoaderRoute: typeof ConfirmarEmailRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/configuracoes': {
+      id: '/configuracoes'
+      path: '/configuracoes'
+      fullPath: '/configuracoes'
+      preLoaderRoute: typeof ConfiguracoesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/checklist': {
+      id: '/checklist'
+      path: '/checklist'
+      fullPath: '/checklist'
+      preLoaderRoute: typeof ChecklistRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/cadastro': {
+      id: '/cadastro'
+      path: '/cadastro'
+      fullPath: '/cadastro'
+      preLoaderRoute: typeof CadastroRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/cadastrar': {
+      id: '/cadastrar'
+      path: '/cadastrar'
+      fullPath: '/cadastrar'
+      preLoaderRoute: typeof CadastrarRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin': {
+      id: '/admin'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof AdminRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/executar/$id': {
+      id: '/executar/$id'
+      path: '/executar/$id'
+      fullPath: '/executar/$id'
+      preLoaderRoute: typeof ExecutarIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/convite/$token': {
+      id: '/convite/$token'
+      path: '/convite/$token'
+      fullPath: '/convite/$token'
+      preLoaderRoute: typeof ConviteTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/c/$id': {
+      id: '/c/$id'
+      path: '/c/$id'
+      fullPath: '/c/$id'
+      preLoaderRoute: typeof CIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/auth/callback': {
+      id: '/auth/callback'
+      path: '/auth/callback'
+      fullPath: '/auth/callback'
+      preLoaderRoute: typeof AuthCallbackRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/unidades/$unitId/operacao': {
       id: '/unidades/$unitId/operacao'
-      path: '/operacao'
+      path: '/unidades/$unitId/operacao'
       fullPath: '/unidades/$unitId/operacao'
       preLoaderRoute: typeof UnidadesUnitIdOperacaoRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/api/camera-ai/verify': {
+      id: '/api/camera-ai/verify'
+      path: '/api/camera-ai/verify'
+      fullPath: '/api/camera-ai/verify'
+      preLoaderRoute: typeof ApiCameraAiVerifyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/camera-ai/test-verification': {
+      id: '/api/camera-ai/test-verification'
+      path: '/api/camera-ai/test-verification'
+      fullPath: '/api/camera-ai/test-verification'
+      preLoaderRoute: typeof ApiCameraAiTestVerificationRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/camera-ai/signed-url': {
+      id: '/api/camera-ai/signed-url'
+      path: '/api/camera-ai/signed-url'
+      fullPath: '/api/camera-ai/signed-url'
+      preLoaderRoute: typeof ApiCameraAiSignedUrlRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/camera-ai/reference-image': {
+      id: '/api/camera-ai/reference-image'
+      path: '/api/camera-ai/reference-image'
+      fullPath: '/api/camera-ai/reference-image'
+      preLoaderRoute: typeof ApiCameraAiReferenceImageRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/camera-ai/compile-policy': {
+      id: '/api/camera-ai/compile-policy'
+      path: '/api/camera-ai/compile-policy'
+      fullPath: '/api/camera-ai/compile-policy'
+      preLoaderRoute: typeof ApiCameraAiCompilePolicyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/team/members/update': {
+      id: '/api/team/members/update'
+      path: '/api/team/members/update'
+      fullPath: '/api/team/members/update'
+      preLoaderRoute: typeof ApiTeamMembersUpdateRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/team/invitations/revoke': {
+      id: '/api/team/invitations/revoke'
+      path: '/api/team/invitations/revoke'
+      fullPath: '/api/team/invitations/revoke'
+      preLoaderRoute: typeof ApiTeamInvitationsRevokeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/team/invitations/resend': {
+      id: '/api/team/invitations/resend'
+      path: '/api/team/invitations/resend'
+      fullPath: '/api/team/invitations/resend'
+      preLoaderRoute: typeof ApiTeamInvitationsResendRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/invitations/inspect': {
+      id: '/api/public/invitations/inspect'
+      path: '/api/public/invitations/inspect'
+      fullPath: '/api/public/invitations/inspect'
+      preLoaderRoute: typeof ApiPublicInvitationsInspectRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/invitations/create': {
+      id: '/api/public/invitations/create'
+      path: '/api/public/invitations/create'
+      fullPath: '/api/public/invitations/create'
+      preLoaderRoute: typeof ApiPublicInvitationsCreateRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/invitations/accept': {
+      id: '/api/public/invitations/accept'
+      path: '/api/public/invitations/accept'
+      fullPath: '/api/public/invitations/accept'
+      preLoaderRoute: typeof ApiPublicInvitationsAcceptRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/cron/overdue-assignments': {
+      id: '/api/public/cron/overdue-assignments'
+      path: '/api/public/cron/overdue-assignments'
+      fullPath: '/api/public/cron/overdue-assignments'
+      preLoaderRoute: typeof ApiPublicCronOverdueAssignmentsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/camera-ai/reference-image/preview': {
+      id: '/api/camera-ai/reference-image/preview'
+      path: '/preview'
+      fullPath: '/api/camera-ai/reference-image/preview'
+      preLoaderRoute: typeof ApiCameraAiReferenceImagePreviewRouteImport
+      parentRoute: typeof ApiCameraAiReferenceImageRoute
     }
   }
 }
@@ -598,20 +708,43 @@ interface ApiCameraAiReferenceImageRouteChildren {
   ApiCameraAiReferenceImagePreviewRoute: typeof ApiCameraAiReferenceImagePreviewRoute
 }
 
-const ApiCameraAiReferenceImageRouteChildren: ApiCameraAiReferenceImageRouteChildren = {
-  ApiCameraAiReferenceImagePreviewRoute: ApiCameraAiReferenceImagePreviewRoute,
-}
+const ApiCameraAiReferenceImageRouteChildren: ApiCameraAiReferenceImageRouteChildren =
+  {
+    ApiCameraAiReferenceImagePreviewRoute:
+      ApiCameraAiReferenceImagePreviewRoute,
+  }
 
-const ApiCameraAiReferenceImageRouteWithChildren = ApiCameraAiReferenceImageRoute._addFileChildren(ApiCameraAiReferenceImageRouteChildren)
+const ApiCameraAiReferenceImageRouteWithChildren =
+  ApiCameraAiReferenceImageRoute._addFileChildren(
+    ApiCameraAiReferenceImageRouteChildren,
+  )
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AdminRoute: AdminRoute,
+  CadastrarRoute: CadastrarRoute,
+  CadastroRoute: CadastroRoute,
+  ChecklistRoute: ChecklistRoute,
+  ConfiguracoesRoute: ConfiguracoesRoute,
+  ConfirmarEmailRoute: ConfirmarEmailRoute,
+  DominiosRoute: DominiosRoute,
+  EquipeRoute: EquipeRoute,
+  InicioRoute: InicioRoute,
+  InsightsRoute: InsightsRoute,
+  LoginRoute: LoginRoute,
+  MembrosRoute: MembrosRoute,
+  OrganizarRoute: OrganizarRoute,
+  PainelRoute: PainelRoute,
+  AuthCallbackRoute: AuthCallbackRoute,
+  CIdRoute: CIdRoute,
+  ConviteTokenRoute: ConviteTokenRoute,
+  ExecutarIdRoute: ExecutarIdRoute,
   ApiCameraAiCompilePolicyRoute: ApiCameraAiCompilePolicyRoute,
   ApiCameraAiReferenceImageRoute: ApiCameraAiReferenceImageRouteWithChildren,
   ApiCameraAiSignedUrlRoute: ApiCameraAiSignedUrlRoute,
   ApiCameraAiTestVerificationRoute: ApiCameraAiTestVerificationRoute,
   ApiCameraAiVerifyRoute: ApiCameraAiVerifyRoute,
+  UnidadesUnitIdOperacaoRoute: UnidadesUnitIdOperacaoRoute,
   ApiPublicCronOverdueAssignmentsRoute: ApiPublicCronOverdueAssignmentsRoute,
   ApiPublicInvitationsAcceptRoute: ApiPublicInvitationsAcceptRoute,
   ApiPublicInvitationsCreateRoute: ApiPublicInvitationsCreateRoute,
@@ -619,24 +752,6 @@ const rootRouteChildren: RootRouteChildren = {
   ApiTeamInvitationsResendRoute: ApiTeamInvitationsResendRoute,
   ApiTeamInvitationsRevokeRoute: ApiTeamInvitationsRevokeRoute,
   ApiTeamMembersUpdateRoute: ApiTeamMembersUpdateRoute,
-  AuthCallbackRoute: AuthCallbackRoute,
-  CIdRoute: CIdRoute,
-  CadastrarRoute: CadastrarRoute,
-  CadastroRoute: CadastroRoute,
-  ChecklistRoute: ChecklistRoute,
-  ConfiguracoesRoute: ConfiguracoesRoute,
-  ConfirmarEmailRoute: ConfirmarEmailRoute,
-  ConviteTokenRoute: ConviteTokenRoute,
-  DominiosRoute: DominiosRoute,
-  EquipeRoute: EquipeRoute,
-  ExecutarIdRoute: ExecutarIdRoute,
-  InicioRoute: InicioRoute,
-  InsightsRoute: InsightsRoute,
-  LoginRoute: LoginRoute,
-  MembrosRoute: MembrosRoute,
-  OrganizarRoute: OrganizarRoute,
-  PainelRoute: PainelRoute,
-  UnidadesUnitIdOperacaoRoute: UnidadesUnitIdOperacaoRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

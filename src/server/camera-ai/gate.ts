@@ -1,30 +1,35 @@
 import { CameraVerification, CameraReferenceVerification, VerificationResult } from './schema';
 
 export function evaluateGate(analysis: CameraVerification | CameraReferenceVerification): VerificationResult {
+  // 1. Sanitize user_message
   const sanitizeMessage = (msg: string, isApproved: boolean): string => {
     if (!msg) return isApproved ? 'Foto verificada com sucesso.' : 'É necessário tirar outra foto.';
-
+    
+    // Remove technical jargon, model names, JSON-like structures, and markdown
     let clean = msg
-      .replace(/\{.*\}/g, '')
-      .replace(/gpt-[a-z0-9-]+|openai|claude|gemini|deepseek/gi, '')
-      .replace(/[\*\_\`\#]/g, '')
+      .replace(/\{.*\}/g, '') // remove JSON
+      .replace(/gpt-[a-z0-9-]+|openai|claude|gemini|deepseek/gi, '') // remove model names
+      .replace(/[\*\_\`\#]/g, '') // remove markdown
       .replace(/\s+/g, ' ')
       .trim();
-
+    
+    // Limit to 240 chars
     if (clean.length > 240) {
       clean = clean.substring(0, 237) + '...';
     }
-
+    
     return clean || (isApproved ? 'Foto verificada com sucesso.' : 'É necessário tirar outra foto.');
   };
 
   const v = analysis;
+
+  // 2. Reference mode specific logic
   const isReferenceMode = 'reference_match' in v;
-  const referencePassed = isReferenceMode
+  const referencePassed = isReferenceMode 
     ? (v.reference_match === true && v.reference_match_confidence >= 0.90)
     : true;
 
-  const isApproved =
+  const isApproved = 
     referencePassed &&
     v.target_visible === true &&
     v.target_identity_confidence >= 0.90 &&
@@ -47,24 +52,20 @@ export function evaluateGate(analysis: CameraVerification | CameraReferenceVerif
     };
   }
 
-  if (isReferenceMode && (!v.reference_match || v.reference_match_confidence < 0.90)) {
-    const relevantDifferences = v.reference_differences
-      .map((difference) => sanitizeMessage(difference, false))
-      .filter(Boolean);
-    const evidence = relevantDifferences.join(', ');
-    const firstDifference = relevantDifferences[0];
+  // 3. Fail-Closed Mapping
 
+  // Reference mismatch
+  if (isReferenceMode && (!v.reference_match || v.reference_match_confidence < 0.90)) {
     return {
       ok: true,
       decision: 'retake',
       code: 'reference_mismatch',
-      message: firstDifference
-        ? `Tire outra foto. ${firstDifference}`
-        : 'Tire outra foto. O resultado não corresponde aos critérios relevantes da referência.',
-      evidence: evidence || 'O resultado não corresponde aos critérios relevantes da referência.'
+      message: sanitizedMessage,
+      evidence: v.reference_differences?.join(', ') || 'A foto não coincide com o padrão de referência esperado.'
     };
   }
 
+  // Objeto ausente ou incorreto
   if (!v.target_visible || v.target_identity_confidence < 0.90) {
     return {
       ok: true,
@@ -75,6 +76,7 @@ export function evaluateGate(analysis: CameraVerification | CameraReferenceVerif
     };
   }
 
+  // Qualidade insuficiente
   if (!v.image_quality_usable) {
     return {
       ok: true,
@@ -85,6 +87,7 @@ export function evaluateGate(analysis: CameraVerification | CameraReferenceVerif
     };
   }
 
+  // Condição não observável ou impossível de verificar
   if (!v.condition_observable || v.contradictions.length > 0 || v.positive_visible_evidence.length === 0) {
     return {
       ok: true,
@@ -95,6 +98,7 @@ export function evaluateGate(analysis: CameraVerification | CameraReferenceVerif
     };
   }
 
+  // Condição visivelmente não atendida
   if (v.condition_met === false) {
     return {
       ok: true,
@@ -105,6 +109,7 @@ export function evaluateGate(analysis: CameraVerification | CameraReferenceVerif
     };
   }
 
+  // Fallback para Retake (Baixa confiança ou outros motivos)
   return {
     ok: true,
     decision: 'retake',
