@@ -149,6 +149,29 @@ describe('CameraSettingsPanel — botão "Testar verificação" (5C.3.3-A)', () 
     expect(testButton()).toBeDisabled();
     expect(saveHint()).not.toBeNull();
   });
+
+  it('5C.3.3-C.1: policy válida + hash atual + revalidation false + isCompiling false + syncFailed true → Testar DESABILITADO + mensagem de falha', () => {
+    // A barreira NÃO pode depender de revalidation: todos os sinais de "pronto"
+    // estão verdes — apenas syncFailed=true mantém o fail-closed.
+    render(<CameraSettingsPanel {...baseProps} syncFailed={true} />);
+    expect(testButton()).toBeDisabled();
+    expect(screen.queryByText(/não foi possível atualizar a verificação/i)).not.toBeNull();
+    expect(updatingHint()).toBeNull();
+  });
+
+  it('5C.3.3-C.1: syncFailed=true tem precedência sobre o aviso de atualização', () => {
+    render(
+      <CameraSettingsPanel
+        {...baseProps}
+        isCameraPolicyReady={false}
+        cameraAiNeedsRevalidation={true}
+        syncFailed={true}
+      />
+    );
+    expect(testButton()).toBeDisabled();
+    expect(screen.queryByText(/não foi possível atualizar a verificação/i)).not.toBeNull();
+    expect(updatingHint()).toBeNull();
+  });
 });
 
 describe('CameraBlockEditor — derivação isCameraPolicyReady (5C.3.3-A)', () => {

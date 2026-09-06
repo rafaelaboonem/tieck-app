@@ -253,4 +253,36 @@ describe('CameraBlockEditor — wiring do save autoritativo (5C.3.3-B)', () => {
     await waitFor(() => expect(testButton()).toBeDisabled());
     expect(screen.queryByText(/não foi possível atualizar a verificação/i)).not.toBeNull();
   });
+
+  it('5C.3.3-C.1: alteração NÃO-pergunta (mode) com policy válida + persistência falha → syncFailed bloqueia Testar sem depender de revalidation', async () => {
+    const validPolicy = await makePolicy('Pergunta atual', 'Desc');
+
+    render(
+      <SyncHarness
+        initialBlock={{
+          id: 'b1',
+          type: 'camera',
+          title: 'Pergunta atual',
+          description: 'Desc',
+          cameraAiPolicy: validPolicy,
+          cameraAiNeedsRevalidation: false,
+          mode: 'auto',
+        }}
+        syncImpl={async () => false} // persistência falha
+      />
+    );
+
+    fireEvent.click(screen.getByTestId('camera-card'));
+    // alteração que NÃO muda a pergunta: mode auto → reference
+    fireEvent.click(screen.getByText('Comparar com referência'));
+    fireEvent.click(screen.getByText('Salvar bloco'));
+
+    // mensagem de falha aparece depois que a sync termina (isCompiling=false);
+    // nesse ponto policy continua válida + hash atual + revalidation=false —
+    // SÓ syncFailed mantém Testar bloqueado (5C.3.3-C.1)
+    await waitFor(() =>
+      expect(screen.queryByText(/não foi possível atualizar a verificação/i)).not.toBeNull()
+    );
+    expect(testButton()).toBeDisabled();
+  });
 });

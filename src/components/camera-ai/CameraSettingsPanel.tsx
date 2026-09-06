@@ -53,7 +53,10 @@ export function CameraSettingsPanel({ block, isOpen, onClose, onSave, isCompilin
   // schema-invalid (the latter three are collapsed into isCameraPolicyReady,
   // which CameraBlockEditor derives from the canonical question hash).
   const isPolicyPendingUpdate = isCompiling || cameraAiNeedsRevalidation || !isCameraPolicyReady;
-  const isTestDisabled = hasChanges || isPolicyPendingUpdate;
+  // 5C.3.3-C.1: syncFailed bloqueia Testar INDEPENDENTEMENTE de
+  // isCameraPolicyReady — mesmo com policy válida + hash atual + revalidation
+  // false, uma persistência que falhou não libera o teste (fail-closed).
+  const isTestDisabled = hasChanges || syncFailed || isPolicyPendingUpdate;
 
   useEffect(() => {
     if (isOpen) {
@@ -416,12 +419,13 @@ export function CameraSettingsPanel({ block, isOpen, onClose, onSave, isCompilin
               </div>
               {hasChanges ? (
                 <span className="text-[10px] text-neutral-400 font-normal italic">Salve as alterações antes de testar</span>
+              ) : syncFailed ? (
+                /* 5C.3.3-C.1: falha de sync tem precedência sobre o estado de
+                   atualização — mensagem específica, Testar permanece bloqueado
+                   até uma nova tentativa bem-sucedida. */
+                <span className="text-[10px] text-red-500 font-normal italic">Não foi possível atualizar a verificação. Tente salvar novamente.</span>
               ) : isPolicyPendingUpdate ? (
-                syncFailed ? (
-                  <span className="text-[10px] text-red-500 font-normal italic">Não foi possível atualizar a verificação. Tente salvar novamente.</span>
-                ) : (
-                  <span className="text-[10px] text-neutral-400 font-normal italic">Atualizando a verificação da câmera...</span>
-                )
+                <span className="text-[10px] text-neutral-400 font-normal italic">Atualizando a verificação da câmera...</span>
               ) : null}
             </button>
           </div>

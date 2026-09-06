@@ -44,7 +44,18 @@ export async function mergePersistedBlocksInto(current: any[], persisted: any[])
         result.push(cur); // pergunta local mais nova → preserva (5C.3.3-C)
         continue;
       }
-      result.push(per); // mesma pergunta → payload persistido é autoritativo
+      // 5C.3.3-C.1: MESMA pergunta → o payload NÃO substitui o bloco Camera
+      // local inteiro. Apenas os campos autoritativos produzidos pela policy
+      // sync (cameraAiPolicy + cameraAiNeedsRevalidation) vêm do persistido;
+      // edições locais contemporâneas (title/description, required, mode,
+      // cameraReference e demais configurações editáveis) são preservadas —
+      // hashes iguais significam a mesma pergunta, então o objeto local é a
+      // base mais recente.
+      result.push({
+        ...cur,
+        cameraAiPolicy: per.cameraAiPolicy,
+        cameraAiNeedsRevalidation: per.cameraAiNeedsRevalidation,
+      });
       continue;
     }
     result.push(cur); // bloco não-camera editado durante a persistência → preserva
