@@ -158,15 +158,16 @@ describe('CameraBlockEditor — wiring do save autoritativo (5C.3.3-B)', () => {
 
   it('H: botão só habilita após o fluxo autoritativo completo', async () => {
     const oldPolicy = await makePolicy('Pergunta antiga', 'Desc');
+    // policy pré-computada: nenhuma operação assíncrona (crypto) no caminho pós-resolve
+    const freshPolicy = await makePolicy('Pergunta nova', 'Desc');
     let resolveSync: (v: boolean) => void = () => {};
     let appliedPolicy: CameraVerificationPolicyV1 | null = null;
 
     render(
       <SyncHarness
         initialBlock={{ id: 'b1', type: 'camera', title: 'Pergunta antiga', description: 'Desc', cameraAiPolicy: oldPolicy }}
-        syncImpl={async (_id, nextBlock, apply) => {
+        syncImpl={async (_id, _nextBlock, apply) => {
           await new Promise<boolean>((r) => { resolveSync = r; });
-          const freshPolicy = await makePolicy(nextBlock.title, nextBlock.description);
           appliedPolicy = freshPolicy;
           apply({ cameraAiPolicy: freshPolicy, cameraAiNeedsRevalidation: false });
           return true;
@@ -188,5 +189,67 @@ describe('CameraBlockEditor — wiring do save autoritativo (5C.3.3-B)', () => {
     await waitFor(() => expect(testButton()).not.toBeDisabled(), { timeout: 5000 });
     expect(screen.queryByText(/atualizando a verificação da câmera/i)).toBeNull();
     expect(appliedPolicy).not.toBeNull();
+  });
+
+  it('5C.3.3-B.1: revalidation preexistente + policy com hash igual → flag NÃO é limpa no save', async () => {
+    const policy = await makePolicy('Pia limpa?', 'Foto da pia');
+    const updateBlock = vi.fn();
+    const onSync = vi.fn(async () => true);
+
+    render(
+      <CameraBlockEditor
+        block={{
+          id: 'b1',
+          type: 'camera',
+          title: 'Pia limpa?',
+          description: 'Foto da pia',
+          cameraAiPolicy: policy,
+          cameraAiNeedsRevalidation: true,
+        }}
+        isActive={false}
+        currentChecklistId="c1"
+        updateBlock={updateBlock}
+        removeBlock={vi.fn()}
+        setActiveBlockId={vi.fn()}
+        textColor="#000"
+        textareaRefs={{ current: {} } as any}
+        onSyncCameraPolicy={onSync}
+      />
+    );
+
+    fireEvent.click(screen.getByTestId('camera-card'));
+    fireEvent.click(screen.getByRole('switch')); // mudança não-camera, pergunta intacta
+    fireEvent.click(screen.getByText('Salvar bloco'));
+
+    await waitFor(() => expect(onSync).toHaveBeenCalledTimes(1));
+    // fail-closed: o flag pendente é PRESERVADO até a conclusão autoritativa
+    expect(updateBlock).toHaveBeenCalledWith('b1', expect.objectContaining({ cameraAiNeedsRevalidation: true }));
+    expect(onSync).toHaveBeenCalledWith('b1', expect.objectContaining({ cameraAiNeedsRevalidation: true }));
+  });
+
+  it('5C.3.3-B.1: falha da sync → flag continua true e Testar bloqueado', async () => {
+    const oldPolicy = await makePolicy('Pergunta antiga', 'Desc');
+
+    render(
+      <SyncHarness
+        initialBlock={{
+          id: 'b1',
+          type: 'camera',
+          title: 'Pergunta antiga',
+          description: 'Desc',
+          cameraAiPolicy: oldPolicy,
+          cameraAiNeedsRevalidation: true,
+        }}
+        syncImpl={async () => false}
+      />
+    );
+
+    fireEvent.click(screen.getByTestId('camera-card'));
+    fireEvent.change(screen.getByDisplayValue('Pergunta antiga'), { target: { value: 'Pergunta nova' } });
+    fireEvent.click(screen.getByText('Salvar bloco'));
+
+    // mesmo após a falha, a revalidação pendente mantém o teste bloqueado
+    await waitFor(() => expect(testButton()).toBeDisabled());
+    expect(screen.queryByText(/atualizando a verificação da câmera/i)).not.toBeNull();
   });
 });

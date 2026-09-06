@@ -128,6 +128,7 @@ import { BlockRenderer, INTERACTIVE_BLOCK_TYPES } from "@/components/BlockRender
 import { ensureCameraBlockIds, withNewCameraBlockId, extractCameraQuestions } from "@/lib/camera-blocks";
 import { hashQuestion } from "@/lib/camera-ai/hashing";
 import { syncCameraBlockPolicy } from "@/lib/camera-ai/policy-sync";
+import { createWriteSerializer } from "@/lib/camera-ai/write-serializer";
 function CameraBlockPreview({ textColor, blockId }: { textColor?: string; blockId?: string }) {
   const [dataUrl, setDataUrl] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -345,12 +346,21 @@ export function CameraBlockEditor({
 
   // 5C.3.3-B: "Salvar bloco" — update local state, flag revalidation immediately
   // when the question diverges, then run the authoritative persistence chain.
+  // 5C.3.3-B.1: fail-closed — a revalidação pendente NUNCA é limpa antes da
+  // conclusão autoritativa; uma policy só é reutilizável se for schema-válida,
+  // bater com a pergunta atual E o bloco não já estiver marcado.
   const handleBlockSave = async (patch: any) => {
     const nextTitle = String(patch.title ?? block.title ?? "");
     const nextDescription = String(patch.description ?? block.description ?? "");
     const nextPolicy = patch.cameraAiPolicy as CameraVerificationPolicyV1 | undefined;
     const nextHash = await hashQuestion(nextTitle, nextDescription);
-    const needsRevalidation = !nextPolicy || nextPolicy.questionHash !== nextHash;
+    const policySchemaOk = !!nextPolicy &&
+      CameraVerificationPolicyV1Schema.safeParse(nextPolicy).success &&
+      nextPolicy.version === 1;
+    const policyReadyForQuestion = policySchemaOk && nextPolicy.questionHash === nextHash;
+    // Só pode ser false quando a policy é válida/sincronizada SEM revalidação
+    // anterior; caso contrário preserva TRUE até o sync autoritativo concluir.
+    const needsRevalidation = block.cameraAiNeedsRevalidation === true || !policyReadyForQuestion;
 
     updateBlock(block.id, { ...patch, cameraAiNeedsRevalidation: needsRevalidation });
 
@@ -995,6 +1005,43 @@ export function NovoChecklistPage() {
   const [customDomain, setCustomDomain] = useState<string | null>(null);
   const [customDomainStatus, setCustomDomainStatus] = useState<'verified' | 'pending' | 'failed' | null>(null);
   const isSavingRef = useRef(false);
+
+  // 5C.3.3-B.1: uma única disciplina de serialização para TODOS os writers de
+  // `checklists.blocks` (autosave/saveChecklist e camera policy sync). Nunca há
+  // dois writers em voo ao mesmo tempo; o writer antigo sempre termina antes.
+  const writeSerializerRef = useRef(createWriteSerializer());
+  const serializeWrite = useCallback(<T,>(op: () => PromiseLike<T>): Promise<T> =>
+    writeSerializerRef.current.enqueue(op), []);
+
+  // 5C.3.3-B: persist the blocks column directly (same pattern the publish flow
+  // uses after compiling policies). Awaits the REAL Supabase confirmation and
+  // participates in the shared write serialization above.
+  const persistBlocks = useCallback(async (nextBlocks: any[]): Promise<boolean> => {
+    const targetId = currentChecklistId || sessionChecklistIdRef.current;
+    if (!targetId) return false;
+    return serializeWrite(async () => {
+      try {
+        const { data, error } = await supabase
+          .from("checklists")
+          .update({ blocks: nextBlocks })
+          .eq("id", targetId)
+          .select("id");
+        if (error) {
+          console.error("[Camera AI] persist blocks failed:", error);
+          return false;
+        }
+        // Confirmação real: o checklist alvo precisa ter sido afetado.
+        if (!data || data.length === 0) {
+          console.error("[Camera AI] persist blocks: checklist não encontrado/atualizado:", targetId);
+          return false;
+        }
+        return true;
+      } catch (err) {
+        console.error("[Camera AI] persist blocks threw:", err);
+        return false;
+      }
+    });
+  }, [currentChecklistId, serializeWrite]);
 
   useEffect(() => {
     if (user) {
@@ -2377,7 +2424,9 @@ export function NovoChecklistPage() {
 
       // IDs estáveis dos blocos /Camera: criados uma única vez e preservados
       // em edição, reordenação e movimentação.
-      const { blocks: blocksWithIds } = ensureCameraBlockIds(blocks as any[]);
+      // 5C.3.3-B.1: lê o estado MAIS RECENTE (ref), não o closure — assim um
+      // save enfileirado atrás de uma camera sync grava a policy confirmada.
+      const { blocks: blocksWithIds } = ensureCameraBlockIds(blocksRef.current as any[]);
 
       const checklistData: any = {
         user_id: authUser.id,
@@ -2453,19 +2502,25 @@ export function NovoChecklistPage() {
       // published_content is only updated when the user explicitly clicks "Publicar"
       // (handled above when isPublishedOverride === true). Auto-saves do not touch it.
 
+      // 5C.3.3-B.1: o write principal participa da mesma serialização do
+      // camera sync — nunca há dois writers de `checklists` em voo.
       if (checklistId || sessionChecklistIdRef.current) {
-        result = await supabase
-          .from("checklists")
-          .update(checklistData)
-          .or(`id.eq.${checklistId || sessionChecklistIdRef.current},custom_slug.eq.${checklistId || 'null'}`)
-          .select()
-          .single();
+        result = await serializeWrite(() =>
+          supabase
+            .from("checklists")
+            .update(checklistData)
+            .or(`id.eq.${checklistId || sessionChecklistIdRef.current},custom_slug.eq.${checklistId || 'null'}`)
+            .select()
+            .single()
+        );
       } else {
-        result = await supabase
-          .from("checklists")
-          .insert(checklistData)
-          .select()
-          .single();
+        result = await serializeWrite(() =>
+          supabase
+            .from("checklists")
+            .insert(checklistData)
+            .select()
+            .single()
+        );
       }
 
       const { data, error } = result;
@@ -2508,12 +2563,10 @@ export function NovoChecklistPage() {
               b.id === cam.id ? { ...b, cameraAiPolicy: compiled.policy, cameraAiNeedsRevalidation: false } : b
             );
             
-            const { error: syncErr } = await supabase
-              .from("checklists")
-              .update({ blocks: updatedBlocks })
-              .eq("id", data.id);
-            
-            if (syncErr) throw syncErr;
+            // 5C.3.3-B.1: reusa persistBlocks — serializado com o autosave e com
+            // confirmação real de que o checklist foi afetado.
+            const syncOk = await persistBlocks(updatedBlocks);
+            if (!syncOk) throw new Error("Não foi possível persistir os critérios da câmera. Tente publicar novamente.");
             // Update our local reference for the next steps in this function
             blocksWithIds.splice(0, blocksWithIds.length, ...updatedBlocks);
           }
@@ -2603,7 +2656,7 @@ export function NovoChecklistPage() {
       isSavingRef.current = false;
       if (!silent) setIsPublishing(false);
     }
-  }, [user, title, blocks, theme, font, bgColor, textColor, accentColor, pageWidth, baseFontSize, language, redirectOnCompletion, redirectUrl, progressBar, btnBgColor, btnTextColor, btnText, btnIcon, btnIconPosition, checklistId, selfEmailNotif, respondentEmailNotif, respondentEmailFieldId, respondentEmailSubject, respondentEmailMessage, includeResponsesInEmail, ownerEmailAddress, dataRetention, retentionDays, partialSubmissions, checklistBranding, thankYouTitle, thankYouDescription, categoryParam, customDomain, passwordProtect, formPassword, closeForm, closeFormScheduled, closeFormDate, limitSubmissions, submissionLimit, closedFormMessage, closedMessageText, deadlineAlertEnabled, primaryMemberId, assignmentDueAt]);
+  }, [user, title, blocks, theme, font, bgColor, textColor, accentColor, pageWidth, baseFontSize, language, redirectOnCompletion, redirectUrl, progressBar, btnBgColor, btnTextColor, btnText, btnIcon, btnIconPosition, checklistId, selfEmailNotif, respondentEmailNotif, respondentEmailFieldId, respondentEmailSubject, respondentEmailMessage, includeResponsesInEmail, ownerEmailAddress, dataRetention, retentionDays, partialSubmissions, checklistBranding, thankYouTitle, thankYouDescription, categoryParam, customDomain, passwordProtect, formPassword, closeForm, closeFormScheduled, closeFormDate, limitSubmissions, submissionLimit, closedFormMessage, closedMessageText, deadlineAlertEnabled, primaryMemberId, assignmentDueAt, serializeWrite, persistBlocks]);
 
   const loadDeadlineAssignmentState = async () => {
     if (!settingsChecklistId) {
@@ -2872,27 +2925,6 @@ export function NovoChecklistPage() {
       return newBlocks;
     });
   }, []);
-
-  // 5C.3.3-B: persist the blocks column directly (same pattern the publish flow
-  // uses after compiling policies). Awaits the REAL Supabase confirmation.
-  const persistBlocks = useCallback(async (nextBlocks: any[]): Promise<boolean> => {
-    const targetId = currentChecklistId || sessionChecklistIdRef.current;
-    if (!targetId) return false;
-    try {
-      const { error } = await supabase
-        .from("checklists")
-        .update({ blocks: nextBlocks })
-        .eq("id", targetId);
-      if (error) {
-        console.error("[Camera AI] persist blocks failed:", error);
-        return false;
-      }
-      return true;
-    } catch (err) {
-      console.error("[Camera AI] persist blocks threw:", err);
-      return false;
-    }
-  }, [currentChecklistId]);
 
   // 5C.3.3-B: compile against the PERSISTED checklist (never against client state).
   const compileCameraPolicy = useCallback(async (checklistId: string, blockId: string) => {
