@@ -43,3 +43,5 @@ supabase/.temp/
 archive/legacy-integration-history/
 /bun.lock
 /bun.lockb
+
+.freebuff/
