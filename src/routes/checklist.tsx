@@ -129,6 +129,8 @@ import { ensureCameraBlockIds, withNewCameraBlockId, extractCameraQuestions } fr
 import { hashQuestion } from "@/lib/camera-ai/hashing";
 import { syncCameraBlockPolicy } from "@/lib/camera-ai/policy-sync";
 import { createWriteSerializer } from "@/lib/camera-ai/write-serializer";
+import { createAutosaveCoalescer } from "@/lib/camera-ai/autosave-coalescer";
+import { mergePersistedBlocksInto } from "@/lib/camera-ai/blocks-freshness";
 function CameraBlockPreview({ textColor, blockId }: { textColor?: string; blockId?: string }) {
   const [dataUrl, setDataUrl] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -1006,6 +1008,10 @@ export function NovoChecklistPage() {
   const [customDomainStatus, setCustomDomainStatus] = useState<'verified' | 'pending' | 'failed' | null>(null);
   const isSavingRef = useRef(false);
 
+  // 5C.3.3-B.2: autosave solicitado durante outro save não é perdido — é
+  // marcado pendente e coalescido em UM save posterior com estado recente.
+  const pendingAutosaveCoalescer = useRef(createAutosaveCoalescer()).current;
+
   // 5C.3.3-B.1: uma única disciplina de serialização para TODOS os writers de
   // `checklists.blocks` (autosave/saveChecklist e camera policy sync). Nunca há
   // dois writers em voo ao mesmo tempo; o writer antigo sempre termina antes.
@@ -1035,6 +1041,10 @@ export function NovoChecklistPage() {
           console.error("[Camera AI] persist blocks: checklist não encontrado/atualizado:", targetId);
           return false;
         }
+        // 5C.3.3-B.2: ref autoritativa atualizada SINCRONAMENTE, dentro do op
+        // serializado — antes de liberar a fila para o próximo writer. O merge
+        // por bloco preserva edições mais novas fora do payload persistido.
+        blocksRef.current = mergePersistedBlocksInto(blocksRef.current, nextBlocks);
         return true;
       } catch (err) {
         console.error("[Camera AI] persist blocks threw:", err);
@@ -2422,21 +2432,11 @@ export function NovoChecklistPage() {
         setRetentionDays(5);
       }
 
-      // IDs estáveis dos blocos /Camera: criados uma única vez e preservados
-      // em edição, reordenação e movimentação.
-      // 5C.3.3-B.1: lê o estado MAIS RECENTE (ref), não o closure — assim um
-      // save enfileirado atrás de uma camera sync grava a policy confirmada.
-      const { blocks: blocksWithIds } = ensureCameraBlockIds(blocksRef.current as any[]);
-
       const checklistData: any = {
         user_id: authUser.id,
         title: (title && title.trim()) ? title.trim() : "Sem título",
-        blocks: blocksWithIds.map((b: any) => {
-          if (b.type === 'camera') {
-            return b;
-          }
-          return b;
-        }) as any,
+        // `blocks` é preenchido DENTRO do write serializado (late-bind) —
+        // 5C.3.3-B.2: lido no momento da execução, não antes de esperar na fila.
 
 
         custom_email_domain_id: customEmailDomainId,
@@ -2504,11 +2504,17 @@ export function NovoChecklistPage() {
 
       // 5C.3.3-B.1: o write principal participa da mesma serialização do
       // camera sync — nunca há dois writers de `checklists` em voo.
+      // 5C.3.3-B.2: late-bind — `blocks` é lido NO MOMENTO EM QUE o op ganha a
+      // fila (depois que todos os writers anteriores terminaram), nunca antes.
+      const buildChecklistPayload = (): any => ({
+        ...checklistData,
+        blocks: ensureCameraBlockIds(blocksRef.current as any[]).blocks,
+      });
       if (checklistId || sessionChecklistIdRef.current) {
         result = await serializeWrite(() =>
           supabase
             .from("checklists")
-            .update(checklistData)
+            .update(buildChecklistPayload())
             .or(`id.eq.${checklistId || sessionChecklistIdRef.current},custom_slug.eq.${checklistId || 'null'}`)
             .select()
             .single()
@@ -2517,7 +2523,7 @@ export function NovoChecklistPage() {
         result = await serializeWrite(() =>
           supabase
             .from("checklists")
-            .insert(checklistData)
+            .insert(buildChecklistPayload())
             .select()
             .single()
         );
@@ -2532,6 +2538,8 @@ export function NovoChecklistPage() {
       let serverSlug: string | null = data?.custom_slug ?? null;
       // PATCH CAMERA AI: Antes de publicar, garantimos que todas as policies estão sincronizadas.
       if (isPublishedOverride === true && data?.id) {
+        // 5C.3.3-B.2: relê o estado mais recente para o loop de publicação.
+        const { blocks: blocksWithIds } = ensureCameraBlockIds(blocksRef.current as any[]);
         const cameraBlocks = blocksWithIds.filter(b => b.type === 'camera');
         for (const cam of cameraBlocks) {
           // CANONICAL QUESTION: Usar title e description, ignorando subtitle.
@@ -2655,6 +2663,13 @@ export function NovoChecklistPage() {
     } finally {
       isSavingRef.current = false;
       if (!silent) setIsPublishing(false);
+      // 5C.3.3-B.2: autosave solicitado durante este save → UM save coalescido
+      // com o estado mais recente. Nunca perdido; nunca em loop: o flag é
+      // consumido aqui e só renasce com um timer real durante o próximo save.
+      if (pendingAutosaveCoalescer.consumePending()) {
+        const targetId = checklistId || sessionChecklistIdRef.current;
+        if (user) void saveChecklist(user, targetId ? undefined : false, true);
+      }
     }
   }, [user, title, blocks, theme, font, bgColor, textColor, accentColor, pageWidth, baseFontSize, language, redirectOnCompletion, redirectUrl, progressBar, btnBgColor, btnTextColor, btnText, btnIcon, btnIconPosition, checklistId, selfEmailNotif, respondentEmailNotif, respondentEmailFieldId, respondentEmailSubject, respondentEmailMessage, includeResponsesInEmail, ownerEmailAddress, dataRetention, retentionDays, partialSubmissions, checklistBranding, thankYouTitle, thankYouDescription, categoryParam, customDomain, passwordProtect, formPassword, closeForm, closeFormScheduled, closeFormDate, limitSubmissions, submissionLimit, closedFormMessage, closedMessageText, deadlineAlertEnabled, primaryMemberId, assignmentDueAt, serializeWrite, persistBlocks]);
 
@@ -2789,7 +2804,9 @@ export function NovoChecklistPage() {
     if (!user) return;
     
     const timer = setTimeout(() => {
-      if (isSavingRef.current) return;
+      // 5C.3.3-B.2: se um save está em voo, não descarta — marca pendente e
+      // coalesce; o save atual executa UM autosave posterior no seu finally.
+      if (!pendingAutosaveCoalescer.onTick(isSavingRef.current)) return;
       
       // Only auto-save if there's actual content AND a slash command has been used (per user request)
       // or if it already has an ID (meaning it was already created as draft)
@@ -2956,7 +2973,7 @@ export function NovoChecklistPage() {
       getBlocks: () => blocksRef.current,
       persistBlocks,
       compilePolicy: compileCameraPolicy,
-      applyBlocks: (nextBlocks) => setBlocks(nextBlocks as Block[]),
+      applyBlocks: (nextBlocks) => setBlocks((prev) => mergePersistedBlocksInto(prev, nextBlocks) as Block[]),
     });
   }, [currentChecklistId, persistBlocks, compileCameraPolicy]);
 
