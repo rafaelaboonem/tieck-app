@@ -248,8 +248,9 @@ describe('CameraBlockEditor — wiring do save autoritativo (5C.3.3-B)', () => {
     fireEvent.change(screen.getByDisplayValue('Pergunta antiga'), { target: { value: 'Pergunta nova' } });
     fireEvent.click(screen.getByText('Salvar bloco'));
 
-    // mesmo após a falha, a revalidação pendente mantém o teste bloqueado
+    // mesmo após a falha, a revalidação pendente mantém o teste bloqueado e o
+    // painel mostra o erro fail-closed (5C.3.3-C) em vez do estado de atualização
     await waitFor(() => expect(testButton()).toBeDisabled());
-    expect(screen.queryByText(/atualizando a verificação da câmera/i)).not.toBeNull();
+    expect(screen.queryByText(/não foi possível atualizar a verificação/i)).not.toBeNull();
   });
 });

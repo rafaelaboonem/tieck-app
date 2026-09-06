@@ -57,6 +57,7 @@ describe('CameraSettingsPanel', () => {
         onClose={mockOnClose}
         onSave={mockOnSave}
         isCompiling={false}
+        syncFailed={false}
       />
     );
 
@@ -73,6 +74,7 @@ describe('CameraSettingsPanel', () => {
         onClose={mockOnClose}
         onSave={mockOnSave}
         isCompiling={false}
+        syncFailed={false}
       />
     );
 
@@ -90,6 +92,7 @@ describe('CameraSettingsPanel', () => {
         onClose={mockOnClose}
         onSave={mockOnSave}
         isCompiling={false}
+        syncFailed={false}
       />
     );
 
@@ -113,6 +116,7 @@ describe('CameraSettingsPanel', () => {
         onClose={mockOnClose}
         onSave={mockOnSave}
         isCompiling={false}
+        syncFailed={false}
       />
     );
 

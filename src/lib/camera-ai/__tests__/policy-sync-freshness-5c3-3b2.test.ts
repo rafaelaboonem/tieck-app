@@ -60,7 +60,7 @@ function makePageLikeDb(initialBlocks: any[]) {
     maxInFlight = Math.max(maxInFlight, inFlight);
     if (gates[callIndex]) await gates[callIndex].promise;
     persisted.splice(0, persisted.length, ...nextBlocks);
-    blocksRef.current = mergePersistedBlocksInto(blocksRef.current, nextBlocks);
+    blocksRef.current = await mergePersistedBlocksInto(blocksRef.current, nextBlocks);
     inFlight--;
     log.push(`sync:end#${callIndex}`);
     return true;
@@ -83,23 +83,23 @@ function makePageLikeDb(initialBlocks: any[]) {
 }
 
 describe('mergePersistedBlocksInto (5C.3.3-B.2)', () => {
-  it('payload persistido é autoritativo para o bloco camera', () => {
+  it('payload persistido é autoritativo para o bloco camera com a MESMA pergunta', async () => {
     const current = [cameraBlock('A', 'd', undefined, true)];
     const persisted = [{ ...current[0], cameraAiPolicy: { version: 1 } as any, cameraAiNeedsRevalidation: false }];
-    const merged = mergePersistedBlocksInto(current, persisted);
+    const merged = await mergePersistedBlocksInto(current, persisted);
     expect(merged[0].cameraAiNeedsRevalidation).toBe(false);
     expect(merged[0].cameraAiPolicy).toEqual({ version: 1 });
   });
 
-  it('bloco não-camera editado durante a persistência (objeto novo) é preservado', () => {
+  it('bloco não-camera editado durante a persistência (objeto novo) é preservado', async () => {
     const textOld = { id: 't1', type: 'text', value: 'original' };
     const textNew = { id: 't1', type: 'text', value: 'editado' };
-    const merged = mergePersistedBlocksInto([textNew], [textOld]);
+    const merged = await mergePersistedBlocksInto([textNew], [textOld]);
     expect(merged[0].value).toBe('editado');
   });
 
-  it('bloco ausente do payload persistido é preservado', () => {
-    const merged = mergePersistedBlocksInto(
+  it('bloco ausente do payload persistido é preservado', async () => {
+    const merged = await mergePersistedBlocksInto(
       [{ id: 't1', type: 'text', value: 'novo' }],
       [{ id: 'b1', type: 'camera' }]
     );
@@ -123,7 +123,7 @@ describe('autosave durante persist-policy — late-bind (5C.3.3-B.2)', () => {
       getBlocks: () => db.blocksRef.current,
       persistBlocks: db.persistBlocks,
       compilePolicy: async () => ({ ok: true, policy }),
-      applyBlocks: (next) => { db.blocksRef.current = mergePersistedBlocksInto(db.blocksRef.current, next); },
+      applyBlocks: async (next) => { db.blocksRef.current = await mergePersistedBlocksInto(db.blocksRef.current, next); },
     });
 
     // aguarda a SEGUNDA persistência (persist-policy) ficar em voo
@@ -168,7 +168,7 @@ describe('autosave durante persist-policy — late-bind (5C.3.3-B.2)', () => {
       getBlocks: () => db.blocksRef.current,
       persistBlocks: db.persistBlocks,
       compilePolicy: async () => ({ ok: true, policy }),
-      applyBlocks: (next) => { db.blocksRef.current = mergePersistedBlocksInto(db.blocksRef.current, next); },
+      applyBlocks: async (next) => { db.blocksRef.current = await mergePersistedBlocksInto(db.blocksRef.current, next); },
     });
 
     await vi.waitFor(() => expect(db.log.filter((l) => l.startsWith('sync:start')).length).toBe(2));
@@ -199,7 +199,7 @@ describe('autosave durante persist-policy — late-bind (5C.3.3-B.2)', () => {
       getBlocks: () => db.blocksRef.current,
       persistBlocks: db.persistBlocks,
       compilePolicy: async () => ({ ok: true, policy }),
-      applyBlocks: (next) => { db.blocksRef.current = mergePersistedBlocksInto(db.blocksRef.current, next); },
+      applyBlocks: async (next) => { db.blocksRef.current = await mergePersistedBlocksInto(db.blocksRef.current, next); },
     });
 
     await vi.waitFor(() => expect(db.log.filter((l) => l.startsWith('sync:start')).length).toBe(1));

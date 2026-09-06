@@ -49,6 +49,7 @@ describe('CameraSettingsPanel', () => {
     isCompiling: false,
     isCameraPolicyReady: true,
     cameraAiNeedsRevalidation: false,
+    syncFailed: false,
     checklistId: 'checklist-123'
   };
 

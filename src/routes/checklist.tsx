@@ -301,6 +301,9 @@ export function CameraBlockEditor({
 }) {
   const [isCompiling, setIsCompiling] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  // 5C.3.3-C: estado mínimo de erro da sync (updating/failed/ready). Uma nova
+  // tentativa limpa o erro ao começar; continua fail-closed até o sucesso.
+  const [syncFailed, setSyncFailed] = useState(false);
   const compileTimeoutRef = useRef<any>(null);
   const syncInFlightRef = useRef(false);
   
@@ -344,10 +347,14 @@ export function CameraBlockEditor({
 
     syncInFlightRef.current = true;
     setIsCompiling(true);
+    setSyncFailed(false); // nova tentativa limpa o erro (5C.3.3-C)
     try {
-      await onSyncCameraPolicy(blockId);
+      const ok = await onSyncCameraPolicy(blockId);
+      // false = falha (compile/persist/stale sem recuperação) → fail-closed
+      setSyncFailed(ok === false);
     } catch (err) {
       console.error('[Camera AI] authoritative sync failed:', err);
+      setSyncFailed(true);
     } finally {
       syncInFlightRef.current = false;
       setIsCompiling(false);
@@ -377,10 +384,14 @@ export function CameraBlockEditor({
     if (!onSyncCameraPolicy || syncInFlightRef.current) return;
     syncInFlightRef.current = true;
     setIsCompiling(true);
+    setSyncFailed(false); // nova tentativa limpa o erro (5C.3.3-C)
     try {
-      await onSyncCameraPolicy(block.id, { ...patch, cameraAiNeedsRevalidation: needsRevalidation });
+      const ok = await onSyncCameraPolicy(block.id, { ...patch, cameraAiNeedsRevalidation: needsRevalidation });
+      // false = falha (compile/persist/stale sem recuperação) → fail-closed
+      setSyncFailed(ok === false);
     } catch (err) {
       console.error('[Camera AI] authoritative sync failed:', err);
+      setSyncFailed(true);
     } finally {
       syncInFlightRef.current = false;
       setIsCompiling(false);
@@ -443,6 +454,7 @@ export function CameraBlockEditor({
         isCompiling={isCompiling}
         isCameraPolicyReady={isCameraPolicyReady}
         cameraAiNeedsRevalidation={block.cameraAiNeedsRevalidation === true}
+        syncFailed={syncFailed}
         onSave={handleBlockSave}
         checklistId={currentChecklistId || ""}
       />
@@ -1025,6 +1037,13 @@ export function NovoChecklistPage() {
   // que acabou de terminar, para não gravar title/settings/theme antigos.
   const latestSaveDispatch = useRef(createLatestSaveDispatch<SaveChecklistFn>()).current;
 
+  // 5C.3.3-C: re-sync da versão MAIS NOVA da pergunta, coalescido e por bloco.
+  // Se a pergunta mudar durante uma sync em voo (operação stale), UMA nova
+  // sync é encadeada para a pergunta atual — nunca duas syncs simultâneas e
+  // nunca uma sync por versão intermediária (A→B→C vira no máximo 1 re-run).
+  const cameraResyncPendingRef = useRef<Record<string, boolean>>({});
+  const cameraResyncRunningRef = useRef<Record<string, boolean>>({});
+
   // 5C.3.3-B.1: uma única disciplina de serialização para TODOS os writers de
   // `checklists.blocks` (autosave/saveChecklist e camera policy sync). Nunca há
   // dois writers em voo ao mesmo tempo; o writer antigo sempre termina antes.
@@ -1057,7 +1076,9 @@ export function NovoChecklistPage() {
         // 5C.3.3-B.2: ref autoritativa atualizada SINCRONAMENTE, dentro do op
         // serializado — antes de liberar a fila para o próximo writer. O merge
         // por bloco preserva edições mais novas fora do payload persistido.
-        blocksRef.current = mergePersistedBlocksInto(blocksRef.current, nextBlocks);
+        // 5C.3.3-C: o merge também protege a câmera — uma persistência de
+        // pergunta ANTIGA nunca clobbera a pergunta local mais nova.
+        blocksRef.current = await mergePersistedBlocksInto(blocksRef.current, nextBlocks);
         return true;
       } catch (err) {
         console.error("[Camera AI] persist blocks threw:", err);
@@ -2985,15 +3006,47 @@ export function NovoChecklistPage() {
 
   // 5C.3.3-B: authoritative save → compile → persist policy sequence for one
   // camera block. Passed to CameraBlockEditor as onSyncCameraPolicy.
+  // 5C.3.3-C: se a pergunta mudar durante o voo (operação stale — onStale),
+  // uma nova sync é encadeada para a versão MAIS RECENTE, com estado atual
+  // (sem o nextBlock da chamada original, que é da pergunta antiga).
   const handleCameraBlockSync = useCallback((blockId: string, nextBlock?: any): Promise<boolean> => {
     const targetId = currentChecklistId || sessionChecklistIdRef.current;
     if (!targetId) return Promise.resolve(false);
-    return syncCameraBlockPolicy(blockId, targetId, nextBlock, {
-      getBlocks: () => blocksRef.current,
-      persistBlocks,
-      compilePolicy: compileCameraPolicy,
-      applyBlocks: (nextBlocks) => setBlocks((prev) => mergePersistedBlocksInto(prev, nextBlocks) as Block[]),
-    });
+
+    const runSync = async (useRequestedBlock: boolean): Promise<boolean> => {
+      if (cameraResyncRunningRef.current[blockId]) {
+        // nunca duas syncs simultâneas para o mesmo bloco — coalesce
+        cameraResyncPendingRef.current[blockId] = true;
+        return false;
+      }
+      cameraResyncRunningRef.current[blockId] = true;
+      try {
+        return await syncCameraBlockPolicy(blockId, targetId, useRequestedBlock ? nextBlock : undefined, {
+          getBlocks: () => blocksRef.current,
+          persistBlocks,
+          compilePolicy: compileCameraPolicy,
+          applyBlocks: async (nextBlocks) => {
+            // 5C.3.3-C: merge também protege a ref autoritativa — a persistência
+            // de uma pergunta antiga nunca clobbera a edição local mais nova.
+            const merged = await mergePersistedBlocksInto(blocksRef.current, nextBlocks);
+            blocksRef.current = merged;
+            setBlocks(merged as Block[]);
+          },
+          onStale: () => {
+            cameraResyncPendingRef.current[blockId] = true;
+          },
+        });
+      } finally {
+        cameraResyncRunningRef.current[blockId] = false;
+        if (cameraResyncPendingRef.current[blockId]) {
+          cameraResyncPendingRef.current[blockId] = false;
+          // re-sync com a pergunta ATUAL (sem o nextBlock antigo)
+          return runSync(false);
+        }
+      }
+    };
+
+    return runSync(true);
   }, [currentChecklistId, persistBlocks, compileCameraPolicy]);
 
   const removeBlock = useCallback((id: string) => {

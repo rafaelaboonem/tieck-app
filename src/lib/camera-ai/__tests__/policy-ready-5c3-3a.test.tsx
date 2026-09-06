@@ -85,6 +85,7 @@ describe('CameraSettingsPanel — botão "Testar verificação" (5C.3.3-A)', () 
     isCompiling: false,
     isCameraPolicyReady: true,
     cameraAiNeedsRevalidation: false,
+    syncFailed: false,
     checklistId: 'c1',
   };
 

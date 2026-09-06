@@ -28,11 +28,13 @@ interface CameraSettingsPanelProps {
   isCameraPolicyReady: boolean;
   /** Block-level flag set when the saved question no longer matches the saved policy. */
   cameraAiNeedsRevalidation: boolean;
+  /** 5C.3.3-C: última tentativa de sync falhou (compile/persist) → mensagem de erro fail-closed. */
+  syncFailed: boolean;
   checklistId: string;
 }
 
 
-export function CameraSettingsPanel({ block, isOpen, onClose, onSave, isCompiling, isCameraPolicyReady, cameraAiNeedsRevalidation, checklistId }: CameraSettingsPanelProps) {
+export function CameraSettingsPanel({ block, isOpen, onClose, onSave, isCompiling, isCameraPolicyReady, cameraAiNeedsRevalidation, syncFailed, checklistId }: CameraSettingsPanelProps) {
   const [draft, setDraft] = useState<CameraDraft>({
     title: block.title || block.subtitle || "",
     description: block.description || "",
@@ -415,7 +417,11 @@ export function CameraSettingsPanel({ block, isOpen, onClose, onSave, isCompilin
               {hasChanges ? (
                 <span className="text-[10px] text-neutral-400 font-normal italic">Salve as alterações antes de testar</span>
               ) : isPolicyPendingUpdate ? (
-                <span className="text-[10px] text-neutral-400 font-normal italic">Atualizando a verificação da câmera...</span>
+                syncFailed ? (
+                  <span className="text-[10px] text-red-500 font-normal italic">Não foi possível atualizar a verificação. Tente salvar novamente.</span>
+                ) : (
+                  <span className="text-[10px] text-neutral-400 font-normal italic">Atualizando a verificação da câmera...</span>
+                )
               ) : null}
             </button>
           </div>
