@@ -365,6 +365,26 @@ async function describeReferences(references: (Decoded & { position: number })[]
 }
 
 async function describeReference(reference: Decoded, question: string, meter: UsageEntry[]): Promise<string | null> {
+  try {
+    const payload = await cfMetered(meter, "reference_summary", "google_gemini", {
+      action: "describe-multimodal",
+      images: [toDataUrl(reference)],
+      prompt: `Analyze this reference photo for a quality checklist standard.
+
+      Summarize the visual standard defined by this photo.
+      Question context: "${question}"
+
+      Focus on permanent visual features, correct state, and what specifically must be checked.
+      Be concise.`
+    });
+
+    const text = extractModelText(payload).trim();
+    return text ? text.slice(0, 600) : null;
+  } catch (err) {
+    console.error(`[lab] describeReference failed:`, err);
+    return null;
+  }
+}
 
 // ---------------- localização visual (detect / point / query) ----------------
 type Box = { x: number; y: number; w: number; h: number };
