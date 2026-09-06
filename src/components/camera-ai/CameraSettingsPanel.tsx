@@ -24,11 +24,15 @@ interface CameraSettingsPanelProps {
   onClose: () => void;
   onSave: (patch: CameraBlockPatch) => void;
   isCompiling: boolean;
+  /** Derived by CameraBlockEditor: policy exists, schema-valid, hash matches the current question, not compiling, not flagged for revalidation. */
+  isCameraPolicyReady: boolean;
+  /** Block-level flag set when the saved question no longer matches the saved policy. */
+  cameraAiNeedsRevalidation: boolean;
   checklistId: string;
 }
 
 
-export function CameraSettingsPanel({ block, isOpen, onClose, onSave, isCompiling, checklistId }: CameraSettingsPanelProps) {
+export function CameraSettingsPanel({ block, isOpen, onClose, onSave, isCompiling, isCameraPolicyReady, cameraAiNeedsRevalidation, checklistId }: CameraSettingsPanelProps) {
   const [draft, setDraft] = useState<CameraDraft>({
     title: block.title || block.subtitle || "",
     description: block.description || "",
@@ -40,6 +44,14 @@ export function CameraSettingsPanel({ block, isOpen, onClose, onSave, isCompilin
 
   const [isTestModalOpen, setIsTestModalOpen] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
+
+  // 5C.3.3-A: fail-closed test barrier. "Testar verificação" stays disabled while
+  // the current policy cannot be proven to match the current question: draft
+  // changes, compile in flight, revalidation pending, or policy missing/stale/
+  // schema-invalid (the latter three are collapsed into isCameraPolicyReady,
+  // which CameraBlockEditor derives from the canonical question hash).
+  const isPolicyPendingUpdate = isCompiling || cameraAiNeedsRevalidation || !isCameraPolicyReady;
+  const isTestDisabled = hasChanges || isPolicyPendingUpdate;
 
   useEffect(() => {
     if (isOpen) {
@@ -394,17 +406,18 @@ export function CameraSettingsPanel({ block, isOpen, onClose, onSave, isCompilin
             <button onClick={handleSave} disabled={!hasChanges} className="w-full py-3 bg-pink-500 text-white rounded-xl font-bold text-sm disabled:opacity-50">Salvar bloco</button>
             <button 
               onClick={() => setIsTestModalOpen(true)} 
-              disabled={hasChanges || isCompiling}
+              disabled={isTestDisabled}
               className="w-full py-3 bg-white text-neutral-700 border rounded-xl font-bold text-sm flex flex-col items-center justify-center gap-0.5 disabled:opacity-50"
             >
               <div className="flex items-center gap-2">
                 <Play className="w-3.5 h-3.5 fill-current" /> Testar verificação
               </div>
-              {(hasChanges || isCompiling) && (
+              {hasChanges ? (
                 <span className="text-[10px] text-neutral-400 font-normal italic">Salve as alterações antes de testar</span>
-              )}
+              ) : isPolicyPendingUpdate ? (
+                <span className="text-[10px] text-neutral-400 font-normal italic">Atualizando a verificação da câmera...</span>
+              ) : null}
             </button>
-
           </div>
         </SheetContent>
       </Sheet>

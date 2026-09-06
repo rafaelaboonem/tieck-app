@@ -3,6 +3,7 @@ import {
   useRef, 
   useState, 
   useCallback,
+  useMemo,
   lazy, 
   Suspense
 } from "react";
@@ -259,6 +260,7 @@ function CameraBlockPreview({ textColor, blockId }: { textColor?: string; blockI
 }
 
 import { CameraVerificationPolicyV1 } from "@/server/camera-ai/schema";
+import { CameraVerificationPolicyV1Schema } from "@/lib/camera-ai/schema.functions";
 
 import { CameraBlockCard } from "@/components/camera-ai/CameraBlockCard";
 import { CameraSettingsPanel } from "@/components/camera-ai/CameraSettingsPanel";
@@ -291,6 +293,32 @@ export function CameraBlockEditor({
   const camTitle = String(block.title || "");
   const camDescription = String(block.description ?? "");
   const policy = block.cameraAiPolicy as CameraVerificationPolicyV1 | undefined;
+
+  // 5C.3.3-A: fail-closed policy readiness barrier.
+  // SHA-256 of the current question (title + description), held in state so the
+  // readiness check below is synchronous and can gate "Testar verificação".
+  const [currentQuestionHash, setCurrentQuestionHash] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    hashQuestion(camTitle, camDescription).then((hash) => {
+      if (!cancelled) setCurrentQuestionHash(hash);
+    });
+    return () => { cancelled = true; };
+  }, [camTitle, camDescription]);
+
+  // The policy is ready only when every fail-closed condition holds:
+  // - policy exists and has a usable local shape (schema-valid);
+  // - it is not flagged for revalidation;
+  // - no compilation is in flight;
+  // - its questionHash matches the canonical hash of the current question.
+  const isCameraPolicyReady = useMemo(() => {
+    if (!policy) return false;
+    if (!CameraVerificationPolicyV1Schema.safeParse(policy).success) return false;
+    if (block.cameraAiNeedsRevalidation === true) return false;
+    if (isCompiling) return false;
+    if (currentQuestionHash === null) return false;
+    return policy.questionHash === currentQuestionHash;
+  }, [policy, block.cameraAiNeedsRevalidation, isCompiling, currentQuestionHash]);
 
   const triggerCompile = async (checklistId: string, blockId: string) => {
     if (isCompiling) return;
@@ -390,6 +418,8 @@ export function CameraBlockEditor({
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
         isCompiling={isCompiling}
+        isCameraPolicyReady={isCameraPolicyReady}
+        cameraAiNeedsRevalidation={block.cameraAiNeedsRevalidation === true}
         onSave={(patch) => updateBlock(block.id, patch)}
         checklistId={currentChecklistId || ""}
       />

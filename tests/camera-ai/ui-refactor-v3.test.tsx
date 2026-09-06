@@ -62,6 +62,8 @@ describe('CameraSettingsPanel UI & Lifecycle', () => {
     onClose: vi.fn(),
     onSave: vi.fn(),
     isCompiling: false,
+    isCameraPolicyReady: true,
+    cameraAiNeedsRevalidation: false,
     checklistId: 'checklist-123'
   };
 
