@@ -131,6 +131,14 @@ import { syncCameraBlockPolicy } from "@/lib/camera-ai/policy-sync";
 import { createWriteSerializer } from "@/lib/camera-ai/write-serializer";
 import { createAutosaveCoalescer } from "@/lib/camera-ai/autosave-coalescer";
 import { mergePersistedBlocksInto } from "@/lib/camera-ai/blocks-freshness";
+import { createLatestSaveDispatch } from "@/lib/camera-ai/latest-save-dispatch";
+
+/**
+ * 5C.3.3-B.3 — assinatura do saveChecklist da página, usada pelo dispatch de
+ * autosave pendente (latest-save-dispatch.ts) para sempre executar pela
+ * closure MAIS RECENTE da renderização.
+ */
+type SaveChecklistFn = (currentUser?: any, isPublishedOverride?: boolean, silent?: boolean) => Promise<void>;
 function CameraBlockPreview({ textColor, blockId }: { textColor?: string; blockId?: string }) {
   const [dataUrl, setDataUrl] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -1011,6 +1019,11 @@ export function NovoChecklistPage() {
   // 5C.3.3-B.2: autosave solicitado durante outro save não é perdido — é
   // marcado pendente e coalescido em UM save posterior com estado recente.
   const pendingAutosaveCoalescer = useRef(createAutosaveCoalescer()).current;
+
+  // 5C.3.3-B.3: o autosave coalescido é sempre executado pela closure MAIS
+  // RECENTE do saveChecklist (nova renderização) — nunca pela closure do save
+  // que acabou de terminar, para não gravar title/settings/theme antigos.
+  const latestSaveDispatch = useRef(createLatestSaveDispatch<SaveChecklistFn>()).current;
 
   // 5C.3.3-B.1: uma única disciplina de serialização para TODOS os writers de
   // `checklists.blocks` (autosave/saveChecklist e camera policy sync). Nunca há
@@ -2664,14 +2677,20 @@ export function NovoChecklistPage() {
       isSavingRef.current = false;
       if (!silent) setIsPublishing(false);
       // 5C.3.3-B.2: autosave solicitado durante este save → UM save coalescido
-      // com o estado mais recente. Nunca perdido; nunca em loop: o flag é
-      // consumido aqui e só renasce com um timer real durante o próximo save.
-      if (pendingAutosaveCoalescer.consumePending()) {
-        const targetId = checklistId || sessionChecklistIdRef.current;
-        if (user) void saveChecklist(user, targetId ? undefined : false, true);
-      }
+      // com o estado mais recente. Nunca perdido; nunca em loop: a pendência é
+      // consumida aqui e só renasce com um timer real durante o próximo save.
+      // 5C.3.3-B.3: esse autosave é executado pela closure MAIS RECENTE do
+      // saveChecklist (nova renderização) — não pela closure deste save — para
+      // que title/settings/theme/etc. venham da versão atual da UI.
+      const targetId = checklistId || sessionChecklistIdRef.current;
+      if (user) latestSaveDispatch.finishSave(pendingAutosaveCoalescer, user, targetId ? undefined : false, true);
     }
   }, [user, title, blocks, theme, font, bgColor, textColor, accentColor, pageWidth, baseFontSize, language, redirectOnCompletion, redirectUrl, progressBar, btnBgColor, btnTextColor, btnText, btnIcon, btnIconPosition, checklistId, selfEmailNotif, respondentEmailNotif, respondentEmailFieldId, respondentEmailSubject, respondentEmailMessage, includeResponsesInEmail, ownerEmailAddress, dataRetention, retentionDays, partialSubmissions, checklistBranding, thankYouTitle, thankYouDescription, categoryParam, customDomain, passwordProtect, formPassword, closeForm, closeFormScheduled, closeFormDate, limitSubmissions, submissionLimit, closedFormMessage, closedMessageText, deadlineAlertEnabled, primaryMemberId, assignmentDueAt, serializeWrite, persistBlocks]);
+
+  // 5C.3.3-B.3: a cada renderização, o dispatch passa a apontar para a closure
+  // MAIS RECENTE do saveChecklist — o autosave coalescido (disparado no
+  // `finally` de um save em voo) nunca roda pela closure antiga.
+  latestSaveDispatch.registerLatestSave(saveChecklist);
 
   const loadDeadlineAssignmentState = async () => {
     if (!settingsChecklistId) {
