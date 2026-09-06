@@ -127,6 +127,7 @@ const SubmissionsTab = lazy(() => import("@/components/SubmissionsTab").then(m =
 import { BlockRenderer, INTERACTIVE_BLOCK_TYPES } from "@/components/BlockRenderer";
 import { ensureCameraBlockIds, withNewCameraBlockId, extractCameraQuestions } from "@/lib/camera-blocks";
 import { hashQuestion } from "@/lib/camera-ai/hashing";
+import { syncCameraBlockPolicy } from "@/lib/camera-ai/policy-sync";
 function CameraBlockPreview({ textColor, blockId }: { textColor?: string; blockId?: string }) {
   const [dataUrl, setDataUrl] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -273,7 +274,8 @@ export function CameraBlockEditor({
   removeBlock, 
   setActiveBlockId, 
   textColor, 
-  textareaRefs 
+  textareaRefs, 
+  onSyncCameraPolicy 
 }: { 
   block: any; 
   isActive: boolean; 
@@ -283,11 +285,13 @@ export function CameraBlockEditor({
   setActiveBlockId: (id: string | null) => void; 
   textColor: string; 
   textareaRefs: React.MutableRefObject<Record<string, HTMLElement | null>>;
+  // 5C.3.3-B: authoritative sync (persist question → compile → persist policy).
+  onSyncCameraPolicy?: (blockId: string, nextBlock?: any) => Promise<boolean>;
 }) {
   const [isCompiling, setIsCompiling] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const compileTimeoutRef = useRef<any>(null);
-  const requestedHashRef = useRef<string | null>(null);
+  const syncInFlightRef = useRef(false);
   
   // Canonical title/description mapping
   const camTitle = String(block.title || "");
@@ -320,46 +324,45 @@ export function CameraBlockEditor({
     return policy.questionHash === currentQuestionHash;
   }, [policy, block.cameraAiNeedsRevalidation, isCompiling, currentQuestionHash]);
 
+  // 5C.3.3-B: auto-recovery path (e.g. stale block loaded from DB). Also routes
+  // through the authoritative sync — the old local-only update is gone because
+  // it could make the UI ready before the DB had the policy.
   const triggerCompile = async (checklistId: string, blockId: string) => {
-    if (isCompiling) return;
-    
-    // Capture the exact hash we are requesting for
-    const currentHash = await hashQuestion(camTitle, camDescription);
-    requestedHashRef.current = currentHash;
-    
+    if (isCompiling || syncInFlightRef.current) return;
+    if (!onSyncCameraPolicy) return;
+
+    syncInFlightRef.current = true;
     setIsCompiling(true);
     try {
-      const token = (await supabase.auth.getSession()).data.session?.access_token;
-      if (!token) throw new Error('No token');
-      
-      const res = await fetch('/api/camera-ai/compile-policy', {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ checklistId, blockId })
-      });
-      const data = await res.json();
-      
-      // Validar se a resposta ainda é válida para a pergunta atual
-      if (data.ok && data.policy) {
-        const nowHash = await hashQuestion(camTitle, camDescription);
-        
-        // 1. A resposta deve corresponder ao que pedimos
-        // 2. O bloco não pode ter mudado enquanto a rede trabalhava
-        if (data.policy.questionHash === currentHash && currentHash === nowHash) {
-          updateBlock(blockId, { 
-            cameraAiPolicy: data.policy,
-            cameraAiNeedsRevalidation: false
-          });
-        } else {
-          console.warn('[Camera AI] Stale compile response discarded due to text change.');
-        }
-      }
+      await onSyncCameraPolicy(blockId);
     } catch (err) {
-      console.error('Failed to compile policy:', err);
+      console.error('[Camera AI] authoritative sync failed:', err);
     } finally {
+      syncInFlightRef.current = false;
+      setIsCompiling(false);
+    }
+  };
+
+  // 5C.3.3-B: "Salvar bloco" — update local state, flag revalidation immediately
+  // when the question diverges, then run the authoritative persistence chain.
+  const handleBlockSave = async (patch: any) => {
+    const nextTitle = String(patch.title ?? block.title ?? "");
+    const nextDescription = String(patch.description ?? block.description ?? "");
+    const nextPolicy = patch.cameraAiPolicy as CameraVerificationPolicyV1 | undefined;
+    const nextHash = await hashQuestion(nextTitle, nextDescription);
+    const needsRevalidation = !nextPolicy || nextPolicy.questionHash !== nextHash;
+
+    updateBlock(block.id, { ...patch, cameraAiNeedsRevalidation: needsRevalidation });
+
+    if (!onSyncCameraPolicy || syncInFlightRef.current) return;
+    syncInFlightRef.current = true;
+    setIsCompiling(true);
+    try {
+      await onSyncCameraPolicy(block.id, { ...patch, cameraAiNeedsRevalidation: needsRevalidation });
+    } catch (err) {
+      console.error('[Camera AI] authoritative sync failed:', err);
+    } finally {
+      syncInFlightRef.current = false;
       setIsCompiling(false);
     }
   };
@@ -420,7 +423,7 @@ export function CameraBlockEditor({
         isCompiling={isCompiling}
         isCameraPolicyReady={isCameraPolicyReady}
         cameraAiNeedsRevalidation={block.cameraAiNeedsRevalidation === true}
-        onSave={(patch) => updateBlock(block.id, patch)}
+        onSave={handleBlockSave}
         checklistId={currentChecklistId || ""}
       />
     </div>
@@ -1394,6 +1397,10 @@ export function NovoChecklistPage() {
   });
   const [history, setHistory] = useState<Block[][]>([]);
   const [activeBlockId, setActiveBlockId] = useState<string | null>(null);
+
+  // Latest committed blocks for authoritative camera syncs (avoids stale closures).
+  const blocksRef = useRef<Block[]>(blocks);
+  useEffect(() => { blocksRef.current = blocks; }, [blocks]);
  
   // Auto-save drafts to localStorage only if NOT a persistent checklist from DB
   useEffect(() => {
@@ -2865,6 +2872,61 @@ export function NovoChecklistPage() {
       return newBlocks;
     });
   }, []);
+
+  // 5C.3.3-B: persist the blocks column directly (same pattern the publish flow
+  // uses after compiling policies). Awaits the REAL Supabase confirmation.
+  const persistBlocks = useCallback(async (nextBlocks: any[]): Promise<boolean> => {
+    const targetId = currentChecklistId || sessionChecklistIdRef.current;
+    if (!targetId) return false;
+    try {
+      const { error } = await supabase
+        .from("checklists")
+        .update({ blocks: nextBlocks })
+        .eq("id", targetId);
+      if (error) {
+        console.error("[Camera AI] persist blocks failed:", error);
+        return false;
+      }
+      return true;
+    } catch (err) {
+      console.error("[Camera AI] persist blocks threw:", err);
+      return false;
+    }
+  }, [currentChecklistId]);
+
+  // 5C.3.3-B: compile against the PERSISTED checklist (never against client state).
+  const compileCameraPolicy = useCallback(async (checklistId: string, blockId: string) => {
+    try {
+      const token = (await supabase.auth.getSession()).data.session?.access_token;
+      if (!token) return { ok: false } as const;
+      const res = await fetch('/api/camera-ai/compile-policy', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ checklistId, blockId })
+      });
+      const data = await res.json();
+      return { ok: !!data.ok, policy: data.policy };
+    } catch (err) {
+      console.error('[Camera AI] compile-policy failed:', err);
+      return { ok: false } as const;
+    }
+  }, []);
+
+  // 5C.3.3-B: authoritative save → compile → persist policy sequence for one
+  // camera block. Passed to CameraBlockEditor as onSyncCameraPolicy.
+  const handleCameraBlockSync = useCallback((blockId: string, nextBlock?: any): Promise<boolean> => {
+    const targetId = currentChecklistId || sessionChecklistIdRef.current;
+    if (!targetId) return Promise.resolve(false);
+    return syncCameraBlockPolicy(blockId, targetId, nextBlock, {
+      getBlocks: () => blocksRef.current,
+      persistBlocks,
+      compilePolicy: compileCameraPolicy,
+      applyBlocks: (nextBlocks) => setBlocks(nextBlocks as Block[]),
+    });
+  }, [currentChecklistId, persistBlocks, compileCameraPolicy]);
 
   const removeBlock = useCallback((id: string) => {
     setBlocks((prev) => {
@@ -4739,6 +4801,7 @@ export function NovoChecklistPage() {
                         setActiveBlockId={setActiveBlockId}
                         textColor={textColor}
                         textareaRefs={textareaRefs}
+                        onSyncCameraPolicy={handleCameraBlockSync}
                       />
                     );
                   }
