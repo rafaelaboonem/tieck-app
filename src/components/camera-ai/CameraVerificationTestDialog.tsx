@@ -101,7 +101,12 @@ export function CameraVerificationTestDialog({ isOpen, onClose, blockId, checkli
         if (res.status === 401) throw new Error("401");
         if (res.status === 403) throw new Error("403");
         if (res.status === 429) throw new Error("429");
-        if (errorData.code === "invalid_policy" || errorData.code === "checklist_update_required") throw new Error("policy_error");
+        // 5C.3.3-D: os códigos retornados pelo servidor são preservados e
+        // tratados SEPARADAMENTE — invalid_policy (configuração da pergunta
+        // inválida) vs checklist_update_required (verificação ainda
+        // atualizando). Nunca colapsados em um único erro genérico.
+        if (errorData.code === "invalid_policy") throw new Error("invalid_policy");
+        if (errorData.code === "checklist_update_required") throw new Error("checklist_update_required");
         throw new Error("tech_failure");
       }
 
@@ -115,7 +120,9 @@ export function CameraVerificationTestDialog({ isOpen, onClose, blockId, checkli
         "401": "Sessão expirada. Faça login novamente.",
         "403": "Você não tem permissão para testar este checklist.",
         "429": "Limite de testes atingido. Tente novamente em 10 minutos.",
-        "policy_error": "Configuração da política inválida ou desatualizada.",
+        // 5C.3.3-D: mensagens específicas por código do servidor.
+        "invalid_policy": "Não foi possível validar a configuração desta pergunta. Salve o bloco novamente.",
+        "checklist_update_required": "Esta verificação foi alterada e ainda não terminou de atualizar. Aguarde a atualização antes de testar.",
         "tech_failure": "Falha técnica ao processar a IA. Tente novamente."
       };
       toast.error(messages[errorKey] || messages["tech_failure"]);
