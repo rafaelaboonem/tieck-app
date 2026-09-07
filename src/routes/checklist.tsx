@@ -926,6 +926,11 @@ export function NovoChecklistPage() {
     newChecklistWorkspaceId: effectiveNewChecklistWorkspaceId,
   });
   const rbacWorkspaceId = checklistWorkspaceForResources;
+  // 5E.0.2.2: workspace-only deadline UI exists only when the checklist has a
+  // real applicable workspace. Visibility ≠ permission: canManageWorkspace still
+  // decides whether the controls are editable (Viewer in a workspace checklist
+  // still sees the section, disabled).
+  const hasWorkspaceResources = !!checklistWorkspaceForResources;
   const { canManage: canManageWorkspace } = useWorkspaceRBAC(rbacWorkspaceId);
   const { canManageChecklist } = resolveChecklistManagementAccess({
     authUserId: authUser?.id,
@@ -1694,6 +1699,11 @@ export function NovoChecklistPage() {
       // the checklist's real workspace. A personal existing checklist has no
       // workspace → no member fetch from the visual context.
       const wsId = checklistWorkspaceForResources;
+      if (!wsId) {
+        // 5E.0.2.2: switching to a checklist without a real workspace must not
+        // keep stale members from a previous workspace checklist.
+        setWorkspaceMembers([]);
+      }
       if (!wsId || !user) return;
 
       // 1. Buscar membros ativos
@@ -1735,10 +1745,17 @@ export function NovoChecklistPage() {
   }, [user, checklistId, checklistMeta, currentWorkspace?.id, workspaceParam]);
 
   useEffect(() => {
-    if (isSettingsOpen && settingsActiveTab === "emails" && settingsChecklistId) {
+    // 5E.0.2.2: deadline/assignment state only loads when the checklist has a
+    // real applicable workspace — never for personal checklists.
+    if (
+      isSettingsOpen &&
+      settingsActiveTab === "emails" &&
+      settingsChecklistId &&
+      checklistWorkspaceForResources
+    ) {
       loadDeadlineAssignmentState();
     }
-  }, [settingsChecklistId, isSettingsOpen, settingsActiveTab]);
+  }, [settingsChecklistId, isSettingsOpen, settingsActiveTab, checklistWorkspaceForResources]);
 
 
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
@@ -6262,6 +6279,7 @@ export function NovoChecklistPage() {
                     )}
                   </div>
 
+                  {hasWorkspaceResources && (
                   <div className="py-6 border-b border-neutral-200">
                     <h3 className="text-sm font-semibold text-neutral-900 mb-4 uppercase tracking-wider text-[10px]">Alertas de Prazo</h3>
                     <SettingsRow
@@ -6362,6 +6380,7 @@ export function NovoChecklistPage() {
                       </div>
                     )}
                   </div>
+                  )}
                 </div>
 
                 <div className="mt-8 flex items-center justify-center gap-6">
