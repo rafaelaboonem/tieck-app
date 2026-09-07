@@ -16,6 +16,8 @@ import {
 } from "lucide-react";
 import { getAssignmentStatus, getStatusBadge } from "@/utils/assignment-status";
 import { AssignmentDeadlinePopover } from "@/components/AssignmentDeadlinePopover";
+import { ChecklistCardQuickActions } from "@/components/checklists/ChecklistCardQuickActions";
+import { buildPublicChecklistUrl } from "@/lib/checklist-links";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
 import type { WorkspaceMemberView } from "./equipe";
@@ -133,7 +135,6 @@ function SortableChecklistCard({
   onMove,
   onDelete,
   onEdit,
-  onCopyLink,
   onDuplicate,
   accentColor,
   assignments,
@@ -151,7 +152,6 @@ function SortableChecklistCard({
   onDelete: (item: Checklist) => void;
   onEdit: (id: string) => void;
   onUpdateTitle: (id: string, title: string) => void;
-  onCopyLink: () => void;
   onDuplicate: (item: Checklist) => void;
   accentColor: string;
   assignments: ChecklistAssignmentView[];
@@ -165,6 +165,23 @@ function SortableChecklistCard({
 
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState(checklist.title || "");
+  const navigate = useNavigate();
+
+  // 5E.0: link público canônico do checklist (custom_slug quando válido, senão id).
+  // Rascunho não publicado não gera link utilizável.
+  const copyPublicLink = () => {
+    if (checklist.is_published !== true) {
+      toast.error("Publicado o checklist para gerar um link público.");
+      return;
+    }
+    const url = buildPublicChecklistUrl(window.location.origin, (checklist as any).custom_slug, checklist.id);
+    if (!url) {
+      toast.error("Link indisponível: publique o checklist primeiro.");
+      return;
+    }
+    navigator.clipboard.writeText(url);
+    toast.success("Link copiado!");
+  };
 
   const {
     attributes,
@@ -382,9 +399,11 @@ function SortableChecklistCard({
 
             <DropdownMenuSeparator className="bg-neutral-800 my-1" />
 
-            <DropdownMenuItem className="gap-3 text-xs hover:bg-neutral-800 rounded-lg py-2" onClick={onCopyLink}>
-              <Link2 className="w-4 h-4" /> Copiar link
-            </DropdownMenuItem>
+            {checklist.is_published === true && (
+              <DropdownMenuItem className="gap-3 text-xs hover:bg-neutral-800 rounded-lg py-2" onClick={copyPublicLink}>
+                <Link2 className="w-4 h-4" /> Copiar link
+              </DropdownMenuItem>
+            )}
 
             <DropdownMenuItem className="gap-3 text-xs hover:bg-neutral-800 rounded-lg py-2 justify-between" onClick={() => onDuplicate(checklist)}>
               <div className="flex items-center gap-3">
@@ -433,6 +452,21 @@ function SortableChecklistCard({
         </DropdownMenu>
       </div>
 
+      {/* 5E.0: atalhos discretos no hover/focus do card (desktop) */}
+      <div
+        className="flex items-center gap-1 mt-2 pt-2 border-t border-neutral-50 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <ChecklistCardQuickActions
+          isPublished={checklist.is_published === true}
+          onEdit={() => onEdit(checklist.id)}
+          onCopyLink={copyPublicLink}
+          onOpenSubmissions={() =>
+            navigate({ to: "/checklist", search: { id: checklist.id, settings: "envios" } })
+          }
+          onPublish={() => navigate({ to: "/checklist", search: { id: checklist.id } })}
+        />
+      </div>
     </div>
   );
 }
@@ -1768,7 +1802,6 @@ export function WorkspacePage() {
                               onDelete={(chk) => setChecklistToDelete(chk)}
                               onEdit={(id) => navigate({ to: "/checklist", search: { id } })}
                               onUpdateTitle={handleUpdateItemTitle}
-                              onCopyLink={handleCopyWorkspaceLink}
                               onDuplicate={(item) => {
                                 // Basic duplication logic
                                 handleAddItem(item.category, `${item.title} (Cópia)`);

@@ -132,6 +132,7 @@ import { createWriteSerializer } from "@/lib/camera-ai/write-serializer";
 import { createAutosaveCoalescer } from "@/lib/camera-ai/autosave-coalescer";
 import { mergePersistedBlocksInto } from "@/lib/camera-ai/blocks-freshness";
 import { createLatestSaveDispatch } from "@/lib/camera-ai/latest-save-dispatch";
+import { resolveSettingsIntent } from "@/lib/checklist-links";
 
 /**
  * 5C.3.3-B.3 — assinatura do saveChecklist da página, usada pelo dispatch de
@@ -690,12 +691,17 @@ export const Route = createFileRoute("/checklist")({
   head: () => ({
     meta: [{ title: "Editor — Tieck" }],
   }),
-  validateSearch: (search: Record<string, unknown>): { id?: string; workspace?: string; category?: string; settings?: boolean } => {
+  validateSearch: (search: Record<string, unknown>): { id?: string; workspace?: string; category?: string; settings?: boolean | string } => {
     return {
       id: typeof search.id === "string" ? search.id : undefined,
       workspace: typeof search.workspace === "string" ? search.workspace : undefined,
       category: typeof search.category === "string" ? search.category : undefined,
-      settings: typeof search.settings === "boolean" ? search.settings : undefined,
+      // 5E.0: `?settings=true` abre Configurações; `?settings=envios` (ou outro
+      // nome de aba válido) abre Configurações já naquela aba. Sobrevive a reload.
+      settings:
+        typeof search.settings === "boolean" || typeof search.settings === "string"
+          ? search.settings
+          : undefined,
     };
   },
   component: ChecklistPageWrapper,
@@ -905,9 +911,11 @@ export function NovoChecklistPage() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   useEffect(() => {
-    if (openSettingsParam) {
-      setIsSettingsOpen(true);
-    }
+    if (!openSettingsParam) return;
+    const intent = resolveSettingsIntent(openSettingsParam);
+    if (!intent.open) return;
+    setIsSettingsOpen(true);
+    if (intent.tab) setSettingsActiveTab(intent.tab);
   }, [openSettingsParam]);
   const [isCustomizeOpen, setIsCustomizeOpen] = useState(false);
   const [isPreviewMode, setIsPreviewMode] = useState(false);
@@ -2669,12 +2677,15 @@ export function NovoChecklistPage() {
 
         if (isActuallyPublished) {
           setTimeout(() => {
-            setIsSettingsOpen(true);
-            setSettingsActiveTab("compartilhar");
+            // 5E.0: para checklist recém-criado, navegar primeiro com o id REAL
+            // (data.id) — nunca "undefined"/"null"/id antigo — e só então abrir
+            // Configurações/Compartilhar. Assim o painel nunca renderiza sem id.
             if (!checklistId) {
               sessionChecklistIdRef.current = data.id;
               navigate({ to: "/checklist", search: { id: data.id }, replace: true });
             }
+            setIsSettingsOpen(true);
+            setSettingsActiveTab("compartilhar");
           }, 1000);
         } else if (!checklistId) {
           // If it was a new draft, update the URL without full redirect to keep editing
