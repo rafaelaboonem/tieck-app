@@ -132,6 +132,16 @@ import { createWriteSerializer } from "@/lib/camera-ai/write-serializer";
 import { createAutosaveCoalescer } from "@/lib/camera-ai/autosave-coalescer";
 import { mergePersistedBlocksInto } from "@/lib/camera-ai/blocks-freshness";
 import { createLatestSaveDispatch } from "@/lib/camera-ai/latest-save-dispatch";
+import {
+  blockToolbarClass,
+  clampMenuPosition,
+  gettingStartedGridClass,
+  popoverWidthClass,
+  slashMenuSize,
+  templatesGridClass,
+  topbarTextLabelClass,
+  topbarTouchTargetClass,
+} from "@/lib/editor-layout";
 
 /**
  * 5C.3.3-B.3 — assinatura do saveChecklist da página, usada pelo dispatch de
@@ -2110,7 +2120,13 @@ export function NovoChecklistPage() {
     const top = rect.top + (mRect.top - mirrorRect.top) + 28;
     const left = rect.left + (mRect.left - mirrorRect.left);
     document.body.removeChild(mirror);
-    setSlashMenuPos({ top, left });
+    setSlashMenuPos(
+      clampMenuPosition(
+        { top, left },
+        { width: window.innerWidth, height: window.innerHeight },
+        slashMenuSize(window.innerHeight)
+      )
+    );
   };
 
   const insertOption = (label: string) => {
@@ -3207,9 +3223,9 @@ export function NovoChecklistPage() {
       )}
 
       {/* Top bar */}
-      <header className="flex items-center justify-between px-4 sm:px-6 py-3 border-b border-neutral-100">
+      <header className="flex items-center justify-between px-3 sm:px-6 py-3 border-b border-neutral-100">
         <div className={cn(
-          "flex items-center gap-1.5 sm:gap-2 transition-all duration-300",
+          "flex items-center gap-1.5 sm:gap-2 transition-all duration-300 min-w-0",
           !sidebarOpen && isMobile === false ? "pl-14" : "pl-0",
           isMobile === true && !sidebarOpen ? "pl-12" : "pl-0"
         )}>
@@ -3228,16 +3244,16 @@ export function NovoChecklistPage() {
           <span className="text-neutral-700 font-medium text-[10px] sm:text-sm truncate max-w-[80px] sm:max-w-none">{title || "Sem título"}</span>
         </div>
 
-        <div className="flex items-center gap-3 text-sm text-neutral-500">
+        <div className="flex items-center gap-1.5 sm:gap-3 text-sm text-neutral-500 shrink-0">
           {user && (
             <>
-              <button className="hover:text-neutral-900" aria-label="Integrações">
+              <button className={cn("hover:text-neutral-900", topbarTouchTargetClass(isMobile))} aria-label="Integrações">
                 <Zap className="w-4 h-4" />
               </button>
               <button
                 type="button"
                 onClick={() => setIsHistoryOpen(true)}
-                className="hover:text-neutral-900"
+                className={cn("hover:text-neutral-900", topbarTouchTargetClass(isMobile))}
                 aria-label="Histórico"
               >
                 <History className="w-4 h-4" />
@@ -3250,17 +3266,17 @@ export function NovoChecklistPage() {
               <button
                 type="button"
                 onClick={() => setIsSettingsOpen(true)}
-                className="hover:text-neutral-900 flex items-center gap-1 sm:gap-1.5"
+                className={cn("hover:text-neutral-900 flex items-center gap-1 sm:gap-1.5", topbarTouchTargetClass(isMobile))}
               >
                 <Settings className="w-4 h-4" />
-                <span className="hidden sm:inline">Configuração</span>
+                <span className={topbarTextLabelClass(isMobile)}>Configuração</span>
               </button>
               <button
                 type="button"
                 onClick={() => setIsCustomizeOpen((v) => !v)}
                 className={`hover:text-neutral-900 px-2 py-1 rounded-md ${isCustomizeOpen ? "ring-1 ring-blue-400 text-neutral-900" : ""}`}
               >
-                <span className="hidden sm:inline">Personalizar</span>
+                <span className={topbarTextLabelClass(isMobile)}>Personalizar</span>
                 <span className="sm:hidden"><Palette className="w-4 h-4" /></span>
               </button>
             </>
@@ -3269,9 +3285,9 @@ export function NovoChecklistPage() {
           <button 
             type="button"
             onClick={() => setIsPreviewMode(true)}
-            className="hover:text-neutral-900"
+            className={cn("hover:text-neutral-900", topbarTouchTargetClass(isMobile))}
           >
-            <span className="hidden sm:inline">Pré-visualizar</span>
+            <span className={topbarTextLabelClass(isMobile)}>Pré-visualizar</span>
             <span className="sm:hidden"><Eye className="w-4 h-4" /></span>
           </button>
 
@@ -3473,7 +3489,7 @@ export function NovoChecklistPage() {
                       Voltar
                     </button>
                   </div>
-                  <div className="grid grid-cols-3 gap-4">
+                  <div className={templatesGridClass()}>
                     {["Poppins", "Montserrat", "Roboto"].map((font) => (
                       <button
                         key={font}
@@ -3504,7 +3520,7 @@ export function NovoChecklistPage() {
                 mencionar respostas de perguntas.
               </p>
 
-              <div className="mt-10 grid grid-cols-2 gap-x-12 gap-y-3 text-sm">
+              <div className={gettingStartedGridClass()}>
                 <div>
                   <p className="font-semibold text-neutral-900 mb-3">Começar</p>
                   <ul className="space-y-2.5 text-neutral-600">
@@ -4979,14 +4995,17 @@ export function NovoChecklistPage() {
                         : ""
                     }`}
                   >
-                    <div className={`absolute -left-20 top-1.5 flex items-center gap-1 transition-all duration-300 text-neutral-600 ${activeBlockId === block.id ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}>
+                    <div className={cn(
+                      blockToolbarClass(isMobile),
+                      activeBlockId === block.id ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+                    )}>
                       <button
                         type="button"
                         onClick={() => removeBlock(block.id)}
                         aria-label="Apagar"
-                        className="hover:text-neutral-900"
+                        className={cn("hover:text-neutral-900", isMobile === true ? "p-2 sm:p-0 flex items-center justify-center" : "")}
                       >
-                        <Trash2 className="w-4 h-4" strokeWidth={2.5} />
+                        <Trash2 className={cn(isMobile === true ? "w-5 h-5 sm:w-4 sm:h-4" : "w-4 h-4")} strokeWidth={2.5} />
                       </button>
                       <button
                         type="button"
@@ -4996,20 +5015,20 @@ export function NovoChecklistPage() {
                           setPickerOpen(true);
                         }}
                         aria-label="Adicionar"
-                        className="hover:text-neutral-900"
+                        className={cn("hover:text-neutral-900", isMobile === true ? "p-2 sm:p-0 flex items-center justify-center" : "")}
                       >
-                        <Plus className="w-4 h-4" strokeWidth={2.5} />
+                        <Plus className={cn(isMobile === true ? "w-5 h-5 sm:w-4 sm:h-4" : "w-4 h-4")} strokeWidth={2.5} />
                       </button>
                       <div className="relative group/options">
                         <button
                           type="button"
                           onPointerDown={(e) => startBlockDrag(e, block.id)}
                           onClick={() => setOptionsPanelBlockId(optionsPanelBlockId === block.id ? null : block.id)}
-                          className="cursor-grab active:cursor-grabbing hover:text-neutral-900 touch-none flex items-center"
+                          className={cn("cursor-grab active:cursor-grabbing hover:text-neutral-900 touch-none flex items-center", isMobile === true ? "p-2 sm:p-0" : "")}
                           aria-label="Mover e Opções"
                           data-grip-for={block.id}
                         >
-                          <GripVertical className="w-4 h-4" strokeWidth={2.5} />
+                          <GripVertical className={cn(isMobile === true ? "w-5 h-5 sm:w-4 sm:h-4" : "w-4 h-4")} strokeWidth={2.5} />
                         </button>
                         
                         {optionsPanelBlockId === block.id && (
@@ -5018,7 +5037,7 @@ export function NovoChecklistPage() {
                               className="fixed inset-0 z-[190]" 
                               onClick={() => setOptionsPanelBlockId(null)}
                             />
-                            <div className="absolute left-0 top-full mt-1 z-[200] w-64 bg-white dark:bg-neutral-800 rounded-lg shadow-xl border border-neutral-200 dark:border-neutral-700 py-2 animate-in fade-in zoom-in-95 duration-200">
+                            <div className={`absolute left-0 top-full mt-1 z-[200] max-h-[70vh] overflow-y-auto bg-white dark:bg-neutral-800 rounded-lg shadow-xl border border-neutral-200 dark:border-neutral-700 py-2 animate-in fade-in zoom-in-95 duration-200 ${popoverWidthClass()}`}>
                               <div className="px-3 py-1.5 space-y-3">
                                 <div className="flex items-center justify-between">
                                   <span className="text-xs font-medium text-neutral-700 dark:text-neutral-300">Obrigatório</span>
@@ -5254,7 +5273,7 @@ export function NovoChecklistPage() {
                               className="fixed inset-0 z-[190]"
                               onClick={() => { setSlashMenuOpen(false); setSlashReplaceForBlockId(null); setSlashQuery(""); }}
                             />
-                            <div className="absolute left-0 top-full mt-1 z-[200] w-64 max-h-80 overflow-y-auto bg-white rounded-lg border border-neutral-200 shadow-lg py-1 animate-in fade-in zoom-in-95 duration-200">
+                            <div className={`absolute left-0 top-full mt-1 z-[200] max-h-80 overflow-y-auto bg-white rounded-lg border border-neutral-200 shadow-lg py-1 animate-in fade-in zoom-in-95 duration-200 ${popoverWidthClass()}`}>
                               {(() => {
                                 let runningIdx = 0;
                                 return filteredSections.map((section) => (
@@ -5511,7 +5530,7 @@ export function NovoChecklistPage() {
                  
                  return (
                 <div
-                  className="fixed z-50 w-64 max-h-80 overflow-y-auto bg-white rounded-lg border border-neutral-200 shadow-lg py-1"
+                  className={`fixed z-50 max-h-80 overflow-y-auto bg-white rounded-lg border border-neutral-200 shadow-lg py-1 ${popoverWidthClass()}`}
                   style={{ top: slashMenuPos.top, left: slashMenuPos.left }}
                 >
                   {(() => {
