@@ -1,4 +1,5 @@
 import { getAssignmentStatus } from "@/utils/assignment-status";
+import type { HomeCameraAttentionByChecklist } from "./home-camera-attention";
 
 /**
  * Home 6A.1 — compact operational summary for `/inicio`.
@@ -21,9 +22,21 @@ export type HomeOperationalSummary = {
 export type HomeOperationalPriority = {
   checklistId: string;
   title: string;
-  status: "atrasado" | "pendente";
+  /** Deadline status. null when the checklist only has a Camera AI rejection signal. */
+  status: "atrasado" | "pendente" | null;
   /** ISO date of the relevant due date (oldest overdue for atrasado, soonest for pendente). */
   dueAt: string | null;
+  /** Evidence groups rejected by Camera AI in the latest submission (0 = none). */
+  rejectedCount: number;
+  /** submitted_at of the latest submission (present when rejectedCount > 0). */
+  latestSubmittedAt: string | null;
+};
+
+export type HomeOperationalPrioritiesOptions = {
+  /** Camera AI rejection signals keyed by checklist id (Home 6A.3). */
+  attention?: HomeCameraAttentionByChecklist;
+  /** Maximum number of priorities shown (default 3). */
+  limit?: number;
 };
 
 export type HomeOperationalPriorities = {
@@ -78,18 +91,26 @@ export function buildHomeOperationalSummary(checklists: any[]): HomeOperationalS
 /**
  * Build the actionable "Prioridades" list for `/inicio`.
  *
- * Only checklists whose operational status is `atrasado` or `pendente` enter;
- * checklists without a relevant due date never enter. Order:
- *   1. atrasados first — oldest due date first (most overdue = highest priority)
- *   2. pendentes second — soonest due date first
+ * A checklist enters when it has a deadline signal (`atrasado`/`pendente` with
+ * a relevant due date) and/or a Camera AI rejection signal (Home 6A.3). Each
+ * checklist yields ONE priority with combined signals. Order:
+ *   1. atrasado + IA rejection   — oldest due date first
+ *   2. atrasado                  — oldest due date first
+ *   3. IA rejection only         — latest submission first
+ *   4. pendente                  — soonest due date first
  * Limited to `limit` items (default 3); the remainder is reported via `remaining`.
  */
-export function buildHomeOperationalPriorities(checklists: any[], limit = 3): HomeOperationalPriorities {
+export function buildHomeOperationalPriorities(
+  checklists: any[],
+  options: HomeOperationalPrioritiesOptions = {}
+): HomeOperationalPriorities {
+  const { attention = {}, limit = 3 } = options;
   const priorities: HomeOperationalPriority[] = [];
 
   for (const checklist of checklists) {
     const assignments = checklist?.checklist_assignments;
-    if (!Array.isArray(assignments) || assignments.length === 0) continue;
+    const attentionInfo = attention[checklist?.id];
+    const hasIaRejection = !!attentionInfo && attentionInfo.rejectedCount > 0;
 
     const title =
       typeof checklist?.title === "string" && checklist.title.trim().length > 0
@@ -99,35 +120,60 @@ export function buildHomeOperationalPriorities(checklists: any[], limit = 3): Ho
     let relevantDueAt: string | null = null;
     let status: "atrasado" | "pendente" | null = null;
 
-    for (const a of assignments) {
-      const s = getAssignmentStatus(a?.due_at ?? null, a?.completed_at ?? null);
-      if (s === "atrasado") {
-        // The most overdue (oldest due date) among the atrasado assignments.
-        if (status !== "atrasado" || (a?.due_at && (!relevantDueAt || a.due_at < relevantDueAt))) {
-          status = "atrasado";
-          relevantDueAt = a?.due_at ?? null;
-        }
-      } else if (s === "pendente" && status !== "atrasado") {
-        // The soonest due date among the pendente assignments.
-        if (status !== "pendente" || (a?.due_at && (!relevantDueAt || a.due_at < relevantDueAt))) {
-          status = "pendente";
-          relevantDueAt = a?.due_at ?? null;
+    if (Array.isArray(assignments)) {
+      for (const a of assignments) {
+        const s = getAssignmentStatus(a?.due_at ?? null, a?.completed_at ?? null);
+        if (s === "atrasado") {
+          // The most overdue (oldest due date) among the atrasado assignments.
+          if (status !== "atrasado" || (a?.due_at && (!relevantDueAt || a.due_at < relevantDueAt))) {
+            status = "atrasado";
+            relevantDueAt = a?.due_at ?? null;
+          }
+        } else if (s === "pendente" && status !== "atrasado") {
+          // The soonest due date among the pendente assignments.
+          if (status !== "pendente" || (a?.due_at && (!relevantDueAt || a.due_at < relevantDueAt))) {
+            status = "pendente";
+            relevantDueAt = a?.due_at ?? null;
+          }
         }
       }
     }
 
-    if (!status) continue;
-    // Fail-closed: a checklist without a relevant due date never enters Prioridades.
-    if (!relevantDueAt) continue;
+    if (status && !relevantDueAt) status = null;
+    if (!status && !hasIaRejection) continue;
 
-    priorities.push({ checklistId: checklist.id, title, status, dueAt: relevantDueAt });
+    priorities.push({
+      checklistId: checklist.id,
+      title,
+      status,
+      dueAt: relevantDueAt,
+      rejectedCount: hasIaRejection ? attentionInfo.rejectedCount : 0,
+      latestSubmittedAt: hasIaRejection ? attentionInfo.latestSubmittedAt ?? null : null,
+    });
   }
 
+  // 1. atrasado + IA  → 2. atrasado  → 3. IA only  → 4. pendente
+  const rank = (p: HomeOperationalPriority): number => {
+    if (p.status === "atrasado") return p.rejectedCount > 0 ? 0 : 1;
+    if (p.rejectedCount > 0) return 2;
+    return 3; // pendente
+  };
+
   priorities.sort((a, b) => {
-    if (a.status !== b.status) return a.status === "atrasado" ? -1 : 1;
+    const ra = rank(a);
+    const rb = rank(b);
+    if (ra !== rb) return ra - rb;
+    if (ra === 2) {
+      // IA-only: latest submission first.
+      const sa = a.latestSubmittedAt ?? "";
+      const sb = b.latestSubmittedAt ?? "";
+      if (sa !== sb) return sa > sb ? -1 : 1;
+      return 0;
+    }
     const da = a.dueAt ?? "";
     const db = b.dueAt ?? "";
-    return da < db ? -1 : da > db ? 1 : 0;
+    if (da !== db) return da < db ? -1 : 1;
+    return 0;
   });
 
   return {

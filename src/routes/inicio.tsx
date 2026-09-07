@@ -14,6 +14,8 @@ import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { HomeOperationalSummary } from "@/components/home/HomeOperationalSummary";
 import { HomeOperationalPriorities } from "@/components/home/HomeOperationalPriorities";
+import { useHomeCameraAttention } from "@/hooks/useHomeCameraAttention";
+import { canLoadHomeCameraAttention } from "@/lib/home-camera-attention";
 import logoUrl from "../assets/local/logo-k.webp";
 import { toast } from "sonner";
 import {
@@ -222,6 +224,17 @@ export function Dashboard() {
     );
   };
 
+  // Home 6A.3 — Camera AI rejection signals, secondary enrichment (never blocks the Home).
+  const cameraAttention = useHomeCameraAttention({
+    checklists,
+    enabled: canLoadHomeCameraAttention({
+      isWorkspaceContext: workspaceStatus === 'workspace',
+      isViewer,
+      canManage,
+      isAuthenticated: !!user?.id,
+    }),
+  });
+
   const handleBulkDelete = async () => {
     if (selectedIds.length === 0) return;
 
@@ -300,7 +313,13 @@ export function Dashboard() {
                 <HomeOperationalSummary checklists={checklists} />
                 <HomeOperationalPriorities
                   checklists={checklists}
-                  onOpen={(checklistId) => {
+                  attentionByChecklist={cameraAttention}
+                  onOpen={(checklistId, kind) => {
+                    // Home 6A.3: prioridade com rejeição IA → Envios (investigação da evidência).
+                    if (kind === 'camera') {
+                      navigate({ to: "/checklist", search: { id: checklistId, settings: "envios" } });
+                      return;
+                    }
                     // FASE 5B.6: Viewer vai para execução, outros para editor
                     if (workspaceStatus === 'workspace' && isViewer) {
                       navigate({ to: "/executar/$id", params: { id: checklistId } });

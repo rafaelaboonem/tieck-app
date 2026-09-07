@@ -145,7 +145,7 @@ describe('Home 6A.2 — buildHomeOperationalPriorities', () => {
       title: `Atrasado ${n}`,
       checklist_assignments: [assignment({ due_at: daysAgo(n) })],
     }));
-    const { items, remaining } = buildHomeOperationalPriorities(checklists, 2);
+    const { items, remaining } = buildHomeOperationalPriorities(checklists, { limit: 2 });
     expect(items).toHaveLength(2);
     expect(remaining).toBe(2);
   });
@@ -206,7 +206,7 @@ describe('Home 6A.2 — componente HomeOperationalPriorities', () => {
     expect(screen.getByText('+ 2 outras prioridades')).toBeInTheDocument();
   });
 
-  it('clicar na linha chama onOpen com o checklistId', async () => {
+  it('clicar na linha chama onOpen com o checklistId e kind deadline (prioridade só de prazo)', async () => {
     const user = userEvent.setup();
     const onOpen = vi.fn();
     const checklists = [
@@ -214,7 +214,7 @@ describe('Home 6A.2 — componente HomeOperationalPriorities', () => {
     ];
     render(<HomeOperationalPriorities checklists={checklists} onOpen={onOpen} />);
     await user.click(screen.getByText('Casa 2'));
-    expect(onOpen).toHaveBeenCalledWith('c1');
+    expect(onOpen).toHaveBeenCalledWith('c1', 'deadline');
   });
 });
 
