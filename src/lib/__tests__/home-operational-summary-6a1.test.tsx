@@ -7,7 +7,6 @@ import React from 'react';
 import {
   resolveChecklistOperationalStatus,
   buildHomeOperationalSummary,
-  getHomeAttentionMessage,
 } from '../home-operational-summary';
 import { HomeOperationalSummary } from '../../components/home/HomeOperationalSummary';
 
@@ -121,31 +120,6 @@ describe('Home 6A.1 — buildHomeOperationalSummary (contagem)', () => {
   });
 });
 
-describe('Home 6A.1 — getHomeAttentionMessage', () => {
-  it('I) atrasado tem prioridade sobre pendente', () => {
-    expect(getHomeAttentionMessage({ total: 4, concluidos: 1, pendentes: 3, atrasados: 1 })).toBe(
-      '1 checklist está atrasado'
-    );
-  });
-
-  it('I2) pluralização correta', () => {
-    expect(getHomeAttentionMessage({ total: 3, concluidos: 0, pendentes: 0, atrasados: 2 })).toBe(
-      '2 checklists estão atrasados'
-    );
-    expect(getHomeAttentionMessage({ total: 3, concluidos: 2, pendentes: 1, atrasados: 0 })).toBe(
-      '1 checklist está pendente'
-    );
-    expect(getHomeAttentionMessage({ total: 5, concluidos: 2, pendentes: 3, atrasados: 0 })).toBe(
-      '3 checklists estão pendentes'
-    );
-  });
-
-  it('I3) sem atraso/pendência → sem alerta', () => {
-    expect(getHomeAttentionMessage({ total: 2, concluidos: 2, pendentes: 0, atrasados: 0 })).toBeNull();
-    expect(getHomeAttentionMessage({ total: 0, concluidos: 0, pendentes: 0, atrasados: 0 })).toBeNull();
-  });
-});
-
 describe('Home 6A.1 — componente HomeOperationalSummary', () => {
   it('renderiza os 4 indicadores com os valores corretos', () => {
     const checklists = [
@@ -158,7 +132,11 @@ describe('Home 6A.1 — componente HomeOperationalSummary', () => {
     expect(screen.getByText('Concluídos')).toBeInTheDocument();
     expect(screen.getByText('Pendentes')).toBeInTheDocument();
     expect(screen.getByText('Atrasados')).toBeInTheDocument();
-    expect(screen.getByText('1 checklist está atrasado')).toBeInTheDocument();
+    // 6A.2: a mensagem genérica antiga não é mais renderizada — o detalhe fica em "Prioridades".
+    expect(screen.queryByText(/está atrasado/i)).toBeNull();
+    expect(screen.queryByText(/estão atrasados/i)).toBeNull();
+    expect(screen.queryByText(/está pendente/i)).toBeNull();
+    expect(screen.queryByText(/estão pendentes/i)).toBeNull();
   });
 
   it('grid responsivo: 2 colunas no mobile, 4 no desktop', () => {

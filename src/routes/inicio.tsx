@@ -13,6 +13,7 @@ import { getAssignmentStatus, getStatusBadge } from "@/utils/assignment-status";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { HomeOperationalSummary } from "@/components/home/HomeOperationalSummary";
+import { HomeOperationalPriorities } from "@/components/home/HomeOperationalPriorities";
 import logoUrl from "../assets/local/logo-k.webp";
 import { toast } from "sonner";
 import {
@@ -297,6 +298,17 @@ export function Dashboard() {
             ) : checklists.length > 0 ? (
               <div className="space-y-6">
                 <HomeOperationalSummary checklists={checklists} />
+                <HomeOperationalPriorities
+                  checklists={checklists}
+                  onOpen={(checklistId) => {
+                    // FASE 5B.6: Viewer vai para execução, outros para editor
+                    if (workspaceStatus === 'workspace' && isViewer) {
+                      navigate({ to: "/executar/$id", params: { id: checklistId } });
+                    } else {
+                      navigate({ to: "/checklist", search: { id: checklistId } });
+                    }
+                  }}
+                />
                 <div className="flex items-center justify-between">
                   <h2 className="text-xl font-bold text-neutral-900">
                     {isSelectionMode ? `${selectedIds.length} selecionado(s)` : "Checklists"}

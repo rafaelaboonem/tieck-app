@@ -1,0 +1,71 @@
+import { AlertTriangle, Clock, ChevronRight } from "lucide-react";
+import { buildHomeOperationalPriorities, formatDueDateShort } from "@/lib/home-operational-summary";
+import { cn } from "@/lib/utils";
+
+/**
+ * Home 6A.2 — actionable \"Prioridades\" section for `/inicio`.
+ *
+ * Shown ONLY when at least one visible checklist is operationally atrasado or
+ * pendente. Derived exclusively from the `checklists` array the route already
+ * loaded under the existing RBAC/visibility rules — no new query, no widened
+ * access. The open callback keeps the navigation rule explicit in the route
+ * (Viewer → /executar/$id, other roles → /checklist?id=...).
+ */
+export function HomeOperationalPriorities({
+  checklists,
+  onOpen,
+}: {
+  checklists: any[];
+  onOpen: (checklistId: string) => void;
+}) {
+  const { items, remaining } = buildHomeOperationalPriorities(checklists);
+
+  if (items.length === 0) return null;
+
+  return (
+    <section aria-label="Prioridades" className="space-y-2">
+      <h2 className="text-sm font-semibold text-neutral-500 uppercase tracking-wide">Prioridades</h2>
+      <div className="bg-white border border-neutral-200 rounded-xl shadow-sm divide-y divide-neutral-100 overflow-hidden">
+        {items.map((item) => {
+          const atrasado = item.status === "atrasado";
+          const due = formatDueDateShort(item.dueAt);
+          return (
+            <button
+              key={item.checklistId}
+              type="button"
+              onClick={() => onOpen(item.checklistId)}
+              className="w-full flex items-center gap-3 px-3 sm:px-4 py-3 text-left hover:bg-neutral-50 transition-colors group"
+            >
+              <span
+                className={cn(
+                  "w-8 h-8 rounded-lg flex items-center justify-center shrink-0",
+                  atrasado ? "bg-red-50 text-red-600" : "bg-blue-50 text-blue-600"
+                )}
+              >
+                {atrasado ? <AlertTriangle className="w-4 h-4" /> : <Clock className="w-4 h-4" />}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block font-semibold text-sm text-neutral-900 truncate group-hover:text-pink-500 transition-colors">
+                  {item.title}
+                </span>
+                <span className="block text-xs text-neutral-500">
+                  {atrasado ? "Atrasado" : "Pendente"}
+                  {due && <span className="opacity-70"> · prazo {due}</span>}
+                </span>
+              </span>
+              <span className="flex items-center gap-1 text-xs font-medium text-neutral-500 shrink-0">
+                Abrir
+                <ChevronRight className="w-3.5 h-3.5" />
+              </span>
+            </button>
+          );
+        })}
+        {remaining > 0 && (
+          <div className="px-3 sm:px-4 py-2.5 text-xs text-neutral-500">
+            + {remaining} {remaining === 1 ? "outra prioridade" : "outras prioridades"}
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}

@@ -1,16 +1,16 @@
 import { FileText, CheckCircle2, Clock, AlertTriangle } from "lucide-react";
-import { buildHomeOperationalSummary, getHomeAttentionMessage } from "@/lib/home-operational-summary";
+import { buildHomeOperationalSummary } from "@/lib/home-operational-summary";
 import { cn } from "@/lib/utils";
 
 /**
  * Home 6A.1 — compact operational summary shown above the checklist list in
  * `/inicio`. Derived ONLY from the checklists already visible in this screen/
  * context (no extra query, no widened access). `/painel` remains the deep
- * operational analytics area.
+ * operational analytics area. The actionable detail lives in the
+ * "Prioridades" section (HomeOperationalPriorities).
  */
 export function HomeOperationalSummary({ checklists }: { checklists: any[] }) {
   const summary = buildHomeOperationalSummary(checklists);
-  const attention = getHomeAttentionMessage(summary);
 
   const cards = [
     {
@@ -58,17 +58,6 @@ export function HomeOperationalSummary({ checklists }: { checklists: any[] }) {
           </div>
         ))}
       </div>
-      {attention && (
-        <p
-          className={cn(
-            "text-sm font-semibold flex items-center gap-1.5",
-            summary.atrasados > 0 ? "text-red-600" : "text-blue-600"
-          )}
-        >
-          {summary.atrasados > 0 ? <AlertTriangle className="w-4 h-4" /> : <Clock className="w-4 h-4" />}
-          {attention}
-        </p>
-      )}
     </section>
   );
 }
