@@ -134,6 +134,7 @@ import { mergePersistedBlocksInto } from "@/lib/camera-ai/blocks-freshness";
 import { createLatestSaveDispatch } from "@/lib/camera-ai/latest-save-dispatch";
 import { resolveSettingsIntent } from "@/lib/checklist-links";
 import { shouldOpenShareAfterSave } from "@/lib/checklist-publish-intent";
+import { resolveChecklistManagementAccess } from "@/lib/checklist-management-access";
 
 /**
  * 5C.3.3-B.3 — assinatura do saveChecklist da página, usada pelo dispatch de
@@ -905,7 +906,28 @@ export function NovoChecklistPage() {
     if (draftTitle) setTitle(draftTitle);
     if (localStorage.getItem("draft_checklist_started") === "true") setIsStarted(true);
   }, [checklistId]);
-  const { canManage } = useWorkspaceRBAC(currentWorkspace?.id);
+  // 5E.0.2: separate checklist management from workspace RBAC. RBAC is resolved
+  // against the checklist's REAL workspace once loaded — never just the visually
+  // selected context — and personal checklists follow ownership, not workspace role.
+  const [checklistMeta, setChecklistMeta] = useState<{
+    ownerId: string | null;
+    workspaceId: string | null;
+  } | null>(null);
+  const [checklistMetaLoading, setChecklistMetaLoading] = useState<boolean>(!!checklistId);
+  const effectiveNewChecklistWorkspaceId = workspaceParam ?? currentWorkspace?.id ?? null;
+  const checklistRealWorkspaceId = checklistMeta?.workspaceId ?? null;
+  const rbacWorkspaceId =
+    checklistRealWorkspaceId || effectiveNewChecklistWorkspaceId || undefined;
+  const { canManage: canManageWorkspace } = useWorkspaceRBAC(rbacWorkspaceId);
+  const { canManageChecklist } = resolveChecklistManagementAccess({
+    authUserId: authUser?.id,
+    checklistOwnerId: checklistMeta?.ownerId ?? null,
+    checklistWorkspaceId: checklistRealWorkspaceId,
+    newChecklistWorkspaceId: effectiveNewChecklistWorkspaceId,
+    workspaceCanManage: canManageWorkspace,
+    metadataLoading: checklistMetaLoading,
+    isExistingChecklist: !!checklistId,
+  });
   const [isTemplatesOpen, setIsTemplatesOpen] = useState(false);
   const [selectedFont, setSelectedFont] = useState("");
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
@@ -1538,8 +1560,13 @@ export function NovoChecklistPage() {
     }
   }, [checklistId]);
     useEffect(() => {
+      // 5E.0.2: reset ownership metadata when switching checklists; keep the
+      // administrative UI fail-closed until the real checklist is loaded.
+      setChecklistMeta(null);
+      setChecklistMetaLoading(!!checklistId);
       const fetchExisting = async () => {
         if (!checklistId) {
+          setChecklistMetaLoading(false);
           setCurrentChecklistId(sessionChecklistIdRef.current);
           return;
         }
@@ -1552,6 +1579,12 @@ export function NovoChecklistPage() {
             .single();
           
           if (data && !error) {
+            // 5E.0.2: persist only the minimal ownership context needed to
+            // decide management rights (owner + real workspace).
+            setChecklistMeta({
+              ownerId: data.user_id ?? null,
+              workspaceId: data.workspace_id ?? null,
+            });
             setCurrentChecklistId(data.id);
             setTitle(data.title || "");
             setBlocks(
@@ -1627,6 +1660,7 @@ export function NovoChecklistPage() {
         } catch (err) {
           console.error("Error fetching checklist:", err);
         }
+        setChecklistMetaLoading(false);
       };
       fetchExisting();
     }, [checklistId]);
@@ -2774,7 +2808,7 @@ export function NovoChecklistPage() {
 
   const saveDeadlineConfig = async () => {
     const wsId = currentWorkspace?.id || workspaceParam;
-    if (!settingsChecklistId || !wsId || !canManage) return;
+    if (!settingsChecklistId || !wsId || !canManageWorkspace) return;
 
     try {
       const existingPrimary = checklistAssignments.find(a => a.is_primary);
@@ -3265,7 +3299,7 @@ export function NovoChecklistPage() {
             </>
           )}
           
-          {canManage && (
+          {canManageChecklist && (
             <>
               <button
                 type="button"
@@ -3295,7 +3329,7 @@ export function NovoChecklistPage() {
             <span className="sm:hidden"><Eye className="w-4 h-4" /></span>
           </button>
 
-          {canManage && (
+          {canManageChecklist && (
             <button 
               type="button"
               onClick={() => saveChecklist(undefined, true)}
@@ -6219,7 +6253,7 @@ export function NovoChecklistPage() {
                     <SettingsRow
                       title="Receber alerta de prazo não cumprido"
                       description="Você receberá um e-mail se o responsável não concluir este checklist até o prazo definido."
-                      control={<Switch checked={deadlineAlertEnabled} onCheckedChange={setDeadlineAlertEnabled} disabled={!canManage} />}
+                      control={<Switch checked={deadlineAlertEnabled} onCheckedChange={setDeadlineAlertEnabled} disabled={!canManageWorkspace} />}
                     />
                     
                     {deadlineAlertEnabled && (
@@ -6231,7 +6265,7 @@ export function NovoChecklistPage() {
                           <select
                             value={primaryMemberId || ""}
                             onChange={(e) => setPrimaryMemberId(e.target.value || null)}
-                            disabled={!canManage}
+                            disabled={!canManageWorkspace}
                             className="w-full text-sm border border-neutral-200 rounded-md px-3 py-2 bg-white outline-none focus:border-neutral-400"
                           >
                             <option value="">Selecionar responsável</option>
@@ -6247,7 +6281,7 @@ export function NovoChecklistPage() {
                           <CustomField label="Data limite">
                             <input
                               type="date"
-                              disabled={!canManage}
+                              disabled={!canManageWorkspace}
                               value={assignmentDueAt ? toLocalISO(new Date(assignmentDueAt)).split('T')[0] : ""}
                               onChange={(e) => {
                                 const date = e.target.value;
@@ -6263,7 +6297,7 @@ export function NovoChecklistPage() {
                           <CustomField label="Horário limite">
                             <input
                               type="time"
-                              disabled={!canManage}
+                              disabled={!canManageWorkspace}
                               value={assignmentDueAt ? toLocalISO(new Date(assignmentDueAt)).split('T')[1]?.slice(0, 5) : ""}
                               onChange={(e) => {
                                 const time = e.target.value;
