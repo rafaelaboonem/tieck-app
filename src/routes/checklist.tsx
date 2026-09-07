@@ -133,6 +133,7 @@ import { createAutosaveCoalescer } from "@/lib/camera-ai/autosave-coalescer";
 import { mergePersistedBlocksInto } from "@/lib/camera-ai/blocks-freshness";
 import { createLatestSaveDispatch } from "@/lib/camera-ai/latest-save-dispatch";
 import { resolveSettingsIntent } from "@/lib/checklist-links";
+import { shouldOpenShareAfterSave } from "@/lib/checklist-publish-intent";
 
 /**
  * 5C.3.3-B.3 — assinatura do saveChecklist da página, usada pelo dispatch de
@@ -2670,12 +2671,20 @@ export function NovoChecklistPage() {
       }
 
       if (!silent) {
-        const isActuallyPublished = serverPublished;
-        toast.success(isActuallyPublished ? (checklistId ? "Alterações salvas!" : "Checklist publicado com sucesso!") : "Rascunho salvo!");
+        // 5E.0.1: Configurações → Compartilhar abre SOMENTE após publicação
+        // EXPLÍCITA (isPublishedOverride === true) confirmada pelo backend
+        // (serverPublished === true). Save normal de checklist já publicado,
+        // saves de configurações e autosave silencioso nunca abrem o painel.
+        const didExplicitlyPublish = shouldOpenShareAfterSave({
+          isPublishedOverride,
+          serverPublished,
+          silent,
+        });
+        toast.success(serverPublished ? (checklistId ? "Alterações salvas!" : "Checklist publicado com sucesso!") : "Rascunho salvo!");
         if (serverSlug) setShortSlug(serverSlug);
 
 
-        if (isActuallyPublished) {
+        if (didExplicitlyPublish) {
           setTimeout(() => {
             // 5E.0: para checklist recém-criado, navegar primeiro com o id REAL
             // (data.id) — nunca "undefined"/"null"/id antigo — e só então abrir

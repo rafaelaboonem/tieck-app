@@ -13,8 +13,9 @@ const source = readFileSync(resolve(process.cwd(), 'src/routes/checklist.tsx'), 
 
 describe('Execution 5E.0 — Publish → Compartilhar (A/B/C)', () => {
   // Escopo: apenas o fluxo de publicação dentro de saveChecklist — a partir do
-  // bloco de sucesso até o fim do handler (evita hits em handlers anteriores).
-  const successIdx = source.indexOf('if (isActuallyPublished) {');
+  // cálculo do intent de pós-publicação até o fim do handler (evita hits em
+  // handlers anteriores). 5E.0.1: o gate agora é shouldOpenShareAfterSave.
+  const successIdx = source.indexOf('const didExplicitlyPublish = shouldOpenShareAfterSave({');
   const flowBlock = source.slice(successIdx);
   const flowCatchIdx = flowBlock.indexOf('} catch (err: any) {');
 
@@ -41,13 +42,11 @@ describe('Execution 5E.0 — Publish → Compartilhar (A/B/C)', () => {
   });
 
   it('C) checklist novo: navega com o id REAL (data.id) antes de abrir o painel', () => {
-    const successIdx = source.indexOf('if (isActuallyPublished) {');
-    const successBlock = source.slice(successIdx);
-    expect(successBlock).toContain('sessionChecklistIdRef.current = data.id');
-    expect(successBlock).toContain('search: { id: data.id }');
+    expect(flowBlock).toContain('sessionChecklistIdRef.current = data.id');
+    expect(flowBlock).toContain('search: { id: data.id }');
     // id real vem antes da abertura das Configurações
-    expect(successBlock.indexOf('navigate({ to: "/checklist", search: { id: data.id }'))
-      .toBeLessThan(successBlock.indexOf('setIsSettingsOpen(true);'));
+    expect(flowBlock.indexOf('navigate({ to: "/checklist", search: { id: data.id }'))
+      .toBeLessThan(flowBlock.indexOf('setIsSettingsOpen(true);'));
     // nunca link com undefined/null
     expect(source).not.toContain('search: { id: undefined }');
     expect(source).not.toContain('search: { id: null }');
