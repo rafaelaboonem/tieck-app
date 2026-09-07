@@ -100,3 +100,28 @@ export function topbarTouchTargetClass(isMobile: boolean | undefined): string {
 export function popoverWidthClass(): string {
   return "w-64 max-w-[calc(100vw-2rem)]";
 }
+
+/** Secondary actions available in the editor topbar. */
+export type TopbarActionId =
+  | "integrations"
+  | "history"
+  | "settings"
+  | "customize"
+  | "preview"
+  | "publish";
+
+/**
+ * Editor Mobile 5D.1.1 — where each topbar action lives.
+ *
+ * Mobile: only the priorities (Preview, Publicar) stay directly in the bar;
+ * the secondary actions move to the "Mais" overflow menu so every action
+ * stays reachable in 320–430px without overflowing the viewport.
+ * Desktop / SSR first paint: every action stays directly visible, as before.
+ */
+export function topbarActionPlacement(
+  isMobile: boolean | undefined,
+  action: TopbarActionId
+): "direct" | "overflow" {
+  if (isMobile !== true) return "direct";
+  return action === "preview" || action === "publish" ? "direct" : "overflow";
+}

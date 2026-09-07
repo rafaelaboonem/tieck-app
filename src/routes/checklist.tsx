@@ -142,6 +142,7 @@ import {
   topbarTextLabelClass,
   topbarTouchTargetClass,
 } from "@/lib/editor-layout";
+import { EditorTopbarOverflowMenu } from "@/components/editor/EditorTopbarOverflowMenu";
 
 /**
  * 5C.3.3-B.3 — assinatura do saveChecklist da página, usada pelo dispatch de
@@ -3245,61 +3246,125 @@ export function NovoChecklistPage() {
         </div>
 
         <div className="flex items-center gap-1.5 sm:gap-3 text-sm text-neutral-500 shrink-0">
-          {user && (
+          {isMobile === true ? (
             <>
-              <button className={cn("hover:text-neutral-900", topbarTouchTargetClass(isMobile))} aria-label="Integrações">
-                <Zap className="w-4 h-4" />
-              </button>
               <button
                 type="button"
-                onClick={() => setIsHistoryOpen(true)}
+                onClick={() => setIsPreviewMode(true)}
                 className={cn("hover:text-neutral-900", topbarTouchTargetClass(isMobile))}
-                aria-label="Histórico"
+                aria-label="Pré-visualizar"
               >
-                <History className="w-4 h-4" />
+                <Eye className="w-4 h-4" />
               </button>
+
+              <EditorTopbarOverflowMenu
+                triggerClassName="p-2.5 -m-2.5"
+                actions={[
+                  ...(user
+                    ? [
+                        {
+                          key: "integrations",
+                          label: "Integrações",
+                          icon: <Zap className="w-4 h-4" />,
+                          onClick: () => {},
+                        },
+                        {
+                          key: "history",
+                          label: "Histórico",
+                          icon: <History className="w-4 h-4" />,
+                          onClick: () => setIsHistoryOpen(true),
+                        },
+                      ]
+                    : []),
+                  ...(canManage
+                    ? [
+                        {
+                          key: "settings",
+                          label: "Configuração",
+                          icon: <Settings className="w-4 h-4" />,
+                          onClick: () => setIsSettingsOpen(true),
+                        },
+                        {
+                          key: "customize",
+                          label: "Personalizar",
+                          icon: <Palette className="w-4 h-4" />,
+                          onClick: () => setIsCustomizeOpen((v) => !v),
+                        },
+                      ]
+                    : []),
+                ]}
+              />
+
+              {canManage && (
+                <button 
+                  type="button"
+                  onClick={() => saveChecklist(undefined, true)}
+                  disabled={isPublishing}
+                  className="text-xs font-bold bg-[#FF007F] text-white rounded-md px-2.5 py-2 hover:opacity-90 transition-opacity disabled:opacity-50 shadow-sm"
+                >
+                  {isPublishing ? "Publicando..." : "Publicar"}
+                </button>
+              )}
             </>
-          )}
-          
-          {canManage && (
+          ) : (
             <>
-              <button
+              {user && (
+                <>
+                  <button className="hover:text-neutral-900" aria-label="Integrações">
+                    <Zap className="w-4 h-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsHistoryOpen(true)}
+                    className="hover:text-neutral-900"
+                    aria-label="Histórico"
+                  >
+                    <History className="w-4 h-4" />
+                  </button>
+                </>
+              )}
+              
+              {canManage && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setIsSettingsOpen(true)}
+                    className="hover:text-neutral-900 flex items-center gap-1 sm:gap-1.5"
+                  >
+                    <Settings className="w-4 h-4" />
+                    <span className="hidden sm:inline">Configuração</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsCustomizeOpen((v) => !v)}
+                    className={`hover:text-neutral-900 px-2 py-1 rounded-md ${isCustomizeOpen ? "ring-1 ring-blue-400 text-neutral-900" : ""}`}
+                  >
+                    <span className="hidden sm:inline">Personalizar</span>
+                    <span className="sm:hidden"><Palette className="w-4 h-4" /></span>
+                  </button>
+                </>
+              )}
+
+              <button 
                 type="button"
-                onClick={() => setIsSettingsOpen(true)}
-                className={cn("hover:text-neutral-900 flex items-center gap-1 sm:gap-1.5", topbarTouchTargetClass(isMobile))}
+                onClick={() => setIsPreviewMode(true)}
+                className="hover:text-neutral-900"
               >
-                <Settings className="w-4 h-4" />
-                <span className={topbarTextLabelClass(isMobile)}>Configuração</span>
+                <span className="hidden sm:inline">Pré-visualizar</span>
+                <span className="sm:hidden"><Eye className="w-4 h-4" /></span>
               </button>
-              <button
-                type="button"
-                onClick={() => setIsCustomizeOpen((v) => !v)}
-                className={`hover:text-neutral-900 px-2 py-1 rounded-md ${isCustomizeOpen ? "ring-1 ring-blue-400 text-neutral-900" : ""}`}
-              >
-                <span className={topbarTextLabelClass(isMobile)}>Personalizar</span>
-                <span className="sm:hidden"><Palette className="w-4 h-4" /></span>
-              </button>
+
+              {canManage && (
+                <button 
+                  type="button"
+                  onClick={() => saveChecklist(undefined, true)}
+                  disabled={isPublishing}
+                  className="text-xs font-bold bg-[#FF007F] text-white rounded-md px-2.5 sm:px-4 py-1.5 hover:opacity-90 transition-opacity disabled:opacity-50 shadow-sm"
+                >
+                  {isPublishing ? "Publicando..." : "Publicar"}
+                </button>
+              )}
             </>
-          )}
-
-          <button 
-            type="button"
-            onClick={() => setIsPreviewMode(true)}
-            className={cn("hover:text-neutral-900", topbarTouchTargetClass(isMobile))}
-          >
-            <span className={topbarTextLabelClass(isMobile)}>Pré-visualizar</span>
-            <span className="sm:hidden"><Eye className="w-4 h-4" /></span>
-          </button>
-
-          {canManage && (
-            <button 
-              type="button"
-              onClick={() => saveChecklist(undefined, true)}
-              disabled={isPublishing}
-              className="text-xs font-bold bg-[#FF007F] text-white rounded-md px-2.5 sm:px-4 py-1.5 hover:opacity-90 transition-opacity disabled:opacity-50 shadow-sm"
-            >
-              {isPublishing ? "Publicando..." : "Publicar"}
-            </button>
           )}
         </div>
       </header>
