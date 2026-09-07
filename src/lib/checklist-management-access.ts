@@ -39,6 +39,30 @@ export interface ChecklistManagementAccessResult {
   canManageChecklist: boolean;
 }
 
+/**
+ * 5E.0.2.1 — workspace scope for workspace-scoped resources (RBAC, members,
+ * deadline assignments).
+ *
+ * For an EXISTING checklist the scope is ONLY the checklist's real workspace:
+ * a personal checklist (workspace_id null) yields `undefined` — never the
+ * visually selected workspace. Only a NEW checklist may use the effective
+ * context (workspaceParam → currentWorkspace?.id → null).
+ */
+export function resolveWorkspaceRbacScope(input: {
+  /** Route's existing-checklist id (or custom slug); null/undefined when new. */
+  checklistId: string | null | undefined;
+  /** Real `checklists.workspace_id` once loaded (null/undefined for personal). */
+  checklistWorkspaceId: string | null | undefined;
+  /** Effective workspace for a NEW checklist: workspaceParam → currentWorkspace?.id → null. */
+  newChecklistWorkspaceId: string | null | undefined;
+}): string | undefined {
+  const { checklistId, checklistWorkspaceId, newChecklistWorkspaceId } = input;
+  if (checklistId) {
+    return checklistWorkspaceId || undefined;
+  }
+  return newChecklistWorkspaceId || undefined;
+}
+
 export function resolveChecklistManagementAccess(
   input: ChecklistManagementAccessInput
 ): ChecklistManagementAccessResult {

@@ -134,7 +134,7 @@ import { mergePersistedBlocksInto } from "@/lib/camera-ai/blocks-freshness";
 import { createLatestSaveDispatch } from "@/lib/camera-ai/latest-save-dispatch";
 import { resolveSettingsIntent } from "@/lib/checklist-links";
 import { shouldOpenShareAfterSave } from "@/lib/checklist-publish-intent";
-import { resolveChecklistManagementAccess } from "@/lib/checklist-management-access";
+import { resolveChecklistManagementAccess, resolveWorkspaceRbacScope } from "@/lib/checklist-management-access";
 
 /**
  * 5C.3.3-B.3 — assinatura do saveChecklist da página, usada pelo dispatch de
@@ -916,8 +916,16 @@ export function NovoChecklistPage() {
   const [checklistMetaLoading, setChecklistMetaLoading] = useState<boolean>(!!checklistId);
   const effectiveNewChecklistWorkspaceId = workspaceParam ?? currentWorkspace?.id ?? null;
   const checklistRealWorkspaceId = checklistMeta?.workspaceId ?? null;
-  const rbacWorkspaceId =
-    checklistRealWorkspaceId || effectiveNewChecklistWorkspaceId || undefined;
+  // 5E.0.2.1: workspace-scoped resources (RBAC, members, deadline assignments)
+  // resolve ONLY against the checklist's real workspace for existing checklists —
+  // never the visually selected workspace. A personal existing checklist gets no
+  // workspace at all (fail-closed); only NEW checklists use the effective context.
+  const checklistWorkspaceForResources = resolveWorkspaceRbacScope({
+    checklistId,
+    checklistWorkspaceId: checklistRealWorkspaceId,
+    newChecklistWorkspaceId: effectiveNewChecklistWorkspaceId,
+  });
+  const rbacWorkspaceId = checklistWorkspaceForResources;
   const { canManage: canManageWorkspace } = useWorkspaceRBAC(rbacWorkspaceId);
   const { canManageChecklist } = resolveChecklistManagementAccess({
     authUserId: authUser?.id,
@@ -1682,7 +1690,10 @@ export function NovoChecklistPage() {
 
   useEffect(() => {
     const fetchWorkspaceData = async () => {
-      const wsId = currentWorkspace?.id || workspaceParam;
+      // 5E.0.2.1: for an existing checklist, members/assignments come only from
+      // the checklist's real workspace. A personal existing checklist has no
+      // workspace → no member fetch from the visual context.
+      const wsId = checklistWorkspaceForResources;
       if (!wsId || !user) return;
 
       // 1. Buscar membros ativos
@@ -1721,7 +1732,7 @@ export function NovoChecklistPage() {
     };
     fetchWorkspaceData();
 
-  }, [user, currentWorkspace?.id, workspaceParam]);
+  }, [user, checklistId, checklistMeta, currentWorkspace?.id, workspaceParam]);
 
   useEffect(() => {
     if (isSettingsOpen && settingsActiveTab === "emails" && settingsChecklistId) {
@@ -2807,7 +2818,10 @@ export function NovoChecklistPage() {
   };
 
   const saveDeadlineConfig = async () => {
-    const wsId = currentWorkspace?.id || workspaceParam;
+    // 5E.0.2.1: deadline/assignment RPCs only ever target the checklist's real
+    // workspace. A personal existing checklist (undefined wsId) returns
+    // immediately — never creating/altering an assignment.
+    const wsId = checklistWorkspaceForResources;
     if (!settingsChecklistId || !wsId || !canManageWorkspace) return;
 
     try {

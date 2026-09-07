@@ -171,7 +171,7 @@ describe('Execution 5E.0.2 — checklist.tsx fiação (I/J)', () => {
 
   it('I2) resolveChecklistManagementAccess é importado e usado com authUser', () => {
     expect(routeSource).toContain(
-      "import { resolveChecklistManagementAccess } from \"@/lib/checklist-management-access\";"
+      "import { resolveChecklistManagementAccess, resolveWorkspaceRbacScope } from \"@/lib/checklist-management-access\";"
     );
     expect(routeSource).toMatch(/resolveChecklistManagementAccess\(\{/);
     expect(routeSource).toContain('authUserId: authUser?.id,');
@@ -187,6 +187,7 @@ describe('Execution 5E.0.2 — checklist.tsx fiação (I/J)', () => {
   });
 
   it('RBAC é resolvido contra o workspace REAL do checklist, não só o contexto visual', () => {
-    expect(routeSource).toContain('checklistRealWorkspaceId || effectiveNewChecklistWorkspaceId || undefined');
+    expect(routeSource).toContain('const checklistWorkspaceForResources = resolveWorkspaceRbacScope({');
+    expect(routeSource).toContain('const rbacWorkspaceId = checklistWorkspaceForResources;');
   });
 });
