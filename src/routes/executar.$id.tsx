@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { Loader2, Ban, AlertCircle, CalendarDays, CheckCircle2 } from "lucide-react";
 import { getAssignmentStatus, getStatusBadge } from "@/utils/assignment-status";
 import { cn } from "@/lib/utils";
+import { getAssignmentsForWorkspaceMember } from "@/lib/execution-assignment";
 
 export const Route = createFileRoute("/executar/$id")({
   component: AuthenticatedExecutionPage,
@@ -27,7 +28,7 @@ function AuthenticatedExecutionPage() {
   const navigate = useNavigate();
 
   // RBAC check
-  const { role, loading: rbacLoading } = useWorkspaceRBAC(checklist?.workspace_id);
+  const { role, workspaceMemberId, loading: rbacLoading } = useWorkspaceRBAC(checklist?.workspace_id);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -143,7 +144,7 @@ function AuthenticatedExecutionPage() {
               ← Voltar
             </Link>
             
-            {checklist.checklist_assignments?.filter((a: any) => a.workspace_member_id === user?.id).map((a: any) => {
+            {getAssignmentsForWorkspaceMember(checklist.checklist_assignments, workspaceMemberId).map((a: any) => {
               const status = getAssignmentStatus(a.due_at, a.completed_at);
               const badge = getStatusBadge(status);
               if (!badge) return null;
