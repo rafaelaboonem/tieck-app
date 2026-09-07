@@ -153,8 +153,8 @@ describe('Home 6A.1 — componente HomeOperationalSummary', () => {
       { id: 'c2', checklist_assignments: [assignment({ due_at: past })] },
     ];
     render(<HomeOperationalSummary checklists={checklists} />);
-    expect(screen.getByText('Visão de hoje')).toBeInTheDocument();
-    expect(screen.getByText('Checklists')).toBeInTheDocument();
+    expect(screen.getByText('Resumo operacional')).toBeInTheDocument();
+    expect(screen.getByText('Total')).toBeInTheDocument();
     expect(screen.getByText('Concluídos')).toBeInTheDocument();
     expect(screen.getByText('Pendentes')).toBeInTheDocument();
     expect(screen.getByText('Atrasados')).toBeInTheDocument();

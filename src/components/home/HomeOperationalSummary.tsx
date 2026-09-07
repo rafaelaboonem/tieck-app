@@ -14,7 +14,7 @@ export function HomeOperationalSummary({ checklists }: { checklists: any[] }) {
 
   const cards = [
     {
-      label: "Checklists",
+      label: "Total",
       value: summary.total,
       Icon: FileText,
       iconClass: "bg-neutral-100 text-neutral-600",
@@ -40,8 +40,8 @@ export function HomeOperationalSummary({ checklists }: { checklists: any[] }) {
   ];
 
   return (
-    <section aria-label="Visão de hoje" className="space-y-3">
-      <h2 className="text-sm font-semibold text-neutral-500 uppercase tracking-wide">Visão de hoje</h2>
+    <section aria-label="Resumo operacional" className="space-y-3">
+      <h2 className="text-sm font-semibold text-neutral-500 uppercase tracking-wide">Resumo operacional</h2>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {cards.map(({ label, value, Icon, iconClass }) => (
           <div
