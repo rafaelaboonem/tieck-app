@@ -87,6 +87,7 @@ export function SubmissionsTab({
     labels: [],
     currentIndex: 0,
   });
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const fetchSubmissions = async (isManual = false) => {
     try {
@@ -194,10 +195,35 @@ export function SubmissionsTab({
     toast.success(`Respostas serão armazenadas por ${days} dias`);
   };
 
+  // 6A.5.1: manual deletion goes through the secure server endpoint which
+  // removes storage objects BEFORE the DB row (storage failure preserves the row).
   const deleteResponse = async (id: string) => {
-    await supabase.from("checklist_responses").delete().eq("id", id);
-    setResponses((p) => p.filter((r) => r.id !== id));
-    toast.success("Resposta excluída");
+    if (deletingId) return; // no concurrent destructive deletes
+    setDeletingId(id);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token ?? "";
+      const res = await fetch("/api/checklist-responses/delete", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ responseId: id }),
+      });
+      const payload = (await res.json().catch(() => ({}))) as { ok?: boolean };
+      if (!res.ok || payload.ok !== true) {
+        toast.error("Não foi possível excluir a resposta. Tente novamente.");
+        return;
+      }
+      setResponses((p) => p.filter((r) => r.id !== id));
+      toast.success("Resposta excluída");
+    } catch (err) {
+      console.error("Error deleting response:", err);
+      toast.error("Não foi possível excluir a resposta. Tente novamente.");
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   const counts = {
@@ -455,9 +481,11 @@ export function SubmissionsTab({
                   <span className="text-neutral-400 text-[10px] ml-auto font-medium">Expira {formatDate(r.expires_at)}</span>
                   <button
                     onClick={(e) => { e.stopPropagation(); deleteResponse(r.id); }}
-                    className="p-2 text-neutral-300 hover:text-red-500 transition-colors rounded-lg hover:bg-red-50"
+                    disabled={deletingId !== null}
+                    aria-label={`Excluir resposta de ${responder}`}
+                    className="p-2 text-neutral-300 hover:text-red-500 transition-colors rounded-lg hover:bg-red-50 disabled:opacity-50 disabled:hover:bg-transparent disabled:cursor-not-allowed"
                   >
-                    <Trash2 className="w-4 h-4" />
+                    {deletingId === r.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
                   </button>
                 </button>
                 
