@@ -2,6 +2,7 @@ import { VerifyPayload, Decision, VerificationResult, PublishedBlock, CameraVeri
 import { createHash } from 'crypto';
 import { validateImageBuffer } from './image-validation';
 import { evaluateGate } from './gate';
+import { isActionableCameraNonApproval } from '@/lib/camera-ai/actionable-non-approval';
 
 export interface PublicSession {
   response_id: string;
@@ -444,7 +445,19 @@ export async function verifyCameraRequest(
   // 12. Final Decision & Persistence (Single Atomic markCompleted)
   let evidenceId: string | undefined;
 
-  if (result.decision === 'approved') {
+  const isApproved = result.decision === 'approved';
+  // 6A.4: an ACTIONABLE non-approval (completed + retake with an actionable
+  // code, or legacy completed + rejected) also persists the candidate photo for
+  // the audit trail — the decision itself is unchanged. quality_failure,
+  // uncertain, not_observable and technical failures are never persisted as
+  // operational evidence.
+  const isActionableNonApproval = isActionableCameraNonApproval({
+    status: 'completed',
+    decision: result.decision,
+    code: result.code
+  });
+
+  if (isApproved || isActionableNonApproval) {
     const { evidenceId: pId, error: pError } = await deps.persistEvidence({
       checklistId: session.checklist_id,
       responseId: session.response_id,
@@ -455,38 +468,50 @@ export async function verifyCameraRequest(
     });
 
     if (pError || !pId) {
-      // markCompleted exactly once for Approved+StorageFailure
-      const { data: finalUpdate, error: finalError } = await deps.markCompleted({
-        responseId: session.response_id,
-        blockId: payload.blockId,
-        idempotencyKey: payload.idempotencyKey,
-        decision: 'approved',
-        code: 'storage_pending',
-        evidence: result.evidence,
-        evidenceId: undefined,
-        model: deps.model,
-        durationMs: duration,
-        at: deps.now()
-      });
+      if (isApproved) {
+        // Approved+StorageFailure: EXISTING fail-closed path, unchanged.
+        const { data: finalUpdate, error: finalError } = await deps.markCompleted({
+          responseId: session.response_id,
+          blockId: payload.blockId,
+          idempotencyKey: payload.idempotencyKey,
+          decision: 'approved',
+          code: 'storage_pending',
+          evidence: result.evidence,
+          evidenceId: undefined,
+          model: deps.model,
+          durationMs: duration,
+          at: deps.now()
+        });
 
-      if (finalError || !finalUpdate) {
-        return { 
-          status: 500, 
-          body: { ok: false, code: 'persistence_error', message: 'Falha ao confirmar falha de salvamento.', requestId } 
+        if (finalError || !finalUpdate) {
+          return { 
+            status: 500, 
+            body: { ok: false, code: 'persistence_error', message: 'Falha ao confirmar falha de salvamento.', requestId } 
+          };
+        }
+
+        return {
+          status: 500,
+          body: {
+            ok: false,
+            code: 'storage_failure',
+            message: 'Foto aprovada. Não conseguimos salvá-la ainda.',
+            requestId
+          }
         };
       }
 
-      return {
-        status: 500,
-        body: {
-          ok: false,
-          code: 'storage_failure',
-          message: 'Foto aprovada. Não conseguimos salvá-la ainda.',
-          requestId
-        }
-      };
+      // Actionable non-approval: a failed audit photo must NOT turn a valid AI
+      // decision into a technical error nor block another photo. The
+      // verification stays valid; the visual audit degrades to text-only
+      // (evidenceId stays undefined, persisted=false).
+      console.error(
+        `[CameraAI] Non-approved evidence persistence failed (degraded to text-only)`,
+        { requestId: deps.requestId }
+      );
+    } else {
+      evidenceId = pId;
     }
-    evidenceId = pId;
   }
 
   // markCompleted exactly once for all new successful/rejected paths
@@ -515,12 +540,14 @@ export async function verifyCameraRequest(
     };
   }
 
+  // `persisted` means "this candidate image was persisted and linked to the
+  // attempt" — NOT "approved". The UI decides approval by decision/code only.
   return { 
     status: 200, 
     body: { 
       ...result, 
       evidenceId, 
-      persisted: result.decision === 'approved' && !!evidenceId, 
+      persisted: !!evidenceId, 
       requestId 
     } 
   };

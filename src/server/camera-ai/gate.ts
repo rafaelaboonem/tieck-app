@@ -87,8 +87,9 @@ export function evaluateGate(analysis: CameraVerification | CameraReferenceVerif
     };
   }
 
-  // Condição não observável ou impossível de verificar
-  if (!v.condition_observable || v.contradictions.length > 0 || v.positive_visible_evidence.length === 0) {
+  // Condição NÃO observável (cortada, oculta, ângulo impede verificar) OU
+  // análise contraditória → inconclusivo. Nunca vira condition_not_met.
+  if (!v.condition_observable || v.contradictions.length > 0) {
     return {
       ok: true,
       decision: 'not_observable',
@@ -98,7 +99,10 @@ export function evaluateGate(analysis: CameraVerification | CameraReferenceVerif
     };
   }
 
-  // Condição visivelmente não atendida
+  // Condição VISIVELMENTE NÃO ATENDIDA: observável + met=false + leitura
+  // coerente (sem contradictions) → retake/condition_not_met, mesmo quando
+  // positive_visible_evidence está vazio — a evidência relevante vive em
+  // negative_visible_evidence. Ex.: "A mão está aberta?" com punho fechado.
   if (v.condition_met === false) {
     return {
       ok: true,
@@ -106,6 +110,17 @@ export function evaluateGate(analysis: CameraVerification | CameraReferenceVerif
       code: 'condition_not_met',
       message: sanitizedMessage,
       evidence: v.negative_visible_evidence.join(', ')
+    };
+  }
+
+  // Observável e atendida, mas sem evidência positiva coerente → fail-closed.
+  if (v.positive_visible_evidence.length === 0) {
+    return {
+      ok: true,
+      decision: 'not_observable',
+      code: 'not_observable',
+      message: sanitizedMessage,
+      evidence: [...v.negative_visible_evidence, ...v.contradictions].join(', ')
     };
   }
 

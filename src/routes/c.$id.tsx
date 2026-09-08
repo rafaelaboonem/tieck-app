@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { getChecklistSeo } from "@/lib/checklist_seo.functions";
 import { t } from "@/lib/checklist-i18n";
 import { ExecutionEngine } from "@/components/ExecutionEngine";
+import { shouldShowChecklistWatermark } from "@/lib/camera-watermark-visibility";
 import logoUrl from "../assets/local/logo-k.webp";
 const tieckLogo = logoUrl;
 
@@ -69,6 +70,9 @@ function PublicChecklistPage() {
   const [submitted, setSubmitted] = useState(false);
   const [analyticsId, setAnalyticsId] = useState<string | null>(null);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  // True only while the live camera viewfinder is active — page-level branding
+  // ("Feito com Tieck") is hidden during live capture and restored after (6A.4.1).
+  const [cameraOpen, setCameraOpen] = useState(false);
   const heartbeatInterval = useRef<any>(null);
 
   useEffect(() => {
@@ -186,10 +190,11 @@ function PublicChecklistPage() {
           mode="public"
           onSubmitted={() => setSubmitted(true)}
           analyticsId={analyticsId}
+          onCameraActiveChange={setCameraOpen}
         />
       </main>
 
-      {loaderData.showBranding && (
+      {shouldShowChecklistWatermark(loaderData.showBranding, cameraOpen) && (
         <div className="fixed bottom-6 right-8 z-[100] flex items-center gap-3">
           <span className="text-sm text-neutral-400">Feito com</span>
           <img src={tieckLogo} alt="Tieck" className="h-20 grayscale opacity-60" />

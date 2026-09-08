@@ -8,6 +8,13 @@ import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { CompareTab } from "./CompareTab";
 import { getEvidenceSignedUrl } from "@/lib/evidence-signed-url";
+import {
+  cameraAttemptStatusLabel,
+  countActionableNonApprovals,
+  resolveSubmissionsNoEvidenceLabel,
+  type HomeCameraAttempt as CameraAttemptLike,
+} from "@/lib/home-camera-attention";
+import { isActionableCameraNonApproval } from "@/lib/camera-ai/actionable-non-approval";
 
 
 type ResponseRow = {
@@ -33,13 +40,14 @@ type Filter = "todos" | "completo" | "parcial" | "comparar";
 type CameraAIAttempt = {
   id: string;
   response_id: string;
-  decision: 'approved' | 'rejected' | 'not_observable' | 'error';
-  evidence: string;
+  block_id?: string | null;
+  decision: 'approved' | 'retake' | 'rejected' | 'not_observable' | 'technical_failure' | 'error';
+  evidence?: string | null;
   model: string;
   duration_ms: number;
   completed_at: string;
   code: string;
-  evidence_id: string;
+  evidence_id: string | null;
   status: 'processing' | 'completed' | 'failed';
 };
 
@@ -79,6 +87,7 @@ export function SubmissionsTab({
     labels: [],
     currentIndex: 0,
   });
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const fetchSubmissions = async (isManual = false) => {
     try {
@@ -116,10 +125,12 @@ export function SubmissionsTab({
       setIsRetentionEnabled(hydratedEnabled);
       onRetentionChange?.(hydratedEnabled, hydratedDays);
 
-      // Hydrate with Camera AI attempts
+      // Hydrate with Camera AI attempts (via the secure read RPC — direct
+      // SELECT on camera_ai_attempts is closed to clients; the RPC only
+      // returns attempts for checklists the caller can manage).
       const respIds = (resp.data ?? []).map((r: any) => r.id);
-      const { data: cameraAttempts } = respIds.length > 0 
-        ? await supabase.from("camera_ai_attempts").select("*").in("response_id", respIds)
+      const { data: cameraAttempts } = respIds.length > 0
+        ? await supabase.rpc("get_camera_ai_attempts_for_responses", { p_response_ids: respIds })
         : { data: [] };
       
       const hydratedResponses = (resp.data ?? []).map((r: any) => ({
@@ -184,10 +195,35 @@ export function SubmissionsTab({
     toast.success(`Respostas serão armazenadas por ${days} dias`);
   };
 
+  // 6A.5.1: manual deletion goes through the secure server endpoint which
+  // removes storage objects BEFORE the DB row (storage failure preserves the row).
   const deleteResponse = async (id: string) => {
-    await supabase.from("checklist_responses").delete().eq("id", id);
-    setResponses((p) => p.filter((r) => r.id !== id));
-    toast.success("Resposta excluída");
+    if (deletingId) return; // no concurrent destructive deletes
+    setDeletingId(id);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token ?? "";
+      const res = await fetch("/api/checklist-responses/delete", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ responseId: id }),
+      });
+      const payload = (await res.json().catch(() => ({}))) as { ok?: boolean };
+      if (!res.ok || payload.ok !== true) {
+        toast.error("Não foi possível excluir a resposta. Tente novamente.");
+        return;
+      }
+      setResponses((p) => p.filter((r) => r.id !== id));
+      toast.success("Resposta excluída");
+    } catch (err) {
+      console.error("Error deleting response:", err);
+      toast.error("Não foi possível excluir a resposta. Tente novamente.");
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   const counts = {
@@ -229,6 +265,7 @@ export function SubmissionsTab({
 
   const summarizePhotos = (answers: Record<string, any>, attempts: CameraAIAttempt[] = []) => {
     let total = 0, aiApproved = 0, photoReceived = 0, inconsistencies = 0, rejected = 0;
+    const aiNonApproved = countActionableNonApprovals((attempts as CameraAttemptLike[]));
     
     for (const v of Object.values(answers || {})) {
       if (v && typeof v === "object" && !Array.isArray(v) && typeof (v as any).evidenceId === "string") {
@@ -253,11 +290,20 @@ export function SubmissionsTab({
         photoReceived += 1;
       }
     }
-    return { total, aiApproved, photoReceived, inconsistencies, rejected };
+    return { total, aiApproved, photoReceived, inconsistencies, rejected, aiNonApproved };
   };
 
-  const photoBadge = (s: { total: number; aiApproved: number; photoReceived: number; inconsistencies: number; rejected: number }) => {
-    if (s.total === 0) return { label: "Sem evidências", tone: "bg-neutral-100 text-neutral-500 border-neutral-200" };
+  const photoBadge = (s: { total: number; aiApproved: number; photoReceived: number; inconsistencies: number; rejected: number; aiNonApproved: number }) => {
+    if (s.total === 0) {
+      const noEvidence = resolveSubmissionsNoEvidenceLabel({
+        photoCount: s.total,
+        nonApprovedCount: s.aiNonApproved,
+      });
+      if (noEvidence.isNonApprovedSignal) {
+        return { label: noEvidence.label, tone: "bg-red-50 text-red-700 border-red-200" };
+      }
+      return { label: "Sem evidências", tone: "bg-neutral-100 text-neutral-500 border-neutral-200" };
+    }
     const totalLabel = `${s.total} evidência${s.total > 1 ? "s" : ""}`;
     
     if (s.aiApproved > 0) return { label: totalLabel, tone: "bg-emerald-50 text-emerald-700 border-emerald-200" };
@@ -404,6 +450,15 @@ export function SubmissionsTab({
             const responder = identifyResponder(r.answers) ?? `Visitante ${r.visitor_id.slice(0, 6)}`;
             const stats = summarizePhotos(r.answers, r.camera_attempts);
             const badge = photoBadge(stats);
+            const evidenceIdsInAnswers = new Set<string>();
+            for (const v of Object.values(r.answers || {})) {
+              if (v && typeof v === "object" && !Array.isArray(v) && typeof (v as any).evidenceId === "string") {
+                evidenceIdsInAnswers.add((v as any).evidenceId);
+              }
+            }
+            const orphanAttempts = (r.camera_attempts ?? []).filter(
+              (a) => !a.evidence_id || !evidenceIdsInAnswers.has(a.evidence_id)
+            );
             
             return (
               <div key={r.id} className="border border-neutral-100 rounded-2xl overflow-hidden bg-white shadow-sm transition-all hover:border-neutral-200">
@@ -426,9 +481,11 @@ export function SubmissionsTab({
                   <span className="text-neutral-400 text-[10px] ml-auto font-medium">Expira {formatDate(r.expires_at)}</span>
                   <button
                     onClick={(e) => { e.stopPropagation(); deleteResponse(r.id); }}
-                    className="p-2 text-neutral-300 hover:text-red-500 transition-colors rounded-lg hover:bg-red-50"
+                    disabled={deletingId !== null}
+                    aria-label={`Excluir resposta de ${responder}`}
+                    className="p-2 text-neutral-300 hover:text-red-500 transition-colors rounded-lg hover:bg-red-50 disabled:opacity-50 disabled:hover:bg-transparent disabled:cursor-not-allowed"
                   >
-                    <Trash2 className="w-4 h-4" />
+                    {deletingId === r.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
                   </button>
                 </button>
                 
@@ -442,6 +499,56 @@ export function SubmissionsTab({
                         {renderAnswerValue(value, labelForBlock(blockId), r.camera_attempts)}
                       </div>
                     ))}
+                    {orphanAttempts.length > 0 && (
+                      <div className="space-y-3">
+                        <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest block">
+                          Verificação da câmera
+                        </label>
+                        {orphanAttempts.map((a) => {
+                          // 6A.4: a non-approved attempt whose photo WAS persisted
+                          // renders the real private evidence (EvidenceCard) instead
+                          // of the text-only "Foto não armazenada" fallback.
+                          if (a.evidence_id) {
+                            return (
+                              <EvidenceCard
+                                key={a.id}
+                                evidenceId={a.evidence_id}
+                                blockLabel={labelForBlock(a.block_id ?? "")}
+                                attempts={r.camera_attempts ?? []}
+                                openLightbox={openLightbox}
+                              />
+                            );
+                          }
+                          const statusLabel = cameraAttemptStatusLabel(a as CameraAttemptLike);
+                          const tone =
+                            statusLabel === "Não aprovada pela IA"
+                              ? "bg-red-50 text-red-700 border-red-100"
+                              : statusLabel === "Aprovada pela IA"
+                                ? "bg-emerald-50 text-emerald-700 border-emerald-100"
+                                : "bg-neutral-50 text-neutral-500 border-neutral-100";
+                          return (
+                            <div key={a.id} className="rounded-xl border border-neutral-200 bg-white p-3 shadow-sm">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span
+                                  className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full border text-[11px] font-bold uppercase tracking-wider ${tone}`}
+                                >
+                                  <Brain className="w-3.5 h-3.5" />
+                                  {statusLabel ?? "Verificação em andamento"}
+                                </span>
+                                {!a.evidence_id && (
+                                  <span className="text-[10px] font-medium text-neutral-400">Foto não armazenada</span>
+                                )}
+                              </div>
+                              {a.evidence && (
+                                <p className="mt-2 text-[11px] text-neutral-600 leading-relaxed bg-neutral-50/50 p-2 rounded-lg border border-neutral-100">
+                                  {a.evidence}
+                                </p>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -510,18 +617,20 @@ function EvidenceCard({
 
 
   const isApproved = attempt?.status === 'completed' && attempt?.decision === 'approved';
-  const isRejected = attempt?.status === 'completed' && attempt?.decision === 'rejected';
+  // Shared 6A.4 semantics: completed + rejected (legacy) OR completed + retake
+  // with an actionable code → "Não aprovada pela IA".
+  const isNonApproved = isActionableCameraNonApproval(attempt);
   const isNotObservable = attempt?.status === 'completed' && attempt?.decision === 'not_observable';
   const isTechnicalFailure = attempt?.status === 'failed' || attempt?.decision === 'error' || (attempt?.code && (attempt.code.includes('failure') || attempt.code.includes('error')));
 
   const statusBadge = useMemo(() => {
     if (!attempt) return { label: "Sem verificação automática", tone: "neutral" };
     if (isApproved) return { label: "Aprovada pela IA", tone: "approved" };
-    if (isRejected) return { label: "Rejeitada pela IA", tone: "rejected" };
+    if (isNonApproved) return { label: "Não aprovada pela IA", tone: "rejected" };
     if (isNotObservable) return { label: "Não foi possível verificar", tone: "neutral" };
     if (isTechnicalFailure) return { label: "Verificação indisponível", tone: "neutral" };
     return { label: "Verificação não localizada", tone: "neutral" };
-  }, [attempt, isApproved, isRejected, isNotObservable, isTechnicalFailure]);
+  }, [attempt, isApproved, isNonApproved, isNotObservable, isTechnicalFailure]);
 
 
   const reviewStatus = "Não revisada";

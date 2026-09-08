@@ -29,6 +29,7 @@ import { Route as ConviteTokenRouteImport } from './routes/convite.$token'
 import { Route as CIdRouteImport } from './routes/c.$id'
 import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
 import { Route as UnidadesUnitIdOperacaoRouteImport } from './routes/unidades.$unitId.operacao'
+import { Route as ApiChecklistResponsesDeleteRouteImport } from './routes/api/checklist-responses/delete'
 import { Route as ApiCameraAiVerifyRouteImport } from './routes/api/camera-ai/verify'
 import { Route as ApiCameraAiTestVerificationRouteImport } from './routes/api/camera-ai/test-verification'
 import { Route as ApiCameraAiSignedUrlRouteImport } from './routes/api/camera-ai/signed-url'
@@ -41,6 +42,7 @@ import { Route as ApiPublicInvitationsInspectRouteImport } from './routes/api/pu
 import { Route as ApiPublicInvitationsCreateRouteImport } from './routes/api/public/invitations/create'
 import { Route as ApiPublicInvitationsAcceptRouteImport } from './routes/api/public/invitations/accept'
 import { Route as ApiPublicCronOverdueAssignmentsRouteImport } from './routes/api/public/cron/overdue-assignments'
+import { Route as ApiPublicCronEvidenceRetentionRouteImport } from './routes/api/public/cron/evidence-retention'
 import { Route as ApiCameraAiReferenceImagePreviewRouteImport } from './routes/api/camera-ai/reference-image/preview'
 
 const PainelRoute = PainelRouteImport.update({
@@ -143,6 +145,12 @@ const UnidadesUnitIdOperacaoRoute = UnidadesUnitIdOperacaoRouteImport.update({
   path: '/unidades/$unitId/operacao',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiChecklistResponsesDeleteRoute =
+  ApiChecklistResponsesDeleteRouteImport.update({
+    id: '/api/checklist-responses/delete',
+    path: '/api/checklist-responses/delete',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiCameraAiVerifyRoute = ApiCameraAiVerifyRouteImport.update({
   id: '/api/camera-ai/verify',
   path: '/api/camera-ai/verify',
@@ -212,6 +220,12 @@ const ApiPublicCronOverdueAssignmentsRoute =
     path: '/api/public/cron/overdue-assignments',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicCronEvidenceRetentionRoute =
+  ApiPublicCronEvidenceRetentionRouteImport.update({
+    id: '/api/public/cron/evidence-retention',
+    path: '/api/public/cron/evidence-retention',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiCameraAiReferenceImagePreviewRoute =
   ApiCameraAiReferenceImagePreviewRouteImport.update({
     id: '/preview',
@@ -244,8 +258,10 @@ export interface FileRoutesByFullPath {
   '/api/camera-ai/signed-url': typeof ApiCameraAiSignedUrlRoute
   '/api/camera-ai/test-verification': typeof ApiCameraAiTestVerificationRoute
   '/api/camera-ai/verify': typeof ApiCameraAiVerifyRoute
+  '/api/checklist-responses/delete': typeof ApiChecklistResponsesDeleteRoute
   '/unidades/$unitId/operacao': typeof UnidadesUnitIdOperacaoRoute
   '/api/camera-ai/reference-image/preview': typeof ApiCameraAiReferenceImagePreviewRoute
+  '/api/public/cron/evidence-retention': typeof ApiPublicCronEvidenceRetentionRoute
   '/api/public/cron/overdue-assignments': typeof ApiPublicCronOverdueAssignmentsRoute
   '/api/public/invitations/accept': typeof ApiPublicInvitationsAcceptRoute
   '/api/public/invitations/create': typeof ApiPublicInvitationsCreateRoute
@@ -279,8 +295,10 @@ export interface FileRoutesByTo {
   '/api/camera-ai/signed-url': typeof ApiCameraAiSignedUrlRoute
   '/api/camera-ai/test-verification': typeof ApiCameraAiTestVerificationRoute
   '/api/camera-ai/verify': typeof ApiCameraAiVerifyRoute
+  '/api/checklist-responses/delete': typeof ApiChecklistResponsesDeleteRoute
   '/unidades/$unitId/operacao': typeof UnidadesUnitIdOperacaoRoute
   '/api/camera-ai/reference-image/preview': typeof ApiCameraAiReferenceImagePreviewRoute
+  '/api/public/cron/evidence-retention': typeof ApiPublicCronEvidenceRetentionRoute
   '/api/public/cron/overdue-assignments': typeof ApiPublicCronOverdueAssignmentsRoute
   '/api/public/invitations/accept': typeof ApiPublicInvitationsAcceptRoute
   '/api/public/invitations/create': typeof ApiPublicInvitationsCreateRoute
@@ -315,8 +333,10 @@ export interface FileRoutesById {
   '/api/camera-ai/signed-url': typeof ApiCameraAiSignedUrlRoute
   '/api/camera-ai/test-verification': typeof ApiCameraAiTestVerificationRoute
   '/api/camera-ai/verify': typeof ApiCameraAiVerifyRoute
+  '/api/checklist-responses/delete': typeof ApiChecklistResponsesDeleteRoute
   '/unidades/$unitId/operacao': typeof UnidadesUnitIdOperacaoRoute
   '/api/camera-ai/reference-image/preview': typeof ApiCameraAiReferenceImagePreviewRoute
+  '/api/public/cron/evidence-retention': typeof ApiPublicCronEvidenceRetentionRoute
   '/api/public/cron/overdue-assignments': typeof ApiPublicCronOverdueAssignmentsRoute
   '/api/public/invitations/accept': typeof ApiPublicInvitationsAcceptRoute
   '/api/public/invitations/create': typeof ApiPublicInvitationsCreateRoute
@@ -352,8 +372,10 @@ export interface FileRouteTypes {
     | '/api/camera-ai/signed-url'
     | '/api/camera-ai/test-verification'
     | '/api/camera-ai/verify'
+    | '/api/checklist-responses/delete'
     | '/unidades/$unitId/operacao'
     | '/api/camera-ai/reference-image/preview'
+    | '/api/public/cron/evidence-retention'
     | '/api/public/cron/overdue-assignments'
     | '/api/public/invitations/accept'
     | '/api/public/invitations/create'
@@ -387,8 +409,10 @@ export interface FileRouteTypes {
     | '/api/camera-ai/signed-url'
     | '/api/camera-ai/test-verification'
     | '/api/camera-ai/verify'
+    | '/api/checklist-responses/delete'
     | '/unidades/$unitId/operacao'
     | '/api/camera-ai/reference-image/preview'
+    | '/api/public/cron/evidence-retention'
     | '/api/public/cron/overdue-assignments'
     | '/api/public/invitations/accept'
     | '/api/public/invitations/create'
@@ -422,8 +446,10 @@ export interface FileRouteTypes {
     | '/api/camera-ai/signed-url'
     | '/api/camera-ai/test-verification'
     | '/api/camera-ai/verify'
+    | '/api/checklist-responses/delete'
     | '/unidades/$unitId/operacao'
     | '/api/camera-ai/reference-image/preview'
+    | '/api/public/cron/evidence-retention'
     | '/api/public/cron/overdue-assignments'
     | '/api/public/invitations/accept'
     | '/api/public/invitations/create'
@@ -458,7 +484,9 @@ export interface RootRouteChildren {
   ApiCameraAiSignedUrlRoute: typeof ApiCameraAiSignedUrlRoute
   ApiCameraAiTestVerificationRoute: typeof ApiCameraAiTestVerificationRoute
   ApiCameraAiVerifyRoute: typeof ApiCameraAiVerifyRoute
+  ApiChecklistResponsesDeleteRoute: typeof ApiChecklistResponsesDeleteRoute
   UnidadesUnitIdOperacaoRoute: typeof UnidadesUnitIdOperacaoRoute
+  ApiPublicCronEvidenceRetentionRoute: typeof ApiPublicCronEvidenceRetentionRoute
   ApiPublicCronOverdueAssignmentsRoute: typeof ApiPublicCronOverdueAssignmentsRoute
   ApiPublicInvitationsAcceptRoute: typeof ApiPublicInvitationsAcceptRoute
   ApiPublicInvitationsCreateRoute: typeof ApiPublicInvitationsCreateRoute
@@ -610,6 +638,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof UnidadesUnitIdOperacaoRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/checklist-responses/delete': {
+      id: '/api/checklist-responses/delete'
+      path: '/api/checklist-responses/delete'
+      fullPath: '/api/checklist-responses/delete'
+      preLoaderRoute: typeof ApiChecklistResponsesDeleteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/camera-ai/verify': {
       id: '/api/camera-ai/verify'
       path: '/api/camera-ai/verify'
@@ -694,6 +729,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicCronOverdueAssignmentsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/cron/evidence-retention': {
+      id: '/api/public/cron/evidence-retention'
+      path: '/api/public/cron/evidence-retention'
+      fullPath: '/api/public/cron/evidence-retention'
+      preLoaderRoute: typeof ApiPublicCronEvidenceRetentionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/camera-ai/reference-image/preview': {
       id: '/api/camera-ai/reference-image/preview'
       path: '/preview'
@@ -744,7 +786,9 @@ const rootRouteChildren: RootRouteChildren = {
   ApiCameraAiSignedUrlRoute: ApiCameraAiSignedUrlRoute,
   ApiCameraAiTestVerificationRoute: ApiCameraAiTestVerificationRoute,
   ApiCameraAiVerifyRoute: ApiCameraAiVerifyRoute,
+  ApiChecklistResponsesDeleteRoute: ApiChecklistResponsesDeleteRoute,
   UnidadesUnitIdOperacaoRoute: UnidadesUnitIdOperacaoRoute,
+  ApiPublicCronEvidenceRetentionRoute: ApiPublicCronEvidenceRetentionRoute,
   ApiPublicCronOverdueAssignmentsRoute: ApiPublicCronOverdueAssignmentsRoute,
   ApiPublicInvitationsAcceptRoute: ApiPublicInvitationsAcceptRoute,
   ApiPublicInvitationsCreateRoute: ApiPublicInvitationsCreateRoute,

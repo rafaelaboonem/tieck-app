@@ -2624,6 +2624,24 @@ export type Database = {
       }
       generate_dataset_public_id: { Args: never; Returns: string }
       generate_short_slug: { Args: { length?: number }; Returns: string }
+      get_camera_ai_attempts_for_responses: {
+        Args: { p_response_ids: string[] }
+        Returns: {
+          block_id: string
+          code: string | null
+          completed_at: string | null
+          created_at: string
+          decision: string | null
+          duration_ms: number | null
+          evidence: string | null
+          evidence_id: string | null
+          id: string
+          model: string | null
+          response_id: string
+          status: string
+          updated_at: string
+        }[]
+      }
       get_checklist_access: {
         Args: { p_checklist_id: string; p_user_id: string }
         Returns: {

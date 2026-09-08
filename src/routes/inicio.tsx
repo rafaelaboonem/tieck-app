@@ -12,6 +12,10 @@ import { FileText, Clock, ChevronRight, CalendarDays } from "lucide-react";
 import { getAssignmentStatus, getStatusBadge } from "@/utils/assignment-status";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { HomeOperationalSummary } from "@/components/home/HomeOperationalSummary";
+import { HomeOperationalPriorities } from "@/components/home/HomeOperationalPriorities";
+import { useHomeCameraAttention } from "@/hooks/useHomeCameraAttention";
+import { canLoadHomeCameraAttention } from "@/lib/home-camera-attention";
 import logoUrl from "../assets/local/logo-k.webp";
 import { toast } from "sonner";
 import {
@@ -220,6 +224,17 @@ export function Dashboard() {
     );
   };
 
+  // Home 6A.3 — Camera AI rejection signals, secondary enrichment (never blocks the Home).
+  const cameraAttention = useHomeCameraAttention({
+    checklists,
+    enabled: canLoadHomeCameraAttention({
+      isWorkspaceContext: workspaceStatus === 'workspace',
+      isViewer,
+      canManage,
+      isAuthenticated: !!user?.id,
+    }),
+  });
+
   const handleBulkDelete = async () => {
     if (selectedIds.length === 0) return;
 
@@ -295,6 +310,26 @@ export function Dashboard() {
               </div>
             ) : checklists.length > 0 ? (
               <div className="space-y-6">
+                <HomeOperationalSummary checklists={checklists} />
+                <HomeOperationalPriorities
+                  checklists={checklists}
+                  attentionByChecklist={cameraAttention}
+                  onOpen={(checklistId, kind) => {
+                    // Home 6A.3: prioridade com rejeição IA → Envios (investigação da evidência).
+                    if (kind === 'camera') {
+                      // 6A-only: abre o editor com o painel de Configurações (aba Envios) —
+                      // o deep-link ?settings=envios é superfície da 5E.0.1, adiada.
+                      navigate({ to: "/checklist", search: { id: checklistId, settings: true } });
+                      return;
+                    }
+                    // FASE 5B.6: Viewer vai para execução, outros para editor
+                    if (workspaceStatus === 'workspace' && isViewer) {
+                      navigate({ to: "/executar/$id", params: { id: checklistId } });
+                    } else {
+                      navigate({ to: "/checklist", search: { id: checklistId } });
+                    }
+                  }}
+                />
                 <div className="flex items-center justify-between">
                   <h2 className="text-xl font-bold text-neutral-900">
                     {isSelectionMode ? `${selectedIds.length} selecionado(s)` : "Checklists"}
