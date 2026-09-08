@@ -181,6 +181,15 @@ describe('Home 6A.2 — componente HomeOperationalPriorities', () => {
     expect(screen.getAllByText('Abrir')).toHaveLength(2);
   });
 
+  it('6A.0.2: botão principal da linha de prioridade usa cursor-pointer', () => {
+    const checklists = [
+      { id: 'c1', title: 'Casa 2', checklist_assignments: [assignment({ due_at: daysAgo(1) })] },
+    ];
+    render(<HomeOperationalPriorities checklists={checklists} onOpen={() => {}} />);
+    const rowBtn = screen.getByRole('button', { name: /Casa 2/ });
+    expect(rowBtn).toHaveClass('cursor-pointer');
+  });
+
   it('J) nenhuma prioridade → seção não aparece', () => {
     const { container } = render(
       <HomeOperationalPriorities

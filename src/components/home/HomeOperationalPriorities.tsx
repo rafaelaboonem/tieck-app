@@ -50,7 +50,7 @@ export function HomeOperationalPriorities({
               key={item.checklistId}
               type="button"
               onClick={() => onOpen(item.checklistId, openKind)}
-              className="w-full flex items-center gap-3 px-3 sm:px-4 py-3 text-left hover:bg-neutral-50 transition-colors group"
+              className="w-full flex items-center gap-3 px-3 sm:px-4 py-3 text-left cursor-pointer hover:bg-neutral-50 transition-colors group"
             >
               <span
                 className={cn(
