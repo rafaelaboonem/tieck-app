@@ -24,19 +24,19 @@ function checklistRouteOptions(): string {
 }
 
 describe("Promotion 6A.0.1 — deep-link Envios sem 5E", () => {
-  it("A/B) validateSearch aceita settingsTab apenas com o literal 'envios'", () => {
+  it("A/B) validateSearch aceita settingsTab 'envios' (6A) e 'compartilhar' (5E.0A), fail-closed", () => {
     const route = checklistRouteOptions();
-    expect(route).toContain(`settingsTab: search.settingsTab === "envios" ? "envios" : undefined`);
-    expect(route).toContain(`settingsTab?: "envios"`);
+    // Contrato evoluído pela 5E.0A: 'envios' continua aceito; 'compartilhar'
+    // foi adicionado para o publish → Share. Qualquer outro valor → undefined.
+    expect(route).toContain(`search.settingsTab === "envios" ? "envios"`);
+    expect(route).toContain(`settingsTab?: "envios" | "compartilhar"`);
   });
 
-  it("C) settingsTab inválido → undefined (nenhum outro literal aceito)", () => {
+  it("C) settingsTab inválido → undefined (exatamente os dois literais aceitos)", () => {
     const route = checklistRouteOptions();
-    // A única expressão de aceitação compara com o literal "envios"; qualquer
-    // outro valor cai no ternário → undefined.
-    expect(route.match(/settingsTab: search\.settingsTab === "envios"/g)?.length).toBe(1);
-    // Nenhuma cópia da união 5E (lista de abas no validateSearch).
-    expect(route).not.toMatch(/settingsTab === \(|settingsTab\?\.\w+Tab|compartilhar.*settingsTab/);
+    // Exatamente dois aceitadores: "envios" (6A) e "compartilhar" (5E.0A).
+    const acceptors = route.match(/search\.settingsTab === "(envios|compartilhar)"/g) ?? [];
+    expect(acceptors).toHaveLength(2);
   });
 
   it("preserva o contrato da main para settings (boolean-only)", () => {
@@ -71,11 +71,10 @@ describe("Promotion 6A.0.1 — deep-link Envios sem 5E", () => {
     expect(routeSource).not.toMatch(/settings\?: boolean \| string/);
   });
 
-  it("nenhum helper/arquivo 5E é importado", () => {
+  it("nenhum helper 5E proibido é importado (checklist-publish-intent foi sancionado pela 5E.0A)", () => {
     const forbidden = [
       "execution-assignment",
       "checklist-links",
-      "checklist-publish-intent",
       "checklist-management-access",
       "ChecklistCoverProfile",
       "checklist-render-styles",

@@ -125,6 +125,7 @@ import { getAssignmentStatus, getStatusBadge } from "@/utils/assignment-status";
 const InsightsTab = lazy(() => import("@/components/InsightsTab").then(m => ({ default: m.InsightsTab })));
 const SubmissionsTab = lazy(() => import("@/components/SubmissionsTab").then(m => ({ default: m.SubmissionsTab })));
 import { BlockRenderer, INTERACTIVE_BLOCK_TYPES } from "@/components/BlockRenderer";
+import { shouldOpenShareAfterSave } from "@/lib/checklist-publish-intent";
 import { ensureCameraBlockIds, withNewCameraBlockId, extractCameraQuestions } from "@/lib/camera-blocks";
 import { hashQuestion } from "@/lib/camera-ai/hashing";
 import { syncCameraBlockPolicy } from "@/lib/camera-ai/policy-sync";
@@ -690,15 +691,19 @@ export const Route = createFileRoute("/checklist")({
   head: () => ({
     meta: [{ title: "Editor — Tieck" }],
   }),
-  validateSearch: (search: Record<string, unknown>): { id?: string; workspace?: string; category?: string; settings?: boolean; settingsTab?: "envios" } => {
+  validateSearch: (search: Record<string, unknown>): { id?: string; workspace?: string; category?: string; settings?: boolean; settingsTab?: "envios" | "compartilhar" } => {
     return {
       id: typeof search.id === "string" ? search.id : undefined,
       workspace: typeof search.workspace === "string" ? search.workspace : undefined,
       category: typeof search.category === "string" ? search.category : undefined,
       settings: typeof search.settings === "boolean" ? search.settings : undefined,
-      // 6A-only deep-link: Home Camera AI attention ("Ver envio") opens Configurações → Envios.
-      // Separate param (not a 5E settings union); only the literal "envios" is accepted.
-      settingsTab: search.settingsTab === "envios" ? "envios" : undefined,
+      // Deep-link tab selection: Home Camera AI ("Ver envio") → "envios";
+      // 5E.0A explicit publish → "compartilhar". Fail-closed: only these two
+      // literals are accepted, any other value is undefined (default "geral").
+      settingsTab:
+        search.settingsTab === "envios" ? "envios"
+        : search.settingsTab === "compartilhar" ? "compartilhar"
+        : undefined,
     };
   },
   component: ChecklistPageWrapper,
@@ -1018,11 +1023,12 @@ export function NovoChecklistPage() {
   const savedRangeRef = useRef<Range | null>(null);
   const [settingsActiveTab, setSettingsActiveTab] = useState<"geral" | "compartilhar" | "envios" | "insights" | "emails" | "apresentacao">("geral");
 
-  // 6A.0.1: deep-link ?settings=true&settingsTab=envios (Home "Ver envio") selects the
-  // Envios tab when Configurações opens. Default remains "geral" without the param.
+  // 6A.0.1 / 5E.0A: deep-link ?settings=true&settingsTab=… selects the tab when
+  // Configurações opens ("envios" = Home "Ver envio"; "compartilhar" = publish
+  // success). Default remains "geral" without the param.
   useEffect(() => {
-    if (openSettingsTabParam === "envios") {
-      setSettingsActiveTab("envios");
+    if (openSettingsTabParam === "envios" || openSettingsTabParam === "compartilhar") {
+      setSettingsActiveTab(openSettingsTabParam);
     }
   }, [openSettingsTabParam]);
   const sessionChecklistIdRef = useRef<string | null>(null);
@@ -2678,15 +2684,25 @@ export function NovoChecklistPage() {
         if (serverSlug) setShortSlug(serverSlug);
 
 
-        if (isActuallyPublished) {
-          setTimeout(() => {
-            setIsSettingsOpen(true);
-            setSettingsActiveTab("compartilhar");
-            if (!checklistId) {
-              sessionChecklistIdRef.current = data.id;
-              navigate({ to: "/checklist", search: { id: data.id }, replace: true });
-            }
-          }, 1000);
+        // 5E.0A: open Configurações → Compartilhar ONLY for an explicit,
+        // backend-confirmed publish (shouldOpenShareAfterSave). A plain save of
+        // an already-published checklist keeps serverPublished === true and must
+        // NOT open the share panel.
+        if (shouldOpenShareAfterSave({ isPublishedOverride, serverPublished: isActuallyPublished, silent })) {
+          // For a newly created checklist, bind the real persisted ID FIRST and
+          // carry the share intent THROUGH the URL (?settings=true&settingsTab=
+          // compartilhar) so the tab selection survives the search-param update
+          // and re-render. The effect at the settingsActiveTab declaration
+          // consumes it. Imperative setters alone did not survive this
+          // transition (smoke-verified bug).
+          if (!checklistId) {
+            sessionChecklistIdRef.current = data.id;
+          }
+          navigate({
+            to: "/checklist",
+            search: { id: data.id, settings: true, settingsTab: "compartilhar" },
+            replace: true,
+          });
         } else if (!checklistId) {
           // If it was a new draft, update the URL without full redirect to keep editing
           sessionChecklistIdRef.current = data.id;
