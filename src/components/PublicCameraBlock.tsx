@@ -115,6 +115,10 @@ export function PublicCameraBlock({
   }, []);
 
   const handleCapture = async (file: File) => {
+    // The live viewfinder is over the moment a capture fires — notify the
+    // parent so page-level branding ("Feito com Tieck") can come back.
+    onCameraActiveChange?.(false);
+
     // Phase 2.1: Final local technical validation ON THE CAPTURED FILE
     try {
       const { QualityEngine } = await import("@/lib/camera-quality/engine");

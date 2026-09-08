@@ -95,17 +95,25 @@ export function ExecutionEngine({
   checklist, 
   onSubmitted,
   analyticsId,
-  mode = "public"
+  mode = "public",
+  onCameraActiveChange
 }: { 
   checklist: any; 
   onSubmitted: () => void;
   analyticsId?: string | null;
   mode?: "public" | "authenticated";
+  /** Public pages use this to hide page-level branding while the live camera viewfinder is open. */
+  onCameraActiveChange?: (active: boolean) => void;
 }) {
   const [answers, setAnswers] = useState<Record<string, any>>({});
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<{ done: number; total: number } | null>(null);
   const [cameraActive, setCameraActive] = useState(false);
+
+  // Lift the real camera-viewfinder state upward (no timers/viewport tricks).
+  useEffect(() => {
+    onCameraActiveChange?.(cameraActive);
+  }, [cameraActive, onCameraActiveChange]);
   
   const setAnswer = (blockId: string, value: any) => {
     setAnswers((p) => ({ ...p, [blockId]: value }));
