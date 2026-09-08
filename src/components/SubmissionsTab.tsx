@@ -122,10 +122,12 @@ export function SubmissionsTab({
       setIsRetentionEnabled(hydratedEnabled);
       onRetentionChange?.(hydratedEnabled, hydratedDays);
 
-      // Hydrate with Camera AI attempts
+      // Hydrate with Camera AI attempts (via the secure read RPC — direct
+      // SELECT on camera_ai_attempts is closed to clients; the RPC only
+      // returns attempts for checklists the caller can manage).
       const respIds = (resp.data ?? []).map((r: any) => r.id);
-      const { data: cameraAttempts } = respIds.length > 0 
-        ? await supabase.from("camera_ai_attempts").select("*").in("response_id", respIds)
+      const { data: cameraAttempts } = respIds.length > 0
+        ? await supabase.rpc("get_camera_ai_attempts_for_responses", { p_response_ids: respIds })
         : { data: [] };
       
       const hydratedResponses = (resp.data ?? []).map((r: any) => ({

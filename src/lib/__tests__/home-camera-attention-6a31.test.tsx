@@ -244,9 +244,9 @@ describe('Home 6A.3.1 — RBAC e escopo (N, O)', () => {
     expect(fetchAttempts).not.toHaveBeenCalled();
   });
 
-  it('hook seleciona code na query de camera_ai_attempts', () => {
+  it('hook lê tentativas via RPC seguro (6A.3.3), não por SELECT direto', () => {
     const hookSource = readFileSync(resolve(process.cwd(), 'src/hooks/useHomeCameraAttention.ts'), 'utf8');
-    expect(hookSource).toContain('code,');
-    expect(hookSource).toContain('"id, response_id, evidence_id, block_id, status, decision, code, evidence, completed_at, updated_at, created_at"');
+    expect(hookSource).toContain('get_camera_ai_attempts_for_responses');
+    expect(hookSource).not.toContain('.from("camera_ai_attempts")');
   });
 });

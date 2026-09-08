@@ -51,12 +51,12 @@ export function useHomeCameraAttention({
             return { data: (data ?? []) as HomeCameraResponse[], error };
           },
           fetchAttempts: async (responseIds) => {
-            const { data, error } = await supabase
-              .from("camera_ai_attempts")
-              .select(
-                "id, response_id, evidence_id, block_id, status, decision, code, evidence, completed_at, updated_at, created_at"
-              )
-              .in("response_id", responseIds);
+            // Secure read RPC: camera_ai_attempts is closed to direct client
+            // SELECT; the RPC returns attempts only for checklists the caller
+            // can manage (Viewer gate is duplicated server-side).
+            const { data, error } = await supabase.rpc("get_camera_ai_attempts_for_responses", {
+              p_response_ids: responseIds,
+            });
             return { data: (data ?? []) as HomeCameraAttempt[], error };
           },
         },
