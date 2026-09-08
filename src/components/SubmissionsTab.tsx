@@ -428,7 +428,8 @@ export function SubmissionsTab({
               onChange={(e) => updateRetention(Number(e.target.value))}
               className="px-2 py-1.5 rounded-lg border border-neutral-200 bg-white text-xs font-bold outline-none focus:border-[#FF007F]"
             >
-              {[3, 7, 15, 30].map(d => <option key={d} value={d}>{d} dias</option>)}
+              {/* Mesma lista canônica do seletor de retenção em Configurações Gerais (checklist.tsx). */}
+              {[3, 4, 5, 6, 7, 15, 30].map(d => <option key={d} value={d}>{d} dias</option>)}
             </select>
           )}
         </div>
