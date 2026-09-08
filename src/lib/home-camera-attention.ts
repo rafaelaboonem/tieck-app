@@ -7,16 +7,22 @@
  * submissions never count — the latest submission represents the current
  * operational state.
  *
- * Semantics aligned with the real runtime (`src/server/camera-ai/gate.ts`):
- * the Decision enum is `approved | retake | not_observable | technical_failure`
- * and an actionable non-approval is either:
- *   - legacy `completed` + `rejected`, or
- *   - `completed` + `retake` with an actionable code
- *     (`condition_not_met`, `reference_mismatch`, `target_missing`).
- * `not_observable`, `technical_failure`, `failed`, `quality_failure` and
- * `uncertain` are inconclusive/technical and NEVER counted as an operational
- * non-approval in this patch.
+ * Semantics are the shared actionable non-approval rule in
+ * `src/lib/camera-ai/actionable-non-approval.ts` (used by Home, Envios and the
+ * verify runtime): `completed` + `rejected` (legacy) or `completed` + `retake`
+ * with an actionable code (`condition_not_met`, `reference_mismatch`,
+ * `target_missing`). Since 6A.4, grouping is BY BLOCK (response_id + block_id)
+ * — never by evidence_id — because each retry can now carry its own persisted
+ * evidence, and the operational state of a block is decided by its LATEST
+ * terminal attempt only.
  */
+
+import {
+  isActionableCameraNonApproval,
+  ACTIONABLE_RETAKE_CODES,
+} from "./camera-ai/actionable-non-approval";
+
+export { isActionableCameraNonApproval, ACTIONABLE_RETAKE_CODES } from "./camera-ai/actionable-non-approval";
 
 export type HomeCameraResponse = {
   id: string;
@@ -50,13 +56,6 @@ export type HomeCameraAttention = {
 export type HomeCameraAttentionByChecklist = Record<string, Omit<HomeCameraAttention, "checklistId">>;
 
 /**
- * Codes produced by the runtime for a `retake` decision that represent an
- * observable failure to meet the expected criterion. `quality_failure` and
- * `uncertain` are intentionally excluded (technical/inconclusive).
- */
-export const ACTIONABLE_RETAKE_CODES = ["condition_not_met", "reference_mismatch", "target_missing"] as const;
-
-/**
  * Pick the most recent COMPLETE submission (submitted_at != null) per
  * checklist, latest `submitted_at` wins (fallback `created_at`).
  */
@@ -73,11 +72,14 @@ export function pickLatestResponsePerChecklist(responses: HomeCameraResponse[]):
 }
 
 /**
- * Stable grouping key for one evidence/block: `evidence_id` when present,
- * otherwise `response_id + block_id`.
+ * Stable grouping key per CAMERA BLOCK: `response_id + block_id`.
+ *
+ * Since 6A.4 each retry can have its own persisted `evidence_id`, so evidence
+ * ids must NOT define the operational state — otherwise an old retake (evidence
+ * A) followed by an approved capture (evidence B) of the SAME block would keep
+ * the old retake visible. The latest terminal attempt per block wins.
  */
 export function cameraAttemptGroupKey(a: HomeCameraAttempt): string {
-  if (a.evidence_id) return `evidence:${a.evidence_id}`;
   return `response:${a.response_id ?? ""}:block:${a.block_id ?? ""}`;
 }
 
@@ -105,23 +107,6 @@ export function selectLatestAttemptPerGroup(attempts: HomeCameraAttempt[]): Home
     if (tsA > tsCurrent || (tsA === tsCurrent && a.id > current.id)) finalByGroup.set(key, a);
   }
   return [...finalByGroup.values()];
-}
-
-/**
- * An operational non-approval only counts when the FINAL attempt is:
- *   - legacy: `completed` + `rejected`, or
- *   - runtime: `completed` + `retake` with an actionable code.
- * Everything else (not_observable, technical_failure, failed, quality_failure,
- * uncertain, error, processing) is NOT an actionable non-approval.
- */
-export function isActionableCameraNonApproval(a: HomeCameraAttempt | undefined | null): boolean {
-  if (!a) return false;
-  if (a.status !== "completed") return false;
-  if (a.decision === "rejected") return true; // legacy runtime
-  if (a.decision === "retake") {
-    return !!a.code && (ACTIONABLE_RETAKE_CODES as readonly string[]).includes(a.code);
-  }
-  return false;
 }
 
 /** Count of evidence/block groups with an actionable final non-approval. */

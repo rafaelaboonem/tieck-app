@@ -14,6 +14,7 @@ import {
   resolveSubmissionsNoEvidenceLabel,
   type HomeCameraAttempt as CameraAttemptLike,
 } from "@/lib/home-camera-attention";
+import { isActionableCameraNonApproval } from "@/lib/camera-ai/actionable-non-approval";
 
 
 type ResponseRow = {
@@ -39,6 +40,7 @@ type Filter = "todos" | "completo" | "parcial" | "comparar";
 type CameraAIAttempt = {
   id: string;
   response_id: string;
+  block_id?: string | null;
   decision: 'approved' | 'retake' | 'rejected' | 'not_observable' | 'technical_failure' | 'error';
   evidence?: string | null;
   model: string;
@@ -475,6 +477,20 @@ export function SubmissionsTab({
                           Verificação da câmera
                         </label>
                         {orphanAttempts.map((a) => {
+                          // 6A.4: a non-approved attempt whose photo WAS persisted
+                          // renders the real private evidence (EvidenceCard) instead
+                          // of the text-only "Foto não armazenada" fallback.
+                          if (a.evidence_id) {
+                            return (
+                              <EvidenceCard
+                                key={a.id}
+                                evidenceId={a.evidence_id}
+                                blockLabel={labelForBlock(a.block_id ?? "")}
+                                attempts={r.camera_attempts ?? []}
+                                openLightbox={openLightbox}
+                              />
+                            );
+                          }
                           const statusLabel = cameraAttemptStatusLabel(a as CameraAttemptLike);
                           const tone =
                             statusLabel === "Não aprovada pela IA"
@@ -573,18 +589,20 @@ function EvidenceCard({
 
 
   const isApproved = attempt?.status === 'completed' && attempt?.decision === 'approved';
-  const isRejected = attempt?.status === 'completed' && attempt?.decision === 'rejected';
+  // Shared 6A.4 semantics: completed + rejected (legacy) OR completed + retake
+  // with an actionable code → "Não aprovada pela IA".
+  const isNonApproved = isActionableCameraNonApproval(attempt);
   const isNotObservable = attempt?.status === 'completed' && attempt?.decision === 'not_observable';
   const isTechnicalFailure = attempt?.status === 'failed' || attempt?.decision === 'error' || (attempt?.code && (attempt.code.includes('failure') || attempt.code.includes('error')));
 
   const statusBadge = useMemo(() => {
     if (!attempt) return { label: "Sem verificação automática", tone: "neutral" };
     if (isApproved) return { label: "Aprovada pela IA", tone: "approved" };
-    if (isRejected) return { label: "Rejeitada pela IA", tone: "rejected" };
+    if (isNonApproved) return { label: "Não aprovada pela IA", tone: "rejected" };
     if (isNotObservable) return { label: "Não foi possível verificar", tone: "neutral" };
     if (isTechnicalFailure) return { label: "Verificação indisponível", tone: "neutral" };
     return { label: "Verificação não localizada", tone: "neutral" };
-  }, [attempt, isApproved, isRejected, isNotObservable, isTechnicalFailure]);
+  }, [attempt, isApproved, isNonApproved, isNotObservable, isTechnicalFailure]);
 
 
   const reviewStatus = "Não revisada";

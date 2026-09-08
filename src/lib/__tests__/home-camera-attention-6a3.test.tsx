@@ -116,15 +116,26 @@ describe('Home 6A.3 — buildHomeCameraAttention', () => {
     expect(buildHomeCameraAttention(['c1'], responses, attempts)).toEqual([]);
   });
 
-  it('E) 2 evidências com rejected final → rejectedCount = 2', () => {
+  it('E) 2 blocos Camera com rejected final → rejectedCount = 2 (agrupamento POR BLOCO desde 6A.4)', () => {
     const responses = [response({ id: 'r1', checklist_id: 'c1' })];
     const attempts = [
-      attempt({ id: 'a1', response_id: 'r1', evidence_id: 'e1', decision: 'rejected' }),
-      attempt({ id: 'a2', response_id: 'r1', evidence_id: 'e2', decision: 'rejected' }),
-      attempt({ id: 'a3', response_id: 'r1', evidence_id: 'e3', decision: 'approved' }),
+      attempt({ id: 'a1', response_id: 'r1', evidence_id: 'e1', block_id: 'b1', decision: 'rejected' }),
+      attempt({ id: 'a2', response_id: 'r1', evidence_id: 'e2', block_id: 'b2', decision: 'rejected' }),
+      attempt({ id: 'a3', response_id: 'r1', evidence_id: 'e3', block_id: 'b3', decision: 'approved' }),
     ];
     expect(buildHomeCameraAttention(['c1'], responses, attempts)).toEqual([
       { checklistId: 'c1', rejectedCount: 2, latestSubmittedAt: NEW },
+    ]);
+  });
+
+  it('E2) retakes do MESMO bloco com evidence_ids diferentes contam UMA vez (latest vence)', () => {
+    const responses = [response({ id: 'r1', checklist_id: 'c1' })];
+    const attempts = [
+      attempt({ id: 'a-old', response_id: 'r1', evidence_id: 'e-old', block_id: 'b1', decision: 'rejected', completed_at: OLD }),
+      attempt({ id: 'a-new', response_id: 'r1', evidence_id: 'e-new', block_id: 'b1', decision: 'rejected', completed_at: NEW }),
+    ];
+    expect(buildHomeCameraAttention(['c1'], responses, attempts)).toEqual([
+      { checklistId: 'c1', rejectedCount: 1, latestSubmittedAt: NEW },
     ]);
   });
 
