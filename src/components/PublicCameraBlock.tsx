@@ -20,6 +20,7 @@ import { TieckCamera } from "./TieckCamera";
 import { Button } from "./ui/button";
 import { Alert, AlertDescription } from "./ui/alert";
 import { cn } from "@/lib/utils";
+import { resolveCameraActiveSession } from "@/lib/execution-response-session";
 
 interface PublicCameraBlockProps {
   block: PublicCameraBlockData;
@@ -29,7 +30,6 @@ interface PublicCameraBlockProps {
   title?: string;
   onAnswer?: (blockId: string, value: string) => void;
   onCameraActiveChange?: (active: boolean) => void;
-  session?: { responseId: string; responseToken: string } | null;
   ensureResponseSession: (options?: { forceNew?: boolean }) => Promise<{
     responseId: string;
     responseToken: string;
@@ -71,7 +71,6 @@ export function PublicCameraBlock({
   title,
   onAnswer,
   onCameraActiveChange,
-  session,
   ensureResponseSession,
 }: PublicCameraBlockProps) {
   const [state, setState] = useState<VerificationState>("idle");
@@ -195,7 +194,14 @@ export function PublicCameraBlock({
     // Closure to check if this request is still the active one
     const isCurrent = () => sequence === requestSequenceRef.current;
 
-    const activeSession = options?.sessionOverride ?? session ?? (await ensureResponseSession());
+    // Canonical session: NEVER trust a stale render-time prop — always resolve
+    // through ensureResponseSession (persisted → in-flight → new), which is the
+    // SAME source the submit uses, so verify and finalize target the same
+    // checklist_responses.id. Only an explicit recovery override is honored.
+    const activeSession = await resolveCameraActiveSession({
+      sessionOverride: options?.sessionOverride,
+      ensureResponseSession,
+    });
 
     if (!isCurrent()) return;
 

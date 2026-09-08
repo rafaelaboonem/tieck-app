@@ -6,6 +6,7 @@ import { BlockRenderer } from "@/components/BlockRenderer";
 import { getChecklistContainerClass } from "@/lib/checklist-render-styles";
 import { PublicCameraBlock } from "@/components/PublicCameraBlock";
 import { CameraSessionProvider } from "@/contexts/CameraSessionContext";
+import { ensureCanonicalResponseSession, type ResponseSession } from "@/lib/execution-response-session";
 import { 
   ArrowRight, 
   ArrowUpRight, 
@@ -130,17 +131,10 @@ export function ExecutionEngine({
     try { sessionStorage.removeItem(responseSessionKey(cid)); } catch { /* noop */ }
   };
 
-  const responseSessionPromise = useRef<Promise<any> | null>(null);
+  const responseSessionPromise = useRef<Promise<ResponseSession | null> | null>(null);
 
-  const ensureResponseSession = async (options?: { forceNew?: boolean }): Promise<any> => {
+  const ensureResponseSession = async (options?: { forceNew?: boolean }): Promise<ResponseSession | null> => {
     const currentChecklistId = checklist?.id;
-    if (options?.forceNew) clearResponseSession(currentChecklistId);
-    else {
-      const existing = readResponseSession(currentChecklistId);
-      if (existing) return existing;
-    }
-
-    if (responseSessionPromise.current) return responseSessionPromise.current;
 
     let visitorId = localStorage.getItem("tieck_visitor_id");
     if (!visitorId) {
@@ -148,25 +142,36 @@ export function ExecutionEngine({
       localStorage.setItem("tieck_visitor_id", visitorId);
     }
 
-    responseSessionPromise.current = (async () => {
-      const { data, error } = await (supabase.rpc as any)("create_public_response", {
-        p_checklist_id: currentChecklistId,
-        p_visitor_id: visitorId
-      });
+    return ensureCanonicalResponseSession({
+      checklistId: currentChecklistId,
+      persistence: {
+        read: (cid) => readResponseSession(cid),
+        write: (cid, session) => {
+          try { sessionStorage.setItem(responseSessionKey(cid), JSON.stringify(session)); } catch { /* noop */ }
+        },
+        clear: (cid) => clearResponseSession(cid),
+      },
+      inflight: {
+        get: () => responseSessionPromise.current,
+        set: (promise) => { responseSessionPromise.current = promise; },
+      },
+      create: async (cid) => {
+        const { data, error } = await (supabase.rpc as any)("create_public_response", {
+          p_checklist_id: cid,
+          p_visitor_id: visitorId
+        });
 
-      if (error || !data || (data as any).length === 0) return null;
-      const respData = (data as any)[0];
-      const session = { 
-        responseId: respData.response_id, 
-        responseToken: respData.response_token,
-        checklistId: currentChecklistId,
-        createdAt: Date.now()
-      };
-      sessionStorage.setItem(responseSessionKey(currentChecklistId), JSON.stringify(session));
-      return session;
-    })();
-
-    try { return await responseSessionPromise.current; } finally { responseSessionPromise.current = null; }
+        if (error || !data || (data as any).length === 0) return null;
+        const respData = (data as any)[0];
+        return {
+          responseId: respData.response_id,
+          responseToken: respData.response_token,
+          checklistId: cid,
+          createdAt: Date.now()
+        };
+      },
+      forceNew: options?.forceNew,
+    });
   };
 
   const uploadFile = async (file: File): Promise<string | null> => {
@@ -314,7 +319,6 @@ export function ExecutionEngine({
                     block={block}
                     checklistId={checklist.id}
                     ensureResponseSession={ensureResponseSession}
-                    session={readResponseSession()}
                     onAnswer={setAnswer}
                     onCameraActiveChange={setCameraActive}
                     textColor={settings.textColor}
