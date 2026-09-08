@@ -119,7 +119,25 @@ export function PublicCameraBlock({
     // parent so page-level branding ("Feito com Tieck") can come back.
     onCameraActiveChange?.(false);
 
+    // A NEW photo was actually taken — any previously approved answer for this
+    // block is invalid from this moment on, even if the new capture later fails
+    // the LOCAL quality check. Opening the camera and cancelling without a
+    // capture never reaches this point, so a prior approval stays untouched.
+    if (onAnswer) {
+      onAnswer(block.id, "");
+    }
+
+    // Build the local preview BEFORE quality validation. The retake/result UI
+    // is gated on `preview`, so a photo rejected locally (low_light, blurry,
+    // overexposed, unavailable) must already have a preview or the whole block
+    // disappears from the checklist.
+    if (preview) URL.revokeObjectURL(preview);
+    const newPreview = URL.createObjectURL(file);
+    setPreview(newPreview);
+    setCapturedFile(file);
+
     // Phase 2.1: Final local technical validation ON THE CAPTURED FILE
+    let effectiveState = "ready";
     try {
       const { QualityEngine } = await import("@/lib/camera-quality/engine");
       const engine = new QualityEngine();
@@ -129,23 +147,7 @@ export function PublicCameraBlock({
         // Photography doesn't have temporal motion analysis.
         // We override "moving" to "ready" if all other metrics are fine,
         // since motion score on a single frame comparison is irrelevant here.
-        const effectiveState = quality.state === "moving" ? "ready" : quality.state;
-
-        if (effectiveState !== "ready") {
-          const messages: Record<string, string> = {
-            low_light: "A foto ficou escura. Procure mais iluminação e tente novamente.",
-            overexposed:
-              "Há luz excessiva na imagem. Evite apontar diretamente para a fonte de luz.",
-            blurry: "A foto ficou pouco nítida. Segure o aparelho com firmeza e tente novamente.",
-            unavailable: "A imagem capturada não possui resolução ou qualidade suficiente.",
-          };
-
-          setErrorMsg(
-            messages[effectiveState] || "A qualidade da foto não é suficiente. Tente novamente.",
-          );
-          setState("retake");
-          return;
-        }
+        effectiveState = quality.state === "moving" ? "ready" : quality.state;
       } finally {
         engine.dispose();
       }
@@ -153,9 +155,25 @@ export function PublicCameraBlock({
       console.warn("[PublicCameraBlock] Local quality check failed, falling back to OpenAI:", err);
     }
 
-    // 1. Limpeza de resposta anterior de verdade
-    if (onAnswer) {
-      onAnswer(block.id, "");
+    if (effectiveState !== "ready") {
+      const messages: Record<string, string> = {
+        low_light: "A foto ficou escura. Procure mais iluminação e tente novamente.",
+        overexposed:
+          "Há luz excessiva na imagem. Evite apontar diretamente para a fonte de luz.",
+        blurry: "A foto ficou pouco nítida. Segure o aparelho com firmeza e tente novamente.",
+        unavailable: "A imagem capturada não possui resolução ou qualidade suficiente.",
+      };
+
+      setErrorMsg(
+        messages[effectiveState] || "A qualidade da foto não é suficiente. Tente novamente.",
+      );
+      // Local rejection only — before any Camera AI involvement. No AI evidence
+      // text, no idempotency key, no response session, no camera_ai_attempt and
+      // no /api/camera-ai/verify call for this photo.
+      setEvidence(null);
+      setFailureReason("none");
+      setState("retake");
+      return;
     }
 
     // 2. Incremento da sequência e abort da requisição anterior
@@ -164,11 +182,6 @@ export function PublicCameraBlock({
       abortReasonRef.current = "retake";
       abortControllerRef.current.abort();
     }
-
-    if (preview) URL.revokeObjectURL(preview);
-    const newPreview = URL.createObjectURL(file);
-    setPreview(newPreview);
-    setCapturedFile(file);
 
     const newIdempotencyKey = crypto.randomUUID();
     setIdempotencyKey(newIdempotencyKey);
