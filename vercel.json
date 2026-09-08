@@ -1,3 +1,9 @@
 {
-  "buildCommand": "npm run build"
+  "buildCommand": "npm run build",
+  "crons": [
+    {
+      "path": "/api/public/cron/evidence-retention",
+      "schedule": "0 6 * * *"
+    }
+  ]
 }
