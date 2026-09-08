@@ -392,8 +392,9 @@ describe('Home 6A.3 — estrutura da rota /inicio', () => {
     expect(prioritiesSection).toContain('attentionByChecklist={cameraAttention}');
   });
 
-  it('Q) prioridade IA navega para Configurações (aba Envios)', () => {
+  it('Q) prioridade IA navega para Configurações → aba Envios (settings + settingsTab)', () => {
     expect(prioritiesSection).toContain(`settings: true`);
+    expect(prioritiesSection).toContain(`settingsTab: "envios"`);
     // O branch camera vem antes das navegações de prazo.
     expect(prioritiesSection.indexOf('kind === \'camera\'')).toBeGreaterThan(-1);
   });

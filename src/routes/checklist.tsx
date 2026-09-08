@@ -690,12 +690,15 @@ export const Route = createFileRoute("/checklist")({
   head: () => ({
     meta: [{ title: "Editor — Tieck" }],
   }),
-  validateSearch: (search: Record<string, unknown>): { id?: string; workspace?: string; category?: string; settings?: boolean } => {
+  validateSearch: (search: Record<string, unknown>): { id?: string; workspace?: string; category?: string; settings?: boolean; settingsTab?: "envios" } => {
     return {
       id: typeof search.id === "string" ? search.id : undefined,
       workspace: typeof search.workspace === "string" ? search.workspace : undefined,
       category: typeof search.category === "string" ? search.category : undefined,
       settings: typeof search.settings === "boolean" ? search.settings : undefined,
+      // 6A-only deep-link: Home Camera AI attention ("Ver envio") opens Configurações → Envios.
+      // Separate param (not a 5E settings union); only the literal "envios" is accepted.
+      settingsTab: search.settingsTab === "envios" ? "envios" : undefined,
     };
   },
   component: ChecklistPageWrapper,
@@ -869,7 +872,7 @@ export function NovoChecklistPage() {
   const { user: authUser } = useAuth();
   const navigate = useNavigate();
   
-  const { id: checklistId, workspace: workspaceParam, category: categoryParam, settings: openSettingsParam } = Route.useSearch();
+  const { id: checklistId, workspace: workspaceParam, category: categoryParam, settings: openSettingsParam, settingsTab: openSettingsTabParam } = Route.useSearch();
 
 
   
@@ -1014,6 +1017,14 @@ export function NovoChecklistPage() {
   const [linkUrl, setLinkUrl] = useState("");
   const savedRangeRef = useRef<Range | null>(null);
   const [settingsActiveTab, setSettingsActiveTab] = useState<"geral" | "compartilhar" | "envios" | "insights" | "emails" | "apresentacao">("geral");
+
+  // 6A.0.1: deep-link ?settings=true&settingsTab=envios (Home "Ver envio") selects the
+  // Envios tab when Configurações opens. Default remains "geral" without the param.
+  useEffect(() => {
+    if (openSettingsTabParam === "envios") {
+      setSettingsActiveTab("envios");
+    }
+  }, [openSettingsTabParam]);
   const sessionChecklistIdRef = useRef<string | null>(null);
   const [currentChecklistId, setCurrentChecklistId] = useState<string | null>(null);
   const [profile, setProfile] = useState<any>(null);

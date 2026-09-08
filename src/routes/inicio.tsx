@@ -317,9 +317,9 @@ export function Dashboard() {
                   onOpen={(checklistId, kind) => {
                     // Home 6A.3: prioridade com rejeição IA → Envios (investigação da evidência).
                     if (kind === 'camera') {
-                      // 6A-only: abre o editor com o painel de Configurações (aba Envios) —
-                      // o deep-link ?settings=envios é superfície da 5E.0.1, adiada.
-                      navigate({ to: "/checklist", search: { id: checklistId, settings: true } });
+                      // 6A: prioridade Camera AI ("Ver envio") abre Configurações → aba Envios
+                      // via settingsTab 6A-specific (sem importar a união 5E de settings).
+                      navigate({ to: "/checklist", search: { id: checklistId, settings: true, settingsTab: "envios" } });
                       return;
                     }
                     // FASE 5B.6: Viewer vai para execução, outros para editor
