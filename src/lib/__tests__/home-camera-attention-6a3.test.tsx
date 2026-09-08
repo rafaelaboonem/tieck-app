@@ -8,9 +8,9 @@ import React from 'react';
 import {
   pickLatestResponsePerChecklist,
   selectLatestAttemptPerGroup,
-  isRejectedFinalAttempt,
+  isActionableCameraNonApproval,
   buildHomeCameraAttention,
-  formatRejectedEvidenceLabel,
+  formatNonApprovedVerificationLabel,
   canLoadHomeCameraAttention,
   loadHomeCameraAttention,
   toHomeCameraAttentionMap,
@@ -61,7 +61,7 @@ describe('Home 6A.3 — pickLatestResponsePerChecklist', () => {
   });
 });
 
-describe('Home 6A.3 — selectLatestAttemptPerGroup / isRejectedFinalAttempt', () => {
+describe('Home 6A.3 — selectLatestAttemptPerGroup / isActionableCameraNonApproval', () => {
   it('C) mesma evidência: rejected antiga + approved nova → final não é rejected', () => {
     const attempts = [
       attempt({ id: 'a-old', response_id: 'r1', evidence_id: 'e1', decision: 'rejected', completed_at: OLD }),
@@ -69,7 +69,7 @@ describe('Home 6A.3 — selectLatestAttemptPerGroup / isRejectedFinalAttempt', (
     ];
     const finals = selectLatestAttemptPerGroup(attempts);
     expect(finals).toHaveLength(1);
-    expect(isRejectedFinalAttempt(finals[0])).toBe(false);
+    expect(isActionableCameraNonApproval(finals[0])).toBe(false);
   });
 
   it('D) mesma evidência: approved antiga + rejected nova → final rejected', () => {
@@ -79,7 +79,7 @@ describe('Home 6A.3 — selectLatestAttemptPerGroup / isRejectedFinalAttempt', (
     ];
     const finals = selectLatestAttemptPerGroup(attempts);
     expect(finals).toHaveLength(1);
-    expect(isRejectedFinalAttempt(finals[0])).toBe(true);
+    expect(isActionableCameraNonApproval(finals[0])).toBe(true);
   });
 
   it('fallback sem evidence_id agrupa por response_id + block_id', () => {
@@ -91,8 +91,8 @@ describe('Home 6A.3 — selectLatestAttemptPerGroup / isRejectedFinalAttempt', (
     const finals = selectLatestAttemptPerGroup(attempts);
     expect(finals).toHaveLength(2);
     const byId = new Map(finals.map((a) => [a.id, a]));
-    expect(isRejectedFinalAttempt(byId.get('a2'))).toBe(false);
-    expect(isRejectedFinalAttempt(byId.get('a3'))).toBe(true);
+    expect(isActionableCameraNonApproval(byId.get('a2'))).toBe(false);
+    expect(isActionableCameraNonApproval(byId.get('a3'))).toBe(true);
   });
 });
 
@@ -293,10 +293,10 @@ describe('Home 6A.3 — loader (N, O, P)', () => {
     expect(map.c1).toEqual({ checklistId: 'c1', rejectedCount: 2, latestSubmittedAt: NEW });
   });
 
-  it('formatRejectedEvidenceLabel pluraliza corretamente', () => {
-    expect(formatRejectedEvidenceLabel(1)).toBe('IA reprovou 1 evidência');
-    expect(formatRejectedEvidenceLabel(2)).toBe('IA reprovou 2 evidências');
-    expect(formatRejectedEvidenceLabel(0)).toBe('');
+  it('formatNonApprovedVerificationLabel pluraliza corretamente', () => {
+    expect(formatNonApprovedVerificationLabel(1)).toBe('IA não aprovou 1 verificação');
+    expect(formatNonApprovedVerificationLabel(2)).toBe('IA não aprovou 2 verificações');
+    expect(formatNonApprovedVerificationLabel(0)).toBe('');
   });
 });
 
@@ -317,7 +317,7 @@ describe('Home 6A.3 — componente (Q, R)', () => {
         onOpen={onOpen}
       />
     );
-    expect(screen.getByText('IA reprovou 2 evidências')).toBeInTheDocument();
+    expect(screen.getByText('IA não aprovou 2 verificações')).toBeInTheDocument();
     expect(screen.getByText('Ver envio')).toBeInTheDocument();
     expect(screen.queryByText('Abrir')).toBeNull();
     await user.click(screen.getByText('Casa 2'));
@@ -342,7 +342,7 @@ describe('Home 6A.3 — componente (Q, R)', () => {
     const row = screen.getByRole('button', { name: /Casa 2/ });
     expect(row).toHaveTextContent('Atrasado');
     expect(row).toHaveTextContent('prazo 17/08');
-    expect(row).toHaveTextContent('IA reprovou 1 evidência');
+    expect(row).toHaveTextContent('IA não aprovou 1 verificação');
     expect(row).toHaveTextContent('Ver envio');
   });
 

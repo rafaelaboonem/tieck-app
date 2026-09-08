@@ -1,11 +1,21 @@
 /**
- * Home 6A.3 — Camera AI rejection signals for `/inicio` priorities.
+ * Home 6A.3 / 6A.3.1 — Camera AI attention signals for `/inicio` priorities.
  *
  * Pure, testable helpers that resolve, from the MOST RECENT complete
- * submission of each visible checklist, how many evidence groups ended with a
- * terminal Camera AI `rejected` decision. Historical rejections of older
+ * submission of each visible checklist, how many evidence/block groups ended
+ * with a terminal Camera AI NON-APPROVAL. Historical non-approvals of older
  * submissions never count — the latest submission represents the current
  * operational state.
+ *
+ * Semantics aligned with the real runtime (`src/server/camera-ai/gate.ts`):
+ * the Decision enum is `approved | retake | not_observable | technical_failure`
+ * and an actionable non-approval is either:
+ *   - legacy `completed` + `rejected`, or
+ *   - `completed` + `retake` with an actionable code
+ *     (`condition_not_met`, `reference_mismatch`, `target_missing`).
+ * `not_observable`, `technical_failure`, `failed`, `quality_failure` and
+ * `uncertain` are inconclusive/technical and NEVER counted as an operational
+ * non-approval in this patch.
  */
 
 export type HomeCameraResponse = {
@@ -22,6 +32,8 @@ export type HomeCameraAttempt = {
   block_id?: string | null;
   status?: string | null;
   decision?: string | null;
+  code?: string | null;
+  evidence?: string | null;
   completed_at?: string | null;
   updated_at?: string | null;
   created_at?: string | null;
@@ -29,13 +41,20 @@ export type HomeCameraAttempt = {
 
 export type HomeCameraAttention = {
   checklistId: string;
-  /** Number of evidence groups whose FINAL attempt was `completed` + `rejected`. */
+  /** Number of evidence groups whose FINAL attempt is an actionable Camera AI non-approval. */
   rejectedCount: number;
   /** submitted_at of the most recent complete submission of the checklist. */
   latestSubmittedAt: string | null;
 };
 
 export type HomeCameraAttentionByChecklist = Record<string, Omit<HomeCameraAttention, "checklistId">>;
+
+/**
+ * Codes produced by the runtime for a `retake` decision that represent an
+ * observable failure to meet the expected criterion. `quality_failure` and
+ * `uncertain` are intentionally excluded (technical/inconclusive).
+ */
+export const ACTIONABLE_RETAKE_CODES = ["condition_not_met", "reference_mismatch", "target_missing"] as const;
 
 /**
  * Pick the most recent COMPLETE submission (submitted_at != null) per
@@ -88,9 +107,26 @@ export function selectLatestAttemptPerGroup(attempts: HomeCameraAttempt[]): Home
   return [...finalByGroup.values()];
 }
 
-/** A rejection only counts when the FINAL attempt is `completed` + `rejected`. */
-export function isRejectedFinalAttempt(a: HomeCameraAttempt | undefined | null): boolean {
-  return !!a && a.status === "completed" && a.decision === "rejected";
+/**
+ * An operational non-approval only counts when the FINAL attempt is:
+ *   - legacy: `completed` + `rejected`, or
+ *   - runtime: `completed` + `retake` with an actionable code.
+ * Everything else (not_observable, technical_failure, failed, quality_failure,
+ * uncertain, error, processing) is NOT an actionable non-approval.
+ */
+export function isActionableCameraNonApproval(a: HomeCameraAttempt | undefined | null): boolean {
+  if (!a) return false;
+  if (a.status !== "completed") return false;
+  if (a.decision === "rejected") return true; // legacy runtime
+  if (a.decision === "retake") {
+    return !!a.code && (ACTIONABLE_RETAKE_CODES as readonly string[]).includes(a.code);
+  }
+  return false;
+}
+
+/** Count of evidence/block groups with an actionable final non-approval. */
+export function countActionableNonApprovals(attempts: HomeCameraAttempt[]): number {
+  return selectLatestAttemptPerGroup(attempts).filter(isActionableCameraNonApproval).length;
 }
 
 /**
@@ -98,7 +134,7 @@ export function isRejectedFinalAttempt(a: HomeCameraAttempt | undefined | null):
  *
  * - Only submissions belonging to `visibleChecklistIds` are considered.
  * - Only the most recent complete submission per checklist is considered.
- * - Rejections are counted once per evidence/block group (final attempt only).
+ * - Non-approvals are counted once per evidence/block group (final attempt only).
  */
 export function buildHomeCameraAttention(
   visibleChecklistIds: string[],
@@ -120,7 +156,7 @@ export function buildHomeCameraAttention(
 
   const rejectedByChecklist = new Map<string, number>();
   for (const attempt of finalAttempts) {
-    if (!isRejectedFinalAttempt(attempt)) continue;
+    if (!isActionableCameraNonApproval(attempt)) continue;
     const checklistId = checklistByResponse.get(attempt.response_id!);
     if (!checklistId) continue;
     rejectedByChecklist.set(checklistId, (rejectedByChecklist.get(checklistId) ?? 0) + 1);
@@ -143,10 +179,46 @@ export function toHomeCameraAttentionMap(attentions: HomeCameraAttention[]): Hom
   return map;
 }
 
-/** "IA reprovou 1 evidência" / "IA reprovou 2 evidências". */
-export function formatRejectedEvidenceLabel(rejectedCount: number): string {
-  if (rejectedCount <= 0) return "";
-  return `IA reprovou ${rejectedCount} ${rejectedCount === 1 ? "evidência" : "evidências"}`;
+/** "IA não aprovou 1 verificação" / "IA não aprovou 2 verificações". */
+export function formatNonApprovedVerificationLabel(nonApprovedCount: number): string {
+  if (nonApprovedCount <= 0) return "";
+  return `IA não aprovou ${nonApprovedCount} ${nonApprovedCount === 1 ? "verificação" : "verificações"}`;
+}
+
+/**
+ * Envios badge label for the "no photo evidence" case. When the response has
+ * no stored photo evidence but a Camera AI attempt ended actionable (e.g. a
+ * retake whose image was never persisted), show an IA verification signal
+ * instead of a plain "Sem evidências". With no attempts at all, "Sem
+ * evidências" remains correct.
+ */
+export function resolveSubmissionsNoEvidenceLabel(opts: {
+  photoCount: number;
+  nonApprovedCount: number;
+}): { label: string; isNonApprovedSignal: boolean } {
+  if (opts.photoCount > 0) return { label: "", isNonApprovedSignal: false };
+  if (opts.nonApprovedCount > 0) {
+    return {
+      label: `${opts.nonApprovedCount} ${opts.nonApprovedCount === 1 ? "verificação" : "verificações"} IA`,
+      isNonApprovedSignal: true,
+    };
+  }
+  return { label: "Sem evidências", isNonApprovedSignal: false };
+}
+
+/**
+ * Human status label for one Camera AI attempt (used in Envios for attempts
+ * whose photo was not persisted). Null when there is no terminal state.
+ */
+export function cameraAttemptStatusLabel(a: HomeCameraAttempt | undefined | null): string | null {
+  if (!a) return null;
+  if (a.status === "completed" && a.decision === "approved") return "Aprovada pela IA";
+  if (isActionableCameraNonApproval(a)) return "Não aprovada pela IA";
+  if (a.status === "completed" && a.decision === "not_observable") return "Não foi possível verificar";
+  if (a.status === "failed" || a.decision === "error" || a.decision === "technical_failure") {
+    return "Verificação indisponível";
+  }
+  return null; // processing / unknown
 }
 
 /**

@@ -8,6 +8,12 @@ import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { CompareTab } from "./CompareTab";
 import { getEvidenceSignedUrl } from "@/lib/evidence-signed-url";
+import {
+  cameraAttemptStatusLabel,
+  countActionableNonApprovals,
+  resolveSubmissionsNoEvidenceLabel,
+  type HomeCameraAttempt as CameraAttemptLike,
+} from "@/lib/home-camera-attention";
 
 
 type ResponseRow = {
@@ -33,13 +39,13 @@ type Filter = "todos" | "completo" | "parcial" | "comparar";
 type CameraAIAttempt = {
   id: string;
   response_id: string;
-  decision: 'approved' | 'rejected' | 'not_observable' | 'error';
-  evidence: string;
+  decision: 'approved' | 'retake' | 'rejected' | 'not_observable' | 'technical_failure' | 'error';
+  evidence?: string | null;
   model: string;
   duration_ms: number;
   completed_at: string;
   code: string;
-  evidence_id: string;
+  evidence_id: string | null;
   status: 'processing' | 'completed' | 'failed';
 };
 
@@ -229,6 +235,7 @@ export function SubmissionsTab({
 
   const summarizePhotos = (answers: Record<string, any>, attempts: CameraAIAttempt[] = []) => {
     let total = 0, aiApproved = 0, photoReceived = 0, inconsistencies = 0, rejected = 0;
+    const aiNonApproved = countActionableNonApprovals((attempts as CameraAttemptLike[]));
     
     for (const v of Object.values(answers || {})) {
       if (v && typeof v === "object" && !Array.isArray(v) && typeof (v as any).evidenceId === "string") {
@@ -253,11 +260,20 @@ export function SubmissionsTab({
         photoReceived += 1;
       }
     }
-    return { total, aiApproved, photoReceived, inconsistencies, rejected };
+    return { total, aiApproved, photoReceived, inconsistencies, rejected, aiNonApproved };
   };
 
-  const photoBadge = (s: { total: number; aiApproved: number; photoReceived: number; inconsistencies: number; rejected: number }) => {
-    if (s.total === 0) return { label: "Sem evidências", tone: "bg-neutral-100 text-neutral-500 border-neutral-200" };
+  const photoBadge = (s: { total: number; aiApproved: number; photoReceived: number; inconsistencies: number; rejected: number; aiNonApproved: number }) => {
+    if (s.total === 0) {
+      const noEvidence = resolveSubmissionsNoEvidenceLabel({
+        photoCount: s.total,
+        nonApprovedCount: s.aiNonApproved,
+      });
+      if (noEvidence.isNonApprovedSignal) {
+        return { label: noEvidence.label, tone: "bg-red-50 text-red-700 border-red-200" };
+      }
+      return { label: "Sem evidências", tone: "bg-neutral-100 text-neutral-500 border-neutral-200" };
+    }
     const totalLabel = `${s.total} evidência${s.total > 1 ? "s" : ""}`;
     
     if (s.aiApproved > 0) return { label: totalLabel, tone: "bg-emerald-50 text-emerald-700 border-emerald-200" };
@@ -404,6 +420,15 @@ export function SubmissionsTab({
             const responder = identifyResponder(r.answers) ?? `Visitante ${r.visitor_id.slice(0, 6)}`;
             const stats = summarizePhotos(r.answers, r.camera_attempts);
             const badge = photoBadge(stats);
+            const evidenceIdsInAnswers = new Set<string>();
+            for (const v of Object.values(r.answers || {})) {
+              if (v && typeof v === "object" && !Array.isArray(v) && typeof (v as any).evidenceId === "string") {
+                evidenceIdsInAnswers.add((v as any).evidenceId);
+              }
+            }
+            const orphanAttempts = (r.camera_attempts ?? []).filter(
+              (a) => !a.evidence_id || !evidenceIdsInAnswers.has(a.evidence_id)
+            );
             
             return (
               <div key={r.id} className="border border-neutral-100 rounded-2xl overflow-hidden bg-white shadow-sm transition-all hover:border-neutral-200">
@@ -442,6 +467,42 @@ export function SubmissionsTab({
                         {renderAnswerValue(value, labelForBlock(blockId), r.camera_attempts)}
                       </div>
                     ))}
+                    {orphanAttempts.length > 0 && (
+                      <div className="space-y-3">
+                        <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest block">
+                          Verificação da câmera
+                        </label>
+                        {orphanAttempts.map((a) => {
+                          const statusLabel = cameraAttemptStatusLabel(a as CameraAttemptLike);
+                          const tone =
+                            statusLabel === "Não aprovada pela IA"
+                              ? "bg-red-50 text-red-700 border-red-100"
+                              : statusLabel === "Aprovada pela IA"
+                                ? "bg-emerald-50 text-emerald-700 border-emerald-100"
+                                : "bg-neutral-50 text-neutral-500 border-neutral-100";
+                          return (
+                            <div key={a.id} className="rounded-xl border border-neutral-200 bg-white p-3 shadow-sm">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span
+                                  className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full border text-[11px] font-bold uppercase tracking-wider ${tone}`}
+                                >
+                                  <Brain className="w-3.5 h-3.5" />
+                                  {statusLabel ?? "Verificação em andamento"}
+                                </span>
+                                {!a.evidence_id && (
+                                  <span className="text-[10px] font-medium text-neutral-400">Foto não armazenada</span>
+                                )}
+                              </div>
+                              {a.evidence && (
+                                <p className="mt-2 text-[11px] text-neutral-600 leading-relaxed bg-neutral-50/50 p-2 rounded-lg border border-neutral-100">
+                                  {a.evidence}
+                                </p>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

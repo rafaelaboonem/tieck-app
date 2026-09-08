@@ -3,7 +3,7 @@ import {
   buildHomeOperationalPriorities,
   formatDueDateShort,
 } from "@/lib/home-operational-summary";
-import { formatRejectedEvidenceLabel, type HomeCameraAttentionByChecklist } from "@/lib/home-camera-attention";
+import { formatNonApprovedVerificationLabel, type HomeCameraAttentionByChecklist } from "@/lib/home-camera-attention";
 import { cn } from "@/lib/utils";
 
 /** Kind of action the priority row should trigger in the route. */
@@ -79,7 +79,7 @@ export function HomeOperationalPriorities({
                 {hasIaRejection && (
                   <span className="mt-0.5 inline-flex items-center gap-1 text-xs font-medium text-red-600">
                     <ScanEye className="w-3.5 h-3.5 shrink-0" />
-                    {formatRejectedEvidenceLabel(item.rejectedCount)}
+                    {formatNonApprovedVerificationLabel(item.rejectedCount)}
                   </span>
                 )}
               </span>

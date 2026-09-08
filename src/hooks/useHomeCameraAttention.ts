@@ -54,7 +54,7 @@ export function useHomeCameraAttention({
             const { data, error } = await supabase
               .from("camera_ai_attempts")
               .select(
-                "id, response_id, evidence_id, block_id, status, decision, completed_at, updated_at, created_at"
+                "id, response_id, evidence_id, block_id, status, decision, code, evidence, completed_at, updated_at, created_at"
               )
               .in("response_id", responseIds);
             return { data: (data ?? []) as HomeCameraAttempt[], error };
