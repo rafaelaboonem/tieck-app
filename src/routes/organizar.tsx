@@ -17,6 +17,8 @@ import {
 import { getAssignmentStatus, getStatusBadge } from "@/utils/assignment-status";
 import { AssignmentDeadlinePopover } from "@/components/AssignmentDeadlinePopover";
 import { cn } from "@/lib/utils";
+import { ChecklistCardQuickActions } from "@/components/checklists/ChecklistCardQuickActions";
+import { buildPublicChecklistUrl } from "@/lib/checklist-links";
 import { useIsMobile } from "@/hooks/use-mobile";
 import type { WorkspaceMemberView } from "./equipe";
 import type { Database } from "@/integrations/supabase/types";
@@ -99,6 +101,8 @@ interface Checklist {
   category: string | null;
   workspace_id: string | null;
   is_published: boolean | null;
+  // 5E.0B: slug público canônico (fetch usa select("*"), então já vem no dado).
+  custom_slug?: string | null;
   updated_at: string;
   view_type?: string | null;
   [key: string]: unknown;
@@ -133,7 +137,6 @@ function SortableChecklistCard({
   onMove,
   onDelete,
   onEdit,
-  onCopyLink,
   onDuplicate,
   accentColor,
   assignments,
@@ -151,7 +154,6 @@ function SortableChecklistCard({
   onDelete: (item: Checklist) => void;
   onEdit: (id: string) => void;
   onUpdateTitle: (id: string, title: string) => void;
-  onCopyLink: () => void;
   onDuplicate: (item: Checklist) => void;
   accentColor: string;
   assignments: ChecklistAssignmentView[];
@@ -187,6 +189,24 @@ function SortableChecklistCard({
       onUpdateTitle(checklist.id, editValue.trim());
     }
     setIsEditing(false);
+  };
+
+  const navigate = useNavigate();
+
+  // 5E.0B: link público canônico do checklist (custom_slug quando válido, senão id).
+  // Rascunho não publicado não gera link utilizável.
+  const copyPublicLink = () => {
+    if (checklist.is_published !== true) {
+      toast.error("Publique o checklist para gerar um link público.");
+      return;
+    }
+    const url = buildPublicChecklistUrl(window.location.origin, checklist.custom_slug, checklist.id);
+    if (!url) {
+      toast.error("Link indisponível: publique o checklist primeiro.");
+      return;
+    }
+    navigator.clipboard.writeText(url);
+    toast.success("Link copiado!");
   };
 
   return (
@@ -382,9 +402,14 @@ function SortableChecklistCard({
 
             <DropdownMenuSeparator className="bg-neutral-800 my-1" />
 
-            <DropdownMenuItem className="gap-3 text-xs hover:bg-neutral-800 rounded-lg py-2" onClick={onCopyLink}>
-              <Link2 className="w-4 h-4" /> Copiar link
-            </DropdownMenuItem>
+            {/* 5E.0B: "Copiar link" do próprio checklist (link público canônico),
+                apenas para checklist publicado — rascunho não oferece como se
+                estivesse publicado. */}
+            {checklist.is_published === true && (
+              <DropdownMenuItem className="gap-3 text-xs hover:bg-neutral-800 rounded-lg py-2" onClick={copyPublicLink}>
+                <Link2 className="w-4 h-4" /> Copiar link
+              </DropdownMenuItem>
+            )}
 
             <DropdownMenuItem className="gap-3 text-xs hover:bg-neutral-800 rounded-lg py-2 justify-between" onClick={() => onDuplicate(checklist)}>
               <div className="flex items-center gap-3">
@@ -433,6 +458,23 @@ function SortableChecklistCard({
         </DropdownMenu>
       </div>
 
+      {/* 5E.0B: atalhos discretos no hover/focus do card (desktop) */}
+      <div
+        className="flex items-center gap-1 mt-2 pt-2 border-t border-neutral-50 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <ChecklistCardQuickActions
+          isPublished={checklist.is_published === true}
+          onEdit={() => onEdit(checklist.id)}
+          onCopyLink={copyPublicLink}
+          onOpenSubmissions={() =>
+            // Contrato 6A certificado: settings booleano + settingsTab (NÃO o
+            // contrato antigo da 5E com settings como string).
+            navigate({ to: "/checklist", search: { id: checklist.id, settings: true, settingsTab: "envios" } })
+          }
+          onPublish={() => navigate({ to: "/checklist", search: { id: checklist.id } })}
+        />
+      </div>
     </div>
   );
 }
@@ -1768,7 +1810,6 @@ export function WorkspacePage() {
                               onDelete={(chk) => setChecklistToDelete(chk)}
                               onEdit={(id) => navigate({ to: "/checklist", search: { id } })}
                               onUpdateTitle={handleUpdateItemTitle}
-                              onCopyLink={handleCopyWorkspaceLink}
                               onDuplicate={(item) => {
                                 // Basic duplication logic
                                 handleAddItem(item.category, `${item.title} (Cópia)`);
