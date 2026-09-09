@@ -458,23 +458,27 @@ function SortableChecklistCard({
         </DropdownMenu>
       </div>
 
-      {/* 5E.0B: atalhos discretos no hover/focus do card (desktop) */}
-      <div
-        className="flex items-center gap-1 mt-2 pt-2 border-t border-neutral-50 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <ChecklistCardQuickActions
-          isPublished={checklist.is_published === true}
-          onEdit={() => onEdit(checklist.id)}
-          onCopyLink={copyPublicLink}
-          onOpenSubmissions={() =>
-            // Contrato 6A certificado: settings booleano + settingsTab (NÃO o
-            // contrato antigo da 5E com settings como string).
-            navigate({ to: "/checklist", search: { id: checklist.id, settings: true, settingsTab: "envios" } })
-          }
-          onPublish={() => navigate({ to: "/checklist", search: { id: checklist.id } })}
-        />
-      </div>
+      {/* 5E.0B.1: atalhos administrativos apenas desktop (hover/focus) e somente
+          para quem pode gerenciar (canManage); no mobile o menu "..." continua
+          sendo a superfície disponível e o container não reserva espaço. */}
+      {canManage && (
+        <div
+          className="hidden sm:flex items-center gap-1 mt-2 pt-2 border-t border-neutral-50 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <ChecklistCardQuickActions
+            isPublished={checklist.is_published === true}
+            onEdit={() => onEdit(checklist.id)}
+            onCopyLink={copyPublicLink}
+            onOpenSubmissions={() =>
+              // Contrato 6A certificado: settings booleano + settingsTab (NÃO o
+              // contrato antigo da 5E com settings como string).
+              navigate({ to: "/checklist", search: { id: checklist.id, settings: true, settingsTab: "envios" } })
+            }
+            onPublish={() => navigate({ to: "/checklist", search: { id: checklist.id } })}
+          />
+        </div>
+      )}
     </div>
   );
 }
