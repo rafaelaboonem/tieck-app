@@ -255,8 +255,10 @@ describe('Execution 5E.0C.1 — checklist.tsx fiação', () => {
 
   it('saveDeadlineConfig é fail-closed no workspace real (canManageWorkspace)', () => {
     expect(routeSource).toContain('if (!settingsChecklistId || !wsId || !canManageWorkspace) return;');
-    // 4 controles de deadline (switch alerta, select responsável, date, time).
-    expect(routeSource.match(/disabled=\{!canManageWorkspace\}/g)?.length).toBe(4);
+    // 8 controles de deadline: 4 originais (switch alerta, select responsável,
+    // data, time) + 4 da 5E.1.1 (2 botões do segmented + DD/MM + HH:mm; AAAA
+    // usa o mesmo padrão e o select "Em dias" também é gated).
+    expect(routeSource.match(/disabled=\{!canManageWorkspace\}/g)?.length).toBeGreaterThanOrEqual(8);
     // Nenhum `!canManage` sem sufixo sobrou.
     expect(routeSource.match(/!canManage[^W]/g)).toBeNull();
   });

@@ -120,6 +120,7 @@ import { mapAuthError } from "@/utils/auth-errors";
 import { useQuery } from "@tanstack/react-query";
 import { useWorkspaceRBAC } from "@/hooks/useWorkspaceRBAC";
 import { toLocalISO, fromLocalISO } from "@/utils/date-helpers";
+import { getWorkspaceMemberLabel, getAssignableWorkspaceMembers, formatTimeDigits, normalizeDeadlineTime, buildAssignmentDueAtFromDate, buildAssignmentDueAtFromDays, hydrateDeadlinePartsFromDueAt, getLocalYear, type DeadlineMode } from "@/lib/assignment-deadline-ui";
 import { getAssignmentStatus, getStatusBadge } from "@/utils/assignment-status";
 
 const InsightsTab = lazy(() => import("@/components/InsightsTab").then(m => ({ default: m.InsightsTab })));
@@ -948,10 +949,26 @@ export function NovoChecklistPage() {
   const [customEmailDomainId, setCustomEmailDomainId] = useState<string | null>(null);
   const [userDomains, setUserDomains] = useState<any[]>([]);
   const [workspaceMembers, setWorkspaceMembers] = useState<any[]>([]);
+  // 5E.1.1: Responsável = quem EXECUTA. Owner/criador do checklist nunca é
+  // oferecido como executor (ele permanece o destinatário do alerta). Para
+  // checklist existente o owner vem da metadata autoritativa; para checklist
+  // novo, fallback seguro para o usuário autenticado.
+  const assignableWorkspaceMembers = getAssignableWorkspaceMembers(
+    workspaceMembers,
+    checklistMeta?.ownerId ?? (checklistId ? null : authUser?.id ?? null)
+  );
   const [checklistAssignments, setChecklistAssignments] = useState<any[]>([]);
   const [isDeadlineLoading, setIsDeadlineLoading] = useState(false);
   const [deadlineStatus, setDeadlineStatus] = useState<string | null>(null);
   const [assignmentDueAt, setAssignmentDeadline] = useState<string | null>(null);
+  // 5E.1.1: deadline entry UX. Mode is UI-only — the canonical state remains
+  // assignmentDueAt (absolute ISO persisted to checklist_assignments.due_at).
+  const [deadlineMode, setDeadlineMode] = useState<DeadlineMode>("date");
+  const [deadlineDay, setDeadlineDay] = useState("");
+  const [deadlineMonth, setDeadlineMonth] = useState("");
+  const [deadlineYear, setDeadlineYear] = useState(String(getLocalYear()));
+  const [deadlineTime, setDeadlineTime] = useState("23:59");
+  const [deadlineDays, setDeadlineDays] = useState(1);
   const [primaryMemberId, setPrimaryMemberId] = useState<string | null>(null);
   const [deadlineAlertEnabled, setDeadlineAlertEnabled] = useState(false);
 
@@ -1671,10 +1688,11 @@ export function NovoChecklistPage() {
       }
       if (!wsId || !user) return;
 
-      // 1. Buscar membros ativos
+      // 1. Buscar membros ativos. 5E.1.1: email_normalized alimenta o label
+      // humano; role/user_id alimentam a exclusão do owner como Responsável.
       const { data: members, error: memErr } = await supabase
         .from("workspace_members")
-        .select("id, user_id, role, status")
+        .select("id, user_id, role, status, email_normalized")
         .eq("workspace_id", wsId)
         .eq("status", "active");
       
@@ -1688,7 +1706,7 @@ export function NovoChecklistPage() {
         const userIds = members.map(m => m.user_id).filter(id => !!id) as string[];
         const { data: profiles, error: profErr } = await supabase
           .from("profiles")
-          .select("id, display_name, avatar_url")
+          .select("id, display_name, first_name, last_name, avatar_url")
           .in("id", userIds);
 
         if (profErr) {
@@ -2789,11 +2807,27 @@ export function NovoChecklistPage() {
         setAssignmentDeadline(primary.due_at);
         setDeadlineAlertEnabled(!!primary.due_at);
         setDeadlineStatus(getAssignmentStatus(primary.due_at, primary.completed_at));
+        // 5E.1.1: hydrate the visual entry controls from the persisted absolute
+        // due_at (local time). Reopening always hydrates as "Data específica" —
+        // the DB stores only the absolute due_at, never the entry method.
+        setDeadlineMode("date");
+        const parts = hydrateDeadlinePartsFromDueAt(primary.due_at);
+        setDeadlineDay(parts.day);
+        setDeadlineMonth(parts.month);
+        setDeadlineYear(parts.year);
+        setDeadlineTime(parts.time);
       } else {
         setPrimaryMemberId(null);
         setAssignmentDeadline(null);
         setDeadlineAlertEnabled(false);
         setDeadlineStatus(null);
+        // 5E.1.1: fresh deadline entry — empty day/month, current local year,
+        // default time 23:59, date mode. Never creates a deadline by itself.
+        setDeadlineMode("date");
+        setDeadlineDay("");
+        setDeadlineMonth("");
+        setDeadlineYear(String(getLocalYear()));
+        setDeadlineTime("23:59");
       }
       return { ok: true };
     } catch (err) {
@@ -2801,6 +2835,19 @@ export function NovoChecklistPage() {
       return { ok: false, error: err };
     }
   };
+
+  // 5E.1.1: the entry controls are UX-only — the canonical state remains
+  // assignmentDueAt (absolute ISO). Only a fully valid combination produces a
+  // value; incomplete/invalid input leaves it without a valid value, and
+  // saveDeadlineConfig then refuses to persist with a clear error.
+  useEffect(() => {
+    const dueAt =
+      deadlineMode === "date"
+        ? buildAssignmentDueAtFromDate(deadlineDay, deadlineMonth, deadlineYear, deadlineTime)
+        : buildAssignmentDueAtFromDays(deadlineDays, deadlineTime);
+    setAssignmentDeadline(dueAt);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deadlineMode, deadlineDay, deadlineMonth, deadlineYear, deadlineTime, deadlineDays]);
 
   const saveDeadlineConfig = async () => {
     // 5E.0C.1: deadline/assignment RPCs only ever target the checklist's real
@@ -2829,6 +2876,8 @@ export function NovoChecklistPage() {
         return;
       }
 
+      // 5E.1.1: invalid/incomplete date-time keeps assignmentDueAt null →
+      // clear error, nothing persisted (invalid deadline can never reach the DB).
       if (!primaryMemberId || !assignmentDueAt) {
         toast.error("Selecione um responsável e defina um prazo");
         return;
@@ -6271,44 +6320,108 @@ export function NovoChecklistPage() {
                             className="w-full text-sm border border-neutral-200 rounded-md px-3 py-2 bg-white outline-none focus:border-neutral-400"
                           >
                             <option value="">Selecionar responsável</option>
-                            {workspaceMembers.map(m => (
-                              <option key={m.id} value={m.id}>
-                                {m.profiles?.display_name || "Membro"}
-                              </option>
-                            ))}
+                            {/* 5E.1.1: filtered list — owner/creator never offered; human labels. */}
+                            {assignableWorkspaceMembers.length === 0 ? (
+                              <option value="" disabled>Nenhum membro disponível</option>
+                            ) : (
+                              assignableWorkspaceMembers.map(m => (
+                                <option key={m.id} value={m.id}>
+                                  {getWorkspaceMemberLabel(m)}
+                                </option>
+                              ))
+                            )}
                           </select>
                         </CustomField>
 
-                        <div className="grid grid-cols-2 gap-4">
-                          <CustomField label="Data limite">
-                            <input
-                              type="date"
+                        {/* 5E.1.1: entry mode is UX-only — both produce the absolute due_at. */}
+                        <div className="flex items-center gap-1 p-1 bg-neutral-100 rounded-lg w-fit" role="group" aria-label="Forma de definir o prazo">
+                          {(["date", "days"] as DeadlineMode[]).map((mode) => (
+                            <button
+                              key={mode}
+                              type="button"
+                              onClick={() => setDeadlineMode(mode)}
                               disabled={!canManageWorkspace}
-                              value={assignmentDueAt ? toLocalISO(new Date(assignmentDueAt)).split('T')[0] : ""}
-                              onChange={(e) => {
-                                const date = e.target.value;
-                                const currentTime = assignmentDueAt ? toLocalISO(new Date(assignmentDueAt)).split('T')[1]?.slice(0, 5) : "23:59";
-                                if (date) {
-                                  const localISO = `${date}T${currentTime}`;
-                                  setAssignmentDeadline(fromLocalISO(localISO));
-                                }
-                              }}
-                              className="w-full text-sm border border-neutral-200 rounded-md px-3 py-2 outline-none focus:border-neutral-400"
-                            />
+                              className={cn(
+                                "text-xs font-semibold px-3 py-1.5 rounded-md transition-colors",
+                                deadlineMode === mode
+                                  ? "bg-white text-neutral-900 shadow-sm"
+                                  : "text-neutral-500 hover:text-neutral-700"
+                              )}
+                            >
+                              {mode === "date" ? "Data específica" : "Em dias"}
+                            </button>
+                          ))}
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                          <CustomField label={deadlineMode === "date" ? "Data limite" : "Prazo em dias"}>
+                            {deadlineMode === "date" ? (
+                              /* 5E.1.1: DD / MM / AAAA — controlled numeric fields replace
+                                  the unreliable native date picker. Year starts pre-filled
+                                  with the current local year on a NEW deadline. */
+                              <div className="flex items-center gap-1.5">
+                                <input
+                                  type="text"
+                                  inputMode="numeric"
+                                  aria-label="Dia"
+                                  placeholder="DD"
+                                  maxLength={2}
+                                  disabled={!canManageWorkspace}
+                                  value={deadlineDay}
+                                  onChange={(e) => setDeadlineDay(e.target.value.replace(/\D/g, "").slice(0, 2))}
+                                  className="w-12 text-sm text-center border border-neutral-200 rounded-md px-1 py-2 outline-none focus:border-neutral-400"
+                                />
+                                <span className="text-neutral-400">/</span>
+                                <input
+                                  type="text"
+                                  inputMode="numeric"
+                                  aria-label="Mês"
+                                  placeholder="MM"
+                                  maxLength={2}
+                                  disabled={!canManageWorkspace}
+                                  value={deadlineMonth}
+                                  onChange={(e) => setDeadlineMonth(e.target.value.replace(/\D/g, "").slice(0, 2))}
+                                  className="w-12 text-sm text-center border border-neutral-200 rounded-md px-1 py-2 outline-none focus:border-neutral-400"
+                                />
+                                <span className="text-neutral-400">/</span>
+                                <input
+                                  type="text"
+                                  inputMode="numeric"
+                                  aria-label="Ano"
+                                  placeholder="AAAA"
+                                  maxLength={4}
+                                  disabled={!canManageWorkspace}
+                                  value={deadlineYear}
+                                  onChange={(e) => setDeadlineYear(e.target.value.replace(/\D/g, "").slice(0, 4))}
+                                  className="w-16 text-sm text-center border border-neutral-200 rounded-md px-1 py-2 outline-none focus:border-neutral-400"
+                                />
+                              </div>
+                            ) : (
+                              /* 5E.1.1: "Em dias" — shortcut 1–30 calendar days; persists
+                                  only the computed absolute due_at, never "N dias". */
+                              <select
+                                value={deadlineDays}
+                                onChange={(e) => setDeadlineDays(Number(e.target.value))}
+                                disabled={!canManageWorkspace}
+                                className="w-full text-sm border border-neutral-200 rounded-md px-3 py-2 bg-white outline-none focus:border-neutral-400"
+                              >
+                                {Array.from({ length: 30 }, (_, i) => i + 1).map((n) => (
+                                  <option key={n} value={n}>{n} {n === 1 ? "dia" : "dias"}</option>
+                                ))}
+                              </select>
+                            )}
                           </CustomField>
                           <CustomField label="Horário limite">
+                            {/* 5E.1.1: controlled digitable HH:mm replaces the native
+                                time picker (unreliable typing/picker in E2E). */}
                             <input
-                              type="time"
+                              type="text"
+                              inputMode="numeric"
+                              placeholder="HH:mm"
+                              maxLength={5}
                               disabled={!canManageWorkspace}
-                              value={assignmentDueAt ? toLocalISO(new Date(assignmentDueAt)).split('T')[1]?.slice(0, 5) : ""}
-                              onChange={(e) => {
-                                const time = e.target.value;
-                                const currentDate = assignmentDueAt ? toLocalISO(new Date(assignmentDueAt)).split('T')[0] : toLocalISO(new Date()).split('T')[0];
-                                if (time) {
-                                  const localISO = `${currentDate}T${time}`;
-                                  setAssignmentDeadline(fromLocalISO(localISO));
-                                }
-                              }}
+                              value={deadlineTime}
+                              onChange={(e) => setDeadlineTime(formatTimeDigits(e.target.value))}
                               className="w-full text-sm border border-neutral-200 rounded-md px-3 py-2 outline-none focus:border-neutral-400"
                             />
                           </CustomField>
