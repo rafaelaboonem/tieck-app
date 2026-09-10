@@ -19,6 +19,12 @@
 --   - no cron here (occurrence generation arrives in 5E.2B)
 --   - migration is NOT applied to the remote project in this phase
 --
+-- Member lifecycle (5E.2A.1): operational member removal = soft delete
+-- (workspace_members.status = 'inactive'); schedule cancellation =
+-- is_active = false. Physical DELETE is NOT the normal product flow —
+-- the ON DELETE CASCADE FKs below are structural safeguards only and
+-- are intentionally left untouched by this micro-patch.
+--
 -- Frequency semantics (official for this version):
 --   once              → single occurrence on starts_on
 --   daily             → one occurrence per calendar day in
@@ -150,6 +156,7 @@ SET search_path = public, pg_temp
 AS $$
 DECLARE
     v_workspace_id uuid;
+    v_member_status public.member_status;
 BEGIN
     IF TG_OP <> 'INSERT' AND TG_OP <> 'UPDATE' THEN
         RETURN NEW;
@@ -168,14 +175,21 @@ BEGIN
         RAISE EXCEPTION 'schedule_member_required' USING ERRCODE = 'P0001';
     END IF;
 
-    -- C + D) member exists and belongs to the SAME workspace
-    IF NOT EXISTS (
-        SELECT 1
-        FROM public.workspace_members wm
-        WHERE wm.id = NEW.workspace_member_id
-          AND wm.workspace_id = v_workspace_id
-    ) THEN
+    -- C + D + 5E.2A.1) member exists, belongs to the SAME workspace and is
+    -- ACTIVE. Operational member removal is a soft delete (status =
+    -- 'inactive' via update_workspace_member_status), never a physical
+    -- DELETE, so a schedule targeting an inactive member fails closed.
+    SELECT wm.status INTO v_member_status
+    FROM public.workspace_members wm
+    WHERE wm.id = NEW.workspace_member_id
+      AND wm.workspace_id = v_workspace_id;
+
+    IF v_member_status IS NULL THEN
         RAISE EXCEPTION 'schedule_workspace_mismatch' USING ERRCODE = 'P0001';
+    END IF;
+
+    IF v_member_status <> 'active'::public.member_status THEN
+        RAISE EXCEPTION 'schedule_member_inactive' USING ERRCODE = 'P0001';
     END IF;
 
     -- E) timezone must be recognized (IANA database via PostgreSQL)
@@ -213,12 +227,17 @@ FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
 --    Writes arrive later through SECURITY DEFINER RPCs (5E.2B/2C),
 --    so no INSERT/UPDATE/DELETE policies are created here.
 --
---    SELECT policy grants:
---      A) the assigned member (workspace_members.user_id = auth.uid())
+--    SELECT policy grants (5E.2A.1):
+--      A) the assigned ACTIVE member (workspace_members.user_id =
+--         auth.uid() AND status = 'active') — a removed member
+--         (soft-deleted to 'inactive') loses executor read access;
 --      B) managers of the checklist (owner or admin/editor role in
 --         the checklist's real workspace, mirroring the can_manage
 --         semantics of get_checklist_access without calling it —
---         that RPC is service_role-only by hardening)
+--         that RPC is service_role-only by hardening). The manager
+--         path is intentionally NOT conditioned on the assignee's
+--         current member status, so an active manager can still audit
+--         schedules/occurrences whose executor was later deactivated.
 --    Anon: no policy → zero access.
 -- -------------------------------------------------------------
 ALTER TABLE public.checklist_execution_schedules ENABLE ROW LEVEL SECURITY;
@@ -233,6 +252,7 @@ USING (
         FROM public.workspace_members wm
         WHERE wm.id = checklist_execution_schedules.workspace_member_id
           AND wm.user_id = auth.uid()
+          AND wm.status = 'active'
     )
     OR EXISTS (
         SELECT 1
@@ -258,6 +278,7 @@ USING (
         JOIN public.workspace_members wm ON wm.id = s.workspace_member_id
         WHERE s.id = checklist_execution_occurrences.schedule_id
           AND wm.user_id = auth.uid()
+          AND wm.status = 'active'
     )
     OR EXISTS (
         SELECT 1
