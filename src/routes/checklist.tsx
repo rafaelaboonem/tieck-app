@@ -926,6 +926,11 @@ export function NovoChecklistPage() {
     checklistWorkspaceId: checklistRealWorkspaceId,
     newChecklistWorkspaceId: effectiveNewChecklistWorkspaceId,
   });
+  // 5E.0C.2: visibility for the Alertas de Prazo section. A personal existing
+  // checklist has no real workspace and must not show the section at all; a
+  // workspace checklist shows it (Viewer sees it, still disabled by
+  // !canManageWorkspace). Visibility != permission.
+  const hasWorkspaceResources = !!checklistWorkspaceForResources;
   const rbacWorkspaceId = checklistWorkspaceForResources;
   const { canManage: canManageWorkspace } = useWorkspaceRBAC(rbacWorkspaceId);
   const { canManageChecklist } = resolveChecklistManagementAccess({
@@ -1698,14 +1703,20 @@ export function NovoChecklistPage() {
 
   useEffect(() => {
     const fetchWorkspaceData = async () => {
-      // 5E.0C.1: for an existing checklist, members/assignments come only from
-      // the checklist's real workspace. A personal existing checklist has no
-      // workspace → no member fetch from the visual context.
+      // 5E.0C.1 + 5E.0C.2: for an existing checklist, members/assignments come
+      // only from the checklist's real workspace. A personal existing checklist
+      // has no workspace → no member fetch from the visual context.
       const wsId = checklistWorkspaceForResources;
       if (!wsId) {
         // Switching to a checklist without a real workspace must not keep
-        // stale members from a previous workspace checklist.
+        // stale members or ghost deadline state from a previous
+        // workspace checklist.
         setWorkspaceMembers([]);
+        setPrimaryMemberId(null);
+        setAssignmentDeadline(null);
+        setDeadlineAlertEnabled(false);
+        setDeadlineStatus(null);
+        setChecklistAssignments([]);
       }
       if (!wsId || !user) return;
 
@@ -1748,10 +1759,17 @@ export function NovoChecklistPage() {
   }, [user, checklistId, checklistMeta, currentWorkspace?.id, workspaceParam]);
 
   useEffect(() => {
-    if (isSettingsOpen && settingsActiveTab === "emails" && settingsChecklistId) {
+    // 5E.0C.2: deadline/assignment state only loads when the checklist has a
+    // real applicable workspace — never for personal checklists.
+    if (
+      isSettingsOpen &&
+      settingsActiveTab === "emails" &&
+      settingsChecklistId &&
+      checklistWorkspaceForResources
+    ) {
       loadDeadlineAssignmentState();
     }
-  }, [settingsChecklistId, isSettingsOpen, settingsActiveTab]);
+  }, [settingsChecklistId, isSettingsOpen, settingsActiveTab, checklistWorkspaceForResources]);
 
 
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
@@ -6274,6 +6292,9 @@ export function NovoChecklistPage() {
                     )}
                   </div>
 
+                  {/* 5E.0C.2: workspace-only resources — hidden entirely on
+                      personal checklists; visible (disabled) for Viewer. */}
+                  {hasWorkspaceResources && (
                   <div className="py-6 border-b border-neutral-200">
                     <h3 className="text-sm font-semibold text-neutral-900 mb-4 uppercase tracking-wider text-[10px]">Alertas de Prazo</h3>
                     <SettingsRow
@@ -6374,6 +6395,7 @@ export function NovoChecklistPage() {
                       </div>
                     )}
                   </div>
+                  )}
                 </div>
 
                 <div className="mt-8 flex items-center justify-center gap-6">
