@@ -5,6 +5,8 @@ import { getChecklistSeo } from "@/lib/checklist_seo.functions";
 import { t } from "@/lib/checklist-i18n";
 import { ExecutionEngine } from "@/components/ExecutionEngine";
 import { shouldShowChecklistWatermark } from "@/lib/camera-watermark-visibility";
+import { getChecklistRenderStyle, getChecklistWatermarkPlacement } from "@/lib/checklist-render-styles";
+import { ChecklistCoverProfile } from "@/components/ChecklistCoverProfile";
 import logoUrl from "../assets/local/logo-k.webp";
 const tieckLogo = logoUrl;
 
@@ -182,9 +184,10 @@ function PublicChecklistPage() {
   return (
     <div 
       className="min-h-screen overflow-y-auto"
-      style={{ backgroundColor: isDark ? "#1a1a1a" : settings.bgColor, color: isDark ? "#ffffff" : settings.textColor, fontFamily: settings.font }}
+      style={getChecklistRenderStyle(settings, isDark)}
     >
-      <main className="pb-32 pt-12">
+      <ChecklistCoverProfile blocks={checklist.blocks || []} settings={settings} />
+      <main className="pb-32">
         <ExecutionEngine 
           checklist={checklist} 
           mode="public"
@@ -195,7 +198,7 @@ function PublicChecklistPage() {
       </main>
 
       {shouldShowChecklistWatermark(loaderData.showBranding, cameraOpen) && (
-        <div className="fixed bottom-6 right-8 z-[100] flex items-center gap-3">
+        <div className={getChecklistWatermarkPlacement()}>
           <span className="text-sm text-neutral-400">Feito com</span>
           <img src={tieckLogo} alt="Tieck" className="h-20 grayscale opacity-60" />
         </div>

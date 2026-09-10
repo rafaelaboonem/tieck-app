@@ -71,11 +71,9 @@ describe("Promotion 6A.0.1 — deep-link Envios sem 5E", () => {
     expect(routeSource).not.toMatch(/settings\?: boolean \| string/);
   });
 
-  it("nenhum helper 5E ainda não sancionado é importado (publish-intent 5E.0A, checklist-links 5E.0B e checklist-management-access 5E.0C.1 são sancionados)", () => {
+  it("nenhum helper 5E ainda não sancionado é importado (publish-intent 5E.0A, checklist-links 5E.0B, checklist-management-access 5E.0C.1 e render-styles/CoverProfile 5E.0D são sancionados)", () => {
     const forbidden = [
       "execution-assignment",
-      "ChecklistCoverProfile",
-      "checklist-render-styles",
     ];
     for (const f of forbidden) {
       expect(routeSource).not.toContain(f);

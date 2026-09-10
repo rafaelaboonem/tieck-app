@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { t } from "@/lib/checklist-i18n";
+import { getChecklistContainerClass } from "@/lib/checklist-render-styles";
 import { BlockRenderer } from "@/components/BlockRenderer";
 import { PublicCameraBlock } from "@/components/PublicCameraBlock";
 import { CameraSessionProvider } from "@/contexts/CameraSessionContext";
@@ -311,7 +312,7 @@ export function ExecutionEngine({
 
   return (
     <CameraSessionProvider>
-      <div className="w-full mx-auto px-6" style={{ maxWidth: settings.pageWidth || "800px" }}>
+      <div className={getChecklistContainerClass()} style={{ maxWidth: settings.pageWidth || "800px" }}>
         {checklist.title && (
           <h1 className="text-4xl font-bold mb-10 tracking-tight" style={{ color: settings.textColor }}>{checklist.title}</h1>
         )}
