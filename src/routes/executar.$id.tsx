@@ -10,6 +10,7 @@ import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { toast } from "sonner";
 import { Loader2, Ban, AlertCircle, CalendarDays, CheckCircle2 } from "lucide-react";
 import { getAssignmentStatus, getStatusBadge } from "@/utils/assignment-status";
+import { getAssignmentsForWorkspaceMember } from "@/lib/execution-assignment";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/executar/$id")({
@@ -26,8 +27,10 @@ function AuthenticatedExecutionPage() {
   const [analyticsId, setAnalyticsId] = useState<string | null>(null);
   const navigate = useNavigate();
 
-  // RBAC check
-  const { role, loading: rbacLoading } = useWorkspaceRBAC(checklist?.workspace_id);
+  // RBAC check. 5E.1: `workspaceMemberId` é a identidade correta para casar
+  // com checklist_assignments.workspace_member_id (workspace_members.id),
+  // NUNCA user.id (auth.users.id).
+  const { role, workspaceMemberId, loading: rbacLoading } = useWorkspaceRBAC(checklist?.workspace_id);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -143,7 +146,7 @@ function AuthenticatedExecutionPage() {
               ← Voltar
             </Link>
             
-            {checklist.checklist_assignments?.filter((a: any) => a.workspace_member_id === user?.id).map((a: any) => {
+            {getAssignmentsForWorkspaceMember(checklist.checklist_assignments, workspaceMemberId).map((a: any) => {
               const status = getAssignmentStatus(a.due_at, a.completed_at);
               const badge = getStatusBadge(status);
               if (!badge) return null;
