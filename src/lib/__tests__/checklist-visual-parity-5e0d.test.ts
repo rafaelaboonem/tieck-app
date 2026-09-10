@@ -38,10 +38,11 @@ describe("5E.0D — editor preview consumes the shared helpers", () => {
 });
 
 describe("5E.0D — ExecutionEngine consumes the shared container", () => {
-  it("engine container is the shared class with pageWidth fallback", () => {
+  it("engine container is the shared class and follows settings.pageWidth (5E.0D.1: no 800px fallback)", () => {
     expect(engineSource).toContain('className={getChecklistContainerClass()}');
-    expect(engineSource).toContain('style={{ maxWidth: settings.pageWidth || "800px" }}');
+    expect(engineSource).toContain('style={{ maxWidth: settings.pageWidth }}');
     expect(engineSource).not.toContain('"w-full mx-auto px-6"');
+    expect(engineSource).not.toContain('settings.pageWidth || "800px"');
   });
 
   it("engine keeps no Cover/Profile header (belongs to outer surfaces)", () => {

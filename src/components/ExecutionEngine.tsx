@@ -312,7 +312,7 @@ export function ExecutionEngine({
 
   return (
     <CameraSessionProvider>
-      <div className={getChecklistContainerClass()} style={{ maxWidth: settings.pageWidth || "800px" }}>
+      <div className={getChecklistContainerClass()} style={{ maxWidth: settings.pageWidth }}>
         {checklist.title && (
           <h1 className="text-4xl font-bold mb-10 tracking-tight" style={{ color: settings.textColor }}>{checklist.title}</h1>
         )}

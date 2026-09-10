@@ -31,9 +31,13 @@ export function ChecklistCoverProfile({ blocks, settings }: { blocks: any[]; set
             <div
               className="border-4 border-white dark:border-neutral-900 shadow-lg overflow-hidden bg-white"
               style={{
-                width: settings.logoWidth,
-                height: settings.logoHeight,
-                borderRadius: settings.logoRadius,
+                // 5E.0D.1 fail-safe: checklists published before the logo
+                // settings were persisted have no keys in the settings JSON.
+                // Canonical editor defaults (never undefined → no giant
+                // intrinsic-size profile on old public checklists).
+                width: settings.logoWidth || "100px",
+                height: settings.logoHeight || "100px",
+                borderRadius: settings.logoRadius || "50px",
               }}
             >
               <img

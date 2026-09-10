@@ -1593,6 +1593,9 @@ export function NovoChecklistPage() {
                 ["btnIconPosition", setBtnIconPosition],
                 ["pageWidth", setPageWidth],
                 ["baseFontSize", setBaseFontSize],
+                ["logoWidth", setLogoWidth],
+                ["logoHeight", setLogoHeight],
+                ["logoRadius", setLogoRadius],
                 ["language", setLanguage],
                 ["redirectOnCompletion", setRedirectOnCompletion],
                 ["redirectUrl", setRedirectUrl],
@@ -2511,7 +2514,11 @@ export function NovoChecklistPage() {
         settings: {
           theme, font, bgColor, textColor, accentColor, pageWidth, 
           baseFontSize, language, redirectOnCompletion, redirectUrl, progressBar,
-          btnBgColor, btnTextColor, btnText, btnIcon, btnIconPosition, selfEmailNotif,
+          btnBgColor, btnTextColor, btnText, btnIcon, btnIconPosition,
+          // 5E.0D.1: profile/logo dimensions must live in the persisted
+          // settings JSON so the public page renders the same profile as the
+          // preview (previously undefined there → giant unstyled profile).
+          logoWidth, logoHeight, logoRadius, selfEmailNotif,
           respondentEmailNotif, respondentEmailFieldId,
           respondentEmailSubject, respondentEmailMessage,
           includeResponsesInEmail, ownerEmailAddress,
@@ -2749,7 +2756,7 @@ export function NovoChecklistPage() {
       const targetId = checklistId || sessionChecklistIdRef.current;
       if (user) latestSaveDispatch.finishSave(pendingAutosaveCoalescer, user, targetId ? undefined : false, true);
     }
-  }, [user, title, blocks, theme, font, bgColor, textColor, accentColor, pageWidth, baseFontSize, language, redirectOnCompletion, redirectUrl, progressBar, btnBgColor, btnTextColor, btnText, btnIcon, btnIconPosition, checklistId, selfEmailNotif, respondentEmailNotif, respondentEmailFieldId, respondentEmailSubject, respondentEmailMessage, includeResponsesInEmail, ownerEmailAddress, dataRetention, retentionDays, partialSubmissions, checklistBranding, thankYouTitle, thankYouDescription, categoryParam, customDomain, passwordProtect, formPassword, closeForm, closeFormScheduled, closeFormDate, limitSubmissions, submissionLimit, closedFormMessage, closedMessageText, deadlineAlertEnabled, primaryMemberId, assignmentDueAt, serializeWrite, persistBlocks]);
+  }, [user, title, blocks, theme, font, bgColor, textColor, accentColor, pageWidth, baseFontSize, language, redirectOnCompletion, redirectUrl, progressBar, btnBgColor, btnTextColor, btnText, btnIcon, btnIconPosition, logoWidth, logoHeight, logoRadius, checklistId, selfEmailNotif, respondentEmailNotif, respondentEmailFieldId, respondentEmailSubject, respondentEmailMessage, includeResponsesInEmail, ownerEmailAddress, dataRetention, retentionDays, partialSubmissions, checklistBranding, thankYouTitle, thankYouDescription, categoryParam, customDomain, passwordProtect, formPassword, closeForm, closeFormScheduled, closeFormDate, limitSubmissions, submissionLimit, closedFormMessage, closedMessageText, deadlineAlertEnabled, primaryMemberId, assignmentDueAt, serializeWrite, persistBlocks]);
 
   // 5C.3.3-B.3: a cada renderização, o dispatch passa a apontar para a closure
   // MAIS RECENTE do saveChecklist — o autosave coalescido (disparado no
