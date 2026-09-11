@@ -122,6 +122,7 @@ import { useWorkspaceRBAC } from "@/hooks/useWorkspaceRBAC";
 import { toLocalISO, fromLocalISO } from "@/utils/date-helpers";
 import { getWorkspaceMemberLabel, getAssignableWorkspaceMembers, formatTimeDigits, normalizeDeadlineTime, buildAssignmentDueAtFromDate, buildAssignmentDueAtFromDays, hydrateDeadlinePartsFromDueAt, getLocalYear, type DeadlineMode } from "@/lib/assignment-deadline-ui";
 import { getAssignmentStatus, getStatusBadge } from "@/utils/assignment-status";
+import { ExecutionScheduleSettings } from "@/components/ExecutionScheduleSettings";
 
 const InsightsTab = lazy(() => import("@/components/InsightsTab").then(m => ({ default: m.InsightsTab })));
 const SubmissionsTab = lazy(() => import("@/components/SubmissionsTab").then(m => ({ default: m.SubmissionsTab })));
@@ -641,18 +642,20 @@ export const Route = createFileRoute("/checklist")({
   head: () => ({
     meta: [{ title: "Editor — Tieck" }],
   }),
-  validateSearch: (search: Record<string, unknown>): { id?: string; workspace?: string; category?: string; settings?: boolean; settingsTab?: "envios" | "compartilhar" } => {
+  validateSearch: (search: Record<string, unknown>): { id?: string; workspace?: string; category?: string; settings?: boolean; settingsTab?: "envios" | "compartilhar" | "rotinas" } => {
     return {
       id: typeof search.id === "string" ? search.id : undefined,
       workspace: typeof search.workspace === "string" ? search.workspace : undefined,
       category: typeof search.category === "string" ? search.category : undefined,
       settings: typeof search.settings === "boolean" ? search.settings : undefined,
       // Deep-link tab selection: Home Camera AI ("Ver envio") → "envios";
-      // 5E.0A explicit publish → "compartilhar". Fail-closed: only these two
-      // literals are accepted, any other value is undefined (default "geral").
+      // 5E.0A explicit publish → "compartilhar"; 5E.2C.2 rotinas → "rotinas".
+      // Fail-closed: only these three literals are accepted, any other value is
+      // undefined (default "geral").
       settingsTab:
         search.settingsTab === "envios" ? "envios"
         : search.settingsTab === "compartilhar" ? "compartilhar"
+        : search.settingsTab === "rotinas" ? "rotinas"
         : undefined,
     };
   },
@@ -1021,16 +1024,25 @@ export function NovoChecklistPage() {
   }, [sendButtonPanelOpen]);
   const [linkUrl, setLinkUrl] = useState("");
   const savedRangeRef = useRef<Range | null>(null);
-  const [settingsActiveTab, setSettingsActiveTab] = useState<"geral" | "compartilhar" | "envios" | "insights" | "emails" | "apresentacao">("geral");
+  const [settingsActiveTab, setSettingsActiveTab] = useState<"geral" | "compartilhar" | "envios" | "insights" | "emails" | "apresentacao" | "rotinas">("geral");
 
   // 6A.0.1 / 5E.0A: deep-link ?settings=true&settingsTab=… selects the tab when
   // Configurações opens ("envios" = Home "Ver envio"; "compartilhar" = publish
   // success). Default remains "geral" without the param.
   useEffect(() => {
-    if (openSettingsTabParam === "envios" || openSettingsTabParam === "compartilhar") {
+    if (openSettingsTabParam === "envios" || openSettingsTabParam === "compartilhar" || openSettingsTabParam === "rotinas") {
       setSettingsActiveTab(openSettingsTabParam);
     }
   }, [openSettingsTabParam]);
+
+  // 5E.2C.2: if the user lands on the Rotinas tab and the checklist turns out
+  // to have no real workspace (personal), fail back to "Geral" and let the
+  // tab unmount (its state clears with it).
+  useEffect(() => {
+    if (settingsActiveTab === "rotinas" && !hasWorkspaceResources) {
+      setSettingsActiveTab("geral");
+    }
+  }, [settingsActiveTab, hasWorkspaceResources]);
   const sessionChecklistIdRef = useRef<string | null>(null);
   const [currentChecklistId, setCurrentChecklistId] = useState<string | null>(null);
   const [profile, setProfile] = useState<any>(null);
@@ -5869,6 +5881,18 @@ export function NovoChecklistPage() {
               >
                 Apresentação
               </button>
+              {/* 5E.2C.2: Rotinas (recorrentes) exist only for workspace checklists.
+                  Personal checklists never get the tab — recurrence is a
+                  workspace-responsibility concept. */}
+              {hasWorkspaceResources && (
+                <button
+                  onClick={() => setSettingsActiveTab("rotinas")}
+                  data-testid="settings-tab-rotinas"
+                  className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all ${settingsActiveTab === "rotinas" ? "bg-white text-neutral-900 shadow-sm" : "text-neutral-500 hover:text-neutral-700"}`}
+                >
+                  Rotinas
+                </button>
+              )}
             </div>
 
 
@@ -6518,6 +6542,26 @@ export function NovoChecklistPage() {
                     Salvar configurações
                   </button>
                 </div>
+              </section>
+            )}
+
+            {/* 5E.2C.2: Rotinas — recurring execution schedules managed through the
+                audited 5E.2C.1 RPCs ONLY. Independent from Alertas de Prazo
+                (legacy single-assignment deadline) and from the global save
+                button. The DB remains the final authority (RPC authorization + RLS). */}
+            {settingsActiveTab === "rotinas" && (
+              <section>
+                {settingsChecklistId ? (
+                  <ExecutionScheduleSettings
+                    checklistId={settingsChecklistId}
+                    canManage={canManageWorkspace}
+                    workspaceMembers={assignableWorkspaceMembers}
+                  />
+                ) : (
+                  <p className="text-xs text-neutral-500" data-testid="rotinas-unsaved-checklist">
+                    Salve o checklist antes de criar uma rotina.
+                  </p>
+                )}
               </section>
             )}
 
