@@ -54,29 +54,39 @@ BEGIN
       USING ERRCODE = 'P0001';
   END IF;
 
-  -- Candidate generation: dates as date values produced by generate_series
-  -- over INTEGERS (days-since-2000-01-01), so no session-timezone-dependent
-  -- timestamptz series is ever created.
-  WITH candidates AS (
+  -- Candidate generation: per-schedule windows are computed as native dates
+  -- (date - date -> integer day count; date + integer -> date), so no
+  -- date<->integer casts and no session-timezone-dependent timestamptz
+  -- series are ever used. When the schedule window does not intersect the
+  -- requested range, window_end - window_start is negative and
+  -- generate_series(0, negative) yields zero candidates without error.
+  WITH bounded_schedules AS (
     SELECT
-      s.id AS schedule_id,
-      (gs.d)::date AS occurrence_date,
-      (((gs.d)::date + s.due_local_time) AT TIME ZONE s.timezone) AS due_at
+      s.*,
+      greatest(p_from_date, s.starts_on) AS window_start,
+      least(p_through_date, COALESCE(s.ends_on, p_through_date)) AS window_end
     FROM public.checklist_execution_schedules s
     JOIN public.workspace_members wm
       ON wm.id = s.workspace_member_id
      AND wm.status = 'active'
-    CROSS JOIN LATERAL generate_series(
-      greatest(p_from_date, s.starts_on)::integer,
-      least(p_through_date, COALESCE(s.ends_on, p_through_date))::integer
-    ) AS gs(d)
     WHERE s.is_active = true
-      AND (
-        (s.frequency = 'once' AND (gs.d)::date = s.starts_on)
-        OR s.frequency = 'daily'
-        OR (s.frequency = 'weekly' AND ((gs.d)::date - s.starts_on) % 7 = 0)
-        OR (s.frequency = 'specific_weekdays'
-            AND (EXTRACT(ISODOW FROM (gs.d)::date))::smallint = ANY (s.weekdays))
+  ),
+  candidates AS (
+    SELECT
+      b.id AS schedule_id,
+      (b.window_start + gs.day_offset) AS occurrence_date,
+      (((b.window_start + gs.day_offset) + b.due_local_time) AT TIME ZONE b.timezone) AS due_at
+    FROM bounded_schedules b
+    CROSS JOIN LATERAL generate_series(
+      0,
+      b.window_end - b.window_start
+    ) AS gs(day_offset)
+    WHERE (
+        (b.frequency = 'once' AND (b.window_start + gs.day_offset) = b.starts_on)
+        OR b.frequency = 'daily'
+        OR (b.frequency = 'weekly' AND ((b.window_start + gs.day_offset) - b.starts_on) % 7 = 0)
+        OR (b.frequency = 'specific_weekdays'
+            AND (EXTRACT(ISODOW FROM (b.window_start + gs.day_offset)))::smallint = ANY (b.weekdays))
       )
   ),
   ins AS (

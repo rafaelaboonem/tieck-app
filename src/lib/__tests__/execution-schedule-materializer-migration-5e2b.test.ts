@@ -94,14 +94,42 @@ describe("5E.2B — range validation", () => {
 });
 
 describe("5E.2B — candidate generation and eligibility", () => {
-  it("generates dates via generate_series over integers cast back to date (no timestamptz series)", () => {
-    expect(bodyCode).toMatch(/greatest\(p_from_date, s\.starts_on\)::integer/);
+  it("computes per-schedule windows as native dates via greatest/least", () => {
     expect(bodyCode).toMatch(
-      /least\(p_through_date, COALESCE\(s\.ends_on, p_through_date\)\)::integer/,
+      /greatest\(p_from_date, s\.starts_on\) AS window_start/,
     );
-    expect(bodyCode).toMatch(/generate_series\(/);
+    expect(bodyCode).toMatch(
+      /least\(p_through_date, COALESCE\(s\.ends_on, p_through_date\)\) AS window_end/,
+    );
+  });
+
+  it("generates integer day offsets from 0 with upper bound window_end - window_start", () => {
+    expect(bodyCode).toMatch(
+      /generate_series\(\s*0\s*,\s*b\.window_end - b\.window_start\s*\)/,
+    );
     expect(bodyCode).not.toMatch(/generate_series\(\s*now/i);
     expect(bodyCode).not.toMatch(/generate_series\([^)]*timestamptz/i);
+  });
+
+  it("never casts date to integer nor the integer offset back to date", () => {
+    // No date->integer or expression->date casts. String literal casts
+    // ('infinity'::date, used only in range validation) remain allowed.
+    expect(bodyCode).not.toMatch(/::integer\b/);
+    expect(bodyCode).not.toMatch(/(?<!')::date\b/);
+  });
+
+  it("forms occurrence_date by date + integer (window_start + day_offset)", () => {
+    expect(bodyCode).toMatch(
+      /\(b\.window_start \+ gs\.day_offset\) AS occurrence_date/,
+    );
+  });
+
+  it("an interval fully outside the schedule window yields an empty series (negative bound), not out-of-range rows", () => {
+    // PostgreSQL: generate_series(0, negative) produces zero rows. The SQL
+    // must rely on that semantic instead of casting or extra clipping.
+    expect(bodyCode).toMatch(
+      /generate_series\(\s*0\s*,\s*b\.window_end - b\.window_start\s*\)/,
+    );
   });
 
   it("materializes only active schedules", () => {
@@ -114,37 +142,34 @@ describe("5E.2B — candidate generation and eligibility", () => {
     expect(bodyCode).toMatch(/wm\.status = 'active'/);
   });
 
-  it("clips candidates to inclusive starts_on / ends_on bounds", () => {
-    expect(bodyCode).toMatch(/greatest\(p_from_date, s\.starts_on\)/);
-    expect(bodyCode).toMatch(/COALESCE\(s\.ends_on, p_through_date\)/);
-  });
-
-  it("'once' materializes only on starts_on", () => {
+  it("'once' materializes only on starts_on (using the calculated occurrence_date)", () => {
     expect(bodyCode).toMatch(
-      /s\.frequency = 'once' AND \(gs\.d\)::date = s\.starts_on/,
+      /b\.frequency = 'once' AND \(b\.window_start \+ gs\.day_offset\) = b\.starts_on/,
     );
   });
 
   it("'daily' materializes every eligible day", () => {
-    expect(bodyCode).toMatch(/OR s\.frequency = 'daily'/);
+    expect(bodyCode).toMatch(/OR b\.frequency = 'daily'/);
   });
 
   it("'weekly' is anchored on starts_on with a seven-day modulo (date difference)", () => {
     expect(bodyCode).toMatch(
-      /\(s\.frequency = 'weekly' AND \(\(gs\.d\)::date - s\.starts_on\) % 7 = 0\)/,
+      /\(b\.frequency = 'weekly' AND \(\(b\.window_start \+ gs\.day_offset\) - b\.starts_on\) % 7 = 0\)/,
     );
   });
 
-  it("'specific_weekdays' uses ISODOW (1=Monday..7=Sunday) against s.weekdays", () => {
-    expect(bodyCode).toMatch(/EXTRACT\(ISODOW FROM \(gs\.d\)::date\)/);
-    expect(bodyCode).toMatch(/= ANY \(s\.weekdays\)/);
+  it("'specific_weekdays' uses ISODOW (1=Monday..7=Sunday) against b.weekdays", () => {
+    expect(bodyCode).toMatch(
+      /EXTRACT\(ISODOW FROM \(b\.window_start \+ gs\.day_offset\)\)/,
+    );
+    expect(bodyCode).toMatch(/= ANY \(b\.weekdays\)/);
   });
 });
 
 describe("5E.2B — timezone conversion", () => {
-  it("derives due_at from occurrence_date + due_local_time AT TIME ZONE s.timezone", () => {
+  it("derives due_at from the corrected occurrence_date + due_local_time AT TIME ZONE b.timezone", () => {
     expect(bodyCode).toMatch(
-      /\(\(\(gs\.d\)::date \+ s\.due_local_time\) AT TIME ZONE s\.timezone\)/,
+      /\(\(\(b\.window_start \+ gs\.day_offset\) \+ b\.due_local_time\) AT TIME ZONE b\.timezone\)/,
     );
   });
 
