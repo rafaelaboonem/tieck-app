@@ -5,6 +5,10 @@
  * RPCs ONLY (via lib/execution-schedule-management). Never deletes, never
  * touches occurrences, never calls the materializer, never reuses the legacy
  * Alertas de Prazo (checklist_assignments) flow.
+ *
+ * 5E.2C.2.2 — async conclusions (reads and mutations) are bound to the
+ * checklist context they started on; a stale conclusion (checklist switched
+ * or permission lost mid-flight) never touches the visible UI.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -116,6 +120,24 @@ export function ExecutionScheduleSettings({
   // Guards against double-click / concurrent second calls (§12).
   const mutationInFlightRef = useRef(false);
 
+  // 5E.2C.2.2 §A: mirror of the LATEST rendered props, readable from async
+  // closures started under an older render (e.g. a mutation submitted on
+  // checklist A that settles after the panel already shows checklist B).
+  const contextRef = useRef({ checklistId, canManage });
+  contextRef.current = { checklistId, canManage };
+
+  // 5E.2C.2.2 §B/§C: an async step still belongs to the UI only if the
+  // checklist it started on is still displayed AND permission still holds.
+  // A null origin (mutation from an unsaved checklist never starts) can never
+  // be "current" — fail-closed by construction.
+  const isCurrentContext = useCallback(
+    (originChecklistId: string | null) =>
+      contextRef.current.checklistId === originChecklistId &&
+      originChecklistId !== null &&
+      contextRef.current.canManage,
+    []
+  );
+
   const browserTimezones = useMemo(() => {
     try {
       const intl = Intl as unknown as { supportedValuesOf?: (key: "timeZone") => string[] };
@@ -156,19 +178,24 @@ export function ExecutionScheduleSettings({
       return;
     }
     const sequence = ++loadSequenceRef.current;
+    // 5E.2C.2.2 §C: starting a read clears the previous checklist's rows
+    // immediately — stale cards never flash while the new list loads.
+    setSchedules([]);
     setIsLoading(true);
     setLoadError(null);
     try {
       const rows = await listChecklistExecutionSchedules(checklistId);
-      if (sequence !== loadSequenceRef.current) return; // stale response
+      if (sequence !== loadSequenceRef.current) return; // superseded read
+      if (!isCurrentContext(checklistId)) return; // context moved on
       setSchedules(rows);
     } catch (error) {
       console.error("[ExecutionScheduleSettings] list failed:", error);
-      if (sequence !== loadSequenceRef.current) return; // stale error
+      if (sequence !== loadSequenceRef.current) return; // superseded read
+      if (!isCurrentContext(checklistId)) return; // context moved on
       setLoadError(getScheduleErrorMessage(error));
     } finally {
-      // Only the current request may end the loading state.
-      if (sequence === loadSequenceRef.current) {
+      // Only the current request for the current context may end loading.
+      if (sequence === loadSequenceRef.current && isCurrentContext(checklistId)) {
         setIsLoading(false);
       }
     }
@@ -178,14 +205,14 @@ export function ExecutionScheduleSettings({
     void reloadSchedules();
   }, [reloadSchedules]);
 
-  // A checklist without a persisted id cannot hold schedules — clear any
-  // panel state (§13: "Salve o checklist antes de criar uma rotina.").
+  // 5E.2C.2.2 §C: ANY checklist change (unsaved → persisted, or c1 → c2)
+  // invalidates the panel state owned by the previous checklist — an open
+  // form or deactivate dialog must never survive a checklist switch.
   useEffect(() => {
-    if (!checklistId) {
-      setPanelMode("closed");
-      setEditingSchedule(null);
-      setFormError(null);
-    }
+    setPanelMode("closed");
+    setEditingSchedule(null);
+    setFormError(null);
+    setDeactivatingSchedule(null);
   }, [checklistId]);
 
   const memberLabelById = useMemo(() => {
@@ -238,6 +265,11 @@ export function ExecutionScheduleSettings({
       setFormError("Salve o checklist antes de criar uma rotina.");
       return;
     }
+    // 5E.2C.2.2 §B: bind this mutation to the checklist it started on. The
+    // RPC may still settle after the panel moved to another checklist; only
+    // conclusions for the CURRENT context may touch the UI.
+    const originChecklistId = checklistId;
+    const isCreate = panelMode === "create";
     const validationError = validateScheduleDraft(
       {
         workspaceMemberId: draft.workspaceMemberId || null,
@@ -250,7 +282,7 @@ export function ExecutionScheduleSettings({
         // rotina is never blocked by a stale endsOn.
         endsOn: draft.frequency === "once" ? null : draft.endsOn || null,
       },
-      { requireMember: panelMode === "create" }
+      { requireMember: isCreate }
     );
     if (validationError) {
       setFormError(SCHEDULE_ERROR_MESSAGES[validationError]);
@@ -261,22 +293,32 @@ export function ExecutionScheduleSettings({
     setIsMutating(true);
     setFormError(null);
     try {
-      if (panelMode === "create" && draft.workspaceMemberId) {
+      if (isCreate && draft.workspaceMemberId) {
         await createChecklistExecutionSchedule({
           checklistId,
           workspaceMemberId: draft.workspaceMemberId,
           ...payloadFromDraft(),
         });
-        toast.success("Rotina criada");
-      } else if (panelMode === "edit" && editingSchedule) {
+        if (isCurrentContext(originChecklistId)) {
+          toast.success("Rotina criada");
+        }
+      } else if (!isCreate && editingSchedule) {
         await updateChecklistExecutionSchedule(editingSchedule.id, payloadFromDraft());
-        toast.success("Rotina atualizada");
+        if (isCurrentContext(originChecklistId)) {
+          toast.success("Rotina atualizada");
+        }
       }
-      closePanel();
-      await reloadSchedules();
+      // A stale conclusion never closes the NEW context's form, never
+      // reloads the old checklist's list, never fills formError (§3.B).
+      if (isCurrentContext(originChecklistId)) {
+        closePanel();
+        await reloadSchedules();
+      }
     } catch (error) {
       console.error("[ExecutionScheduleSettings] save failed:", error);
-      setFormError(getScheduleErrorMessage(error));
+      if (isCurrentContext(originChecklistId)) {
+        setFormError(getScheduleErrorMessage(error));
+      }
     } finally {
       mutationInFlightRef.current = false;
       setIsMutating(false);
@@ -291,16 +333,23 @@ export function ExecutionScheduleSettings({
   const confirmDeactivate = async () => {
     const target = deactivatingSchedule;
     if (!target || mutationInFlightRef.current || !canManage) return;
+    // 5E.2C.2.2 §B: the deactivation belongs to the checklist that showed
+    // the dialog; a conclusion after a checklist/permission change is stale.
+    const originChecklistId = checklistId;
     mutationInFlightRef.current = true;
     setIsMutating(true);
     try {
       await deactivateChecklistExecutionSchedule(target.id);
-      toast.success("Rotina encerrada");
-      setDeactivatingSchedule(null);
-      await reloadSchedules();
+      if (isCurrentContext(originChecklistId)) {
+        toast.success("Rotina encerrada");
+        setDeactivatingSchedule(null);
+        await reloadSchedules();
+      }
     } catch (error) {
       console.error("[ExecutionScheduleSettings] deactivate failed:", error);
-      toast.error(getScheduleErrorMessage(error));
+      if (isCurrentContext(originChecklistId)) {
+        toast.error(getScheduleErrorMessage(error));
+      }
     } finally {
       mutationInFlightRef.current = false;
       setIsMutating(false);
@@ -377,7 +426,7 @@ export function ExecutionScheduleSettings({
         </div>
       )}
 
-      {!isLoading && !loadError && checklistId && schedules.length === 0 && (
+      {!isLoading && !loadError && canManage && checklistId && schedules.length === 0 && (
         <p className="mt-6 text-xs text-neutral-500" data-testid="execution-schedule-empty">
           Nenhuma rotina criada ainda.
         </p>

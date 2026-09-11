@@ -448,6 +448,161 @@ describe("5E.2C.2.1 canManage=false fail-closed", () => {
   });
 });
 
+// ─────────────── 5E.2C.2.2 — stale async mutations across checklists ──────
+
+describe("5E.2C.2.2 stale mutations bound to the origin checklist", () => {
+  it("1) update pending on c1 → switch to c2 → update resolves: c2 stays, no c1 reload, no stale row", async () => {
+    listMock.mockResolvedValueOnce([schedule({ id: "c1-row" })]);
+    const { rerender } = render(
+      <ExecutionScheduleSettings checklistId="c1" canManage workspaceMembers={members} />
+    );
+    await screen.findByTestId("execution-schedule-card");
+
+    fireEvent.click(screen.getByTestId("execution-schedule-edit"));
+    let resolveUpdate: (v: boolean) => void = () => {};
+    updateMock.mockReturnValue(new Promise<boolean>((res) => (resolveUpdate = res)));
+    fireEvent.click(screen.getByTestId("execution-schedule-submit"));
+    await waitFor(() => expect(updateMock).toHaveBeenCalledTimes(1));
+
+    listMock.mockResolvedValueOnce([schedule({ id: "c2-row", workspace_member_id: "m2" })]);
+    rerender(<ExecutionScheduleSettings checklistId="c2" canManage workspaceMembers={members} />);
+    await waitFor(() =>
+      expect(screen.getByTestId("execution-schedule-card")).toHaveAttribute("data-schedule-id", "c2-row")
+    );
+
+    resolveUpdate(true);
+    await waitFor(() =>
+      expect(screen.queryByTestId("execution-schedule-loading")).toBeNull()
+    );
+    // Reads: c1 initial + c2 after the switch — NO third read for c1.
+    expect(listMock).toHaveBeenCalledTimes(2);
+    expect(listMock).toHaveBeenNthCalledWith(1, "c1");
+    expect(listMock).toHaveBeenNthCalledWith(2, "c2");
+    expect(screen.getByTestId("execution-schedule-card")).toHaveAttribute("data-schedule-id", "c2-row");
+    expect(screen.queryByText("stale")).toBeNull();
+  });
+
+  it("2) create pending on c1 → switch to c2 → create resolves: no c1 reload or visual effect on c2", async () => {
+    listMock.mockResolvedValueOnce([schedule({ id: "c1-row" })]);
+    const { rerender } = render(
+      <ExecutionScheduleSettings checklistId="c1" canManage workspaceMembers={members} />
+    );
+    await screen.findByTestId("execution-schedule-card");
+
+    fireEvent.click(screen.getByTestId("execution-schedule-new"));
+    fireEvent.change(screen.getByTestId("execution-schedule-member"), { target: { value: "m2" } });
+    let resolveCreate: (v: string) => void = () => {};
+    createMock.mockReturnValue(new Promise<string>((res) => (resolveCreate = res)));
+    fireEvent.click(screen.getByTestId("execution-schedule-submit"));
+    await waitFor(() => expect(createMock).toHaveBeenCalledTimes(1));
+
+    listMock.mockResolvedValueOnce([schedule({ id: "c2-row", workspace_member_id: "m2" })]);
+    rerender(<ExecutionScheduleSettings checklistId="c2" canManage workspaceMembers={members} />);
+    await waitFor(() =>
+      expect(screen.getByTestId("execution-schedule-card")).toHaveAttribute("data-schedule-id", "c2-row")
+    );
+
+    resolveCreate("new-id");
+    await waitFor(() =>
+      expect(screen.queryByTestId("execution-schedule-loading")).toBeNull()
+    );
+    expect(listMock).toHaveBeenCalledTimes(2); // no reload of c1
+    expect(screen.getByTestId("execution-schedule-card")).toHaveAttribute("data-schedule-id", "c2-row");
+    expect(screen.queryByTestId("execution-schedule-form")).toBeNull();
+  });
+
+  it("3) deactivate pending on c1 → switch to c2 → deactivate resolves: c2 dialog/list correct, no c1 reload", async () => {
+    listMock.mockResolvedValueOnce([schedule({ id: "c1-row" })]);
+    const { rerender } = render(
+      <ExecutionScheduleSettings checklistId="c1" canManage workspaceMembers={members} />
+    );
+    await screen.findByTestId("execution-schedule-card");
+
+    fireEvent.click(screen.getByTestId("execution-schedule-deactivate"));
+    expect(await screen.findByText("Encerrar esta rotina?")).toBeInTheDocument();
+    let resolveDeactivate: (v: boolean) => void = () => {};
+    deactivateMock.mockReturnValue(new Promise<boolean>((res) => (resolveDeactivate = res)));
+    fireEvent.click(screen.getByTestId("execution-schedule-confirm-deactivate"));
+    await waitFor(() => expect(deactivateMock).toHaveBeenCalledTimes(1));
+
+    listMock.mockResolvedValueOnce([schedule({ id: "c2-row", workspace_member_id: "m2" })]);
+    rerender(<ExecutionScheduleSettings checklistId="c2" canManage workspaceMembers={members} />);
+    // The dialog owned by c1 must not survive the checklist switch.
+    await waitFor(() => expect(screen.queryByText("Encerrar esta rotina?")).toBeNull());
+    await waitFor(() =>
+      expect(screen.getByTestId("execution-schedule-card")).toHaveAttribute("data-schedule-id", "c2-row")
+    );
+
+    resolveDeactivate(true);
+    await waitFor(() =>
+      expect(screen.queryByTestId("execution-schedule-loading")).toBeNull()
+    );
+    expect(listMock).toHaveBeenCalledTimes(2); // no reload of c1
+    expect(deactivateMock).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId("execution-schedule-card")).toHaveAttribute("data-schedule-id", "c2-row");
+    expect(screen.queryByText("Encerrar esta rotina?")).toBeNull();
+  });
+
+  it("4) mutation pending → canManage=false → mutation resolves: zero reads, zero cards, no stale effects", async () => {
+    listMock.mockResolvedValueOnce([schedule({ id: "c1-row" })]);
+    const { rerender } = render(
+      <ExecutionScheduleSettings checklistId="c1" canManage workspaceMembers={members} />
+    );
+    await screen.findByTestId("execution-schedule-card");
+
+    fireEvent.click(screen.getByTestId("execution-schedule-edit"));
+    let resolveUpdate: (v: boolean) => void = () => {};
+    updateMock.mockReturnValue(new Promise<boolean>((res) => (resolveUpdate = res)));
+    fireEvent.click(screen.getByTestId("execution-schedule-submit"));
+    await waitFor(() => expect(updateMock).toHaveBeenCalledTimes(1));
+
+    rerender(<ExecutionScheduleSettings checklistId="c1" canManage={false} workspaceMembers={members} />);
+    resolveUpdate(true);
+    await waitFor(() =>
+      expect(screen.queryByTestId("execution-schedule-loading")).toBeNull()
+    );
+    expect(screen.getByTestId("execution-schedule-readonly")).toBeInTheDocument();
+    expect(screen.queryByTestId("execution-schedule-card")).toBeNull();
+    expect(listMock).toHaveBeenCalledTimes(1); // no new read without permission
+    expect(createMock).not.toHaveBeenCalled();
+    expect(deactivateMock).not.toHaveBeenCalled();
+  });
+
+  it("5) c1 → c2 while c2's read is pending: c1 cards vanish immediately, only c2 cards after resolve", async () => {
+    listMock.mockResolvedValueOnce([schedule({ id: "c1-row" })]);
+    const { rerender } = render(
+      <ExecutionScheduleSettings checklistId="c1" canManage workspaceMembers={members} />
+    );
+    await screen.findByTestId("execution-schedule-card");
+
+    let resolveC2: (v: unknown) => void = () => {};
+    listMock.mockImplementationOnce(() => new Promise((res) => (resolveC2 = res)));
+    rerender(<ExecutionScheduleSettings checklistId="c2" canManage workspaceMembers={members} />);
+    // No flash of c1 data while c2 loads.
+    await waitFor(() =>
+      expect(screen.queryByTestId("execution-schedule-card")).toBeNull()
+    );
+
+    resolveC2([schedule({ id: "c2-row", workspace_member_id: "m2" })]);
+    await waitFor(() =>
+      expect(screen.getByTestId("execution-schedule-card")).toHaveAttribute("data-schedule-id", "c2-row")
+    );
+    expect(screen.queryByText("c1-row")).toBeNull();
+    expect(listMock).toHaveBeenNthCalledWith(1, "c1");
+    expect(listMock).toHaveBeenNthCalledWith(2, "c2");
+  });
+
+  it("6) canManage=false: no 'Nenhuma rotina criada ainda', no SELECT/RPC", async () => {
+    setup({ canManage: false });
+    await screen.findByTestId("execution-schedule-readonly");
+    expect(screen.queryByText("Nenhuma rotina criada ainda.")).toBeNull();
+    expect(listMock).not.toHaveBeenCalled();
+    expect(createMock).not.toHaveBeenCalled();
+    expect(updateMock).not.toHaveBeenCalled();
+    expect(deactivateMock).not.toHaveBeenCalled();
+  });
+});
+
 // ─────────────────────── route integration (§16 C, structural) ──────────────
 
 describe("5E.2C.2 route integration (structural, checklist.tsx)", () => {
