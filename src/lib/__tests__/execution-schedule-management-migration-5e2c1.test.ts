@@ -159,6 +159,7 @@ describe("5E.2C.1 — trigger correction (pure-deactivation exception)", () => {
 
   it("adds the pure-deactivation exception only for UPDATE with is_active -> false", () => {
     expect(integrityBody).toMatch(/TG_OP = 'UPDATE'/);
+    expect(integrityBody).toMatch(/OLD\.is_active = true/);
     expect(integrityBody).toMatch(/NEW\.is_active = false/);
     for (const field of [
       "checklist_id",
@@ -174,6 +175,20 @@ describe("5E.2C.1 — trigger correction (pure-deactivation exception)", () => {
         new RegExp(`OLD\\.${field} IS NOT DISTINCT FROM NEW\\.${field}`),
       );
     }
+  });
+
+  it("a no-op false -> false UPDATE never satisfies the exception", () => {
+    // The single flag assignment lives inside a block requiring BOTH the
+    // OLD=true and NEW=false transitions, so false -> false cannot match.
+    expect(
+      integrityBody.match(/v_pure_deactivation := true/g),
+    ).toHaveLength(1);
+    const block = integrityBody.slice(
+      integrityBody.indexOf("IF TG_OP = 'UPDATE'"),
+      integrityBody.indexOf("v_pure_deactivation := true"),
+    );
+    expect(block).toContain("OLD.is_active = true");
+    expect(block).toContain("NEW.is_active = false");
   });
 
   it("still blocks inactive members on every non-deactivation path", () => {
@@ -203,11 +218,18 @@ describe("5E.2C.1 — trigger correction (pure-deactivation exception)", () => {
 });
 
 describe("5E.2C.1 — create RPC", () => {
-  it("resolves the workspace from the real checklist and fails on personal/missing", () => {
+  it("resolves and LOCKS the checklist row, failing on personal/missing", () => {
     expect(createBody).toMatch(
-      /SELECT c\.workspace_id INTO v_workspace_id\s+FROM public\.checklists c\s+WHERE c\.id = p_checklist_id/,
+      /SELECT c\.workspace_id INTO v_workspace_id\s+FROM public\.checklists c\s+WHERE c\.id = p_checklist_id\s+FOR UPDATE;/,
     );
     expect(createBody).toMatch(/schedule_checklist_not_found/);
+    // Lock precedes authorization and the INSERT (held to commit).
+    expect(createBody.indexOf("FOR UPDATE")).toBeLessThan(
+      createBody.indexOf("has_role_in_workspace"),
+    );
+    expect(createBody.indexOf("has_role_in_workspace")).toBeLessThan(
+      createBody.indexOf("INSERT INTO public.checklist_execution_schedules"),
+    );
   });
 
   it("authorizes only through has_role_in_workspace(..., 'editor')", () => {
@@ -235,12 +257,27 @@ describe("5E.2C.1 — create RPC", () => {
 });
 
 describe("5E.2C.1 — update RPC", () => {
-  it("locks the schedule row with FOR UPDATE and derives workspace via checklist", () => {
-    expect(updateBody).toMatch(/FROM public\.checklist_execution_schedules s\s+WHERE s\.id = p_schedule_id\s+FOR UPDATE/);
-    expect(updateBody).toMatch(/schedule_not_found/);
+  it("loads schedule, checklist, workspace and state in ONE atomic locked query", () => {
     expect(updateBody).toMatch(
-      /SELECT c\.workspace_id INTO v_workspace_id\s+FROM public\.checklists c\s+WHERE c\.id = v_checklist_id/,
+      /SELECT s\.checklist_id, s\.is_active, c\.workspace_id\s+INTO v_checklist_id, v_is_active, v_workspace_id\s+FROM public\.checklist_execution_schedules s\s+JOIN public\.checklists c ON c\.id = s\.checklist_id\s+WHERE s\.id = p_schedule_id\s+FOR UPDATE OF s, c/,
     );
+    expect(updateBody).toMatch(/schedule_not_found/);
+    expect(updateBody).toMatch(/schedule_checklist_not_found/);
+    // Auth happens first; the locked lookup holds to commit.
+    expect(updateBody.indexOf("auth.uid()")).toBeLessThan(
+      updateBody.indexOf("FOR UPDATE OF s, c"),
+    );
+  });
+
+  it("has no later loose checklist lookup to resolve the workspace", () => {
+    expect((updateBody.match(/public\.checklists/g) ?? []).length).toBe(1);
+  });
+
+  it("authorizes BEFORE the schedule_inactive state check", () => {
+    const authz = updateBody.indexOf("has_role_in_workspace");
+    const state = updateBody.indexOf("schedule_inactive");
+    expect(authz).toBeGreaterThan(-1);
+    expect(state).toBeGreaterThan(authz);
   });
 
   it("fails when the schedule is inactive", () => {
@@ -271,12 +308,27 @@ describe("5E.2C.1 — deactivate RPC", () => {
     );
   });
 
-  it("locks the schedule and resolves workspace via the real checklist", () => {
-    expect(deactivateBody).toMatch(/FOR UPDATE/);
-    expect(deactivateBody).toMatch(/schedule_not_found/);
+  it("locks schedule AND checklist atomically in one query", () => {
     expect(deactivateBody).toMatch(
-      /SELECT c\.workspace_id INTO v_workspace_id\s+FROM public\.checklists c\s+WHERE c\.id = v_checklist_id/,
+      /SELECT s\.checklist_id, s\.is_active, c\.workspace_id\s+INTO v_checklist_id, v_is_active, v_workspace_id\s+FROM public\.checklist_execution_schedules s\s+JOIN public\.checklists c ON c\.id = s\.checklist_id\s+WHERE s\.id = p_schedule_id\s+FOR UPDATE OF s, c/,
     );
+    expect(deactivateBody).toMatch(/schedule_not_found/);
+    expect(deactivateBody).toMatch(/schedule_checklist_not_found/);
+    expect((deactivateBody.match(/public\.checklists/g) ?? []).length).toBe(1);
+    expect(deactivateBody.indexOf("auth.uid()")).toBeLessThan(
+      deactivateBody.indexOf("FOR UPDATE OF s, c"),
+    );
+  });
+
+  it("orders: authorization -> idempotent return -> UPDATE is_active = false", () => {
+    const authz = deactivateBody.indexOf("has_role_in_workspace");
+    const idem = deactivateBody.indexOf("RETURN true");
+    const upd = deactivateBody.indexOf(
+      "UPDATE public.checklist_execution_schedules",
+    );
+    expect(authz).toBeGreaterThan(-1);
+    expect(idem).toBeGreaterThan(authz);
+    expect(upd).toBeGreaterThan(idem);
   });
 });
 

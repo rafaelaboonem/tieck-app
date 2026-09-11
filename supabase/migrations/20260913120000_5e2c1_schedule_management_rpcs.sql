@@ -28,6 +28,13 @@
 --
 -- No tables, FKs, triggers, policies, cron or backfill are touched here, and
 -- this migration does NOT invoke any RPC (zero remote effect on its own).
+--
+-- 5E.2C.1.1: the deactivation exception is strictly the is_active
+-- true -> false transition (a no-op over an already-inactive schedule never
+-- matches — idempotency belongs to the RPC), and every RPC locks the
+-- schedule and checklist rows atomically during authorization so a
+-- concurrent checklist change cannot move the workspace between lookup,
+-- authorization and the write (TOCTOU-safe).
 
 -- ---------------------------------------------------------------------------
 -- 1) Integrity function: preserved validations + pure-deactivation exception
@@ -61,13 +68,16 @@ BEGIN
         RAISE EXCEPTION 'schedule_member_required' USING ERRCODE = 'P0001';
     END IF;
 
-    -- 5E.2C.1) pure-deactivation exception: an UPDATE whose ONLY effect is
-    -- is_active -> false (a repeated no-op deactivation also matches), with
-    -- EVERY business field unchanged, may proceed even when the responsible
-    -- member has since been soft-deleted to 'inactive'. The checklist and the
-    -- member must still exist and belong to the same workspace. Reactivation
-    -- (is_active false -> true) and ANY business-field change never match.
+    -- 5E.2C.1.1) pure-deactivation exception: STRICTLY the transition
+    -- is_active true -> false with EVERY business field unchanged, may
+    -- proceed even when the responsible member has since been soft-deleted
+    -- to 'inactive'. The checklist and the member must still exist and
+    -- belong to the same workspace. A no-op UPDATE over an already inactive
+    -- schedule (false -> false), reactivation (false -> true) and ANY
+    -- business-field change never match — idempotency belongs to the
+    -- deactivate RPC, which returns before executing any UPDATE.
     IF TG_OP = 'UPDATE'
+       AND OLD.is_active = true
        AND NEW.is_active = false
        AND OLD.checklist_id IS NOT DISTINCT FROM NEW.checklist_id
        AND OLD.workspace_member_id IS NOT DISTINCT FROM NEW.workspace_member_id
@@ -158,11 +168,14 @@ BEGIN
     RAISE EXCEPTION 'schedule_checklist_required' USING ERRCODE = 'P0001';
   END IF;
 
-  -- Resolve the REAL workspace from the checklist row; never trust a
-  -- client-supplied workspace. Missing or personal checklists fail closed.
+  -- Resolve the REAL workspace from the checklist row and lock it until the
+  -- end of the transaction, so a concurrent checklist change cannot move the
+  -- workspace between this lookup, the authorization and the INSERT.
+  -- Missing or personal checklists fail closed.
   SELECT c.workspace_id INTO v_workspace_id
   FROM public.checklists c
-  WHERE c.id = p_checklist_id;
+  WHERE c.id = p_checklist_id
+  FOR UPDATE;
 
   IF v_workspace_id IS NULL THEN
     RAISE EXCEPTION 'schedule_checklist_not_found' USING ERRCODE = 'P0001';
@@ -232,36 +245,37 @@ BEGIN
     RAISE EXCEPTION 'schedule_required' USING ERRCODE = 'P0001';
   END IF;
 
-  -- Lock the real schedule row; derive everything from the database.
-  SELECT s.checklist_id, s.is_active
-    INTO v_checklist_id, v_is_active
+  -- Atomic lookup (5E.2C.1.1): lock the schedule AND its checklist rows and
+  -- load checklist, active state and the REAL workspace in a single query,
+  -- so no concurrent checklist change can move the workspace between
+  -- lookup, authorization and the write (locks held to commit).
+  SELECT s.checklist_id, s.is_active, c.workspace_id
+    INTO v_checklist_id, v_is_active, v_workspace_id
   FROM public.checklist_execution_schedules s
+  JOIN public.checklists c ON c.id = s.checklist_id
   WHERE s.id = p_schedule_id
-  FOR UPDATE;
+  FOR UPDATE OF s, c;
 
   IF v_checklist_id IS NULL THEN
     RAISE EXCEPTION 'schedule_not_found' USING ERRCODE = 'P0001';
+  END IF;
+
+  IF v_workspace_id IS NULL THEN
+    RAISE EXCEPTION 'schedule_checklist_not_found' USING ERRCODE = 'P0001';
+  END IF;
+
+  -- Authorization comes BEFORE any state check, so an unauthorized caller
+  -- never learns whether a schedule is active or inactive.
+  IF NOT public.has_role_in_workspace(
+    v_user_id, v_workspace_id, 'editor'::public.app_role
+  ) THEN
+    RAISE EXCEPTION 'schedule_management_denied' USING ERRCODE = 'P0001';
   END IF;
 
   -- Editing is only meaningful for active routines; a deactivated routine is
   -- historical and must be replaced by a new schedule instead.
   IF v_is_active = false THEN
     RAISE EXCEPTION 'schedule_inactive' USING ERRCODE = 'P0001';
-  END IF;
-
-  -- Workspace derived through schedule -> checklist (never client-supplied).
-  SELECT c.workspace_id INTO v_workspace_id
-  FROM public.checklists c
-  WHERE c.id = v_checklist_id;
-
-  IF v_workspace_id IS NULL THEN
-    RAISE EXCEPTION 'schedule_checklist_not_found' USING ERRCODE = 'P0001';
-  END IF;
-
-  IF NOT public.has_role_in_workspace(
-    v_user_id, v_workspace_id, 'editor'::public.app_role
-  ) THEN
-    RAISE EXCEPTION 'schedule_management_denied' USING ERRCODE = 'P0001';
   END IF;
 
   UPDATE public.checklist_execution_schedules
@@ -315,19 +329,18 @@ BEGIN
     RAISE EXCEPTION 'schedule_required' USING ERRCODE = 'P0001';
   END IF;
 
-  SELECT s.checklist_id, s.is_active
-    INTO v_checklist_id, v_is_active
+  -- Atomic lookup (5E.2C.1.1): lock schedule AND checklist and load state
+  -- plus the REAL workspace in one query (TOCTOU-safe; locks held to commit).
+  SELECT s.checklist_id, s.is_active, c.workspace_id
+    INTO v_checklist_id, v_is_active, v_workspace_id
   FROM public.checklist_execution_schedules s
+  JOIN public.checklists c ON c.id = s.checklist_id
   WHERE s.id = p_schedule_id
-  FOR UPDATE;
+  FOR UPDATE OF s, c;
 
   IF v_checklist_id IS NULL THEN
     RAISE EXCEPTION 'schedule_not_found' USING ERRCODE = 'P0001';
   END IF;
-
-  SELECT c.workspace_id INTO v_workspace_id
-  FROM public.checklists c
-  WHERE c.id = v_checklist_id;
 
   IF v_workspace_id IS NULL THEN
     RAISE EXCEPTION 'schedule_checklist_not_found' USING ERRCODE = 'P0001';
