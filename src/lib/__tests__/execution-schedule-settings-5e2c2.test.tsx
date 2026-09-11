@@ -127,9 +127,15 @@ describe("5E.2C.2 component states", () => {
 
   it("without canManage: no create/edit/end actions and read-only note", async () => {
     setup({ canManage: false });
-    await screen.findByTestId("execution-schedule-empty");
+    await screen.findByTestId("execution-schedule-readonly");
     expect(screen.queryByTestId("execution-schedule-new")).toBeNull();
     expect(screen.getByTestId("execution-schedule-readonly")).toBeInTheDocument();
+    // 5E.2C.2.1 §5A: fail-closed — zero SELECT, zero RPCs, no data.
+    expect(listMock).not.toHaveBeenCalled();
+    expect(createMock).not.toHaveBeenCalled();
+    expect(updateMock).not.toHaveBeenCalled();
+    expect(deactivateMock).not.toHaveBeenCalled();
+    expect(screen.queryByTestId("execution-schedule-card")).toBeNull();
   });
 });
 
@@ -310,6 +316,135 @@ describe("5E.2C.2 deactivation", () => {
     await waitFor(() => expect(deactivateMock).toHaveBeenCalled());
     // Dialog stays open (deactivatingSchedule only cleared on success).
     expect(screen.getByText("Encerrar esta rotina?")).toBeInTheDocument();
+  });
+});
+
+// ────────────────── 5E.2C.2.1 §4 — once never carries an end date ──────────
+
+describe("5E.2C.2.1 once forces endsOn null", () => {
+  it("creation: pre-filling an end date then switching to once clears and disables the field; payload sends null", async () => {
+    createMock.mockResolvedValue("new-id");
+    setup();
+
+    fireEvent.click(await screen.findByTestId("execution-schedule-new"));
+    fireEvent.change(screen.getByTestId("execution-schedule-member"), { target: { value: "m2" } });
+    fireEvent.change(screen.getByTestId("execution-schedule-ends-on"), { target: { value: "2026-12-31" } });
+    expect((screen.getByTestId("execution-schedule-ends-on") as HTMLInputElement).value).toBe("2026-12-31");
+
+    fireEvent.change(screen.getByTestId("execution-schedule-frequency"), { target: { value: "once" } });
+    const endInput = screen.getByTestId("execution-schedule-ends-on") as HTMLInputElement;
+    expect(endInput.value).toBe("");
+    expect(endInput).toBeDisabled();
+
+    fireEvent.click(screen.getByTestId("execution-schedule-submit"));
+    await waitFor(() => expect(createMock).toHaveBeenCalledTimes(1));
+    expect(createMock.mock.calls[0][0].endsOn).toBeNull();
+  });
+
+  it("edit: a once rotina hydrates with empty end date and the update payload carries endsOn null", async () => {
+    listMock.mockResolvedValue([schedule({ frequency: "once", ends_on: "2026-12-31" })]);
+    updateMock.mockResolvedValue(true);
+    setup();
+
+    fireEvent.click(await screen.findByTestId("execution-schedule-edit"));
+    const endInput = screen.getByTestId("execution-schedule-ends-on") as HTMLInputElement;
+    expect(endInput.value).toBe("");
+    expect(endInput).toBeDisabled();
+
+    fireEvent.click(screen.getByTestId("execution-schedule-submit"));
+    await waitFor(() => expect(updateMock).toHaveBeenCalledTimes(1));
+    const [, payload] = updateMock.mock.calls[0];
+    expect(payload.endsOn).toBeNull();
+  });
+
+  it("edit: switching daily (with end date) to once clears the stale value and sends null", async () => {
+    listMock.mockResolvedValue([schedule({ frequency: "daily" })]);
+    updateMock.mockResolvedValue(true);
+    setup();
+
+    fireEvent.click(await screen.findByTestId("execution-schedule-edit"));
+    fireEvent.change(screen.getByTestId("execution-schedule-ends-on"), { target: { value: "2026-12-31" } });
+    fireEvent.change(screen.getByTestId("execution-schedule-frequency"), { target: { value: "once" } });
+    const endInput = screen.getByTestId("execution-schedule-ends-on") as HTMLInputElement;
+    expect(endInput.value).toBe("");
+    expect(endInput).toBeDisabled();
+
+    fireEvent.click(screen.getByTestId("execution-schedule-submit"));
+    await waitFor(() => expect(updateMock).toHaveBeenCalledTimes(1));
+    expect(updateMock.mock.calls[0][1].endsOn).toBeNull();
+  });
+});
+
+// ────────────── 5E.2C.2.1 §5 — fail-closed without permission ───────────────
+
+describe("5E.2C.2.1 canManage=false fail-closed", () => {
+  it("B) rerender canManage=true → false: data removed, actions gone, no new read", async () => {
+    listMock.mockResolvedValue([schedule()]);
+    const { rerender } = render(
+      <ExecutionScheduleSettings checklistId="c1" canManage workspaceMembers={members} />
+    );
+    await screen.findByTestId("execution-schedule-card");
+    expect(listMock).toHaveBeenCalledTimes(1);
+
+    rerender(<ExecutionScheduleSettings checklistId="c1" canManage={false} workspaceMembers={members} />);
+    await waitFor(() => expect(screen.queryByTestId("execution-schedule-card")).toBeNull());
+    expect(screen.getByTestId("execution-schedule-readonly")).toBeInTheDocument();
+    expect(screen.queryByTestId("execution-schedule-new")).toBeNull();
+    // The list was NOT re-read without permission (reload no longer runs).
+    expect(listMock).toHaveBeenCalledTimes(1);
+    expect(createMock).not.toHaveBeenCalled();
+    expect(updateMock).not.toHaveBeenCalled();
+    expect(deactivateMock).not.toHaveBeenCalled();
+  });
+
+  it("C) pending read resolved after permission loss never repopulates data", async () => {
+    let resolveList: (v: unknown) => void = () => {};
+    listMock.mockReturnValue(new Promise((res) => (resolveList = res)));
+    const { rerender } = render(
+      <ExecutionScheduleSettings checklistId="c1" canManage workspaceMembers={members} />
+    );
+    await waitFor(() => expect(listMock).toHaveBeenCalledTimes(1));
+
+    rerender(<ExecutionScheduleSettings checklistId="c1" canManage={false} workspaceMembers={members} />);
+    // The old response resolves LATE — after the permission changed.
+    resolveList([schedule(), schedule({ id: "late-2" })]);
+    await waitFor(() => expect(screen.queryByTestId("execution-schedule-loading")).toBeNull());
+    expect(screen.queryByTestId("execution-schedule-card")).toBeNull();
+    expect(screen.getByTestId("execution-schedule-readonly")).toBeInTheDocument();
+  });
+
+  it("D) checklist change during a pending read: the stale response never replaces the current list", async () => {
+    let resolveFirst: (v: unknown) => void = () => {};
+    listMock.mockImplementationOnce(
+      () => new Promise((res) => (resolveFirst = res))
+    );
+    const { rerender } = render(
+      <ExecutionScheduleSettings checklistId="c1" canManage workspaceMembers={members} />
+    );
+    await waitFor(() => expect(listMock).toHaveBeenCalledTimes(1));
+
+    listMock.mockResolvedValueOnce([schedule({ id: "current-checklist-row", workspace_member_id: "m2" })]);
+    rerender(<ExecutionScheduleSettings checklistId="c2" canManage workspaceMembers={members} />);
+    await waitFor(() =>
+      expect(screen.getByTestId("execution-schedule-card")).toHaveAttribute(
+        "data-schedule-id",
+        "current-checklist-row"
+      )
+    );
+
+    // The c1 response resolves AFTER c2's list is already rendered.
+    resolveFirst([schedule({ id: "stale-c1-row" })]);
+    await waitFor(() => expect(screen.queryByTestId("execution-schedule-loading")).toBeNull());
+    expect(screen.queryByTestId("stale-c1-row")).toBeNull();
+    expect(screen.getByTestId("execution-schedule-card")).toHaveAttribute(
+      "data-schedule-id",
+      "current-checklist-row"
+    );
+    expect(screen.queryByText("stale-c1-row")).toBeNull();
+    expect(screen.queryByTestId("execution-schedule-card")).not.toHaveAttribute(
+      "data-schedule-id",
+      "stale-c1-row"
+    );
   });
 });
 

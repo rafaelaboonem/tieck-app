@@ -18,6 +18,7 @@ import {
   validateScheduleDraft,
   SCHEDULE_ERROR_MESSAGES,
   getScheduleErrorMessage,
+  getScheduleErrorCode,
   getBrowserTimezone,
   getSupportedTimezones,
   FREQUENCY_LABELS,
@@ -347,6 +348,52 @@ describe("5E.2C.2 Supabase surface", () => {
     expect(getScheduleErrorMessage({ message: "boom: schedule_member_required" })).toBe(
       "Selecione um responsável."
     );
+  });
+
+  it("5E.2C.2.1 §3: real PostgREST P0001 shape resolves the business token from message", () => {
+    // RAISE EXCEPTION 'schedule_member_inactive' USING ERRCODE='P0001' →
+    // Supabase delivers { code: "P0001", message: "schedule_member_inactive" }.
+    expect(getScheduleErrorMessage({ code: "P0001", message: "schedule_member_inactive", details: null, hint: null })).toBe(
+      "Este responsável não está mais ativo na equipe."
+    );
+    expect(getScheduleErrorMessage({ code: "P0001", message: "schedule_management_denied" })).toBe(
+      "Você não tem permissão para gerenciar rotinas."
+    );
+    // Token can be embedded in a technical message wrapper.
+    expect(getScheduleErrorMessage({ code: "P0001", message: "ERROR: schedule_timezone_invalid", details: null })).toBe(
+      "Escolha um fuso horário válido."
+    );
+  });
+
+  it("5E.2C.2.1 §3: P0001 is never treated as a friendly code; technical SQLSTATEs stay generic", () => {
+    // Non-schedule code with no business token anywhere → generic copy.
+    expect(getScheduleErrorMessage({ code: "23514", message: "constraint failed" })).toBe(
+      SCHEDULE_ERROR_MESSAGES.unknown
+    );
+    // P0001 alone (no business token) → generic, never "P0001" in the UI.
+    expect(getScheduleErrorMessage({ code: "P0001", message: "boom" })).toBe(
+      SCHEDULE_ERROR_MESSAGES.unknown
+    );
+    // code itself being a schedule_ token is accepted directly.
+    expect(getScheduleErrorMessage({ code: "schedule_inactive" })).toBe("Esta rotina já foi encerrada.");
+    // tokenIn priority: message beats details/hint.
+    expect(
+      getScheduleErrorMessage({
+        code: "P0001",
+        message: "schedule_member_required",
+        details: "schedule_inactive",
+      })
+    ).toBe("Selecione um responsável.");
+    // details and hint are scanned when message has no token.
+    expect(getScheduleErrorMessage({ code: "P0001", message: "x", details: "schedule_not_found" })).toBe(
+      "Esta rotina não foi encontrada."
+    );
+    expect(getScheduleErrorMessage({ code: "P0001", message: "x", hint: "schedule_required" })).toBe(
+      "Esta rotina não foi encontrada."
+    );
+    // No business code anywhere → null → generic message.
+    expect(getScheduleErrorCode({ code: "P0001", message: "boom" })).toBeNull();
+    expect(getScheduleErrorCode({})).toBeNull();
   });
 });
 

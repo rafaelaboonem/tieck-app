@@ -321,16 +321,33 @@ export const SCHEDULE_ERROR_MESSAGES = {
   unknown: "Não foi possível salvar a rotina. Tente novamente.",
 } as const;
 
-/** Extracts the stable DB error code from a PostgREST error, if present. */
+/**
+ * Extracts the stable business code from a PostgREST error.
+ *
+ * Real Supabase shape for `RAISE EXCEPTION 'schedule_x' USING ERRCODE='P0001'`:
+ *   { code: "P0001", message: "schedule_x", details: null, hint: null }
+ *
+ * The P0001 SQLSTATE is NOT a friendly code — the business token lives in
+ * message/details/hint. Strategy (§3):
+ *   1. look for a schedule_[a-z_]+ token in message → details → hint first;
+ *   2. accept `code` directly ONLY when it is itself a schedule_ token;
+ *   3. never return P0001 or any technical SQLSTATE;
+ *   4. null when no business code is found (generic message shown).
+ */
 export function getScheduleErrorCode(error: unknown): string | null {
   if (!error || typeof error !== "object") return null;
-  const maybe = error as { code?: unknown; message?: unknown };
-  if (typeof maybe.code === "string" && maybe.code) return maybe.code;
-  if (typeof maybe.message === "string" && maybe.message) {
-    const match = /schedule_[a-z_]+/.exec(maybe.message);
+  const maybe = error as { code?: unknown; message?: unknown; details?: unknown; hint?: unknown };
+  const tokenIn = (value: unknown): string | null => {
+    if (typeof value !== "string") return null;
+    const match = /schedule_[a-z_]+/.exec(value);
     return match ? match[0] : null;
-  }
-  return null;
+  };
+  return (
+    tokenIn(maybe.message) ??
+    tokenIn(maybe.details) ??
+    tokenIn(maybe.hint) ??
+    (typeof maybe.code === "string" && maybe.code.startsWith("schedule_") ? maybe.code : null)
+  );
 }
 
 /** Friendly message for any known code; unknown errors keep the generic copy. */

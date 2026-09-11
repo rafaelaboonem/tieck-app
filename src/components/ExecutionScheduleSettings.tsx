@@ -92,7 +92,8 @@ function draftFromSchedule(schedule: ExecutionSchedule): ScheduleDraftState {
     dueLocalTime: schedule.due_local_time,
     timezone: schedule.timezone,
     startsOn: schedule.starts_on,
-    endsOn: schedule.ends_on ?? "",
+    // 5E.2C.2.1 §4D: a once rotina ALWAYS hydrates with an empty end date.
+    endsOn: schedule.frequency === "once" ? "" : schedule.ends_on ?? "",
   };
 }
 
@@ -137,24 +138,41 @@ export function ExecutionScheduleSettings({
     [schedules]
   );
 
+  // 5E.2C.2.1 §5: request sequencing — a response that resolves after the
+  // checklist or the permission changed must never repopulate stale data.
+  const loadSequenceRef = useRef(0);
+
   const reloadSchedules = useCallback(async () => {
-    if (!checklistId) {
+    // Fail-closed: BOTH a persisted checklist AND management permission are
+    // required. Without permission: no SELECT/RPC, no stale data, no panel.
+    if (!checklistId || !canManage) {
+      loadSequenceRef.current += 1; // invalidate any in-flight read
       setSchedules([]);
+      setLoadError(null);
       setIsLoading(false);
+      setPanelMode("closed");
+      setEditingSchedule(null);
+      setDeactivatingSchedule(null);
       return;
     }
+    const sequence = ++loadSequenceRef.current;
     setIsLoading(true);
     setLoadError(null);
     try {
       const rows = await listChecklistExecutionSchedules(checklistId);
+      if (sequence !== loadSequenceRef.current) return; // stale response
       setSchedules(rows);
     } catch (error) {
       console.error("[ExecutionScheduleSettings] list failed:", error);
+      if (sequence !== loadSequenceRef.current) return; // stale error
       setLoadError(getScheduleErrorMessage(error));
     } finally {
-      setIsLoading(false);
+      // Only the current request may end the loading state.
+      if (sequence === loadSequenceRef.current) {
+        setIsLoading(false);
+      }
     }
-  }, [checklistId]);
+  }, [checklistId, canManage]);
 
   useEffect(() => {
     void reloadSchedules();
@@ -210,7 +228,8 @@ export function ExecutionScheduleSettings({
     dueLocalTime: normalizeScheduleTime(draft.dueLocalTime) ?? draft.dueLocalTime,
     timezone: draft.timezone.trim(),
     startsOn: draft.startsOn,
-    endsOn: draft.endsOn || null,
+    // 5E.2C.2.1 §4B: once NEVER carries an end date, regardless of stale state.
+    endsOn: draft.frequency === "once" ? null : draft.endsOn || null,
   });
 
   const submitDraft = async () => {
@@ -227,7 +246,9 @@ export function ExecutionScheduleSettings({
         dueLocalTime: draft.dueLocalTime,
         timezone: draft.timezone,
         startsOn: draft.startsOn,
-        endsOn: draft.endsOn || null,
+        // 5E.2C.2.1 §4C: validate against the EFFECTIVE end date — a once
+        // rotina is never blocked by a stale endsOn.
+        endsOn: draft.frequency === "once" ? null : draft.endsOn || null,
       },
       { requireMember: panelMode === "create" }
     );
@@ -451,7 +472,12 @@ export function ExecutionScheduleSettings({
                 id="schedule-frequency"
                 value={draft.frequency}
                 onChange={(e) =>
-                  setDraft((prev) => ({ ...prev, frequency: e.target.value as ExecutionScheduleFrequency }))
+                  setDraft((prev) => {
+                    const frequency = e.target.value as ExecutionScheduleFrequency;
+                    // 5E.2C.2.1 §4A: switching to once clears any stale end
+                    // date immediately; every other field stays intact.
+                    return { ...prev, frequency, endsOn: frequency === "once" ? "" : prev.endsOn };
+                  })
                 }
                 disabled={!canManage || isMutating}
                 data-testid="execution-schedule-frequency"
