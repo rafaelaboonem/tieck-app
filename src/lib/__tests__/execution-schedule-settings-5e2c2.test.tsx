@@ -664,3 +664,116 @@ describe("5E.2C.2 route integration (structural, checklist.tsx)", () => {
     expect(routeSource).toContain('from "@/components/ExecutionScheduleSettings"');
   });
 });
+
+// ─────────────────────── time normalization (5E.2C.2.3) ─────────────────────
+
+describe("5E.2C.2.3 time normalization and editability", () => {
+  it("card shows 11:00 for a Postgres time value, never 11:00:00", async () => {
+    listMock.mockResolvedValue([schedule({ due_local_time: "11:00:00" })]);
+    setup();
+    expect(await screen.findByTestId("execution-schedule-card")).toHaveTextContent("11:00");
+    expect(screen.getByTestId("execution-schedule-card").textContent).not.toContain("11:00:00");
+  });
+
+  it("edit form hydrates a time input (value 11:00, no seconds) from 11:00:00", async () => {
+    listMock.mockResolvedValue([schedule({ due_local_time: "11:00:00" })]);
+    setup();
+    fireEvent.click(await screen.findByTestId("execution-schedule-edit"));
+    const input = screen.getByTestId("execution-schedule-time") as HTMLInputElement;
+    expect(input.getAttribute("type")).toBe("time");
+    expect(input.value).toBe("11:00");
+    expect(input.value).not.toContain(":00:00");
+  });
+
+  it("changing 11:00 → 09:30 directly (without clearing) sends dueLocalTime 09:30", async () => {
+    listMock.mockResolvedValue([schedule({ due_local_time: "11:00:00" })]);
+    updateMock.mockResolvedValue(true);
+    setup();
+
+    fireEvent.click(await screen.findByTestId("execution-schedule-edit"));
+    const input = screen.getByTestId("execution-schedule-time") as HTMLInputElement;
+    expect(input.value).toBe("11:00");
+    // Direct overwrite, no prior clear — the 5E.2C.2.3 §B requirement.
+    fireEvent.change(input, { target: { value: "09:30" } });
+    expect(input.value).toBe("09:30");
+
+    fireEvent.click(screen.getByTestId("execution-schedule-submit"));
+    await waitFor(() => expect(updateMock).toHaveBeenCalledTimes(1));
+    expect(updateMock.mock.calls[0][1]).toMatchObject({ dueLocalTime: "09:30" });
+  });
+
+  it("after a re-read returning 09:30:00, form and card keep showing 09:30", async () => {
+    // Queue BOTH reads up front: initial read and the post-update re-read.
+    listMock.mockResolvedValueOnce([schedule({ due_local_time: "11:00:00" })]);
+    listMock.mockResolvedValueOnce([schedule({ due_local_time: "09:30:00" })]);
+    updateMock.mockResolvedValue(true);
+    setup();
+    fireEvent.click(await screen.findByTestId("execution-schedule-edit"));
+    fireEvent.change(screen.getByTestId("execution-schedule-time"), {
+      target: { value: "09:30" },
+    });
+    fireEvent.click(screen.getByTestId("execution-schedule-submit"));
+    await waitFor(() => expect(updateMock).toHaveBeenCalledTimes(1));
+
+    // The success re-read (queued above) returns the Postgres time with seconds.
+    await waitFor(() => expect(listMock).toHaveBeenCalledTimes(2));
+    await waitFor(() =>
+      expect(screen.getByTestId("execution-schedule-card")).toHaveTextContent("09:30")
+    );
+    expect(screen.getByTestId("execution-schedule-card").textContent).not.toContain("09:30:00");
+
+    // Reopening the edit form also hydrates the normalized value.
+    fireEvent.click(screen.getByTestId("execution-schedule-edit"));
+    expect((screen.getByTestId("execution-schedule-time") as HTMLInputElement).value).toBe("09:30");
+  });
+
+  it("fractional Postgres time 18:45:00.000000 renders as 18:45", async () => {
+    listMock.mockResolvedValue([schedule({ due_local_time: "18:45:00.000000" })]);
+    setup();
+    expect(await screen.findByTestId("execution-schedule-card")).toHaveTextContent("18:45");
+    expect(screen.getByTestId("execution-schedule-card").textContent).not.toContain("18:45:00");
+
+    fireEvent.click(screen.getByTestId("execution-schedule-edit"));
+    expect((screen.getByTestId("execution-schedule-time") as HTMLInputElement).value).toBe("18:45");
+  });
+
+  it("boundaries 00:00 and 23:59 remain valid end-to-end (payload exact HH:mm)", async () => {
+    listMock.mockResolvedValue([]);
+    createMock.mockResolvedValue("new-id");
+    setup();
+
+    fireEvent.click(await screen.findByTestId("execution-schedule-new"));
+    fireEvent.change(screen.getByTestId("execution-schedule-member"), { target: { value: "m2" } });
+    const input = screen.getByTestId("execution-schedule-time") as HTMLInputElement;
+    fireEvent.change(input, { target: { value: "00:00" } });
+    fireEvent.click(screen.getByTestId("execution-schedule-submit"));
+    await waitFor(() => expect(createMock).toHaveBeenCalledTimes(1));
+    expect(createMock.mock.calls[0][0]).toMatchObject({ dueLocalTime: "00:00" });
+
+    // Success closes the form — reopen a fresh one for the upper boundary.
+    fireEvent.click(await screen.findByTestId("execution-schedule-new"));
+    fireEvent.change(screen.getByTestId("execution-schedule-member"), { target: { value: "m2" } });
+    fireEvent.change(screen.getByTestId("execution-schedule-time"), { target: { value: "23:59" } });
+    fireEvent.click(screen.getByTestId("execution-schedule-submit"));
+    await waitFor(() => expect(createMock).toHaveBeenCalledTimes(2));
+    expect(createMock.mock.calls[1][0]).toMatchObject({ dueLocalTime: "23:59" });
+  });
+
+  it("invalid time values stay blocked before any RPC", async () => {
+    listMock.mockResolvedValue([]);
+    setup();
+    fireEvent.click(await screen.findByTestId("execution-schedule-new"));
+    fireEvent.change(screen.getByTestId("execution-schedule-member"), { target: { value: "m2" } });
+
+    // type=time inputs keep invalid typing out of the controlled value; an
+    // out-of-range value injected into state must still fail validation.
+    const input = screen.getByTestId("execution-schedule-time") as HTMLInputElement;
+    Object.defineProperty(input, "value", { value: "25:99", configurable: true });
+    fireEvent.change(input, { target: { value: "25:99" } });
+    fireEvent.click(screen.getByTestId("execution-schedule-submit"));
+    expect(await screen.findByTestId("execution-schedule-form-error")).toHaveTextContent(
+      "Informe um horário entre 00:00 e 23:59."
+    );
+    expect(createMock).not.toHaveBeenCalled();
+  });
+});

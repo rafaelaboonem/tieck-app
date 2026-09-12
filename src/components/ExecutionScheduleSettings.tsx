@@ -93,7 +93,8 @@ function draftFromSchedule(schedule: ExecutionSchedule): ScheduleDraftState {
     workspaceMemberId: schedule.workspace_member_id,
     frequency: schedule.frequency,
     weekdays: schedule.weekdays ? [...schedule.weekdays] : [],
-    dueLocalTime: schedule.due_local_time,
+    // 5E.2C.2.3: Postgres `time` comes back as "11:00:00[.fraction]" — present HH:mm only.
+    dueLocalTime: normalizeDbScheduleTime(schedule.due_local_time),
     timezone: schedule.timezone,
     startsOn: schedule.starts_on,
     // 5E.2C.2.1 §4D: a once rotina ALWAYS hydrates with an empty end date.
@@ -571,13 +572,11 @@ export function ExecutionScheduleSettings({
                 </label>
                 <input
                   id="schedule-time"
-                  type="text"
-                  inputMode="numeric"
-                  placeholder="18:00"
-                  maxLength={5}
+                  type="time"
+                  step={60}
                   value={draft.dueLocalTime}
                   onChange={(e) =>
-                    setDraft((prev) => ({ ...prev, dueLocalTime: formatTimeInput(e.target.value) }))
+                    setDraft((prev) => ({ ...prev, dueLocalTime: e.target.value }))
                   }
                   disabled={!canManage || isMutating}
                   data-testid="execution-schedule-time"
@@ -700,11 +699,20 @@ export function ExecutionScheduleSettings({
   );
 }
 
-/** Digits-only typing aid: "1337" → "13:37" (same semantics as 5E.1.1). */
-function formatTimeInput(raw: string): string {
-  const digits = raw.replace(/\D/g, "").slice(0, 4);
-  if (digits.length <= 2) return digits;
-  return `${digits.slice(0, 2)}:${digits.slice(2)}`;
+/**
+ * 5E.2C.2.3 §A: normalize a Postgres `time` value for presentation as civil
+ * HH:mm. "11:00" → "11:00"; "11:00:00" → "11:00"; "11:00:00.000000" → "11:00";
+ * out-of-range or unparseable → "" (fail-closed, no seconds ever shown).
+ * Pure string handling — no Date objects, no timezone conversion.
+ */
+export function normalizeDbScheduleTime(raw: string | null | undefined): string {
+  if (!raw) return "";
+  const m = /^(\d{2}):(\d{2})(?::\d{2})?(?:\.\d+)?\s*$/.exec(raw);
+  if (!m) return "";
+  const h = Number(m[1]);
+  const min = Number(m[2]);
+  if (h < 0 || h > 23 || min < 0 || min > 59) return "";
+  return `${m[1]}:${m[2]}`;
 }
 
 function ScheduleCard({
@@ -733,7 +741,8 @@ function ScheduleCard({
         <div className="min-w-0">
           <p className="text-sm font-semibold text-neutral-900 truncate">{memberLabel}</p>
           <p className="mt-0.5 text-xs text-neutral-600">
-            {formatScheduleFrequency(schedule)} · {schedule.due_local_time} ({schedule.timezone})
+            {formatScheduleFrequency(schedule)} ·{" "}
+            {normalizeDbScheduleTime(schedule.due_local_time) || "—"} ({schedule.timezone})
           </p>
           <p className="mt-0.5 text-xs text-neutral-500">
             Início {isValidScheduleDate(schedule.starts_on) ? schedule.starts_on : "—"} ·{" "}
