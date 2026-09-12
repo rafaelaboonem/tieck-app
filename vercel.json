@@ -4,6 +4,10 @@
     {
       "path": "/api/public/cron/evidence-retention",
       "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/public/cron/execution-occurrences",
+      "schedule": "0 6 * * *"
     }
   ]
 }

@@ -42,6 +42,7 @@ import { Route as ApiPublicInvitationsInspectRouteImport } from './routes/api/pu
 import { Route as ApiPublicInvitationsCreateRouteImport } from './routes/api/public/invitations/create'
 import { Route as ApiPublicInvitationsAcceptRouteImport } from './routes/api/public/invitations/accept'
 import { Route as ApiPublicCronOverdueAssignmentsRouteImport } from './routes/api/public/cron/overdue-assignments'
+import { Route as ApiPublicCronExecutionOccurrencesRouteImport } from './routes/api/public/cron/execution-occurrences'
 import { Route as ApiPublicCronEvidenceRetentionRouteImport } from './routes/api/public/cron/evidence-retention'
 import { Route as ApiCameraAiReferenceImagePreviewRouteImport } from './routes/api/camera-ai/reference-image/preview'
 
@@ -220,6 +221,12 @@ const ApiPublicCronOverdueAssignmentsRoute =
     path: '/api/public/cron/overdue-assignments',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicCronExecutionOccurrencesRoute =
+  ApiPublicCronExecutionOccurrencesRouteImport.update({
+    id: '/api/public/cron/execution-occurrences',
+    path: '/api/public/cron/execution-occurrences',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicCronEvidenceRetentionRoute =
   ApiPublicCronEvidenceRetentionRouteImport.update({
     id: '/api/public/cron/evidence-retention',
@@ -262,6 +269,7 @@ export interface FileRoutesByFullPath {
   '/unidades/$unitId/operacao': typeof UnidadesUnitIdOperacaoRoute
   '/api/camera-ai/reference-image/preview': typeof ApiCameraAiReferenceImagePreviewRoute
   '/api/public/cron/evidence-retention': typeof ApiPublicCronEvidenceRetentionRoute
+  '/api/public/cron/execution-occurrences': typeof ApiPublicCronExecutionOccurrencesRoute
   '/api/public/cron/overdue-assignments': typeof ApiPublicCronOverdueAssignmentsRoute
   '/api/public/invitations/accept': typeof ApiPublicInvitationsAcceptRoute
   '/api/public/invitations/create': typeof ApiPublicInvitationsCreateRoute
@@ -299,6 +307,7 @@ export interface FileRoutesByTo {
   '/unidades/$unitId/operacao': typeof UnidadesUnitIdOperacaoRoute
   '/api/camera-ai/reference-image/preview': typeof ApiCameraAiReferenceImagePreviewRoute
   '/api/public/cron/evidence-retention': typeof ApiPublicCronEvidenceRetentionRoute
+  '/api/public/cron/execution-occurrences': typeof ApiPublicCronExecutionOccurrencesRoute
   '/api/public/cron/overdue-assignments': typeof ApiPublicCronOverdueAssignmentsRoute
   '/api/public/invitations/accept': typeof ApiPublicInvitationsAcceptRoute
   '/api/public/invitations/create': typeof ApiPublicInvitationsCreateRoute
@@ -337,6 +346,7 @@ export interface FileRoutesById {
   '/unidades/$unitId/operacao': typeof UnidadesUnitIdOperacaoRoute
   '/api/camera-ai/reference-image/preview': typeof ApiCameraAiReferenceImagePreviewRoute
   '/api/public/cron/evidence-retention': typeof ApiPublicCronEvidenceRetentionRoute
+  '/api/public/cron/execution-occurrences': typeof ApiPublicCronExecutionOccurrencesRoute
   '/api/public/cron/overdue-assignments': typeof ApiPublicCronOverdueAssignmentsRoute
   '/api/public/invitations/accept': typeof ApiPublicInvitationsAcceptRoute
   '/api/public/invitations/create': typeof ApiPublicInvitationsCreateRoute
@@ -376,6 +386,7 @@ export interface FileRouteTypes {
     | '/unidades/$unitId/operacao'
     | '/api/camera-ai/reference-image/preview'
     | '/api/public/cron/evidence-retention'
+    | '/api/public/cron/execution-occurrences'
     | '/api/public/cron/overdue-assignments'
     | '/api/public/invitations/accept'
     | '/api/public/invitations/create'
@@ -413,6 +424,7 @@ export interface FileRouteTypes {
     | '/unidades/$unitId/operacao'
     | '/api/camera-ai/reference-image/preview'
     | '/api/public/cron/evidence-retention'
+    | '/api/public/cron/execution-occurrences'
     | '/api/public/cron/overdue-assignments'
     | '/api/public/invitations/accept'
     | '/api/public/invitations/create'
@@ -450,6 +462,7 @@ export interface FileRouteTypes {
     | '/unidades/$unitId/operacao'
     | '/api/camera-ai/reference-image/preview'
     | '/api/public/cron/evidence-retention'
+    | '/api/public/cron/execution-occurrences'
     | '/api/public/cron/overdue-assignments'
     | '/api/public/invitations/accept'
     | '/api/public/invitations/create'
@@ -487,6 +500,7 @@ export interface RootRouteChildren {
   ApiChecklistResponsesDeleteRoute: typeof ApiChecklistResponsesDeleteRoute
   UnidadesUnitIdOperacaoRoute: typeof UnidadesUnitIdOperacaoRoute
   ApiPublicCronEvidenceRetentionRoute: typeof ApiPublicCronEvidenceRetentionRoute
+  ApiPublicCronExecutionOccurrencesRoute: typeof ApiPublicCronExecutionOccurrencesRoute
   ApiPublicCronOverdueAssignmentsRoute: typeof ApiPublicCronOverdueAssignmentsRoute
   ApiPublicInvitationsAcceptRoute: typeof ApiPublicInvitationsAcceptRoute
   ApiPublicInvitationsCreateRoute: typeof ApiPublicInvitationsCreateRoute
@@ -729,6 +743,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicCronOverdueAssignmentsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/cron/execution-occurrences': {
+      id: '/api/public/cron/execution-occurrences'
+      path: '/api/public/cron/execution-occurrences'
+      fullPath: '/api/public/cron/execution-occurrences'
+      preLoaderRoute: typeof ApiPublicCronExecutionOccurrencesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/cron/evidence-retention': {
       id: '/api/public/cron/evidence-retention'
       path: '/api/public/cron/evidence-retention'
@@ -789,6 +810,8 @@ const rootRouteChildren: RootRouteChildren = {
   ApiChecklistResponsesDeleteRoute: ApiChecklistResponsesDeleteRoute,
   UnidadesUnitIdOperacaoRoute: UnidadesUnitIdOperacaoRoute,
   ApiPublicCronEvidenceRetentionRoute: ApiPublicCronEvidenceRetentionRoute,
+  ApiPublicCronExecutionOccurrencesRoute:
+    ApiPublicCronExecutionOccurrencesRoute,
   ApiPublicCronOverdueAssignmentsRoute: ApiPublicCronOverdueAssignmentsRoute,
   ApiPublicInvitationsAcceptRoute: ApiPublicInvitationsAcceptRoute,
   ApiPublicInvitationsCreateRoute: ApiPublicInvitationsCreateRoute,

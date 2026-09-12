@@ -332,12 +332,18 @@ describe("Evidence 6A.5.2 — estrutura / segurança", () => {
     expect(vercel.buildCommand).toBe("npm run build");
   });
 
-  it("V) vercel.json contém UMA schedule diária (0 6 * * *) para a nova rota", () => {
+  it("V) vercel.json mantém a schedule diária (0 6 * * *) do evidence-retention (5E.2D.2 adicionou o segundo cron)", () => {
     const vercel = JSON.parse(fs.readFileSync(vercelPath, "utf8"));
-    expect(vercel.crons).toHaveLength(1);
-    expect(vercel.crons[0]).toEqual({
-      path: "/api/public/cron/evidence-retention",
-      schedule: "0 6 * * *",
-    });
+    // 5E.2D.2: um segundo cron diário (execution-occurrences) entrou no
+    // registro; a invariante desta fase é que o cron de evidence-retention
+    // permanece registrado, diário, às 0 6 * * *.
+    expect(vercel.crons).toEqual(
+      expect.arrayContaining([
+        {
+          path: "/api/public/cron/evidence-retention",
+          schedule: "0 6 * * *",
+        },
+      ])
+    );
   });
 });
