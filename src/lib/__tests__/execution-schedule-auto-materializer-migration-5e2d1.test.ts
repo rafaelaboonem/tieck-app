@@ -205,6 +205,49 @@ describe("5E.2D.1 operational per-schedule-local-date materializer", () => {
     expect(bodyCurrent).toContain("ORDER BY s.id");
   });
 
+  it("5E.2D.1.1: loop snapshot filters active schedules only (optimization, revalidated under lock)", () => {
+    expect(bodyCurrent).toMatch(
+      /SELECT s\.id\s+FROM public\.checklist_execution_schedules s\s+WHERE s\.is_active = true\s+ORDER BY s\.id/
+    );
+    // The narrow function still re-validates is_active + member under lock.
+    expect(bodyOne).toContain("v_is_active <> true");
+    expect(bodyOne).toContain("v_member_status <> 'active'::public.member_status");
+  });
+
+  it("5E.2D.1.1: skips a schedule removed between snapshot and lock (NOT FOUND → CONTINUE)", () => {
+    // The locked timezone SELECT must be preceded by a defensive reset and
+    // followed — before ANY local-date math or narrow call — by the guard.
+    const resetIdx = bodyCurrent.indexOf("v_schedule_timezone := NULL;");
+    const selIdx = indexOfOrThrow(bodyCurrent, "SELECT s.timezone INTO v_schedule_timezone");
+    const notFoundIdx = indexOfOrThrow(bodyCurrent, "IF NOT FOUND THEN");
+    const continueIdx = indexOfOrThrow(bodyCurrent, "CONTINUE;");
+    const lockIdx = indexOfOrThrow(bodyCurrent, "FOR SHARE OF s;");
+    const localTodayIdx = indexOfOrThrow(bodyCurrent, "(p_as_of AT TIME ZONE v_schedule_timezone)::date");
+    const narrowFirstIdx = indexOfOrThrow(bodyCurrent, "materialize_checklist_execution_occurrence_for_schedule(");
+    expect(resetIdx).toBeGreaterThan(-1);
+    expect(resetIdx).toBeLessThan(selIdx);
+    expect(lockIdx).toBeGreaterThan(selIdx);
+    expect(notFoundIdx).toBeGreaterThan(lockIdx);
+    expect(continueIdx).toBeGreaterThan(notFoundIdx);
+    expect(continueIdx).toBeLessThan(localTodayIdx);
+    expect(continueIdx).toBeLessThan(narrowFirstIdx);
+    // Exactly one guard — placed before the local-date derivation.
+    expect(bodyCurrent.match(/IF NOT FOUND THEN/g)?.length).toBe(1);
+    expect(bodyCurrent.match(/CONTINUE;/g)?.length).toBe(1);
+  });
+
+  it("5E.2D.1.1: recovery continues after a concurrent removal (no retry, no error surface)", () => {
+    // Only ONE loop over schedules; the removal path continues the loop,
+    // so the remaining schedules still materialize in the same run. The
+    // CONTINUE guard itself raises nothing — the only RAISEs in the body
+    // are the p_as_of parameter validations.
+    expect(bodyCurrent.match(/FOR v_schedule IN/g)?.length).toBe(1);
+    const raiseCount = bodyCurrent.match(/RAISE EXCEPTION/g)?.length ?? 0;
+    expect(raiseCount).toBe(2); // occurrence_as_of_required + occurrence_as_of_invalid
+    expect(bodyCurrent).toContain("occurrence_as_of_required");
+    expect(bodyCurrent).toContain("occurrence_as_of_invalid");
+  });
+
   it("reads the timezone from a FOR SHARE-locked read, before deriving the local date", () => {
     // The timezone read IS the locked read: one statement holds FOR SHARE OF s
     // and selects s.timezone; the local date derivation follows it.

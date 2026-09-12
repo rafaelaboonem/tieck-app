@@ -212,12 +212,15 @@ BEGIN
   END IF;
 
   -- B) deterministic visit order (s.id) reduces deadlock risk between two
-  --    concurrent operational runs. Only the ID is read here — the
-  --    timezone is re-read from the LOCKED row inside the narrow function
-  --    (never from this external snapshot).
+  --    concurrent operational runs. Only active schedules enter the loop —
+  --    an initial snapshot optimization only: the narrow function still
+  --    re-validates is_active and the member under lock. Only the ID is
+  --    read here — the timezone is re-read from the LOCKED row inside the
+  --    loop (never from this external snapshot).
   FOR v_schedule IN
     SELECT s.id
     FROM public.checklist_execution_schedules s
+    WHERE s.is_active = true
     ORDER BY s.id
   LOOP
     -- C) lock the schedule row FIRST (FOR SHARE) and only then read its
@@ -227,10 +230,21 @@ BEGIN
     --    re-validates every eligibility condition fail-closed, so a
     --    schedule deactivated between the loop snapshot and the call
     --    inserts zero.
+    --    5E.2D.1.1: a schedule (or its checklist/workspace_member, via ON
+    --    DELETE CASCADE) removed between the snapshot above and this lock
+    --    makes the SELECT find NO row. Skip ONLY this iteration and keep
+    --    processing the remaining schedules — the recovery run must never
+    --    fail because of a concurrent deletion, and no occurrence is ever
+    --    created for the removed row. No retry, no exposed error.
+    v_schedule_timezone := NULL;
     SELECT s.timezone INTO v_schedule_timezone
       FROM public.checklist_execution_schedules s
       WHERE s.id = v_schedule.id
       FOR SHARE OF s;
+
+    IF NOT FOUND THEN
+      CONTINUE;
+    END IF;
 
     v_local_today := (p_as_of AT TIME ZONE v_schedule_timezone)::date;
 
