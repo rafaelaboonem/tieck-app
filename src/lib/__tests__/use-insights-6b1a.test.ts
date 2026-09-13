@@ -3,7 +3,10 @@
  *
  * Covers: success path (real insights only), real-empty state, failure in
  * each of the 5 queries, fail-closed partial-data rejection, no SQL/table
- * leakage in state, refresh recovery, and realtime subscription cleanup.
+ * leakage in state, refresh recovery, realtime subscription cleanup —
+ * plus 6B.1A.1 resiliency: rejected promises, out-of-order responses
+ * (deferred promises resolved deliberately out of order) and unmount
+ * invalidation.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderHook, act, waitFor } from "@testing-library/react";
@@ -215,5 +218,200 @@ describe("useInsights (6B.1A)", () => {
     expect(supabase.channel).toHaveBeenCalledWith("insights");
     unmount();
     expect(supabase.removeChannel).toHaveBeenCalledTimes(1);
+  });
+
+  // ------------------------------------------------------------------
+  // 6B.1A.1 — resiliência: rejeições, corridas e unmount.
+  // ------------------------------------------------------------------
+
+  function deferred<T>() {
+    let resolve!: (v: T) => void;
+    let reject!: (e: unknown) => void;
+    const promise = new Promise<T>((res, rej) => {
+      resolve = res;
+      reject = rej;
+    });
+    return { promise, resolve, reject };
+  }
+
+  /** Builder PostgREST thenable cujo resultado é controlado por uma promessa diferida. */
+  function gatedBuilder(gate: { promise: Promise<FromResult> }) {
+    const b: any = {
+      then: (
+        onFulfilled?: (v: FromResult) => unknown,
+        onRejected?: (e: unknown) => unknown,
+      ) => gate.promise.then(onFulfilled, onRejected),
+      catch: (onRejected?: (e: unknown) => unknown) => gate.promise.catch(onRejected),
+      finally: (cb?: () => void) => gate.promise.finally(cb),
+      select: vi.fn(() => b),
+      eq: vi.fn(() => b),
+    };
+    return b;
+  }
+
+  /** Drena microtasks pendentes sem depender de timers. */
+  async function drain() {
+    for (let i = 0; i < 10; i++) await Promise.resolve();
+  }
+
+  it("rejected query promise ends with loading=false and fail-closed state", async () => {
+    const gate = deferred<FromResult>();
+    vi.mocked(supabase.from).mockImplementation((() => gatedBuilder(gate)) as never);
+    const { result } = renderHook(() => useInsights());
+    expect(result.current.loading).toBe(true);
+
+    gate.reject(new Error("network boom: SELECT * FROM secrets"));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    expect(result.current.error).toBe(true);
+    expect(result.current.insights).toEqual([]);
+    expect(result.current.isEmpty).toBe(false);
+    // Detalhes técnicos da exceção nunca chegam ao estado público.
+    const serialized = JSON.stringify(result.current);
+    expect(serialized).not.toMatch(/network boom|SELECT|secrets/i);
+  });
+
+  it("slow stale request A does not overwrite newer request B (success race)", async () => {
+    const slowA = deferred<FromResult>();
+    const fastB = deferred<FromResult>();
+    let call = 0;
+    vi.mocked(supabase.from).mockImplementation(
+      (() => gatedBuilder(++call <= 5 ? slowA : fastB)) as never,
+    );
+    const { result } = renderHook(() => useInsights());
+    // Requisição A: 5 consultas pendentes.
+    await waitFor(() => expect(vi.mocked(supabase.from)).toHaveBeenCalledTimes(5));
+
+    // Requisição B começa enquanto A ainda está no ar (não esperamos A).
+    await act(async () => {
+      result.current.refresh();
+      await drain();
+    });
+    expect(vi.mocked(supabase.from)).toHaveBeenCalledTimes(10);
+
+    // B termina primeiro com o estado mais recente.
+    fastB.resolve({ data: [], error: null, count: 0 });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.error).toBe(false);
+    expect(result.current.isEmpty).toBe(true);
+
+    // A resposta antiga de A chega POR ÚLTIMO com dados: deve ser descartada.
+    slowA.resolve({
+      data: [
+        {
+          unit_id: "u1",
+          shift_id: "s1",
+          task_id: "t1",
+          title: "STALE",
+          scheduled_at: "2026-09-13T10:00:00Z",
+        },
+      ],
+      error: null,
+      count: 0,
+    });
+    await act(async () => {
+      await drain();
+    });
+
+    expect(result.current.insights).toEqual([]);
+    expect(result.current.error).toBe(false);
+    expect(result.current.isEmpty).toBe(true);
+    expect(result.current.loading).toBe(false);
+  });
+
+  it("stale error A does not overwrite newer success B", async () => {
+    const slowA = deferred<FromResult>();
+    const fastB = deferred<FromResult>();
+    let call = 0;
+    vi.mocked(supabase.from).mockImplementation(
+      (() => gatedBuilder(++call <= 5 ? slowA : fastB)) as never,
+    );
+    const { result } = renderHook(() => useInsights());
+    await waitFor(() => expect(vi.mocked(supabase.from)).toHaveBeenCalledTimes(5));
+
+    await act(async () => {
+      result.current.refresh();
+      await drain();
+    });
+    expect(vi.mocked(supabase.from)).toHaveBeenCalledTimes(10);
+
+    fastB.resolve({ data: [], error: null, count: 0 });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.error).toBe(false);
+
+    // A falha antiga de A chega depois do sucesso recente de B: ignorada.
+    slowA.reject(new Error("old network failure"));
+    await act(async () => {
+      await drain();
+    });
+
+    expect(result.current.error).toBe(false);
+    expect(result.current.isEmpty).toBe(true);
+    expect(result.current.loading).toBe(false);
+  });
+
+  it("stale success A does not remove newer error B", async () => {
+    const slowA = deferred<FromResult>();
+    const fastB = deferred<FromResult>();
+    let call = 0;
+    vi.mocked(supabase.from).mockImplementation(
+      (() => gatedBuilder(++call <= 5 ? slowA : fastB)) as never,
+    );
+    const { result } = renderHook(() => useInsights());
+    await waitFor(() => expect(vi.mocked(supabase.from)).toHaveBeenCalledTimes(5));
+
+    await act(async () => {
+      result.current.refresh();
+      await drain();
+    });
+    expect(vi.mocked(supabase.from)).toHaveBeenCalledTimes(10);
+
+    // B falha primeiro.
+    fastB.resolve({ data: null, error: { message: "fresh failure" }, count: null });
+    await waitFor(() => expect(result.current.error).toBe(true));
+    expect(result.current.insights).toEqual([]);
+
+    // O sucesso antigo de A chega depois do erro recente de B: ignorado.
+    slowA.resolve({
+      data: [
+        {
+          unit_id: "u1",
+          shift_id: "s1",
+          task_id: "t1",
+          title: "STALE",
+          scheduled_at: null,
+        },
+      ],
+      error: null,
+      count: 0,
+    });
+    await act(async () => {
+      await drain();
+    });
+
+    expect(result.current.error).toBe(true);
+    expect(result.current.insights).toEqual([]);
+    expect(result.current.isEmpty).toBe(false);
+    expect(result.current.loading).toBe(false);
+  });
+
+  it("unmount invalidates the in-flight request: no state writes afterwards", async () => {
+    const gate = deferred<FromResult>();
+    vi.mocked(supabase.from).mockImplementation((() => gatedBuilder(gate)) as never);
+    const { result, unmount } = renderHook(() => useInsights());
+    expect(result.current.loading).toBe(true);
+
+    unmount();
+    gate.resolve({ data: [], error: null, count: 0 });
+    await act(async () => {
+      await gate.promise.catch(() => undefined);
+      await drain();
+    });
+
+    // Nenhum setState após o unmount: loading permanece como estava,
+    // sem erro, sem dados.
+    expect(result.current.loading).toBe(true);
+    expect(result.current.error).toBe(false);
+    expect(result.current.insights).toEqual([]);
   });
 });
