@@ -21,9 +21,14 @@ interface FromResult {
 
 // PostgREST builder simulado: então (awaitable) e com .eq encadeável.
 function makeBuilder(result: FromResult) {
+  const eqCalls: Array<[string, unknown]> = [];
   const b: any = Promise.resolve(result);
   b.select = vi.fn().mockReturnValue(b);
-  b.eq = vi.fn().mockReturnValue(b);
+  b.eq = vi.fn((...args: unknown[]) => {
+    eqCalls.push(args as [string, unknown]);
+    return b;
+  });
+  b.__eqCalls = eqCalls;
   return b as never;
 }
 
@@ -101,7 +106,7 @@ describe("useInsights (6B.1A)", () => {
 
   it("produces only real insights from successful queries", async () => {
     mockFromByTable(fullSuccessTables());
-    const { result } = renderHook(() => useInsights());
+    const { result } = renderHook(() => useInsights({ organizationId: "org-1" }));
     await waitFor(() => expect(result.current.loading).toBe(false));
 
     expect(result.current.error).toBe(false);
@@ -124,7 +129,7 @@ describe("useInsights (6B.1A)", () => {
       analytics_unit_ranking: okResult([]),
       evidences: okResult([], 0),
     });
-    const { result } = renderHook(() => useInsights());
+    const { result } = renderHook(() => useInsights({ organizationId: "org-1" }));
     await waitFor(() => expect(result.current.loading).toBe(false));
 
     expect(result.current.insights).toEqual([]);
@@ -159,7 +164,7 @@ describe("useInsights (6B.1A)", () => {
           : "rejected"
         : undefined;
       mockFromByTable(tablesWithFailure(key), evidenceFailOn);
-      const { result } = renderHook(() => useInsights());
+      const { result } = renderHook(() => useInsights({ organizationId: "org-1" }));
       await waitFor(() => expect(result.current.loading).toBe(false));
 
       expect(result.current.error).toBe(true);
@@ -172,7 +177,7 @@ describe("useInsights (6B.1A)", () => {
 
   it("never leaks SQL/table/schema details in state values", async () => {
     mockFromByTable(tablesWithFailure("analytics_overdue_tasks"));
-    const { result } = renderHook(() => useInsights());
+    const { result } = renderHook(() => useInsights({ organizationId: "org-1" }));
     await waitFor(() => expect(result.current.loading).toBe(false));
 
     const serialized = JSON.stringify({
@@ -186,7 +191,7 @@ describe("useInsights (6B.1A)", () => {
 
   it("refresh recovers from a previous failure", async () => {
     mockFromByTable(tablesWithFailure("analytics_unit_ranking"));
-    const { result } = renderHook(() => useInsights());
+    const { result } = renderHook(() => useInsights({ organizationId: "org-1" }));
     await waitFor(() => expect(result.current.error).toBe(true));
 
     mockFromByTable(fullSuccessTables());
@@ -200,7 +205,7 @@ describe("useInsights (6B.1A)", () => {
 
   it("does not render stale data when a failure follows success", async () => {
     mockFromByTable(fullSuccessTables());
-    const { result } = renderHook(() => useInsights());
+    const { result } = renderHook(() => useInsights({ organizationId: "org-1" }));
     await waitFor(() => expect(result.current.insights.length).toBeGreaterThan(0));
 
     mockFromByTable(tablesWithFailure("analytics_critical_failures"));
@@ -214,8 +219,8 @@ describe("useInsights (6B.1A)", () => {
 
   it("cleans up the realtime subscription on unmount", () => {
     mockFromByTable(fullSuccessTables());
-    const { unmount } = renderHook(() => useInsights());
-    expect(supabase.channel).toHaveBeenCalledWith("insights");
+    const { unmount } = renderHook(() => useInsights({ organizationId: "org-1" }));
+    expect(supabase.channel).toHaveBeenCalledWith("insights-org-1");
     unmount();
     expect(supabase.removeChannel).toHaveBeenCalledTimes(1);
   });
@@ -257,7 +262,7 @@ describe("useInsights (6B.1A)", () => {
   it("rejected query promise ends with loading=false and fail-closed state", async () => {
     const gate = deferred<FromResult>();
     vi.mocked(supabase.from).mockImplementation((() => gatedBuilder(gate)) as never);
-    const { result } = renderHook(() => useInsights());
+    const { result } = renderHook(() => useInsights({ organizationId: "org-1" }));
     expect(result.current.loading).toBe(true);
 
     gate.reject(new Error("network boom: SELECT * FROM secrets"));
@@ -278,7 +283,7 @@ describe("useInsights (6B.1A)", () => {
     vi.mocked(supabase.from).mockImplementation(
       (() => gatedBuilder(++call <= 5 ? slowA : fastB)) as never,
     );
-    const { result } = renderHook(() => useInsights());
+    const { result } = renderHook(() => useInsights({ organizationId: "org-1" }));
     // Requisição A: 5 consultas pendentes.
     await waitFor(() => expect(vi.mocked(supabase.from)).toHaveBeenCalledTimes(5));
 
@@ -326,7 +331,7 @@ describe("useInsights (6B.1A)", () => {
     vi.mocked(supabase.from).mockImplementation(
       (() => gatedBuilder(++call <= 5 ? slowA : fastB)) as never,
     );
-    const { result } = renderHook(() => useInsights());
+    const { result } = renderHook(() => useInsights({ organizationId: "org-1" }));
     await waitFor(() => expect(vi.mocked(supabase.from)).toHaveBeenCalledTimes(5));
 
     await act(async () => {
@@ -357,7 +362,7 @@ describe("useInsights (6B.1A)", () => {
     vi.mocked(supabase.from).mockImplementation(
       (() => gatedBuilder(++call <= 5 ? slowA : fastB)) as never,
     );
-    const { result } = renderHook(() => useInsights());
+    const { result } = renderHook(() => useInsights({ organizationId: "org-1" }));
     await waitFor(() => expect(vi.mocked(supabase.from)).toHaveBeenCalledTimes(5));
 
     await act(async () => {
@@ -398,7 +403,7 @@ describe("useInsights (6B.1A)", () => {
   it("unmount invalidates the in-flight request: no state writes afterwards", async () => {
     const gate = deferred<FromResult>();
     vi.mocked(supabase.from).mockImplementation((() => gatedBuilder(gate)) as never);
-    const { result, unmount } = renderHook(() => useInsights());
+    const { result, unmount } = renderHook(() => useInsights({ organizationId: "org-1" }));
     expect(result.current.loading).toBe(true);
 
     unmount();
@@ -413,5 +418,151 @@ describe("useInsights (6B.1A)", () => {
     expect(result.current.loading).toBe(true);
     expect(result.current.error).toBe(false);
     expect(result.current.insights).toEqual([]);
+  });
+
+  // ------------------------------------------------------------------
+  // 6B.1B — escopo de workspace explícito nas cinco consultas.
+  // ------------------------------------------------------------------
+
+  describe("6B.1B — workspace scope", () => {
+    beforeEach(() => {
+      vi.clearAllMocks();
+      console.error = vi.fn();
+    });
+
+    it("each of the five queries contains the exact organization_id", async () => {
+      mockFromByTable(fullSuccessTables());
+      renderHook(() => useInsights({ organizationId: "org-XYZ" }));
+      await waitFor(() => expect(vi.mocked(supabase.from)).toHaveBeenCalledTimes(5));
+
+      const tables = [
+        "analytics_overdue_tasks",
+        "analytics_critical_failures",
+        "analytics_unit_ranking",
+        "evidences",
+        "evidences",
+      ];
+      expect(vi.mocked(supabase.from).mock.calls.map(([t]) => t)).toEqual(tables);
+      for (let i = 0; i < 5; i++) {
+        const builder = vi.mocked(supabase.from).mock.results[i].value as any;
+        expect(builder.__eqCalls).toContainEqual(["organization_id", "org-XYZ"]);
+      }
+    });
+
+    it("enabled=false: zero query and zero subscription", async () => {
+      mockFromByTable(fullSuccessTables());
+      const { result } = renderHook(() =>
+        useInsights({ organizationId: "org-1", enabled: false }),
+      );
+      await act(async () => {
+        await drain();
+      });
+
+      expect(supabase.from).not.toHaveBeenCalled();
+      expect(supabase.channel).not.toHaveBeenCalled();
+      expect(result.current.loading).toBe(false);
+      expect(result.current.insights).toEqual([]);
+      expect(result.current.error).toBe(false);
+    });
+
+    it("missing organizationId: zero query and zero subscription", async () => {
+      mockFromByTable(fullSuccessTables());
+      const { result } = renderHook(() => useInsights({ organizationId: null }));
+      await act(async () => {
+        await drain();
+      });
+
+      expect(supabase.from).not.toHaveBeenCalled();
+      expect(supabase.channel).not.toHaveBeenCalled();
+      expect(result.current.loading).toBe(false);
+      expect(result.current.insights).toEqual([]);
+      expect(result.current.error).toBe(false);
+    });
+
+    it("workspace switch A -> B: channel A removed, channel B created, queries scoped to B", async () => {
+      mockFromByTable(fullSuccessTables());
+      const { rerender } = renderHook(
+        ({ organizationId }) => useInsights({ organizationId }),
+        { initialProps: { organizationId: "org-A" } },
+      );
+      await waitFor(() => expect(supabase.channel).toHaveBeenCalledWith("insights-org-A"));
+
+      await act(async () => {
+        rerender({ organizationId: "org-B" });
+      });
+
+      expect(supabase.removeChannel).toHaveBeenCalled();
+      expect(supabase.channel).toHaveBeenCalledWith("insights-org-B");
+      // Toda consulta emitida (A e B) carrega um filtro organization_id —
+      // nenhuma consulta sem escopo.
+      const allScoped = vi.mocked(supabase.from).mock.results.every((r) => {
+        const b = r.value as any;
+        return (b.__eqCalls ?? []).some(([c]: any) => c === "organization_id");
+      });
+      expect(allScoped).toBe(true);
+      // A última leva (B) filtra exatamente por org-B.
+      for (let i = 5; i < 10; i++) {
+        const builder = vi.mocked(supabase.from).mock.results[i].value as any;
+        expect(builder.__eqCalls).toContainEqual(["organization_id", "org-B"]);
+      }
+    });
+
+    it("realtime filters use the current organizationId", async () => {
+      mockFromByTable(fullSuccessTables());
+      renderHook(() => useInsights({ organizationId: "org-RT" }));
+      await waitFor(() => expect(supabase.channel).toHaveBeenCalledWith("insights-org-RT"));
+
+      const channelMock = vi.mocked(supabase.channel).mock.results[0].value as any;
+      const onCalls = channelMock.on.mock.calls as Array<
+        [string, { table: string; filter?: string }, unknown]
+      >;
+      const events = onCalls.filter(([, cfg]) => cfg && cfg.table);
+      expect(events.length).toBe(2);
+      for (const [, cfg] of events) {
+        expect(["task_executions", "evidences"]).toContain(cfg.table);
+        expect(cfg.filter).toBe("organization_id=eq.org-RT");
+      }
+    });
+
+    it("late success of A cannot overwrite B (workspace scope race)", async () => {
+      const slowA = deferred<FromResult>();
+      const fastB = deferred<FromResult>();
+      let call = 0;
+      vi.mocked(supabase.from).mockImplementation(
+        (() => gatedBuilder(++call <= 5 ? slowA : fastB)) as never,
+      );
+      const { result, rerender } = renderHook(
+        ({ organizationId }) => useInsights({ organizationId }),
+        { initialProps: { organizationId: "org-A" } },
+      );
+      await waitFor(() => expect(vi.mocked(supabase.from)).toHaveBeenCalledTimes(5));
+
+      // Troca de workspace enquanto A está no ar: B termina primeiro.
+      await act(async () => {
+        rerender({ organizationId: "org-B" });
+        await drain();
+      });
+      expect(vi.mocked(supabase.from)).toHaveBeenCalledTimes(10);
+
+      fastB.resolve({ data: [], error: null, count: 0 });
+      await waitFor(() => expect(result.current.loading).toBe(false));
+      expect(result.current.error).toBe(false);
+      expect(result.current.isEmpty).toBe(true);
+
+      // Sucesso antigo de A com dados de outro workspace: descartado.
+      slowA.resolve({
+        data: [
+          { unit_id: "uA", shift_id: "sA", task_id: "tA", title: "STALE-A", scheduled_at: null },
+        ],
+        error: null,
+        count: 0,
+      });
+      await act(async () => {
+        await drain();
+      });
+      expect(result.current.insights).toEqual([]);
+      expect(result.current.error).toBe(false);
+      expect(result.current.loading).toBe(false);
+    });
   });
 });

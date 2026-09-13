@@ -21,6 +21,13 @@ vi.mock("@/contexts/AuthContext", () => ({
   useAuth: () => ({ user: { id: "u1" }, loading: false }),
 }));
 
+vi.mock("@/contexts/WorkspaceContext", () => ({
+  useWorkspace: () => ({
+    currentWorkspace: { id: "org-1", name: "Org Um" },
+    workspaceStatus: "workspace",
+  }),
+}));
+
 vi.mock("@/contexts/SidebarContext", () => ({
   useSidebar: () => ({ sidebarOpen: true }),
 }));
@@ -97,10 +104,12 @@ describe("6B.1A — /insights honesty (structural)", () => {
     expect(ROUTE_SRC).not.toMatch(/interface\s+Insight\s*\{/);
   });
 
-  it("renders real insights exclusively from the hook", () => {
+  it("renders real insights exclusively from the hook, scoped to the workspace", () => {
     expect(ROUTE_SRC).toMatch(
-      /const\s*\{\s*insights,\s*loading,\s*error,\s*refresh\s*\}\s*=\s*useInsights\(\)/,
-    );
+      /const\s*\{\s*insights,\s*loading,\s*error,\s*refresh\s*\}\s*=\s*useInsights\(\{/,    );
+    // O escopo vem do WorkspaceContext e é passado como organizationId.
+    expect(ROUTE_SRC).toContain("organizationId: currentWorkspace?.id");
+    expect(ROUTE_SRC).toContain("useWorkspace()");
   });
 });
 

@@ -73,10 +73,14 @@ function PainelPage() {
     [search.startDate, search.endDate, search.unitId], // eslint-disable-line react-hooks/exhaustive-deps
   );
 
-  const canLoadOperationalData = !rbacLoading && !authLoading && !!user && isAdmin;
+  // Escopo explícito: somente dados do workspace atual (defesa em profundidade
+  // além da RLS — 6B.1B). Sem workspace selecionado, nada é consultado.
+  const canLoadOperationalData =
+    !rbacLoading && !authLoading && !!user && isAdmin && !!currentWorkspace?.id;
 
   const compliance = useUnitCompliance({
     ...filters,
+    organizationId: currentWorkspace?.id ?? null,
     enabled: canLoadOperationalData
   });
   const rows = compliance.data;

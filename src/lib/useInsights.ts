@@ -20,6 +20,16 @@ export interface Insight {
   source: string;
 }
 
+export interface UseInsightsParams {
+  /**
+   * Escopo organizacional obrigatório (workspaces.id === organization_id).
+   * Fornecido pelo consumidor — o hook nunca lê o WorkspaceContext.
+   */
+  organizationId?: string | null;
+  /** Somente consulta quando true e organizationId for válido. */
+  enabled?: boolean;
+}
+
 interface OverdueRow {
   unit_id: string | null;
   shift_id: string | null;
@@ -52,9 +62,12 @@ function topKey<T extends string | null | undefined>(rows: { key: T }[]): { key:
   return best;
 }
 
-export function useInsights() {
+export function useInsights(params: UseInsightsParams = {}) {
+  const { organizationId, enabled = true } = params;
+  const canQuery = !!enabled && !!organizationId;
+
   const [insights, setInsights] = useState<Insight[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(canQuery);
   const [isEmpty, setIsEmpty] = useState(true);
   // Fail-closed: qualquer falha nas 5 consultas invalida o resultado inteiro.
   // O detalhe técnico (SQL/tabela/schema) nunca sai daqui — a UI mostra apenas
@@ -67,6 +80,8 @@ export function useInsights() {
   const loadSeqRef = useRef(0);
   // Depois do unmount nenhuma requisição pendente pode escrever estado.
   const mountedRef = useRef(true);
+  // Escopo (workspace) dono do estado publicado atual.
+  const lastScopeRef = useRef<string | null>(null);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -78,18 +93,37 @@ export function useInsights() {
   }, []);
 
   const load = useCallback(async () => {
-    if (!mountedRef.current) return;
+    if (!mountedRef.current || !organizationId) return;
     const seq = ++loadSeqRef.current;
     const isCurrent = () => mountedRef.current && loadSeqRef.current === seq;
     setLoading(true);
     setError(false);
     try {
+      // Todas as consultas recebem exatamente o organizationId atual — defesa
+      // em profundidade além da RLS.
       const [overdueRes, criticalRes, rankRes, evPendRes, evRejRes] = await Promise.all([
-        supabase.from("analytics_overdue_tasks").select("unit_id,shift_id,task_id,title,scheduled_at"),
-        supabase.from("analytics_critical_failures").select("unit_id,title"),
-        supabase.from("analytics_unit_ranking").select("unit_id,unit_name,compliance_pct"),
-        supabase.from("evidences").select("id", { count: "exact", head: true }).eq("status", "pending"),
-        supabase.from("evidences").select("id", { count: "exact", head: true }).eq("status", "rejected"),
+        supabase
+          .from("analytics_overdue_tasks")
+          .select("unit_id,shift_id,task_id,title,scheduled_at")
+          .eq("organization_id", organizationId),
+        supabase
+          .from("analytics_critical_failures")
+          .select("unit_id,title")
+          .eq("organization_id", organizationId),
+        supabase
+          .from("analytics_unit_ranking")
+          .select("unit_id,unit_name,compliance_pct")
+          .eq("organization_id", organizationId),
+        supabase
+          .from("evidences")
+          .select("id", { count: "exact", head: true })
+          .eq("status", "pending")
+          .eq("organization_id", organizationId),
+        supabase
+          .from("evidences")
+          .select("id", { count: "exact", head: true })
+          .eq("status", "rejected")
+          .eq("organization_id", organizationId),
       ]);
 
       // Resposta de uma requisição antiga ou de um componente já desmontado:
@@ -261,19 +295,47 @@ export function useInsights() {
       // Encerra o carregamento somente para a requisição vigente.
       if (isCurrent()) setLoading(false);
     }
-  }, []);
+  }, [organizationId]);
 
   useEffect(() => {
-    load();
+    // Troca de escopo: invalida imediatamente toda requisição pendente do
+    // workspace anterior e limpa o estado — nunca renderizar insights de A
+    // sob o escopo B.
+    if (lastScopeRef.current !== (organizationId ?? null)) {
+      lastScopeRef.current = organizationId ?? null;
+      loadSeqRef.current += 1;
+      setInsights([]);
+      setIsEmpty(true);
+      setError(false);
+    }
+    if (!canQuery) {
+      // Sem escopo/sem permissão: zero consulta, zero subscription, estado neutro.
+      loadSeqRef.current += 1;
+      setLoading(false);
+      setInsights([]);
+      setIsEmpty(true);
+      setError(false);
+      return;
+    }
+    void load();
+    // Canal identificado pelo escopo; eventos de outra organização não disparam recarga.
     const ch = supabase
-      .channel("insights")
-      .on("postgres_changes", { event: "*", schema: "public", table: "task_executions" }, () => load())
-      .on("postgres_changes", { event: "*", schema: "public", table: "evidences" }, () => load())
+      .channel(`insights-${organizationId}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "task_executions", filter: `organization_id=eq.${organizationId}` },
+        () => void load(),
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "evidences", filter: `organization_id=eq.${organizationId}` },
+        () => void load(),
+      )
       .subscribe();
     return () => {
       supabase.removeChannel(ch);
     };
-  }, [load]);
+  }, [load, canQuery, organizationId]);
 
   return { insights, loading, isEmpty, error, refresh: load };
 }

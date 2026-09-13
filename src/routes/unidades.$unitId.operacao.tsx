@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, AlertOctagon, Camera, Clock, ListChecks, CheckCircle2, Hourglass } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { useSidebar } from "@/contexts/SidebarContext";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { Card } from "@/components/tremor/ui/Card";
@@ -61,6 +62,7 @@ export const Route = createFileRoute("/unidades/$unitId/operacao")({
 
 function UnitOperacaoPage() {
   const { user, loading: authLoading } = useAuth();
+  const { currentWorkspace, workspaceStatus } = useWorkspace();
   const { sidebarOpen } = useSidebar();
   const navigate = useNavigate();
   const { unitId } = Route.useParams();
@@ -75,18 +77,28 @@ function UnitOperacaoPage() {
     if (!authLoading && !user) navigate({ to: "/login" });
   }, [authLoading, user, navigate]);
 
-  // Verificação de acesso via RLS: tenta ler a unidade. Se não vier nada,
-  // ou é inexistente ou o usuário não tem permissão. Antes disso, nada é
-  // exibido além de "verificando".
+  // Verificação de acesso (6B.1B): a unidade deve pertencer ao workspace
+  // atualmente selecionado — consulta com id + workspace_id. Uma unidade de
+  // outro workspace produz o mesmo estado genérico de "não encontrada ou sem
+  // permissão", sem revelar sua existência. A verificação só roda com
+  // autenticação e workspace resolvidos.
   const [unit, setUnit] = useState<{ id: string; name: string } | null>(null);
   const [access, setAccess] = useState<"loading" | "ok" | "denied">("loading");
+  const scopeResolved = !authLoading && workspaceStatus !== "loading" && !!user && !!currentWorkspace?.id;
   useEffect(() => {
+    if (!scopeResolved) {
+      setAccess("loading");
+      setUnit(null);
+      return;
+    }
     let cancelled = false;
     setAccess("loading");
+    setUnit(null);
     supabase
       .from("units")
       .select("id,name")
       .eq("id", unitId)
+      .eq("workspace_id", currentWorkspace!.id)
       .maybeSingle()
       .then(({ data, error }) => {
         if (cancelled) return;
@@ -101,7 +113,7 @@ function UnitOperacaoPage() {
     return () => {
       cancelled = true;
     };
-  }, [unitId]);
+  }, [unitId, scopeResolved, currentWorkspace?.id]);
 
   const setFilters = (next: DashboardFilters) => {
     navigate({
@@ -173,9 +185,10 @@ function UnitOperacaoPage() {
             </Card>
           )}
 
-          {access === "ok" && (
+          {access === "ok" && currentWorkspace?.id && (
             <UnitOperacaoContent
               filters={filters}
+              organizationId={currentWorkspace.id}
               backTo={{ startDate: filters.startDate, endDate: filters.endDate }}
             />
           )}
@@ -187,9 +200,11 @@ function UnitOperacaoPage() {
 
 function UnitOperacaoContent({
   filters,
+  organizationId,
   backTo,
 }: {
   filters: DashboardFilters;
+  organizationId: string;
   backTo: { startDate: string; endDate: string };
 }) {
   void backTo; // preservado para uso futuro
@@ -197,11 +212,13 @@ function UnitOperacaoContent({
     startDate: filters.startDate,
     endDate: filters.endDate,
     unitId: filters.unitId,
+    organizationId,
   });
   const details = useUnitOperationalDetails({
     unitId: filters.unitId!,
     startDate: filters.startDate,
     endDate: filters.endDate,
+    organizationId,
   });
 
   const row = compliance.data[0];

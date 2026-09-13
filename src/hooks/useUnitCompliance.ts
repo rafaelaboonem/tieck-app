@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { UnitComplianceData } from "@/components/dashboard/UnitComplianceChart";
 
@@ -14,6 +14,11 @@ export interface UseUnitComplianceParams {
   startDate: string; // YYYY-MM-DD (inclusivo)
   endDate: string; // YYYY-MM-DD (inclusivo)
   unitId?: string;
+  /**
+   * Escopo organizacional obrigatório (workspaces.id === organization_id).
+   * Fornecido pelo consumidor — defesa em profundidade além da RLS.
+   */
+  organizationId?: string | null;
   enabled?: boolean;
 }
 
@@ -146,67 +151,128 @@ function aggregateByUnit(rows: DailyRow[]): UnitComplianceRow[] {
 }
 
 export function useUnitCompliance(params: UseUnitComplianceParams): UseUnitComplianceResult {
-  const { startDate, endDate, unitId, enabled = true } = params;
+  const { startDate, endDate, unitId, organizationId, enabled = true } = params;
+  const canQuery = !!enabled && !!organizationId;
+
   const [data, setData] = useState<UnitComplianceRow[]>([]);
-  const [loading, setLoading] = useState(enabled);
+  const [loading, setLoading] = useState(canQuery);
   const [error, setError] = useState<string | null>(null);
 
+  // Identificador monotônico de requisição: somente a mais recente atualiza o
+  // estado — resposta antiga que termina por último é descartada.
+  const loadSeqRef = useRef(0);
+  // Depois do unmount nenhuma requisição pendente pode escrever estado.
+  const mountedRef = useRef(true);
+  // Escopo (workspace) dono do estado publicado atual.
+  const lastScopeRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      loadSeqRef.current += 1;
+    };
+  }, []);
+
   const load = useCallback(async () => {
-    if (!enabled) return;
+    if (!mountedRef.current || !organizationId) return;
+    const seq = ++loadSeqRef.current;
+    const isCurrent = () => mountedRef.current && loadSeqRef.current === seq;
     setLoading(true);
     setError(null);
-    let q = supabase
-      .from("analytics_unit_daily_compliance")
-      .select(
-        "organization_id,unit_id,unit_name,reference_date,total_scheduled_tasks,completed_tasks,completed_on_time,completed_late,overdue_open_tasks,delayed_tasks,critical_failures,pending_evidences,weight_total,weight_done,compliance_percentage,total_due_tasks,due_completed_tasks,due_weight_total,due_weight_done,due_compliance_percentage",
-      )
-      .gte("reference_date", startDate)
-      .lte("reference_date", endDate);
+    try {
+      // O filtro de organização é obrigatório — nunca consultar fora do escopo.
+      let q = supabase
+        .from("analytics_unit_daily_compliance")
+        .select(
+          "organization_id,unit_id,unit_name,reference_date,total_scheduled_tasks,completed_tasks,completed_on_time,completed_late,overdue_open_tasks,delayed_tasks,critical_failures,pending_evidences,weight_total,weight_done,compliance_percentage,total_due_tasks,due_completed_tasks,due_weight_total,due_weight_done,due_compliance_percentage",
+        )
+        .eq("organization_id", organizationId)
+        .gte("reference_date", startDate)
+        .lte("reference_date", endDate);
 
-    if (unitId) q = q.eq("unit_id", unitId);
+      if (unitId) q = q.eq("unit_id", unitId);
 
-    const { data: rows, error: err } = await q;
-    if (err) {
-      setError(err.message);
+      const { data: rows, error: err } = await q;
+
+      // Resposta antiga (troca de escopo/parâmetros) ou componente desmontado:
+      // descarta sem tocar em nenhum estado.
+      if (!isCurrent()) return;
+
+      if (err) {
+        setError(err.message);
+        setData([]);
+      } else {
+        setData(aggregateByUnit((rows ?? []) as DailyRow[]));
+      }
+    } catch (e) {
+      // Promise rejeitada (rede/exceção): fail-closed, sem dados antigos.
+      if (!isCurrent()) return;
+      console.error("useUnitCompliance: query threw", e);
+      setError("Falha ao carregar dados de conformidade.");
       setData([]);
-    } else {
-      setData(aggregateByUnit((rows ?? []) as DailyRow[]));
+    } finally {
+      if (isCurrent()) setLoading(false);
     }
-    setLoading(false);
-  }, [startDate, endDate, unitId, enabled]);
+  }, [startDate, endDate, unitId, organizationId]);
 
   useEffect(() => {
-    if (enabled) {
-      load();
-    } else {
+    // Troca de escopo/params: invalida requisições pendentes do anterior.
+    if (lastScopeRef.current !== (organizationId ?? null)) {
+      lastScopeRef.current = organizationId ?? null;
+      loadSeqRef.current += 1;
+      setData([]);
+      setError(null);
+    }
+    if (!canQuery) {
+      // Sem escopo/sem permissão: zero consulta, zero canal, estado neutro.
+      loadSeqRef.current += 1;
       setLoading(false);
       setData([]);
+      setError(null);
+      return;
     }
-  }, [load, enabled]);
+    void load();
+  }, [load, canQuery, organizationId]);
 
-  // Realtime debounced: só quando a janela inclui hoje e está habilitado.
+  // Realtime debounced: só quando a janela inclui hoje, está habilitado e há
+  // escopo. O canal é identificado pela organização e filtra eventos por
+  // organization_id — eventos de outra organização não disparam recarga.
   useEffect(() => {
-    if (!enabled) return;
+    if (!canQuery || !organizationId) return;
     const today = new Date().toISOString().slice(0, 10);
     if (endDate < today) return;
     let timer: ReturnType<typeof setTimeout> | null = null;
     const trigger = () => {
       if (timer) clearTimeout(timer);
       timer = setTimeout(() => {
-        load();
+        void load();
       }, 800);
     };
+    const orgFilter = `organization_id=eq.${organizationId}`;
     const ch = supabase
-      .channel(`compliance-${startDate}-${endDate}-${unitId ?? "all"}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "task_executions" }, trigger)
-      .on("postgres_changes", { event: "*", schema: "public", table: "evidences" }, trigger)
-      .on("postgres_changes", { event: "*", schema: "public", table: "tasks" }, trigger)
+      .channel(`compliance-${organizationId}-${startDate}-${endDate}-${unitId ?? "all"}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "task_executions", filter: orgFilter },
+        trigger,
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "evidences", filter: orgFilter },
+        trigger,
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "tasks", filter: orgFilter },
+        trigger,
+      )
       .subscribe();
     return () => {
       if (timer) clearTimeout(timer);
       supabase.removeChannel(ch);
     };
-  }, [load, startDate, endDate, unitId, enabled]);
+  }, [load, startDate, endDate, unitId, organizationId, canQuery]);
 
   return { data, loading, error, refresh: load };
 }

@@ -1,6 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
+import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { useSidebar } from "@/contexts/SidebarContext";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { Card } from "@/components/tremor/ui/Card";
@@ -59,10 +60,19 @@ const CATEGORY_ICON: Record<InsightCategory, React.ReactNode> = {
 
 function InsightsPage() {
   const { user, loading: authLoading } = useAuth();
+  const { currentWorkspace, workspaceStatus } = useWorkspace();
   const { sidebarOpen } = useSidebar();
   const navigate = useNavigate();
   const [cat, setCat] = useState<Category>("todos");
-  const { insights, loading, error, refresh } = useInsights();
+
+  // Escopo explícito (6B.1B): o hook só consulta com autenticação e workspace
+  // resolvidos. O escopo vem do consumidor — o hook nunca lê o WorkspaceContext.
+  const workspaceLoading = authLoading || workspaceStatus === "loading";
+  const hasWorkspace = !!currentWorkspace?.id;
+  const { insights, loading, error, refresh } = useInsights({
+    organizationId: currentWorkspace?.id ?? null,
+    enabled: !authLoading && workspaceStatus !== "loading" && !!user && hasWorkspace,
+  });
 
   useEffect(() => {
     if (!authLoading && !user) navigate({ to: "/login" });
@@ -85,8 +95,9 @@ function InsightsPage() {
     [insights],
   );
 
-  // Carregando: nunca mostra estado vazio nem erro prematuramente.
-  if (loading) {
+  // Carregando (auth/workspace/dados): nunca mostra estado vazio nem erro
+  // prematuramente.
+  if (workspaceLoading || loading) {
     return (
       <DashboardLayout>
         <main className="flex-1 px-6 py-6 overflow-y-auto bg-neutral-50/50">
@@ -107,6 +118,44 @@ function InsightsPage() {
       </DashboardLayout>
     );
   }
+
+  if (!user) {
+    // O efeito acima redireciona para /login.
+    return null;
+  }
+
+  // Sem workspace selecionado (modo pessoal): estado honesto — nenhuma consulta
+  // foi executada, portanto NÃO é o estado "Nenhum insight".
+  if (!hasWorkspace) {
+    return (
+      <DashboardLayout>
+        <header className="flex items-center justify-between px-6 py-4">
+          <div className={`flex items-center gap-2 transition-all duration-300 ${sidebarOpen ? "pl-0" : "pl-14"}`}>
+            <img src={logoUrl} alt="Logo" className="w-10 h-10 object-contain" />
+            <span className="text-neutral-400">›</span>
+            <span className="text-neutral-600 font-medium">Insights</span>
+          </div>
+        </header>
+        <main className="flex-1 px-6 py-6 overflow-y-auto bg-neutral-50/50">
+          <div className="max-w-7xl mx-auto space-y-6">
+            <Card>
+              <div className="py-10 text-center">
+                <Lightbulb className="w-6 h-6 text-neutral-300 mx-auto" />
+                <p className="mt-3 text-sm font-semibold text-neutral-700">
+                  Selecione um workspace para ver os insights
+                </p>
+                <p className="mt-1 text-xs text-neutral-500">
+                  Os insights operacionais refletem execuções do workspace selecionado. Escolha um
+                  workspace no seletor para consultar os dados.
+                </p>
+              </div>
+            </Card>
+          </div>
+        </main>
+      </DashboardLayout>
+    );
+  }
+
   return (
     <DashboardLayout>
       <header className="flex items-center justify-between px-6 py-4">
