@@ -209,6 +209,48 @@ describe("6B.1B.1 — operational detail: scope-bound authorization", () => {
     ).toBe("org-B");
   });
 
+  it("late denial of A cannot appear as B's denied state; only B's own result decides", { timeout: 20000 }, async () => {
+    workspaceState.currentWorkspace = { id: "org-A", name: "A" };
+    const gateA = deferred<QResult>();
+    const gateB = deferred<QResult>();
+    const queue = [gateA, gateB];
+    vi.mocked(supabase.from).mockImplementation((() => {
+      const gate = queue.shift() ?? gateB;
+      return gatedBuilder(gate) as never;
+    }) as never);
+
+    const { rerender } = render(<DetailPage />);
+    await act(async () => {
+      await drain(); // validação de A em voo
+    });
+
+    // Troca para B ANTES de A resolver.
+    workspaceState.currentWorkspace = { id: "org-B", name: "B" };
+    rerender(<DetailPage />);
+    await act(async () => {
+      await drain();
+    });
+
+    // A nega tarde: não pode produzir "denied" sob B.
+    gateA.resolve({ data: null, error: null });
+    await act(async () => {
+      await drain();
+    });
+    expect(screen.queryByText(/Unidade não encontrada ou sem permissão/i)).toBeNull();
+    expect(mockCompliance).not.toHaveBeenCalled();
+    expect(mockDetails).not.toHaveBeenCalled();
+
+    // A validação própria de B decide: ok monta o conteúdo com org-B.
+    gateB.resolve({ data: { id: "unit-1", name: "UNIT-B" }, error: null });
+    await waitFor(() => expect(mockCompliance).toHaveBeenCalled());
+    expect(
+      mockCompliance.mock.calls[mockCompliance.mock.calls.length - 1][0].organizationId,
+    ).toBe("org-B");
+    expect(
+      mockDetails.mock.calls[mockDetails.mock.calls.length - 1][0].organizationId,
+    ).toBe("org-B");
+  });
+
   it("unit of another workspace: generic denied state, no data hooks", async () => {
     workspaceState.currentWorkspace = { id: "org-1", name: "Org" };
     vi.mocked(supabase.from).mockImplementation(

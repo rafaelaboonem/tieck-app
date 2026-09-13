@@ -96,6 +96,11 @@ export function useUnitOperationalDetails(
   const { unitId, startDate, endDate, organizationId } = filters;
   const canQuery = !!unitId && !!organizationId;
   const scope = detailsScope({ organizationId, unitId, startDate, endDate });
+  // renderScope: escopo de dados + elegibilidade atual da consulta. A tag do
+  // estado publicado inclui a elegibilidade — sem unidade/organização o
+  // retorno é neutro sincronamente, e ao tornar consultável o estado anterior
+  // é tratado como não concluído (loading=true) até a nova consulta publicar.
+  const renderScope = `${scope}|${canQuery ? "on" : "off"}`;
 
   const [data, setData] = useState<OperationalExecution[]>([]);
   const [loading, setLoading] = useState(canQuery);
@@ -106,8 +111,9 @@ export function useUnitOperationalDetails(
   const loadSeqRef = useRef(0);
   // Depois do unmount nenhuma requisição pendente pode escrever estado.
   const mountedRef = useRef(true);
-  // Escopo do estado publicado (tag) — comparado sincronamente a cada render.
-  const stateScopeRef = useRef<string>(scope);
+  // Tag do renderScope que produziu o estado publicado — comparada
+  // sincronamente a cada render, antes de qualquer efeito.
+  const stateTagRef = useRef<string>(renderScope);
   // Escopo ATUAL, atualizado sincronamente durante o render.
   const currentScopeRef = useRef<string>(scope);
   currentScopeRef.current = scope;
@@ -121,15 +127,22 @@ export function useUnitOperationalDetails(
   }, []);
 
   const load = useCallback(async () => {
-    if (!mountedRef.current || !unitId || !organizationId) return;
+    // O escopo vem da PRÓPRIA closure (parâmetros capturados na criação do
+    // callback) — nunca de currentScopeRef dentro do callback. Um load antigo
+    // de A (organizationId, unitId ou datas diferentes dos atuais) é noop
+    // ANTES de qualquer supabase.from: zero consulta com parâmetros de A,
+    // zero loading=true, zero alteração de estado.
+    const requestScope = scope;
+    if (!mountedRef.current || !unitId || !organizationId || currentScopeRef.current !== requestScope) {
+      return;
+    }
     const seq = ++loadSeqRef.current;
-    const reqScope = currentScopeRef.current;
     // A resposta só pode escrever estado se: montado, requisição vigente E o
-    // escopo atual ainda for o mesmo capturado por esta requisição.
+    // escopo atual ainda for o escopo capturado por ESTA requisição.
     const isCurrent = () =>
       mountedRef.current &&
       loadSeqRef.current === seq &&
-      currentScopeRef.current === reqScope;
+      currentScopeRef.current === requestScope;
     setLoading(true);
     setError(null);
     try {
@@ -151,7 +164,7 @@ export function useUnitOperationalDetails(
       if (!isCurrent()) return;
 
       if (err) {
-        stateScopeRef.current = reqScope;
+        stateTagRef.current = renderScope;
         setError(err.message);
         setData([]);
         return;
@@ -182,7 +195,7 @@ export function useUnitOperationalDetails(
       if (!isCurrent()) return;
 
       if (evRes.error) {
-        stateScopeRef.current = reqScope;
+        stateTagRef.current = renderScope;
         setError(evRes.error.message);
         setData([]);
         return;
@@ -255,29 +268,29 @@ export function useUnitOperationalDetails(
         };
       });
 
-      stateScopeRef.current = reqScope;
+      stateTagRef.current = renderScope;
       setData(items);
     } catch (e) {
       // Promise rejeitada (rede/exceção): fail-closed, sem loading travado e
       // sem dados do escopo anterior.
       if (!isCurrent()) return;
       console.error("useUnitOperationalDetails: query threw", e);
-      stateScopeRef.current = reqScope;
+      stateTagRef.current = renderScope;
       setError("Falha ao carregar os detalhes operacionais.");
       setData([]);
     } finally {
       if (isCurrent()) setLoading(false);
     }
-  }, [unitId, startDate, endDate, organizationId]);
+  }, [unitId, startDate, endDate, organizationId, scope, renderScope]);
 
   useEffect(() => {
-    // Troca de escopo (workspace ou unidade): invalida requisições pendentes
-    // do escopo anterior e limpa o estado publicado.
-    if (stateScopeRef.current !== scope) {
+    // Troca de renderScope (workspace/unidade/datas/elegibilidade): invalida
+    // requisições pendentes do escopo anterior e limpa o estado publicado.
+    if (stateTagRef.current !== renderScope) {
       loadSeqRef.current += 1;
       setData([]);
       setError(null);
-      stateScopeRef.current = scope;
+      stateTagRef.current = renderScope;
     }
     if (!canQuery) {
       // Sem escopo: zero consulta, zero canal, estado neutro.
@@ -285,16 +298,18 @@ export function useUnitOperationalDetails(
       setLoading(false);
       setData([]);
       setError(null);
-      stateScopeRef.current = scope;
+      stateTagRef.current = renderScope;
       return;
     }
     void load();
-  }, [load, canQuery, scope]);
+  }, [load, canQuery, renderScope]);
 
   // Realtime debounced — só se o período incluir hoje ou for futuro, com
   // escopo. O canal é identificado por organização + unidade e filtra eventos
   // por unidade (a unidade foi validada dentro do workspace atual pelo
-  // consumidor); o canal antigo é sempre removido ao mudar de escopo.
+  // consumidor); o canal antigo é sempre removido ao mudar de escopo. O
+  // trigger fecha sobre o load do seu próprio escopo: um trigger antigo é
+  // bloqueado pelo gate de escopo dentro do load.
   useEffect(() => {
     if (!canQuery || !organizationId || !unitId) return;
     const today = new Date().toISOString().slice(0, 10);
@@ -326,11 +341,12 @@ export function useUnitOperationalDetails(
     };
   }, [load, unitId, startDate, endDate, organizationId, canQuery]);
 
-  // Propriedade síncrona do escopo: se o estado publicado pertence a um escopo
-  // anterior (props já mudaram, efeitos ainda não rodaram), este render devolve
-  // valores neutros — dados/erro de A jamais aparecem no primeiro render de B.
-  // Sem setState durante o render.
-  if (stateScopeRef.current !== scope) {
+  // Propriedade síncrona do render (antes de qualquer efeito): o estado só é
+  // exposto se a tag pertencer ao renderScope ATUAL — cobre troca de
+  // workspace/unidade/datas E elegibilidade. canQuery=false devolve neutro
+  // imediatamente; reabilitar sem resultado do novo renderScope devolve
+  // loading=true (nunca um vazio falso). Sem setState durante o render.
+  if (stateTagRef.current !== renderScope) {
     return { data: [], error: null, loading: canQuery, refresh: load };
   }
 

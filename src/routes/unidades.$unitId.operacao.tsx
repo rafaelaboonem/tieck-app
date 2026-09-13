@@ -84,33 +84,36 @@ function UnitOperacaoPage() {
   // tardia de uma validação antiga não autoriza o escopo novo.
   const [unit, setUnit] = useState<{ id: string; name: string } | null>(null);
   const [access, setAccess] = useState<"loading" | "ok" | "denied">("loading");
-  // Escopo efetivamente validado — comparado sincronamente a cada render.
-  const validatedScopeRef = useRef<string>("");
+  // Tag de escopo do estado `access` — TODOS os estados são marcados (loading,
+  // denied e ok). Um denied de A também nunca aparece prematuramente sob B.
+  const accessScopeRef = useRef<string>("");
   const authLoadingRef = authLoading || workspaceStatus === "loading";
   const hasWorkspace = !!currentWorkspace?.id;
   const scopeResolved = !authLoadingRef && !!user && hasWorkspace;
-  const currentScope = `${currentWorkspace?.id ?? ""}|${unitId}`;
-  // Propriedade síncrona: se o escopo validado difere do atual, este render já
-  // trata o acesso como pendente — o conteúdo do escopo anterior não aparece.
+  // Escopo ATUAL, atualizado sincronamente durante o render — a comparação de
+  // respostas em voo usa este ref, nunca os valores capturados pela própria
+  // closure (que continuariam sendo os antigos).
+  const currentScopeRef = useRef<string>("");
+  currentScopeRef.current = `${currentWorkspace?.id ?? ""}|${unitId}`;
+  const currentScope = currentScopeRef.current;
+  // Propriedade síncrona: se o escopo que produziu `access` difere do atual,
+  // este render já trata o acesso como pendente — nenhum estado (ok, denied
+  // ou loading) do escopo anterior é reutilizado sob o escopo novo.
   const accessEffective: "loading" | "ok" | "denied" =
-    access === "ok"
-      ? validatedScopeRef.current === currentScope
-        ? "ok"
-        : "loading" // "ok" de escopo antigo nunca é reutilizado sob o novo escopo
-      : access;
+    accessScopeRef.current === currentScope ? access : "loading";
 
   useEffect(() => {
     if (!scopeResolved) {
       setAccess("loading");
       setUnit(null);
-      validatedScopeRef.current = "";
+      accessScopeRef.current = currentScopeRef.current;
       return;
     }
     let cancelled = false;
     const scopeAtRequest = `${currentWorkspace!.id}|${unitId}`;
     setAccess("loading");
     setUnit(null);
-    validatedScopeRef.current = "";
+    accessScopeRef.current = scopeAtRequest;
     supabase
       .from("units")
       .select("id,name")
@@ -119,16 +122,17 @@ function UnitOperacaoPage() {
       .maybeSingle()
       .then(({ data, error }) => {
         // Resposta antiga (escopo/unidade mudou enquanto a consulta voava):
-        // descartada — só autoriza se o escopo ainda for o atual.
-        if (cancelled || `${currentWorkspace?.id ?? ""}|${unitId}` !== scopeAtRequest) return;
+        // descartada — compara contra o escopo ATUAL (ref síncrono), não
+        // contra os valores da própria closure.
+        if (cancelled || currentScopeRef.current !== scopeAtRequest) return;
         if (error || !data) {
           setAccess("denied");
           setUnit(null);
-          validatedScopeRef.current = "";
+          accessScopeRef.current = scopeAtRequest;
         } else {
           setUnit(data);
           setAccess("ok");
-          validatedScopeRef.current = scopeAtRequest;
+          accessScopeRef.current = scopeAtRequest;
         }
       });
     return () => {
@@ -155,7 +159,7 @@ function UnitOperacaoPage() {
           </Link>
           <span className="text-neutral-400">›</span>
           <span className="text-neutral-700 font-medium truncate max-w-[240px]">
-            {access === "ok" ? unit?.name : "Unidade"}
+            {accessEffective === "ok" ? unit?.name : "Unidade"}
           </span>
         </div>
       </header>
@@ -174,7 +178,7 @@ function UnitOperacaoPage() {
               </Link>
               <div>
                 <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-neutral-900">
-                  {access === "ok" ? unit?.name : "Unidade"}
+                  {accessEffective === "ok" ? unit?.name : "Unidade"}
                 </h1>
                 <p className="text-sm text-neutral-500">
                   Operação · {filters.startDate} → {filters.endDate}

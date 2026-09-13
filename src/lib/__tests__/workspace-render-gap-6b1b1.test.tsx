@@ -1,25 +1,39 @@
 /**
- * Execution 6B.1B.1 — render-time scope ownership and gated refresh.
+ * Execution 6B.1B.2 — render-time scope ownership com rerender na MESMA
+ * instância + callbacks vinculados ao próprio escopo (closure).
  *
- * Gap closed: useEffect-based clearing runs AFTER the render, so on the first
- * render with scope B the previously published state of A could still be read.
- * These suites capture the value produced DURING the render of B (before any
- * passive effect) via a render probe and assert it is neutral. Also covers:
- * refresh() respecting the effective canQuery gate (enabled=false → noop) and
- * the operational detail route's scope-bound authorization + honest
- * no-workspace state.
+ * Três garantias por cenário:
+ *  1. O PRIMEIRO render de B (capturado pela sonda na MESMA instância, via
+ *     view.rerender — nunca uma segunda render()) é neutro: dados publicados
+ *     por A jamais retornam.
+ *  2. Callbacks capturados sob A (refresh/load/callback realtime) são noop
+ *     sob B ANTES de qualquer supabase.from — provado inspecionando os
+ *     filtros de TODAS as consultas gravadas: nenhuma nova consulta com
+ *     organization_id, datas ou unitId de A.
+ *  3. A elegibilidade (enabled/canQuery) faz parte da tag de render:
+ *     disabled no primeiro render já é neutro; reabilitar mostra loading,
+ *     nunca um vazio falso.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, renderHook, act, waitFor, screen } from "@testing-library/react";
-import { useUnitCompliance } from "@/hooks/useUnitCompliance";
-import { useUnitOperationalDetails } from "@/hooks/useUnitOperationalDetails";
-import { useInsights } from "@/lib/useInsights";
+import { render, act, waitFor, renderHook } from "@testing-library/react";
 import { supabase } from "@/integrations/supabase/client";
+import { useUnitCompliance } from "@/hooks/useUnitCompliance";
+import {
+  useUnitOperationalDetails,
+  type UseUnitOperationalDetailsResult,
+} from "@/hooks/useUnitOperationalDetails";
+import { useInsights, type Insight } from "@/lib/useInsights";
+import type { UseUnitComplianceResult } from "@/hooks/useUnitCompliance";
 
-interface QResult {
-  data: unknown;
-  error: unknown;
-}
+type QResult = { data: unknown; error: unknown; count?: number };
+
+vi.mock("@/integrations/supabase/client", () => ({
+  supabase: {
+    from: vi.fn(),
+    channel: vi.fn(),
+    removeChannel: vi.fn(),
+  },
+}));
 
 type Deferred<T> = {
   promise: Promise<T>;
@@ -37,52 +51,80 @@ function deferred<T>(): Deferred<T> {
   return { promise, resolve, reject };
 }
 
-/** Builder thenable com resultado controlado por gate diferido. */
-function gatedBuilder(gate?: Deferred<QResult>, fixed?: QResult) {
-  const b: any = {};
-  const outcome = gate ? gate.promise : Promise.resolve(fixed ?? { data: [], error: null });
-  b.then = (onF: any, onR: any) => outcome.then(onF, onR);
-  b.catch = (onR: any) => outcome.catch(onR);
-  b.finally = (cb: any) => outcome.finally(cb);
-  const chain = () => vi.fn(() => b);
-  b.select = chain();
-  b.eq = chain();
-  b.in = chain();
-  b.gte = chain();
-  b.lte = chain();
-  b.order = chain();
-  b.maybeSingle = chain();
-  return b;
-}
-
 const drain = async () => {
   for (let i = 0; i < 12; i++) await Promise.resolve();
 };
 
-vi.mock("@/integrations/supabase/client", () => ({
-  supabase: {
-    from: vi.fn(),
-    channel: vi.fn().mockReturnValue({
-      on: vi.fn().mockReturnThis(),
-      subscribe: vi.fn().mockReturnThis(),
-    }),
-    removeChannel: vi.fn(),
-  },
-}));
+interface RecordedQuery {
+  table: string;
+  eqs: Array<[string, unknown]>;
+  ranges: Array<[string, unknown]>;
+}
 
-beforeEach(() => {
-  // clearAllMocks preserva implementações apenas com mockClear; aqui
-  // restabelecemos o comportamento padrão explicitamente a cada teste.
-  vi.clearAllMocks();
-  vi.mocked(supabase.from).mockImplementation(() => gatedBuilder() as never);
-  console.error = vi.fn();
-});
+/**
+ * Builder que grava tabela + filtros (.eq/.gte/.lte) de cada consulta e roteia
+ * o resultado pelo organization_id efetivamente filtrado — cobre cargas com
+ * número variável de consultas (ex.: evidências só consultam quando há
+ * execuções).
+ */
+function makeRecordingFrom(opts: {
+  gates?: Record<string, Deferred<QResult>>;
+  defaultGate?: Deferred<QResult>;
+  /** Modo fila: cada consulta consome o próximo gate (testes de mudança de
+   * datas/unitId dentro da MESMA organização, onde o roteamento por org não
+   * distingue as cargas). */
+  queue?: Array<Deferred<QResult>>;
+}) {
+  const queries: RecordedQuery[] = [];
+  const from = vi.fn((table: string) => {
+    const q: RecordedQuery = { table, eqs: [], ranges: [] };
+    queries.push(q);
+    const b: any = {};
+    let org: string | undefined;
+    const outcome = () => {
+      const gated = (org && opts.gates?.[org]) || opts.defaultGate;
+      if (gated) return gated.promise;
+      if (opts.queue) return (opts.queue.shift() ?? deferred<QResult>()).promise;
+      return Promise.resolve<QResult>({ data: [], error: null, count: 0 });
+    };
+    const chain = () => vi.fn(() => b);
+    b.select = chain();
+    b.eq = vi.fn((col: string, val: unknown) => {
+      q.eqs.push([col, val]);
+      if (col === "organization_id") org = String(val);
+      return b;
+    });
+    b.gte = vi.fn((col: string, val: unknown) => {
+      q.ranges.push([col, val]);
+      return b;
+    });
+    b.lte = vi.fn((col: string, val: unknown) => {
+      q.ranges.push([col, val]);
+      return b;
+    });
+    b.in = chain();
+    b.order = chain();
+    b.maybeSingle = chain();
+    b.then = (onF: any, onR: any) => outcome().then(onF, onR);
+    b.catch = (onR: any) => outcome().catch(onR);
+    b.finally = (cb: any) => outcome().finally(cb);
+    return b;
+  });
+  return { from, queries };
+}
 
-// ---------------------------------------------------------------------------
+const countOrgQueries = (queries: RecordedQuery[], org: string) =>
+  queries.filter((q) => q.eqs.some(([c, v]) => c === "organization_id" && v === org)).length;
+
+const hasEq = (q: RecordedQuery, col: string, val: unknown) =>
+  q.eqs.some(([c, v]) => c === col && v === val);
+
+const hasRange = (q: RecordedQuery, col: string, val: unknown) =>
+  q.ranges.some(([c, v]) => c === col && v === val);
+
 // Sonda de render: captura o valor produzido DURANTE cada render (antes dos
-// efeitos passivos serem drenados). É a prova de que o primeiro render de B
-// nunca vê o estado de A.
-// ---------------------------------------------------------------------------
+// efeitos passivos serem drenados). A MESMA instância é reutilizada com
+// view.rerender — nunca uma segunda render().
 function makeProbe<T, TValue = unknown>(useHook: (props: T) => TValue) {
   const snapshots: TValue[] = [];
   function Probe(props: T) {
@@ -93,167 +135,261 @@ function makeProbe<T, TValue = unknown>(useHook: (props: T) => TValue) {
   return { Probe, snapshots };
 }
 
-const complianceRow = {
-  unitId: "uA",
-  unitName: "STALE-A",
-  completedTasks: 1,
-  totalScheduledTasks: 1,
-  delayedTasks: 0,
-  criticalFailures: 0,
-  compliancePercentage: 100,
-  completedOnTime: 1,
-  completedLate: 0,
-  overdueOpenTasks: 0,
-  pendingEvidences: 0,
-  weightTotal: 1,
-  weightDone: 1,
-  totalDueTasks: 1,
-  dueCompletedTasks: 1,
-  dueWeightTotal: 1,
-  dueWeightDone: 1,
-  dueCompliancePercentage: 100,
-};
+let channelCbs: Array<(payload?: unknown) => void> = [];
 
-describe("6B.1B.1 — useUnitCompliance render-time scope ownership", () => {
-  it("first render of B never exposes A's published data", async () => {
+/** Captura os callbacks registrados em cada canal realtime. */
+function installChannelMock() {
+  const onCallbacks: Array<(payload?: unknown) => void> = [];
+  vi.mocked(supabase.channel).mockImplementation((() => {
+    const obj: any = {};
+    obj.on = vi.fn(
+      (_event: string, _config: unknown, cb?: (p?: unknown) => void) => {
+        if (typeof cb === "function") onCallbacks.push(cb);
+        return obj;
+      },
+    );
+    obj.subscribe = vi.fn(() => obj);
+    return obj;
+  }) as never);
+  return onCallbacks;
+}
+
+const DAILY_BASE = {
+  reference_date: "2026-01-05",
+  total_scheduled_tasks: 1,
+  completed_tasks: 1,
+  completed_on_time: 1,
+  completed_late: 0,
+  overdue_open_tasks: 0,
+  delayed_tasks: 0,
+  critical_failures: 0,
+  pending_evidences: 0,
+  weight_total: 1,
+  weight_done: 1,
+  compliance_percentage: 100,
+  total_due_tasks: 1,
+  due_completed_tasks: 1,
+  due_weight_total: 1,
+  due_weight_done: 1,
+  due_compliance_percentage: 100,
+};
+const dailyRow = (organization_id: string, unit_id: string, unit_name: string) => ({
+  organization_id,
+  unit_id,
+  unit_name,
+  ...DAILY_BASE,
+});
+
+const overdueRow = (title: string, taskId: string) => ({
+  unit_id: "uA",
+  shift_id: "s1",
+  task_id: taskId,
+  title,
+  scheduled_at: "2026-01-05T10:00:00Z",
+});
+
+const execRow = (id: string, title: string) => ({
+  id,
+  task_id: "t1",
+  shift_id: null,
+  scheduled_at: "2026-01-05T10:00:00Z",
+  executed_at: null,
+  status: "programada",
+  notes: null,
+  executed_by: null,
+  cancelled_at: null,
+  cancellation_reason: null,
+  tasks: { id: "t1", title, description: null, code: null, weight: "comum" },
+  shifts: null,
+});
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  console.error = vi.fn();
+  channelCbs = installChannelMock();
+});
+
+// ---------------------------------------------------------------------------
+// useUnitCompliance
+// ---------------------------------------------------------------------------
+describe("6B.1B.2 — useUnitCompliance: single-instance rerender + scoped callbacks", () => {
+  it("first render of B never exposes A's published data (same instance, view.rerender)", async () => {
     const gateA = deferred<QResult>();
     const gateB = deferred<QResult>();
-    let call = 0;
-    vi.mocked(supabase.from).mockImplementation(
-      (() => gatedBuilder(++call === 1 ? gateA : gateB)) as never,
-    );
+    const rec = makeRecordingFrom({ gates: { "org-A": gateA, "org-B": gateB }, defaultGate: gateB });
+    vi.mocked(supabase.from).mockImplementation(rec.from as never);
 
     const base = { startDate: "2026-01-01", endDate: "2026-01-31" };
     const { Probe, snapshots } = makeProbe(
-      (props: { organizationId: string | null }) => useUnitCompliance({ ...base, ...props }).data,
+      (props: { organizationId: string | null }) =>
+        useUnitCompliance({ ...base, ...props }).data,
     );
-
-    render(<Probe organizationId="org-A" />);
-    // A publica dados reais.
-    gateA.resolve({
-      data: [
-        {
-          organization_id: "org-A",
-          unit_id: "uA",
-          unit_name: "STALE-A",
-          reference_date: "2026-01-05",
-          total_scheduled_tasks: 1,
-          completed_tasks: 1,
-          completed_on_time: 1,
-          completed_late: 0,
-          overdue_open_tasks: 0,
-          delayed_tasks: 0,
-          critical_failures: 0,
-          pending_evidences: 0,
-          weight_total: 1,
-          weight_done: 1,
-          compliance_percentage: 100,
-          total_due_tasks: 1,
-          due_completed_tasks: 1,
-          due_weight_total: 1,
-          due_weight_done: 1,
-          due_compliance_percentage: 100,
-        },
-      ],
-      error: null,
-    });
+    const view = render(<Probe organizationId="org-A" />);
+    gateA.resolve({ data: [dailyRow("org-A", "uA", "STALE-A")], error: null });
     await waitFor(() => {
-      const last = snapshots[snapshots.length - 1];
-      expect((last as unknown as typeof complianceRow[]).length).toBe(1);
+      const last = snapshots[snapshots.length - 1] as unknown as Array<{ unitName: string }>;
+      expect(last.length).toBe(1);
+      expect(last[0].unitName).toBe("STALE-A"); // A publicado pela MESMA instância
     });
-    expect(
-      (snapshots[snapshots.length - 1] as unknown as typeof complianceRow[])[0].unitName,
-    ).toBe("STALE-A");
-    // Delimita a era A: snapshots a partir daqui não podem mais conter dados de A.
     const aPublishedAt = snapshots.length;
 
-    // Troca para B: o snapshot capturado durante o PRÓPRIO render (antes dos
-    // efeitos) já deve ser neutro.
-    await act(async () => {
-      render(<Probe organizationId="org-B" />);
-      await drain();
-    });
+    // MESMA instância: troca para B com rerender (nunca uma segunda render()).
+    view.rerender(<Probe organizationId="org-B" />);
 
-    const afterSwitch = snapshots[snapshots.length - 1] as unknown as typeof complianceRow[];
-    // Nenhum snapshot capturado APÓS a era A pode conter dados de A — nem o
-    // primeiro render de B (antes dos efeitos).
+    // O PRIMEIRO snapshot do render de B (antes dos efeitos) é neutro.
+    const firstB = snapshots[aPublishedAt] as unknown as Array<{ unitName: string }>;
+    expect(firstB).toEqual([]);
     for (const snap of snapshots.slice(aPublishedAt)) {
-      const rows = snap as unknown as typeof complianceRow[];
-      if (Array.isArray(rows)) {
-        for (const r of rows) {
-          expect(r.unitName).not.toBe("STALE-A");
-        }
-      }
+      const rows = snap as unknown as Array<{ unitName: string }>;
+      for (const r of rows) expect(r.unitName).not.toBe("STALE-A");
     }
-    expect(afterSwitch.every((r) => r.unitName !== "STALE-A")).toBe(true);
 
-    // A resposta tardia de A continua descartada.
-    void gateA; // já resolvida
     // B publica somente os dados de B.
-    gateB.resolve({
-      data: [
-        {
-          organization_id: "org-B",
-          unit_id: "uB",
-          unit_name: "B-UNIT",
-          reference_date: "2026-01-05",
-          total_scheduled_tasks: 2,
-          completed_tasks: 2,
-          completed_on_time: 2,
-          completed_late: 0,
-          overdue_open_tasks: 0,
-          delayed_tasks: 0,
-          critical_failures: 0,
-          pending_evidences: 0,
-          weight_total: 2,
-          weight_done: 2,
-          compliance_percentage: 100,
-          total_due_tasks: 2,
-          due_completed_tasks: 2,
-          due_weight_total: 2,
-          due_weight_done: 2,
-          due_compliance_percentage: 100,
-        },
-      ],
-      error: null,
-    });
+    gateB.resolve({ data: [dailyRow("org-B", "uB", "B-UNIT")], error: null });
     await waitFor(() => {
-      const last = snapshots[snapshots.length - 1] as unknown as typeof complianceRow[];
+      const last = snapshots[snapshots.length - 1] as unknown as Array<{ unitName: string }>;
       expect(last.length).toBe(1);
       expect(last[0].unitName).toBe("B-UNIT");
     });
+
+    // Nenhuma nova consulta com organization_id de A depois da troca.
+    expect(countOrgQueries(rec.queries, "org-A")).toBe(1); // somente a carga original de A
+    expect(countOrgQueries(rec.queries, "org-B")).toBe(1);
   });
 
-  it("refresh() is a noop when enabled=false (no query, no channel, neutral state)", async () => {
-    vi.mocked(supabase.from).mockImplementation((() => gatedBuilder()) as never);
-    const { result } = renderHook(() =>
-      useUnitCompliance({
-        startDate: "2026-01-01",
-        endDate: "2026-01-31",
-        organizationId: "org-1",
-        enabled: false,
-      }),
+  it("refresh captured under A is a noop under B: zero new queries with A's filters", async () => {
+    const gateA = deferred<QResult>();
+    const gateB = deferred<QResult>();
+    const rec = makeRecordingFrom({ gates: { "org-A": gateA, "org-B": gateB }, defaultGate: gateB });
+    vi.mocked(supabase.from).mockImplementation(rec.from as never);
+
+    const base = { startDate: "2026-01-01", endDate: "2026-01-31" };
+    const { Probe, snapshots } = makeProbe((props: { organizationId: string | null }) =>
+      useUnitCompliance({ ...base, ...props }),
     );
+    const view = render(<Probe organizationId="org-A" />);
+    gateA.resolve({ data: [dailyRow("org-A", "uA", "STALE-A")], error: null });
+    await waitFor(() => {
+      const last = snapshots[snapshots.length - 1] as UseUnitComplianceResult;
+      expect(last.data.length).toBe(1);
+    });
+    const aPublishedAt = snapshots.length;
+    const refreshA = (snapshots[aPublishedAt - 1] as UseUnitComplianceResult).refresh;
+
+    view.rerender(<Probe organizationId="org-B" />);
+    await act(async () => {
+      await drain(); // carga de B em voo
+    });
+    const before = rec.queries.length;
+    const aBefore = countOrgQueries(rec.queries, "org-A");
+
+    await act(async () => {
+      await refreshA(); // callback antigo de A sob o escopo B
+    });
+
+    expect(rec.queries.length).toBe(before);
+    expect(countOrgQueries(rec.queries, "org-A")).toBe(aBefore);
+
+    gateB.resolve({ data: [dailyRow("org-B", "uB", "B-UNIT")], error: null });
+    await waitFor(() => {
+      const last = snapshots[snapshots.length - 1] as UseUnitComplianceResult;
+      expect(last.data.length).toBe(1);
+      expect(last.data[0].unitName).toBe("B-UNIT");
+      expect(last.data.every((r) => r.unitName !== "STALE-A")).toBe(true);
+    });
+  });
+
+  it("dates-only change invalidates callbacks captured with the old dates", async () => {
+    // Fila: carga A (1 consulta) → carga B (1 consulta).
+    const gateA = deferred<QResult>();
+    const gateB = deferred<QResult>();
+    const rec = makeRecordingFrom({ queue: [gateA, gateB] });
+    vi.mocked(supabase.from).mockImplementation(rec.from as never);
+
+    const base = { organizationId: "org-1" as string | null, endDate: "2026-01-31" };
+    const { Probe, snapshots } = makeProbe((props: { startDate: string }) =>
+      useUnitCompliance({ ...base, startDate: props.startDate }),
+    );
+    const view = render(<Probe startDate="2026-01-01" />);
+    gateA.resolve({ data: [dailyRow("org-1", "u1", "JAN")], error: null });
+    await waitFor(() => {
+      const last = snapshots[snapshots.length - 1] as UseUnitComplianceResult;
+      expect(last.data.length).toBe(1);
+      expect(last.data[0].unitName).toBe("JAN");
+    });
+    const aPublishedAt = snapshots.length;
+    const refreshA = (snapshots[aPublishedAt - 1] as UseUnitComplianceResult).refresh;
+
+    view.rerender(<Probe startDate="2026-02-01" />);
     await act(async () => {
       await drain();
     });
-    expect(supabase.from).not.toHaveBeenCalled();
-    expect(supabase.channel).not.toHaveBeenCalled();
+    const before = rec.queries.length;
+    const oldDateQueries = rec.queries.filter((q) => hasRange(q, "reference_date", "2026-01-01")).length;
 
     await act(async () => {
-      await result.current.refresh();
+      await refreshA(); // closure com as datas de janeiro
     });
 
-    expect(supabase.from).not.toHaveBeenCalled();
-    expect(supabase.channel).not.toHaveBeenCalled();
-    expect(result.current.loading).toBe(false);
-    expect(result.current.data).toEqual([]);
-    expect(result.current.error).toBeNull();
+    expect(rec.queries.length).toBe(before);
+    expect(rec.queries.filter((q) => hasRange(q, "reference_date", "2026-01-01")).length).toBe(oldDateQueries);
+    // A consulta de fevereiro carrega as datas novas.
+    expect(rec.queries.some((q) => hasRange(q, "reference_date", "2026-02-01"))).toBe(true);
+
+    gateB.resolve({ data: [dailyRow("org-1", "u1", "FEV")], error: null });
+    await waitFor(() => {
+      const last = snapshots[snapshots.length - 1] as UseUnitComplianceResult;
+      expect(last.data[0].unitName).toBe("FEV");
+    });
   });
 
-  it("refresh captured while enabled=true becomes a noop after enabled flips to false", async () => {
+  it("unitId-only change invalidates callbacks captured with the old unitId", async () => {
+    // Fila: carga A (1 consulta) → carga B (1 consulta).
+    const gateA = deferred<QResult>();
+    const gateB = deferred<QResult>();
+    const rec = makeRecordingFrom({ queue: [gateA, gateB] });
+    vi.mocked(supabase.from).mockImplementation(rec.from as never);
+
+    const base = { organizationId: "org-1" as string | null, startDate: "2026-01-01", endDate: "2026-01-31" };
+    const { Probe, snapshots } = makeProbe((props: { unitId?: string }) =>
+      useUnitCompliance({ ...base, unitId: props.unitId }),
+    );
+    const view = render(<Probe unitId="u1" />);
+    gateA.resolve({ data: [dailyRow("org-1", "u1", "UNIT-1")], error: null });
+    await waitFor(() => {
+      const last = snapshots[snapshots.length - 1] as UseUnitComplianceResult;
+      expect(last.data[0].unitName).toBe("UNIT-1");
+    });
+    const aPublishedAt = snapshots.length;
+    const refreshA = (snapshots[aPublishedAt - 1] as UseUnitComplianceResult).refresh;
+
+    view.rerender(<Probe unitId="u2" />);
+    await act(async () => {
+      await drain();
+    });
+    const before = rec.queries.length;
+    const oldUnitQueries = rec.queries.filter((q) => hasEq(q, "unit_id", "u1")).length;
+
+    await act(async () => {
+      await refreshA(); // closure com unitId=u1
+    });
+
+    expect(rec.queries.length).toBe(before);
+    expect(rec.queries.filter((q) => hasEq(q, "unit_id", "u1")).length).toBe(oldUnitQueries);
+    expect(rec.queries.some((q) => hasEq(q, "unit_id", "u2"))).toBe(true);
+
+    gateB.resolve({ data: [dailyRow("org-1", "u2", "UNIT-2")], error: null });
+    await waitFor(() => {
+      const last = snapshots[snapshots.length - 1] as UseUnitComplianceResult;
+      expect(last.data[0].unitName).toBe("UNIT-2");
+    });
+  });
+
+  it("enabled true → false: the first disabled render is already neutral and refresh is a noop", async () => {
     const gate = deferred<QResult>();
-    vi.mocked(supabase.from).mockImplementation((() => gatedBuilder(gate)) as never);
+    const rec = makeRecordingFrom({ defaultGate: gate });
+    vi.mocked(supabase.from).mockImplementation(rec.from as never);
+
     const { result, rerender } = renderHook(
       ({ enabled }) =>
         useUnitCompliance({
@@ -264,224 +400,416 @@ describe("6B.1B.1 — useUnitCompliance render-time scope ownership", () => {
         }),
       { initialProps: { enabled: true } },
     );
-    expect(vi.mocked(supabase.from)).toHaveBeenCalledTimes(1);
-    const refreshRef = result.current.refresh;
+    gate.resolve({ data: [dailyRow("org-1", "u1", "UNIT")], error: null });
+    await waitFor(() => expect(result.current.data.length).toBe(1));
 
-    // Desabilita: gate antigo não pode mais consultar.
     rerender({ enabled: false });
+    // Primeiro render desabilitado: neutro sincronamente.
+    expect(result.current.data).toEqual([]);
+    expect(result.current.loading).toBe(false);
+    expect(result.current.error).toBeNull();
+
+    const before = rec.queries.length;
+    await act(async () => {
+      await result.current.refresh();
+    });
+    expect(rec.queries.length).toBe(before);
+  });
+
+  it("enabled false → true: first re-enabled render shows loading, never a false empty", async () => {
+    const gate = deferred<QResult>();
+    const rec = makeRecordingFrom({ defaultGate: gate });
+    vi.mocked(supabase.from).mockImplementation(rec.from as never);
+
+    const { result, rerender } = renderHook(
+      ({ enabled }) =>
+        useUnitCompliance({
+          startDate: "2026-01-01",
+          endDate: "2026-01-31",
+          organizationId: "org-1",
+          enabled,
+        }),
+      { initialProps: { enabled: false } },
+    );
     await act(async () => {
       await drain();
     });
-    const callsBefore = vi.mocked(supabase.from).mock.calls.length;
-
-    await act(async () => {
-      // Callback antigo capturado com enabled=true — o gate atual bloqueia.
-      await refreshRef();
-    });
-
-    expect(vi.mocked(supabase.from).mock.calls.length).toBe(callsBefore);
     expect(result.current.loading).toBe(false);
     expect(result.current.data).toEqual([]);
-    void gate;
+
+    rerender({ enabled: true });
+    // Primeiro render reabilitado: loading=true (estado anterior é "off",
+    // nunca um vazio concluído).
+    expect(result.current.loading).toBe(true);
+    expect(result.current.data).toEqual([]);
+
+    gate.resolve({ data: [dailyRow("org-1", "u1", "UNIT")], error: null });
+    await waitFor(() => expect(result.current.data.length).toBe(1));
+    expect(result.current.loading).toBe(false);
   });
 });
 
-describe("6B.1B.1 — useInsights render-time scope ownership + gated refresh", () => {
-  it("first render of B never exposes A's published insights", async () => {
+// ---------------------------------------------------------------------------
+// useInsights
+// ---------------------------------------------------------------------------
+describe("6B.1B.2 — useInsights: single-instance rerender + scoped callbacks", () => {
+  it("first render of B never exposes A's published insights (same instance, view.rerender)", async () => {
     const gateA = deferred<QResult>();
     const gateB = deferred<QResult>();
-    let call = 0;
-    vi.mocked(supabase.from).mockImplementation(
-      (() => gatedBuilder(++call <= 5 ? gateA : gateB)) as never,
-    );
+    const rec = makeRecordingFrom({ gates: { "org-A": gateA, "org-B": gateB }, defaultGate: gateB });
+    vi.mocked(supabase.from).mockImplementation(rec.from as never);
 
     const { Probe, snapshots } = makeProbe(
       (props: { organizationId: string | null }) => useInsights(props).insights,
     );
-    render(<Probe organizationId="org-A" />);
-    // A publica um insight real (2 atrasos da mesma tarefa → regra de reincidência).
+    const view = render(<Probe organizationId="org-A" />);
     gateA.resolve({
-      data: [
-        { unit_id: "uA", shift_id: "s1", task_id: "t1", title: "STALE-A", scheduled_at: "2026-01-05T10:00:00Z" },
-        { unit_id: "uA", shift_id: "s1", task_id: "t1", title: "STALE-A", scheduled_at: "2026-01-05T11:00:00Z" },
-      ],
+      data: [overdueRow("STALE-A", "t1"), overdueRow("STALE-A", "t1")],
       error: null,
     });
     await waitFor(() => {
       const last = snapshots[snapshots.length - 1] as unknown as Array<{ title: string }>;
       expect(last.some((i) => i.title.includes("STALE-A"))).toBe(true);
     });
-
-    // Delimita a era A: snapshots a partir daqui não podem conter insights de A.
     const aPublishedAt = snapshots.length;
 
-    // Troca para B: o primeiro render de B não pode conter o insight de A.
-    await act(async () => {
-      render(<Probe organizationId="org-B" />);
-      await drain();
-    });
+    view.rerender(<Probe organizationId="org-B" />);
+
+    const firstB = snapshots[aPublishedAt] as unknown as Insight[];
+    expect(firstB).toEqual([]);
     for (const snap of snapshots.slice(aPublishedAt)) {
       const list = snap as unknown as Array<{ title: string }>;
-      expect(list.every((i) => !i.title.includes("STALE-A"))).toBe(true);
+      for (const i of list) expect(i.title.includes("STALE-A")).toBe(false);
     }
 
-    // B publica somente seus insights.
-    gateB.resolve({ data: [{ unit_id: "uB", shift_id: "s1", task_id: "t2", title: "B-TASK", scheduled_at: "2026-01-05T10:00:00Z" }, { unit_id: "uB", shift_id: "s1", task_id: "t2", title: "B-TASK", scheduled_at: "2026-01-05T11:00:00Z" }, { unit_id: "uB", shift_id: "s1", task_id: "t2", title: "B-TASK", scheduled_at: "2026-01-05T12:00:00Z" }, { unit_id: "uB", shift_id: "s1", task_id: "t2", title: "B-TASK", scheduled_at: "2026-01-05T13:00:00Z" }], error: null });
+    gateB.resolve({
+      data: [overdueRow("B-INSIGHT", "t9"), overdueRow("B-INSIGHT", "t9")],
+      error: null,
+    });
     await waitFor(() => {
       const last = snapshots[snapshots.length - 1] as unknown as Array<{ title: string }>;
-      expect(last.some((i) => i.title.includes("B-TASK"))).toBe(true);
+      expect(last.some((i) => i.title.includes("B-INSIGHT"))).toBe(true);
       expect(last.every((i) => !i.title.includes("STALE-A"))).toBe(true);
     });
+    expect(countOrgQueries(rec.queries, "org-A")).toBe(5); // somente a carga original de A
   });
 
-  it("refresh() is a noop when enabled=false (no query, no subscription)", async () => {
-    vi.mocked(supabase.from).mockImplementation((() => gatedBuilder()) as never);
-    const { result } = renderHook(() =>
-      useInsights({ organizationId: "org-1", enabled: false }),
+  it("refresh captured under A is a noop under B: zero new queries with A's filters", async () => {
+    const gateA = deferred<QResult>();
+    const gateB = deferred<QResult>();
+    const rec = makeRecordingFrom({ gates: { "org-A": gateA, "org-B": gateB }, defaultGate: gateB });
+    vi.mocked(supabase.from).mockImplementation(rec.from as never);
+
+    const { Probe, snapshots } = makeProbe((props: { organizationId: string | null }) =>
+      useInsights(props),
     );
+    const view = render(<Probe organizationId="org-A" />);
+    gateA.resolve({
+      data: [overdueRow("STALE-A", "t1"), overdueRow("STALE-A", "t1")],
+      error: null,
+    });
+    await waitFor(() => {
+      const last = snapshots[snapshots.length - 1] as ReturnType<typeof useInsights>;
+      expect(last.insights.some((i) => i.title.includes("STALE-A"))).toBe(true);
+    });
+    const aPublishedAt = snapshots.length;
+    const refreshA = (snapshots[aPublishedAt - 1] as ReturnType<typeof useInsights>).refresh;
+
+    view.rerender(<Probe organizationId="org-B" />);
     await act(async () => {
       await drain();
     });
-    expect(supabase.from).not.toHaveBeenCalled();
-    expect(supabase.channel).not.toHaveBeenCalled();
+    const before = rec.queries.length;
+    const aBefore = countOrgQueries(rec.queries, "org-A");
 
     await act(async () => {
-      await result.current.refresh();
+      await refreshA();
     });
 
-    expect(supabase.from).not.toHaveBeenCalled();
-    expect(supabase.channel).not.toHaveBeenCalled();
-    expect(result.current.loading).toBe(false);
-    expect(result.current.insights).toEqual([]);
-    expect(result.current.error).toBe(false);
+    expect(rec.queries.length).toBe(before);
+    expect(countOrgQueries(rec.queries, "org-A")).toBe(aBefore);
+
+    gateB.resolve({
+      data: [overdueRow("B-INSIGHT", "t9"), overdueRow("B-INSIGHT", "t9")],
+      error: null,
+    });
+    await waitFor(() => {
+      const last = snapshots[snapshots.length - 1] as ReturnType<typeof useInsights>;
+      expect(last.insights.some((i) => i.title.includes("B-INSIGHT"))).toBe(true);
+      expect(last.insights.every((i) => !i.title.includes("STALE-A"))).toBe(true);
+    });
   });
 
-  it("refresh captured while enabled=true becomes a noop after enabled flips to false", async () => {
+  it("realtime callback captured on channel A is a noop under B when invoked manually", async () => {
+    const gateA = deferred<QResult>();
+    const gateB = deferred<QResult>();
+    const rec = makeRecordingFrom({ gates: { "org-A": gateA, "org-B": gateB }, defaultGate: gateB });
+    vi.mocked(supabase.from).mockImplementation(rec.from as never);
+
+    const { Probe, snapshots } = makeProbe(
+      (props: { organizationId: string | null }) => useInsights(props).insights,
+    );
+    const view = render(<Probe organizationId="org-A" />);
+    gateA.resolve({
+      data: [overdueRow("STALE-A", "t1"), overdueRow("STALE-A", "t1")],
+      error: null,
+    });
+    await waitFor(() => {
+      const last = snapshots[snapshots.length - 1] as unknown as Array<{ title: string }>;
+      expect(last.some((i) => i.title.includes("STALE-A"))).toBe(true);
+    });
+    // Callbacks registrados no canal A (task_executions + evidences).
+    const aCallbacks = channelCbs.slice();
+    expect(aCallbacks.length).toBe(2);
+
+    view.rerender(<Probe organizationId="org-B" />);
+    await act(async () => {
+      await drain(); // canal B registrado; carga de B em voo
+    });
+    const before = rec.queries.length;
+    const aBefore = countOrgQueries(rec.queries, "org-A");
+
+    await act(async () => {
+      // Invoca manualmente os callbacks ANTIGOS do canal A depois da troca.
+      aCallbacks.forEach((cb) => cb({}));
+      await drain();
+    });
+
+    expect(rec.queries.length).toBe(before);
+    expect(countOrgQueries(rec.queries, "org-A")).toBe(aBefore);
+  });
+
+  it("enabled true → false: first disabled render is neutral (insights=[], isEmpty=true, error=false, loading=false)", async () => {
     const gate = deferred<QResult>();
-    vi.mocked(supabase.from).mockImplementation((() => gatedBuilder(gate)) as never);
+    const rec = makeRecordingFrom({ defaultGate: gate });
+    vi.mocked(supabase.from).mockImplementation(rec.from as never);
+
     const { result, rerender } = renderHook(
       ({ enabled }) => useInsights({ organizationId: "org-1", enabled }),
       { initialProps: { enabled: true } },
     );
-    expect(vi.mocked(supabase.from)).toHaveBeenCalledTimes(5);
-    const refreshRef = result.current.refresh;
+    gate.resolve({
+      data: [overdueRow("TASK", "t1"), overdueRow("TASK", "t1")],
+      error: null,
+    });
+    await waitFor(() => expect(result.current.insights.length).toBeGreaterThan(0));
 
     rerender({ enabled: false });
+    expect(result.current.insights).toEqual([]);
+    expect(result.current.isEmpty).toBe(true);
+    expect(result.current.error).toBe(false);
+    expect(result.current.loading).toBe(false);
+
+    const before = rec.queries.length;
+    await act(async () => {
+      await result.current.refresh();
+    });
+    expect(rec.queries.length).toBe(before);
+  });
+
+  it("enabled false → true: loading until the new load publishes, never a false empty", async () => {
+    const gate = deferred<QResult>();
+    const rec = makeRecordingFrom({ defaultGate: gate });
+    vi.mocked(supabase.from).mockImplementation(rec.from as never);
+
+    const { result, rerender } = renderHook(
+      ({ enabled }) => useInsights({ organizationId: "org-1", enabled }),
+      { initialProps: { enabled: false } },
+    );
     await act(async () => {
       await drain();
     });
-    const callsBefore = vi.mocked(supabase.from).mock.calls.length;
-
-    await act(async () => {
-      await refreshRef();
-    });
-
-    expect(vi.mocked(supabase.from).mock.calls.length).toBe(callsBefore);
     expect(result.current.loading).toBe(false);
     expect(result.current.insights).toEqual([]);
-    void gate;
+
+    rerender({ enabled: true });
+    expect(result.current.loading).toBe(true);
+    expect(result.current.insights).toEqual([]);
+
+    gate.resolve({
+      data: [overdueRow("TASK", "t1"), overdueRow("TASK", "t1")],
+      error: null,
+    });
+    await waitFor(() => expect(result.current.insights.length).toBeGreaterThan(0));
+    expect(result.current.loading).toBe(false);
   });
 });
 
-describe("6B.1B.1 — useUnitOperationalDetails render-time scope ownership", () => {
-  it("first render of B never exposes A's published executions", async () => {
+// ---------------------------------------------------------------------------
+// useUnitOperationalDetails
+// ---------------------------------------------------------------------------
+describe("6B.1B.2 — useUnitOperationalDetails: single-instance rerender + scoped callbacks", () => {
+  const base = { startDate: "2026-01-01", endDate: "2026-01-31", unitId: "unit-1" };
+
+  it("first render of B never exposes A's published executions (same instance, view.rerender)", async () => {
     const gateA = deferred<QResult>();
     const gateB = deferred<QResult>();
-    // Roteamento por organization_id: TODAS as consultas de uma fase (execuções
-    // e evidências) aguardam o gate do seu próprio escopo — o número de
-    // from() por carga varia (evidências só consultam quando há execuções).
-    const gates: Record<string, Deferred<QResult>> = { "org-A": gateA, "org-B": gateB };
-    vi.mocked(supabase.from).mockImplementation(
-      (() => {
-        const b: any = {};
-        let gate = gateA;
-        const chain = () => vi.fn(() => b);
-        b.select = chain();
-        b.eq = vi.fn((col: string, val: unknown) => {
-          if (col === "organization_id") gate = gates[String(val)] ?? gateA;
-          return b;
-        });
-        b.in = chain();
-        b.gte = chain();
-        b.lte = chain();
-        b.order = chain();
-        b.maybeSingle = chain();
-        const outcome = () => gate.promise;
-        b.then = (onF: any, onR: any) => outcome().then(onF, onR);
-        b.catch = (onR: any) => outcome().catch(onR);
-        b.finally = (cb: any) => outcome().finally(cb);
-        return b;
-      }) as never,
-    );
+    const rec = makeRecordingFrom({ gates: { "org-A": gateA, "org-B": gateB }, defaultGate: gateB });
+    vi.mocked(supabase.from).mockImplementation(rec.from as never);
 
-    const base = { startDate: "2026-01-01", endDate: "2026-01-31", unitId: "unit-1" };
     const { Probe, snapshots } = makeProbe(
       (props: { organizationId: string | null }) =>
         useUnitOperationalDetails({ ...base, ...props }).data,
     );
-    render(<Probe organizationId="org-A" />);
-    gateA.resolve({
-      data: [
-        {
-          id: "exec-A",
-          task_id: "t1",
-          shift_id: null,
-          scheduled_at: "2026-01-05T10:00:00Z",
-          executed_at: null,
-          status: "programada",
-          notes: null,
-          executed_by: null,
-          cancelled_at: null,
-          cancellation_reason: null,
-          tasks: { id: "t1", title: "STALE-A", description: null, code: null, weight: "comum" },
-          shifts: null,
-        },
-      ],
-      error: null,
-    });
+    const view = render(<Probe organizationId="org-A" />);
+    gateA.resolve({ data: [execRow("exec-A", "STALE-A")], error: null });
     await waitFor(() => {
       const last = snapshots[snapshots.length - 1] as unknown as Array<{ taskTitle: string }>;
       expect(last.length).toBe(1);
       expect(last[0].taskTitle).toBe("STALE-A");
     });
-
-    // Delimita a era A: snapshots a partir daqui não podem conter execuções de A.
     const aPublishedAt = snapshots.length;
 
-    // Primeiro render de B: neutro, sem nenhum resquício de A.
-    await act(async () => {
-      render(<Probe organizationId="org-B" />);
-      await drain();
-    });
+    view.rerender(<Probe organizationId="org-B" />);
+
+    const firstB = snapshots[aPublishedAt] as unknown as Array<{ taskTitle: string }>;
+    expect(firstB).toEqual([]);
     for (const snap of snapshots.slice(aPublishedAt)) {
       const list = snap as unknown as Array<{ taskTitle: string }>;
-      expect(list.every((e) => e.taskTitle !== "STALE-A")).toBe(true);
+      for (const e of list) expect(e.taskTitle).not.toBe("STALE-A");
     }
 
-    gateB.resolve({
-      data: [
-        {
-          id: "exec-B",
-          task_id: "t1",
-          shift_id: null,
-          scheduled_at: "2026-01-05T10:00:00Z",
-          executed_at: null,
-          status: "programada",
-          notes: null,
-          executed_by: null,
-          cancelled_at: null,
-          cancellation_reason: null,
-          tasks: { id: "t1", title: "B-EXEC", description: null, code: null, weight: "comum" },
-          shifts: null,
-        },
-      ],
-      error: null,
-    });
+    gateB.resolve({ data: [execRow("exec-B", "B-EXEC")], error: null });
     await waitFor(() => {
       const last = snapshots[snapshots.length - 1] as unknown as Array<{ taskTitle: string }>;
       expect(last.length).toBe(1);
       expect(last[0].taskTitle).toBe("B-EXEC");
     });
+    expect(countOrgQueries(rec.queries, "org-A")).toBe(2); // execuções + evidências de A
+  });
+
+  it("refresh captured under A is a noop under B: zero new queries with A's filters", async () => {
+    const gateA = deferred<QResult>();
+    const gateB = deferred<QResult>();
+    const rec = makeRecordingFrom({ gates: { "org-A": gateA, "org-B": gateB }, defaultGate: gateB });
+    vi.mocked(supabase.from).mockImplementation(rec.from as never);
+
+    const { Probe, snapshots } = makeProbe((props: { organizationId: string | null }) =>
+      useUnitOperationalDetails({ ...base, ...props }),
+    );
+    const view = render(<Probe organizationId="org-A" />);
+    gateA.resolve({ data: [execRow("exec-A", "STALE-A")], error: null });
+    await waitFor(() => {
+      const last = snapshots[snapshots.length - 1] as UseUnitOperationalDetailsResult;
+      expect(last.data.length).toBe(1);
+    });
+    const aPublishedAt = snapshots.length;
+    const refreshA = (snapshots[aPublishedAt - 1] as UseUnitOperationalDetailsResult).refresh;
+
+    view.rerender(<Probe organizationId="org-B" />);
+    await act(async () => {
+      await drain();
+    });
+    const before = rec.queries.length;
+    const aBefore = countOrgQueries(rec.queries, "org-A");
+
+    await act(async () => {
+      await refreshA();
+    });
+
+    expect(rec.queries.length).toBe(before);
+    expect(countOrgQueries(rec.queries, "org-A")).toBe(aBefore);
+
+    gateB.resolve({ data: [execRow("exec-B", "B-EXEC")], error: null });
+    await waitFor(() => {
+      const last = snapshots[snapshots.length - 1] as UseUnitOperationalDetailsResult;
+      expect(last.data[0].taskTitle).toBe("B-EXEC");
+      expect(last.data.every((e) => e.taskTitle !== "STALE-A")).toBe(true);
+    });
+  });
+
+  it("unitId change invalidates callbacks captured with the old unitId", async () => {
+    // Fila: carga A (execuções + evidências) → carga B (execuções + evidências).
+    const gateAExec = deferred<QResult>();
+    const gateAEv = deferred<QResult>();
+    const gateBExec = deferred<QResult>();
+    const gateBEv = deferred<QResult>();
+    const rec = makeRecordingFrom({ queue: [gateAExec, gateAEv, gateBExec, gateBEv] });
+    vi.mocked(supabase.from).mockImplementation(rec.from as never);
+
+    const orgBase = { organizationId: "org-1" as string | null, startDate: "2026-01-01", endDate: "2026-01-31" };
+    const { Probe, snapshots } = makeProbe((props: { unitId: string }) =>
+      useUnitOperationalDetails({ ...orgBase, unitId: props.unitId }),
+    );
+    const view = render(<Probe unitId="unit-1" />);
+    gateAExec.resolve({ data: [execRow("exec-1", "UNIT-1-TASK")], error: null });
+    gateAEv.resolve({ data: [], error: null });
+    await waitFor(() => {
+      const last = snapshots[snapshots.length - 1] as UseUnitOperationalDetailsResult;
+      expect(last.data[0].taskTitle).toBe("UNIT-1-TASK");
+    });
+    const aPublishedAt = snapshots.length;
+    const refreshA = (snapshots[aPublishedAt - 1] as UseUnitOperationalDetailsResult).refresh;
+
+    view.rerender(<Probe unitId="unit-2" />);
+    await act(async () => {
+      await drain();
+    });
+    const before = rec.queries.length;
+    const oldUnitQueries = rec.queries.filter((q) => hasEq(q, "unit_id", "unit-1")).length;
+
+    await act(async () => {
+      await refreshA();
+    });
+
+    expect(rec.queries.length).toBe(before);
+    expect(rec.queries.filter((q) => hasEq(q, "unit_id", "unit-1")).length).toBe(oldUnitQueries);
+    expect(rec.queries.some((q) => hasEq(q, "unit_id", "unit-2"))).toBe(true);
+
+    gateBExec.resolve({ data: [execRow("exec-2", "UNIT-2-TASK")], error: null });
+    gateBEv.resolve({ data: [], error: null });
+    await waitFor(() => {
+      const last = snapshots[snapshots.length - 1] as UseUnitOperationalDetailsResult;
+      expect(last.data[0].taskTitle).toBe("UNIT-2-TASK");
+    });
+  });
+
+  it("dates change invalidates callbacks captured with the old dates", async () => {
+    // Fila: carga A (execuções + evidências) → carga B (execuções + evidências).
+    const gateAExec = deferred<QResult>();
+    const gateAEv = deferred<QResult>();
+    const gateBExec = deferred<QResult>();
+    const gateBEv = deferred<QResult>();
+    const rec = makeRecordingFrom({ queue: [gateAExec, gateAEv, gateBExec, gateBEv] });
+    vi.mocked(supabase.from).mockImplementation(rec.from as never);
+
+    const orgBase = { organizationId: "org-1" as string | null, unitId: "unit-1", endDate: "2026-01-31" };
+    const { Probe, snapshots } = makeProbe((props: { startDate: string }) =>
+      useUnitOperationalDetails({ ...orgBase, startDate: props.startDate }),
+    );
+    const view = render(<Probe startDate="2026-01-01" />);
+    gateAExec.resolve({ data: [execRow("exec-1", "JAN-TASK")], error: null });
+    gateAEv.resolve({ data: [], error: null });
+    await waitFor(() => {
+      const last = snapshots[snapshots.length - 1] as UseUnitOperationalDetailsResult;
+      expect(last.data[0].taskTitle).toBe("JAN-TASK");
+    });
+    const aPublishedAt = snapshots.length;
+    const refreshA = (snapshots[aPublishedAt - 1] as UseUnitOperationalDetailsResult).refresh;
+
+    view.rerender(<Probe startDate="2026-02-01" />);
+    await act(async () => {
+      await drain();
+    });
+    const before = rec.queries.length;
+    const oldStart = "2026-01-01T00:00:00.000Z";
+    const oldDateQueries = rec.queries.filter((q) => hasRange(q, "scheduled_at", oldStart)).length;
+
+    await act(async () => {
+      await refreshA();
+    });
+
+    expect(rec.queries.length).toBe(before);
+    expect(rec.queries.filter((q) => hasRange(q, "scheduled_at", oldStart)).length).toBe(oldDateQueries);
+    expect(
+      rec.queries.some((q) => hasRange(q, "scheduled_at", "2026-02-01T00:00:00.000Z")),
+    ).toBe(true);
+
+    gateBExec.resolve({ data: [execRow("exec-2", "FEV-TASK")], error: null });
+    gateBEv.resolve({ data: [], error: null });
+    await waitFor(() => {
+      const last = snapshots[snapshots.length - 1] as UseUnitOperationalDetailsResult;
+      expect(last.data[0].taskTitle).toBe("FEV-TASK");
+    });
   });
 });
-
