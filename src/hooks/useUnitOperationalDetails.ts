@@ -1,16 +1,24 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { ExecutionDbStatus, TaskWeight } from "@/lib/task-execution-status";
+import { unitPeriodRange, zonedTodayISO } from "@/lib/unit-day-range";
 
 export interface UnitOperationalDetailsFilters {
   unitId: string;
-  startDate: string; // YYYY-MM-DD inclusive
-  endDate: string; // YYYY-MM-DD inclusive
+  startDate: string; // YYYY-MM-DD inclusive (dia civil da UNIDADE)
+  endDate: string; // YYYY-MM-DD inclusive (dia civil da UNIDADE)
   /**
    * Escopo organizacional obrigatório (workspaces.id === organization_id).
    * Fornecido pelo consumidor — defesa em profundidade além da RLS.
    */
   organizationId?: string | null;
+  /**
+   * Timezone IANA da unidade (units.timezone) — define o dia civil usado pela
+   * agregação `analytics_unit_daily_compliance`. O mesmo período precisa virar
+   * o MESMO intervalo UTC aqui, senão o card e o drill-down contam conjuntos
+   * diferentes (6B.2A). Ausente/inválida => UTC.
+   */
+  timezone?: string | null;
 }
 
 export interface EvidenceItem {
@@ -73,29 +81,30 @@ export interface UseUnitOperationalDetailsResult {
   refresh: () => Promise<void>;
 }
 
-function endOfDayISO(dateISO: string): string {
-  return `${dateISO}T23:59:59.999Z`;
-}
-function startOfDayISO(dateISO: string): string {
-  return `${dateISO}T00:00:00.000Z`;
-}
-
-/** Escopo completo que produziu o estado publicado (org + unidade + datas). */
+/**
+ * Escopo completo que produziu o estado publicado.
+ * Inclui a timezone: ela muda o intervalo UTC consultado, portanto trocar de
+ * unidade/timezone com as mesmas datas AINDA é um escopo diferente.
+ */
 function detailsScope(f: {
   organizationId?: string | null;
   unitId?: string;
   startDate: string;
   endDate: string;
+  timezone?: string | null;
 }): string {
-  return `${f.organizationId ?? ""}|${f.unitId ?? ""}|${f.startDate}|${f.endDate}`;
+  return `${f.organizationId ?? ""}|${f.unitId ?? ""}|${f.startDate}|${f.endDate}|${f.timezone ?? ""}`;
 }
 
 export function useUnitOperationalDetails(
   filters: UnitOperationalDetailsFilters,
 ): UseUnitOperationalDetailsResult {
-  const { unitId, startDate, endDate, organizationId } = filters;
+  const { unitId, startDate, endDate, organizationId, timezone } = filters;
   const canQuery = !!unitId && !!organizationId;
-  const scope = detailsScope({ organizationId, unitId, startDate, endDate });
+  const scope = detailsScope({ organizationId, unitId, startDate, endDate, timezone });
+  // Fronteira do período: dias civis da UNIDADE convertidos para UTC. Mesma
+  // regra usada por analytics_unit_daily_compliance (nunca offset fixo).
+  const { start: rangeStart, end: rangeEnd } = unitPeriodRange(startDate, endDate, timezone);
   // renderScope: escopo de dados + elegibilidade atual da consulta. A tag do
   // estado publicado inclui a elegibilidade — sem unidade/organização o
   // retorno é neutro sincronamente, e ao tornar consultável o estado anterior
@@ -179,8 +188,8 @@ export function useUnitOperationalDetails(
         )
         .eq("organization_id", organizationId)
         .eq("unit_id", unitId)
-        .gte("scheduled_at", startOfDayISO(startDate))
-        .lte("scheduled_at", endOfDayISO(endDate))
+        .gte("scheduled_at", rangeStart)
+        .lte("scheduled_at", rangeEnd)
         .order("scheduled_at", { ascending: true });
 
       // Resposta antiga ou componente desmontado: descarta sem tocar no estado.
@@ -304,7 +313,7 @@ export function useUnitOperationalDetails(
     } finally {
       if (isCurrent()) setLoading(false);
     }
-  }, [unitId, startDate, endDate, organizationId, scope, renderScope, cycle]);
+  }, [unitId, organizationId, rangeStart, rangeEnd, scope, renderScope, cycle]);
 
   useEffect(() => {
     // Troca de renderScope (workspace/unidade/datas/elegibilidade): invalida
@@ -335,8 +344,9 @@ export function useUnitOperationalDetails(
   // bloqueado pelo gate de escopo dentro do load.
   useEffect(() => {
     if (!canQuery || !organizationId || !unitId) return;
-    const today = new Date().toISOString().slice(0, 10);
-    if (endDate < today) return;
+    // "Hoje" é o dia civil da unidade — o detalhe usa a timezone da unidade.
+    const unitToday = zonedTodayISO(timezone);
+    if (endDate < unitToday) return;
     let timer: ReturnType<typeof setTimeout> | null = null;
     const trigger = () => {
       if (timer) clearTimeout(timer);
@@ -362,7 +372,7 @@ export function useUnitOperationalDetails(
       if (timer) clearTimeout(timer);
       void supabase.removeChannel(ch);
     };
-  }, [load, unitId, startDate, endDate, organizationId, canQuery]);
+  }, [load, unitId, startDate, endDate, organizationId, timezone, canQuery]);
 
   // Propriedade síncrona do render (antes de qualquer efeito): o estado só é
   // exposto se a tag pertencer ao renderScope ATUAL — cobre troca de

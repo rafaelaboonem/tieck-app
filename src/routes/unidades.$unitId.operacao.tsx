@@ -82,7 +82,9 @@ function UnitOperacaoPage() {
   // autorização é associada ao escopo (organizationId + unitId): uma
   // autorização "ok" de um escopo anterior nunca é reutilizada, e a resposta
   // tardia de uma validação antiga não autoriza o escopo novo.
-  const [unit, setUnit] = useState<{ id: string; name: string } | null>(null);
+  const [unit, setUnit] = useState<{ id: string; name: string; timezone: string | null } | null>(
+    null,
+  );
   const [access, setAccess] = useState<"loading" | "ok" | "denied">("loading");
   // Tag de escopo do estado `access` — TODOS os estados são marcados (loading,
   // denied e ok). Um denied de A também nunca aparece prematuramente sob B.
@@ -116,7 +118,7 @@ function UnitOperacaoPage() {
     accessScopeRef.current = scopeAtRequest;
     supabase
       .from("units")
-      .select("id,name")
+      .select("id,name,timezone")
       .eq("id", unitId)
       .eq("workspace_id", currentWorkspace!.id)
       .maybeSingle()
@@ -228,6 +230,7 @@ function UnitOperacaoPage() {
             <UnitOperacaoContent
               filters={filters}
               organizationId={currentWorkspace.id}
+              timezone={unit?.timezone ?? null}
               backTo={{ startDate: filters.startDate, endDate: filters.endDate }}
             />
           )}
@@ -240,10 +243,12 @@ function UnitOperacaoPage() {
 function UnitOperacaoContent({
   filters,
   organizationId,
+  timezone,
   backTo,
 }: {
   filters: DashboardFilters;
   organizationId: string;
+  timezone: string | null;
   backTo: { startDate: string; endDate: string };
 }) {
   void backTo; // preservado para uso futuro
@@ -253,11 +258,14 @@ function UnitOperacaoContent({
     unitId: filters.unitId,
     organizationId,
   });
+  // A timezone da unidade é a MESMA fonte usada pela agregação: o período do
+  // detalhe passa a ser o dia civil da unidade, não o dia UTC (6B.2A).
   const details = useUnitOperationalDetails({
     unitId: filters.unitId!,
     startDate: filters.startDate,
     endDate: filters.endDate,
     organizationId,
+    timezone,
   });
 
   const row = compliance.data[0];
