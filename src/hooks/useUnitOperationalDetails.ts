@@ -80,11 +80,22 @@ function startOfDayISO(dateISO: string): string {
   return `${dateISO}T00:00:00.000Z`;
 }
 
+/** Escopo completo que produziu o estado publicado (org + unidade + datas). */
+function detailsScope(f: {
+  organizationId?: string | null;
+  unitId?: string;
+  startDate: string;
+  endDate: string;
+}): string {
+  return `${f.organizationId ?? ""}|${f.unitId ?? ""}|${f.startDate}|${f.endDate}`;
+}
+
 export function useUnitOperationalDetails(
   filters: UnitOperationalDetailsFilters,
 ): UseUnitOperationalDetailsResult {
   const { unitId, startDate, endDate, organizationId } = filters;
   const canQuery = !!unitId && !!organizationId;
+  const scope = detailsScope({ organizationId, unitId, startDate, endDate });
 
   const [data, setData] = useState<OperationalExecution[]>([]);
   const [loading, setLoading] = useState(canQuery);
@@ -95,8 +106,11 @@ export function useUnitOperationalDetails(
   const loadSeqRef = useRef(0);
   // Depois do unmount nenhuma requisição pendente pode escrever estado.
   const mountedRef = useRef(true);
-  // Escopo dono do estado publicado: workspace + unidade.
-  const lastScopeRef = useRef<string | null>(null);
+  // Escopo do estado publicado (tag) — comparado sincronamente a cada render.
+  const stateScopeRef = useRef<string>(scope);
+  // Escopo ATUAL, atualizado sincronamente durante o render.
+  const currentScopeRef = useRef<string>(scope);
+  currentScopeRef.current = scope;
 
   useEffect(() => {
     mountedRef.current = true;
@@ -109,7 +123,13 @@ export function useUnitOperationalDetails(
   const load = useCallback(async () => {
     if (!mountedRef.current || !unitId || !organizationId) return;
     const seq = ++loadSeqRef.current;
-    const isCurrent = () => mountedRef.current && loadSeqRef.current === seq;
+    const reqScope = currentScopeRef.current;
+    // A resposta só pode escrever estado se: montado, requisição vigente E o
+    // escopo atual ainda for o mesmo capturado por esta requisição.
+    const isCurrent = () =>
+      mountedRef.current &&
+      loadSeqRef.current === seq &&
+      currentScopeRef.current === reqScope;
     setLoading(true);
     setError(null);
     try {
@@ -131,6 +151,7 @@ export function useUnitOperationalDetails(
       if (!isCurrent()) return;
 
       if (err) {
+        stateScopeRef.current = reqScope;
         setError(err.message);
         setData([]);
         return;
@@ -161,6 +182,7 @@ export function useUnitOperationalDetails(
       if (!isCurrent()) return;
 
       if (evRes.error) {
+        stateScopeRef.current = reqScope;
         setError(evRes.error.message);
         setData([]);
         return;
@@ -233,12 +255,14 @@ export function useUnitOperationalDetails(
         };
       });
 
+      stateScopeRef.current = reqScope;
       setData(items);
     } catch (e) {
       // Promise rejeitada (rede/exceção): fail-closed, sem loading travado e
       // sem dados do escopo anterior.
       if (!isCurrent()) return;
       console.error("useUnitOperationalDetails: query threw", e);
+      stateScopeRef.current = reqScope;
       setError("Falha ao carregar os detalhes operacionais.");
       setData([]);
     } finally {
@@ -249,12 +273,11 @@ export function useUnitOperationalDetails(
   useEffect(() => {
     // Troca de escopo (workspace ou unidade): invalida requisições pendentes
     // do escopo anterior e limpa o estado publicado.
-    const scope = `${organizationId ?? ""}|${unitId ?? ""}`;
-    if (lastScopeRef.current !== scope) {
-      lastScopeRef.current = scope;
+    if (stateScopeRef.current !== scope) {
       loadSeqRef.current += 1;
       setData([]);
       setError(null);
+      stateScopeRef.current = scope;
     }
     if (!canQuery) {
       // Sem escopo: zero consulta, zero canal, estado neutro.
@@ -262,10 +285,11 @@ export function useUnitOperationalDetails(
       setLoading(false);
       setData([]);
       setError(null);
+      stateScopeRef.current = scope;
       return;
     }
     void load();
-  }, [load, canQuery, organizationId, unitId]);
+  }, [load, canQuery, scope]);
 
   // Realtime debounced — só se o período incluir hoje ou for futuro, com
   // escopo. O canal é identificado por organização + unidade e filtra eventos
@@ -301,6 +325,14 @@ export function useUnitOperationalDetails(
       void supabase.removeChannel(ch);
     };
   }, [load, unitId, startDate, endDate, organizationId, canQuery]);
+
+  // Propriedade síncrona do escopo: se o estado publicado pertence a um escopo
+  // anterior (props já mudaram, efeitos ainda não rodaram), este render devolve
+  // valores neutros — dados/erro de A jamais aparecem no primeiro render de B.
+  // Sem setState durante o render.
+  if (stateScopeRef.current !== scope) {
+    return { data: [], error: null, loading: canQuery, refresh: load };
+  }
 
   return { data, loading, error, refresh: load };
 }

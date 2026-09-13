@@ -150,9 +150,20 @@ function aggregateByUnit(rows: DailyRow[]): UnitComplianceRow[] {
   }));
 }
 
+/** Escopo completo que produced o estado publicado (org + datas + unidade). */
+function complianceScope(p: {
+  organizationId?: string | null;
+  startDate: string;
+  endDate: string;
+  unitId?: string;
+}): string {
+  return `${p.organizationId ?? ""}|${p.startDate}|${p.endDate}|${p.unitId ?? ""}`;
+}
+
 export function useUnitCompliance(params: UseUnitComplianceParams): UseUnitComplianceResult {
   const { startDate, endDate, unitId, organizationId, enabled = true } = params;
   const canQuery = !!enabled && !!organizationId;
+  const scope = complianceScope({ organizationId, startDate, endDate, unitId });
 
   const [data, setData] = useState<UnitComplianceRow[]>([]);
   const [loading, setLoading] = useState(canQuery);
@@ -163,8 +174,14 @@ export function useUnitCompliance(params: UseUnitComplianceParams): UseUnitCompl
   const loadSeqRef = useRef(0);
   // Depois do unmount nenhuma requisição pendente pode escrever estado.
   const mountedRef = useRef(true);
-  // Escopo (workspace) dono do estado publicado atual.
-  const lastScopeRef = useRef<string | null>(null);
+  // Escopo do estado publicado (tag) — comparado sincronamente a cada render.
+  const stateScopeRef = useRef<string>(scope);
+  // Escopo e gate ATUAIS, atualizados sincronamente durante o render (o valor
+  // visto por qualquer callback assíncrono é sempre o mais recente).
+  const currentScopeRef = useRef<string>(scope);
+  const currentGateRef = useRef<boolean>(canQuery);
+  currentScopeRef.current = scope;
+  currentGateRef.current = canQuery;
 
   useEffect(() => {
     mountedRef.current = true;
@@ -175,9 +192,18 @@ export function useUnitCompliance(params: UseUnitComplianceParams): UseUnitCompl
   }, []);
 
   const load = useCallback(async () => {
-    if (!mountedRef.current || !organizationId) return;
+    // Gate efetivo (enabled + escopo): refresh manual ou callback antigo NÃO
+    // consulta quando enabled=false ou organizationId ausente.
+    if (!mountedRef.current || !currentGateRef.current || !organizationId) return;
     const seq = ++loadSeqRef.current;
-    const isCurrent = () => mountedRef.current && loadSeqRef.current === seq;
+    const reqScope = currentScopeRef.current;
+    // A resposta só pode escrever estado se: montado, requisição vigente E o
+    // escopo atual ainda for o mesmo capturado por esta requisição — mesmo que
+    // os efeitos do novo escopo ainda não tenham executado.
+    const isCurrent = () =>
+      mountedRef.current &&
+      loadSeqRef.current === seq &&
+      currentScopeRef.current === reqScope;
     setLoading(true);
     setError(null);
     try {
@@ -200,15 +226,18 @@ export function useUnitCompliance(params: UseUnitComplianceParams): UseUnitCompl
       if (!isCurrent()) return;
 
       if (err) {
+        stateScopeRef.current = reqScope;
         setError(err.message);
         setData([]);
       } else {
+        stateScopeRef.current = reqScope;
         setData(aggregateByUnit((rows ?? []) as DailyRow[]));
       }
     } catch (e) {
       // Promise rejeitada (rede/exceção): fail-closed, sem dados antigos.
       if (!isCurrent()) return;
       console.error("useUnitCompliance: query threw", e);
+      stateScopeRef.current = reqScope;
       setError("Falha ao carregar dados de conformidade.");
       setData([]);
     } finally {
@@ -218,11 +247,11 @@ export function useUnitCompliance(params: UseUnitComplianceParams): UseUnitCompl
 
   useEffect(() => {
     // Troca de escopo/params: invalida requisições pendentes do anterior.
-    if (lastScopeRef.current !== (organizationId ?? null)) {
-      lastScopeRef.current = organizationId ?? null;
+    if (stateScopeRef.current !== scope) {
       loadSeqRef.current += 1;
       setData([]);
       setError(null);
+      stateScopeRef.current = scope;
     }
     if (!canQuery) {
       // Sem escopo/sem permissão: zero consulta, zero canal, estado neutro.
@@ -230,10 +259,11 @@ export function useUnitCompliance(params: UseUnitComplianceParams): UseUnitCompl
       setLoading(false);
       setData([]);
       setError(null);
+      stateScopeRef.current = scope;
       return;
     }
     void load();
-  }, [load, canQuery, organizationId]);
+  }, [load, canQuery, scope]);
 
   // Realtime debounced: só quando a janela inclui hoje, está habilitado e há
   // escopo. O canal é identificado pela organização e filtra eventos por
@@ -273,6 +303,14 @@ export function useUnitCompliance(params: UseUnitComplianceParams): UseUnitCompl
       supabase.removeChannel(ch);
     };
   }, [load, startDate, endDate, unitId, organizationId, canQuery]);
+
+  // Propriedade síncrona do escopo: se o estado publicado pertence a um escopo
+  // anterior (props já mudaram, efeitos ainda não rodaram), este render devolve
+  // valores neutros — dados/erro/vazio de A jamais aparecem no primeiro render
+  // de B. Sem setState durante o render.
+  if (stateScopeRef.current !== scope) {
+    return { data: [], error: null, loading: canQuery, refresh: load };
+  }
 
   return { data, loading, error, refresh: load };
 }

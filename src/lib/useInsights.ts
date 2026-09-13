@@ -65,6 +65,9 @@ function topKey<T extends string | null | undefined>(rows: { key: T }[]): { key:
 export function useInsights(params: UseInsightsParams = {}) {
   const { organizationId, enabled = true } = params;
   const canQuery = !!enabled && !!organizationId;
+  // Escopo do hook: organização (o gate enabled não faz parte do escopo de
+  // dados — não limpa estado, apenas bloqueia consulta).
+  const scope = organizationId ?? "";
 
   const [insights, setInsights] = useState<Insight[]>([]);
   const [loading, setLoading] = useState(canQuery);
@@ -80,8 +83,13 @@ export function useInsights(params: UseInsightsParams = {}) {
   const loadSeqRef = useRef(0);
   // Depois do unmount nenhuma requisição pendente pode escrever estado.
   const mountedRef = useRef(true);
-  // Escopo (workspace) dono do estado publicado atual.
-  const lastScopeRef = useRef<string | null>(null);
+  // Escopo do estado publicado (tag) — comparado sincronamente a cada render.
+  const stateScopeRef = useRef<string>(scope);
+  // Escopo e gate ATUAIS, atualizados sincronamente durante o render.
+  const currentScopeRef = useRef<string>(scope);
+  const currentGateRef = useRef<boolean>(canQuery);
+  currentScopeRef.current = scope;
+  currentGateRef.current = canQuery;
 
   useEffect(() => {
     mountedRef.current = true;
@@ -93,9 +101,17 @@ export function useInsights(params: UseInsightsParams = {}) {
   }, []);
 
   const load = useCallback(async () => {
-    if (!mountedRef.current || !organizationId) return;
+    // Gate efetivo (enabled + escopo): refresh manual ou callback antigo NÃO
+    // consulta quando enabled=false ou organizationId ausente.
+    if (!mountedRef.current || !currentGateRef.current || !organizationId) return;
     const seq = ++loadSeqRef.current;
-    const isCurrent = () => mountedRef.current && loadSeqRef.current === seq;
+    const reqScope = currentScopeRef.current;
+    // A resposta só pode escrever estado se: montado, requisição vigente E o
+    // escopo atual ainda for o mesmo capturado por esta requisição.
+    const isCurrent = () =>
+      mountedRef.current &&
+      loadSeqRef.current === seq &&
+      currentScopeRef.current === reqScope;
     setLoading(true);
     setError(false);
     try {
@@ -140,6 +156,7 @@ export function useInsights(params: UseInsightsParams = {}) {
       if (failed) {
         // Detalhe técnico vai apenas para console (auditoria), nunca para a UI.
         console.error("useInsights: one or more insight queries failed");
+        stateScopeRef.current = reqScope;
         setInsights([]);
         setIsEmpty(false);
         setError(true);
@@ -280,6 +297,7 @@ export function useInsights(params: UseInsightsParams = {}) {
       // somente a mais recente publica o resultado.
       if (!isCurrent()) return;
 
+      stateScopeRef.current = reqScope;
       setInsights(result);
       setIsEmpty(result.length === 0);
       setError(false);
@@ -288,6 +306,7 @@ export function useInsights(params: UseInsightsParams = {}) {
       // fail-closed de uma resposta com error — nunca dados parciais.
       if (!isCurrent()) return;
       console.error("useInsights: insight queries threw", err);
+      stateScopeRef.current = reqScope;
       setInsights([]);
       setIsEmpty(false);
       setError(true);
@@ -301,12 +320,12 @@ export function useInsights(params: UseInsightsParams = {}) {
     // Troca de escopo: invalida imediatamente toda requisição pendente do
     // workspace anterior e limpa o estado — nunca renderizar insights de A
     // sob o escopo B.
-    if (lastScopeRef.current !== (organizationId ?? null)) {
-      lastScopeRef.current = organizationId ?? null;
+    if (stateScopeRef.current !== scope) {
       loadSeqRef.current += 1;
       setInsights([]);
       setIsEmpty(true);
       setError(false);
+      stateScopeRef.current = scope;
     }
     if (!canQuery) {
       // Sem escopo/sem permissão: zero consulta, zero subscription, estado neutro.
@@ -315,6 +334,7 @@ export function useInsights(params: UseInsightsParams = {}) {
       setInsights([]);
       setIsEmpty(true);
       setError(false);
+      stateScopeRef.current = scope;
       return;
     }
     void load();
@@ -336,6 +356,20 @@ export function useInsights(params: UseInsightsParams = {}) {
       supabase.removeChannel(ch);
     };
   }, [load, canQuery, organizationId]);
+
+  // Propriedade síncrona do escopo: se o estado publicado pertence a outro
+  // workspace (props já mudaram, efeitos ainda não rodaram), este render
+  // devolve valores neutros — insights de A jamais aparecem no primeiro render
+  // de B. Sem setState durante o render.
+  if (stateScopeRef.current !== scope) {
+    return {
+      insights: [] as Insight[],
+      isEmpty: true,
+      error: false,
+      loading: canQuery,
+      refresh: load,
+    };
+  }
 
   return { insights, loading, isEmpty, error, refresh: load };
 }

@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, AlertOctagon, Camera, Clock, ListChecks, CheckCircle2, Hourglass } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -77,23 +77,40 @@ function UnitOperacaoPage() {
     if (!authLoading && !user) navigate({ to: "/login" });
   }, [authLoading, user, navigate]);
 
-  // Verificação de acesso (6B.1B): a unidade deve pertencer ao workspace
-  // atualmente selecionado — consulta com id + workspace_id. Uma unidade de
-  // outro workspace produz o mesmo estado genérico de "não encontrada ou sem
-  // permissão", sem revelar sua existência. A verificação só roda com
-  // autenticação e workspace resolvidos.
+  // Verificação de acesso (6B.1B/6B.1B.1): a unidade deve pertencer ao
+  // workspace atualmente selecionado — consulta com id + workspace_id. A
+  // autorização é associada ao escopo (organizationId + unitId): uma
+  // autorização "ok" de um escopo anterior nunca é reutilizada, e a resposta
+  // tardia de uma validação antiga não autoriza o escopo novo.
   const [unit, setUnit] = useState<{ id: string; name: string } | null>(null);
   const [access, setAccess] = useState<"loading" | "ok" | "denied">("loading");
-  const scopeResolved = !authLoading && workspaceStatus !== "loading" && !!user && !!currentWorkspace?.id;
+  // Escopo efetivamente validado — comparado sincronamente a cada render.
+  const validatedScopeRef = useRef<string>("");
+  const authLoadingRef = authLoading || workspaceStatus === "loading";
+  const hasWorkspace = !!currentWorkspace?.id;
+  const scopeResolved = !authLoadingRef && !!user && hasWorkspace;
+  const currentScope = `${currentWorkspace?.id ?? ""}|${unitId}`;
+  // Propriedade síncrona: se o escopo validado difere do atual, este render já
+  // trata o acesso como pendente — o conteúdo do escopo anterior não aparece.
+  const accessEffective: "loading" | "ok" | "denied" =
+    access === "ok"
+      ? validatedScopeRef.current === currentScope
+        ? "ok"
+        : "loading" // "ok" de escopo antigo nunca é reutilizado sob o novo escopo
+      : access;
+
   useEffect(() => {
     if (!scopeResolved) {
       setAccess("loading");
       setUnit(null);
+      validatedScopeRef.current = "";
       return;
     }
     let cancelled = false;
+    const scopeAtRequest = `${currentWorkspace!.id}|${unitId}`;
     setAccess("loading");
     setUnit(null);
+    validatedScopeRef.current = "";
     supabase
       .from("units")
       .select("id,name")
@@ -101,13 +118,17 @@ function UnitOperacaoPage() {
       .eq("workspace_id", currentWorkspace!.id)
       .maybeSingle()
       .then(({ data, error }) => {
-        if (cancelled) return;
+        // Resposta antiga (escopo/unidade mudou enquanto a consulta voava):
+        // descartada — só autoriza se o escopo ainda for o atual.
+        if (cancelled || `${currentWorkspace?.id ?? ""}|${unitId}` !== scopeAtRequest) return;
         if (error || !data) {
           setAccess("denied");
           setUnit(null);
+          validatedScopeRef.current = "";
         } else {
           setUnit(data);
           setAccess("ok");
+          validatedScopeRef.current = scopeAtRequest;
         }
       });
     return () => {
@@ -163,13 +184,27 @@ function UnitOperacaoPage() {
             <OperationalDashboardFilters value={filters} onChange={setFilters} />
           </div>
 
-          {access === "loading" && (
+          {!authLoadingRef && !hasWorkspace && (
+            <Card>
+              <div className="py-10 text-center space-y-3">
+                <p className="text-sm font-semibold text-neutral-700">
+                  Selecione um workspace para ver a operação
+                </p>
+                <p className="text-xs text-neutral-500">
+                  A operação da unidade reflete os dados do workspace selecionado. Escolha um
+                  workspace no seletor para continuar.
+                </p>
+              </div>
+            </Card>
+          )}
+
+          {accessEffective === "loading" && hasWorkspace && (
             <Card>
               <p className="text-sm text-neutral-500 py-6 text-center">Verificando permissão…</p>
             </Card>
           )}
 
-          {access === "denied" && (
+          {accessEffective === "denied" && hasWorkspace && (
             <Card>
               <div className="py-10 text-center space-y-3">
                 <p className="text-sm font-semibold text-neutral-700">
@@ -185,7 +220,7 @@ function UnitOperacaoPage() {
             </Card>
           )}
 
-          {access === "ok" && currentWorkspace?.id && (
+          {accessEffective === "ok" && currentWorkspace?.id && (
             <UnitOperacaoContent
               filters={filters}
               organizationId={currentWorkspace.id}
