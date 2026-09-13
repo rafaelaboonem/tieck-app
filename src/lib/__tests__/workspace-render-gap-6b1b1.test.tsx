@@ -936,3 +936,228 @@ describe("6B.1B.3 — disabled-then-coupled refresh stays noop after re-enable",
     expect(final.loading).toBe(false);
   });
 });
+
+// ---------------------------------------------------------------------------
+// 6B.1B.4 — identidade de CICLO dos callbacks (A1 → B → A2)
+// ---------------------------------------------------------------------------
+// A igualdade de CONTEÚDO de renderScope não distingue o primeiro A do A de
+// reentrada. O ciclo monotônico torna um callback abandonado permanentemente
+// stale: ele não consulta, não cria canal, não altera loading/error e não
+// publica — e não pode roubar a publicação do ciclo atual.
+describe("6B.1B.4 — identidade de ciclo: A1 → B → A2", () => {
+  it("useUnitCompliance: refresh capturado em A1 é noop em A2 e o estado de A2 permanece intacto", async () => {
+    const gateA = deferred<QResult>();
+    const gateB = deferred<QResult>();
+    const rec = makeRecordingFrom({
+      gates: { "org-A": gateA, "org-B": gateB },
+      defaultGate: gateB,
+    });
+    vi.mocked(supabase.from).mockImplementation(rec.from as never);
+
+    const base = { startDate: "2026-01-01", endDate: "2026-01-31" };
+    const { Probe, snapshots } = makeProbe((props: { organizationId: string | null }) =>
+      useUnitCompliance({ ...base, ...props }),
+    );
+    const view = render(<Probe organizationId="org-A" />);
+
+    // Ciclo A1: publica dados reais de A.
+    gateA.resolve({ data: [dailyRow("org-A", "uA", "FIRST-A")], error: null });
+    await waitFor(() => {
+      const last = snapshots[snapshots.length - 1] as UseUnitComplianceResult;
+      expect(last.data[0]?.unitName).toBe("FIRST-A");
+    });
+    const refreshA1 = (snapshots[snapshots.length - 1] as UseUnitComplianceResult).refresh;
+
+    // A1 → B → A2, com CONTEÚDO de renderScope de A2 igual ao de A1.
+    view.rerender(<Probe organizationId="org-B" />);
+    await act(async () => {
+      await drain();
+    });
+    view.rerender(<Probe organizationId="org-A" />);
+    await waitFor(() => {
+      const last = snapshots[snapshots.length - 1] as UseUnitComplianceResult;
+      expect(last.data[0]?.unitName).toBe("FIRST-A");
+      expect(last.loading).toBe(false);
+    });
+    const aQueriesAfterA2 = countOrgQueries(rec.queries, "org-A");
+    const stateAtA2 = snapshots[snapshots.length - 1] as UseUnitComplianceResult;
+
+    // Callback do ciclo abandonado A1: permanentemente stale.
+    await act(async () => {
+      await refreshA1();
+    });
+
+    expect(countOrgQueries(rec.queries, "org-A")).toBe(aQueriesAfterA2);
+    // Nenhuma publicação: o snapshot do render de A2 continua sendo o último.
+    expect(snapshots[snapshots.length - 1]).toBe(stateAtA2);
+    expect(stateAtA2.data[0]?.unitName).toBe("FIRST-A");
+    expect(stateAtA2.loading).toBe(false);
+    expect(stateAtA2.error).toBeNull();
+  });
+
+  it("useInsights: callback de A1 é noop em A2 (zero consulta, zero canal) e os insights de A2 permanecem", async () => {
+    const gateA = deferred<QResult>();
+    const gateB = deferred<QResult>();
+    const rec = makeRecordingFrom({
+      gates: { "org-A": gateA, "org-B": gateB },
+      defaultGate: gateB,
+    });
+    vi.mocked(supabase.from).mockImplementation(rec.from as never);
+
+    const { Probe, snapshots } = makeProbe((props: { organizationId: string | null }) =>
+      useInsights({ ...props }),
+    );
+    const view = render(<Probe organizationId="org-A" />);
+
+    // Ciclo A1: 5 consultas.
+    gateA.resolve({
+      data: [overdueRow("TASK", "t1"), overdueRow("TASK", "t1"), overdueRow("TASK", "t4")],
+      error: null,
+    });
+    await waitFor(() => {
+      const last = snapshots[snapshots.length - 1] as ReturnType<typeof useInsights>;
+      expect(last.insights.length).toBeGreaterThan(0);
+      expect(last.loading).toBe(false);
+    });
+    const refreshA1 = (snapshots[snapshots.length - 1] as ReturnType<typeof useInsights>)
+      .refresh;
+
+    // A1 → B → A2 (mesmo organizationId do ciclo A1).
+    view.rerender(<Probe organizationId="org-B" />);
+    await act(async () => {
+      await drain();
+    });
+    view.rerender(<Probe organizationId="org-A" />);
+    await waitFor(() => {
+      const last = snapshots[snapshots.length - 1] as ReturnType<typeof useInsights>;
+      expect(last.insights.length).toBeGreaterThan(0);
+      expect(last.loading).toBe(false);
+    });
+    const queriesAfterA2 = countOrgQueries(rec.queries, "org-A");
+    const channelsAfterA2 = vi.mocked(supabase.channel).mock.calls.length;
+    const stateAtA2 = snapshots[snapshots.length - 1] as ReturnType<typeof useInsights>;
+
+    await act(async () => {
+      await refreshA1();
+    });
+
+    // Nenhuma das 5 consultas repetida, nenhum canal novo, nenhuma publicação.
+    expect(countOrgQueries(rec.queries, "org-A")).toBe(queriesAfterA2);
+    expect(vi.mocked(supabase.channel).mock.calls.length).toBe(channelsAfterA2);
+    expect(snapshots[snapshots.length - 1]).toBe(stateAtA2);
+    expect(stateAtA2.insights.some((i) => i.title.includes("TASK"))).toBe(true);
+    expect(stateAtA2.error).toBe(false);
+    expect(stateAtA2.isEmpty).toBe(false);
+    expect(stateAtA2.loading).toBe(false);
+  });
+
+  it("useUnitOperationalDetails: callback de A1 é noop em A2 e o detalhe de A2 permanece", async () => {
+    const gateA = deferred<QResult>();
+    const gateB = deferred<QResult>();
+    const rec = makeRecordingFrom({
+      gates: { "org-A": gateA, "org-B": gateB },
+      defaultGate: gateB,
+    });
+    vi.mocked(supabase.from).mockImplementation(rec.from as never);
+
+    const base = { startDate: "2026-01-01", endDate: "2026-01-31", unitId: "u1" };
+    const { Probe, snapshots } = makeProbe((props: { organizationId: string | null }) =>
+      useUnitOperationalDetails({ ...base, ...props }),
+    );
+    const view = render(<Probe organizationId="org-A" />);
+
+    gateA.resolve({ data: [], error: null });
+    await waitFor(() => {
+      const last = snapshots[snapshots.length - 1] as UseUnitOperationalDetailsResult;
+      expect(last.loading).toBe(false);
+    });
+    const refreshA1 = (snapshots[snapshots.length - 1] as UseUnitOperationalDetailsResult)
+      .refresh;
+
+    view.rerender(<Probe organizationId="org-B" />);
+    await act(async () => {
+      await drain();
+    });
+    view.rerender(<Probe organizationId="org-A" />);
+    await waitFor(() => {
+      const last = snapshots[snapshots.length - 1] as UseUnitOperationalDetailsResult;
+      expect(last.loading).toBe(false);
+    });
+    const queriesAfterA2 = countOrgQueries(rec.queries, "org-A");
+    const stateAtA2 = snapshots[snapshots.length - 1] as UseUnitOperationalDetailsResult;
+
+    await act(async () => {
+      await refreshA1();
+    });
+
+    expect(countOrgQueries(rec.queries, "org-A")).toBe(queriesAfterA2);
+    expect(snapshots[snapshots.length - 1]).toBe(stateAtA2);
+    expect(stateAtA2.data).toEqual([]);
+    expect(stateAtA2.loading).toBe(false);
+    expect(stateAtA2.error).toBeNull();
+  });
+
+  it("publicação autoritativa: callback stale de A1 não rouba a publicação do ciclo atual (CURRENT-CYCLE)", async () => {
+    const gateA1 = deferred<QResult>();
+    const gateB = deferred<QResult>();
+    const gateReenter = deferred<QResult>();
+    const gateStale = deferred<QResult>();
+    const rec = makeRecordingFrom({ queue: [gateA1, gateB, gateReenter, gateStale] });
+    vi.mocked(supabase.from).mockImplementation(rec.from as never);
+
+    const base = { startDate: "2026-01-01", endDate: "2026-01-31" };
+    const { Probe, snapshots } = makeProbe((props: { organizationId: string | null }) =>
+      useUnitCompliance({ ...base, ...props }),
+    );
+    const view = render(<Probe organizationId="org-A" />);
+
+    gateA1.resolve({ data: [dailyRow("org-A", "uA", "CYCLE-1")], error: null });
+    await waitFor(() => {
+      const last = snapshots[snapshots.length - 1] as UseUnitComplianceResult;
+      expect(last.data[0]?.unitName).toBe("CYCLE-1");
+    });
+    const refreshA1 = (snapshots[snapshots.length - 1] as UseUnitComplianceResult).refresh;
+
+    // A1 → B → A2, com a carga do ciclo atual (A2) ainda em voo.
+    view.rerender(<Probe organizationId="org-B" />);
+    await act(async () => {
+      await drain();
+    });
+    gateB.resolve({ data: [dailyRow("org-B", "uB", "B-UNIT")], error: null });
+    await act(async () => {
+      await drain();
+    });
+    view.rerender(<Probe organizationId="org-A" />);
+    await act(async () => {
+      await drain();
+    });
+
+    // Callback do ciclo abandonado é invocado durante a carga de A2
+    // (não aguardado: sua consulta fica pendente).
+    await act(async () => {
+      void refreshA1();
+      await drain();
+    });
+
+    // Nenhuma consulta adicional foi criada pelo callback stale.
+    expect(rec.queries.length).toBe(3);
+
+    // Resolver primeiro a carga legítima do ciclo atual.
+    gateReenter.resolve({ data: [dailyRow("org-A", "uA", "CURRENT-CYCLE")], error: null });
+    await act(async () => {
+      await drain();
+    });
+
+    const final = snapshots[snapshots.length - 1] as UseUnitComplianceResult;
+    expect(final.data[0]?.unitName).toBe("CURRENT-CYCLE");
+
+    // Mesmo resolvida depois, a resposta stale não pode substituir A2.
+    gateStale.resolve({ data: [dailyRow("org-A", "uA", "STALE-A1")], error: null });
+    await act(async () => {
+      await drain();
+    });
+    const afterStale = snapshots[snapshots.length - 1] as UseUnitComplianceResult;
+    expect(afterStale.data[0]?.unitName).toBe("CURRENT-CYCLE");
+    expect(afterStale.data[0]?.unitName).not.toBe("STALE-A1");
+  });
+});

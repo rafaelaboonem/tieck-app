@@ -100,6 +100,21 @@ export function useInsights(params: UseInsightsParams = {}) {
   currentScopeRef.current = scope;
   currentRenderScopeRef.current = renderScope;
   currentGateRef.current = canQuery;
+  // Ciclo de render: identidade MONOTÔNICA do ciclo lógico de renderScope. A
+  // igualdade de CONTEÚDO de renderScope não distingue A1 de A2 (A→B→A): ao
+  // reentrar em A, um callback criado no primeiro A voltaria a passar nos
+  // gates. O ciclo só avança quando o renderScope muda de verdade, é
+  // incrementado sincronamente durante o render (sem setState, sem render
+  // extra, sem dependência instável) e cada closure captura o seu
+  // requestCycle — depois de abandonado, um callback permanece stale para
+  // sempre.
+  const cycleRef = useRef(0);
+  const cycleScopeRef = useRef<string>(renderScope);
+  if (cycleScopeRef.current !== renderScope) {
+    cycleScopeRef.current = renderScope;
+    cycleRef.current += 1;
+  }
+  const cycle = cycleRef.current;
 
   useEffect(() => {
     mountedRef.current = true;
@@ -120,13 +135,17 @@ export function useInsights(params: UseInsightsParams = {}) {
     const requestScope = scope;
     const requestRenderScope = renderScope;
     const requestEnabled = canQuery;
+    // Ciclo capturado pela PRÓPRIA closure: um callback do ciclo anterior não
+    // é revalidado quando o conteúdo do escopo volta a coincidir (A→B→A).
+    const requestCycle = cycle;
     if (
       !mountedRef.current ||
       !requestEnabled ||
       !currentGateRef.current ||
       !organizationId ||
       currentScopeRef.current !== requestScope ||
-      currentRenderScopeRef.current !== requestRenderScope
+      currentRenderScopeRef.current !== requestRenderScope ||
+      cycleRef.current !== requestCycle
     ) {
       return;
     }
@@ -140,7 +159,8 @@ export function useInsights(params: UseInsightsParams = {}) {
       loadSeqRef.current === seq &&
       currentGateRef.current &&
       currentScopeRef.current === requestScope &&
-      currentRenderScopeRef.current === requestRenderScope;
+      currentRenderScopeRef.current === requestRenderScope &&
+      cycleRef.current === requestCycle;
     setLoading(true);
     setError(false);
     try {
@@ -344,7 +364,7 @@ export function useInsights(params: UseInsightsParams = {}) {
       // Encerra o carregamento somente para a requisição vigente.
       if (isCurrent()) setLoading(false);
     }
-  }, [organizationId, scope, renderScope, canQuery]);
+  }, [organizationId, scope, renderScope, cycle, canQuery]);
 
   useEffect(() => {
     // Troca de renderScope (workspace ou elegibilidade): invalida imediatamente

@@ -117,6 +117,20 @@ export function useUnitOperationalDetails(
   // Escopo ATUAL, atualizado sincronamente durante o render.
   const currentScopeRef = useRef<string>(scope);
   currentScopeRef.current = scope;
+  // Ciclo de render: identidade MONOTÔNICA do ciclo lógico de renderScope. A
+  // igualdade de CONTEÚDO de renderScope não distingue A1 de A2 (A→B→A): ao
+  // reentrar em A, um load criado no primeiro A voltaria a passar no gate.
+  // O ciclo só avança quando o renderScope muda de verdade, é incrementado
+  // sincronamente durante o render (sem setState, sem render extra) e cada
+  // closure captura o seu requestCycle — depois de abandonado, um callback
+  // permanece stale para sempre.
+  const cycleRef = useRef(0);
+  const cycleScopeRef = useRef<string>(renderScope);
+  if (cycleScopeRef.current !== renderScope) {
+    cycleScopeRef.current = renderScope;
+    cycleRef.current += 1;
+  }
+  const cycle = cycleRef.current;
 
   useEffect(() => {
     mountedRef.current = true;
@@ -133,7 +147,15 @@ export function useUnitOperationalDetails(
     // ANTES de qualquer supabase.from: zero consulta com parâmetros de A,
     // zero loading=true, zero alteração de estado.
     const requestScope = scope;
-    if (!mountedRef.current || !unitId || !organizationId || currentScopeRef.current !== requestScope) {
+    // Ciclo capturado pela PRÓPRIA closure (A→B→A não revalida callbacks).
+    const requestCycle = cycle;
+    if (
+      !mountedRef.current ||
+      !unitId ||
+      !organizationId ||
+      currentScopeRef.current !== requestScope ||
+      cycleRef.current !== requestCycle
+    ) {
       return;
     }
     const seq = ++loadSeqRef.current;
@@ -142,7 +164,8 @@ export function useUnitOperationalDetails(
     const isCurrent = () =>
       mountedRef.current &&
       loadSeqRef.current === seq &&
-      currentScopeRef.current === requestScope;
+      currentScopeRef.current === requestScope &&
+      cycleRef.current === requestCycle;
     setLoading(true);
     setError(null);
     try {
@@ -281,7 +304,7 @@ export function useUnitOperationalDetails(
     } finally {
       if (isCurrent()) setLoading(false);
     }
-  }, [unitId, startDate, endDate, organizationId, scope, renderScope]);
+  }, [unitId, startDate, endDate, organizationId, scope, renderScope, cycle]);
 
   useEffect(() => {
     // Troca de renderScope (workspace/unidade/datas/elegibilidade): invalida
