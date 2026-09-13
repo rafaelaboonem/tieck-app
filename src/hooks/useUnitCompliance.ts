@@ -182,11 +182,14 @@ export function useUnitCompliance(params: UseUnitComplianceParams): UseUnitCompl
   // Tag do renderScope que produziu o estado publicado — comparada
   // sincronamente a cada render, antes de qualquer efeito.
   const stateTagRef = useRef<string>(renderScope);
-  // Escopo e gate ATUAIS, atualizados sincronamente durante o render (o valor
-  // visto por qualquer callback assíncrono é sempre o mais recente).
+  // Escopo ATUAL, atualizado sincronamente durante o render.
   const currentScopeRef = useRef<string>(scope);
+  // Tag do renderScope atual, usada por isCurrent para bloquear callbacks
+  // antigos (inclusive refresh/load criados com enabled=false).
+  const currentRenderScopeRef = useRef<string>(renderScope);
   const currentGateRef = useRef<boolean>(canQuery);
   currentScopeRef.current = scope;
+  currentRenderScopeRef.current = renderScope;
   currentGateRef.current = canQuery;
 
   useEffect(() => {
@@ -198,27 +201,36 @@ export function useUnitCompliance(params: UseUnitComplianceParams): UseUnitCompl
   }, []);
 
   const load = useCallback(async () => {
-    // O escopo vem da PRÓPRIA closure (parâmetros capturados na criação do
-    // callback) — nunca de currentScopeRef dentro do callback. Um callback
-    // antigo de A chamado depois da troca para B é noop ANTES de qualquer
-    // supabase.from: zero consulta com parâmetros de A, zero loading=true,
-    // zero alteração de estado.
+    // O escopo e a elegibilidade vêm da PRÓPRIA closure (parâmetros/
+    // tags capturados na criação do callback) — nunca de refs atualizadas
+    // tardiamente dentro do callback. Um callback criado com enabled=false
+    // (renderScope ...|off) e um refresh desabilitado continuam noop para
+    // sempre: mesmo após enabled voltar a true, mesmo com mesmo
+    // organizationId/parâmetros, mesmo durante ou após a carga atual.
     const requestScope = scope;
+    const requestRenderScope = renderScope;
+    const requestEnabled = canQuery;
     if (
       !mountedRef.current ||
+      !requestEnabled ||
       !currentGateRef.current ||
       !organizationId ||
-      currentScopeRef.current !== requestScope
+      currentScopeRef.current !== requestScope ||
+      currentRenderScopeRef.current !== requestRenderScope
     ) {
       return;
     }
     const seq = ++loadSeqRef.current;
-    // A resposta só pode escrever estado se: montado, requisição vigente E o
-    // escopo atual ainda for o escopo capturado por ESTA requisição.
+    // A resposta só pode escrever estado se: montado, requisição vigente,
+    // gate atual e SAME renderScope capturado — um callback antigo do
+    // workspace A ou um refresh desabilitado não pode publicar sob B mesmo
+    // que o escopo de dados coincida.
     const isCurrent = () =>
       mountedRef.current &&
       loadSeqRef.current === seq &&
-      currentScopeRef.current === requestScope;
+      currentGateRef.current &&
+      currentScopeRef.current === requestScope &&
+      currentRenderScopeRef.current === requestRenderScope;
     setLoading(true);
     setError(null);
     try {
@@ -241,24 +253,24 @@ export function useUnitCompliance(params: UseUnitComplianceParams): UseUnitCompl
       if (!isCurrent()) return;
 
       if (err) {
-        stateTagRef.current = renderScope;
+        stateTagRef.current = requestRenderScope;
         setError(err.message);
         setData([]);
       } else {
-        stateTagRef.current = renderScope;
+        stateTagRef.current = requestRenderScope;
         setData(aggregateByUnit((rows ?? []) as DailyRow[]));
       }
     } catch (e) {
       // Promise rejeitada (rede/exceção): fail-closed, sem dados antigos.
       if (!isCurrent()) return;
       console.error("useUnitCompliance: query threw", e);
-      stateTagRef.current = renderScope;
+      stateTagRef.current = requestRenderScope;
       setError("Falha ao carregar dados de conformidade.");
       setData([]);
     } finally {
       if (isCurrent()) setLoading(false);
     }
-  }, [startDate, endDate, unitId, organizationId, scope, renderScope]);
+  }, [startDate, endDate, unitId, organizationId, scope, renderScope, canQuery]);
 
   useEffect(() => {
     // Troca de renderScope (escopo/params/elegibilidade): invalida requisições
@@ -278,6 +290,8 @@ export function useUnitCompliance(params: UseUnitComplianceParams): UseUnitCompl
       stateTagRef.current = renderScope;
       return;
     }
+    // Todo renderScope atualiza a referência que isCurrent usa, e todo
+    // load/refresh captura requestRenderScope + requestEnabled.
     void load();
   }, [load, canQuery, renderScope]);
 

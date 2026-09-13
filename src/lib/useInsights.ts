@@ -91,10 +91,14 @@ export function useInsights(params: UseInsightsParams = {}) {
   // Tag do renderScope que produziu o estado publicado — comparada
   // sincronamente a cada render, antes de qualquer efeito.
   const stateTagRef = useRef<string>(renderScope);
-  // Escopo e gate ATUAIS, atualizados sincronamente durante o render.
+  // Escopo ATUAL, atualizado sincronamente durante o render.
   const currentScopeRef = useRef<string>(scope);
+  // Tag do renderScope atual, usada por isCurrent para bloquear callbacks
+  // antigos (inclusive refresh/load criados com enabled=false).
+  const currentRenderScopeRef = useRef<string>(renderScope);
   const currentGateRef = useRef<boolean>(canQuery);
   currentScopeRef.current = scope;
+  currentRenderScopeRef.current = renderScope;
   currentGateRef.current = canQuery;
 
   useEffect(() => {
@@ -107,28 +111,36 @@ export function useInsights(params: UseInsightsParams = {}) {
   }, []);
 
   const load = useCallback(async () => {
-    // O escopo vem da PRÓPRIA closure (parâmetros capturados na criação do
-    // callback) — nunca de currentScopeRef dentro do callback. Um refresh
-    // antigo de A chamado depois da troca para B (ou um callback realtime do
-    // canal A invocado manualmente) é noop ANTES de qualquer supabase.from:
-    // zero consulta com parâmetros de A, zero loading=true, zero alteração de
-    // estado.
+    // O escopo e a elegibilidade vêm da PRÓPRIA closure (parâmetros/
+    // tags capturados na criação do callback) — nunca de refs atualizadas
+    // tardiamente dentro do callback. Um callback criado com enabled=false
+    // (renderScope ...|off) e um refresh desabilitado continuam noop para
+    // sempre: mesmo após enabled voltar a true, mesmo com mesmo
+    // organizationId/parâmetros, mesmo durante ou após a carga atual.
     const requestScope = scope;
+    const requestRenderScope = renderScope;
+    const requestEnabled = canQuery;
     if (
       !mountedRef.current ||
+      !requestEnabled ||
       !currentGateRef.current ||
       !organizationId ||
-      currentScopeRef.current !== requestScope
+      currentScopeRef.current !== requestScope ||
+      currentRenderScopeRef.current !== requestRenderScope
     ) {
       return;
     }
     const seq = ++loadSeqRef.current;
-    // A resposta só pode escrever estado se: montado, requisição vigente E o
-    // escopo atual ainda for o escopo capturado por ESTA requisição.
+    // A resposta só pode escrever estado se: montado, requisição vigente,
+    // gate atual e SAME renderScope capturado — um callback antigo do
+    // workspace A ou um refresh desabilitado não pode publicar sob B mesmo
+    // que o escopo de dados coincida.
     const isCurrent = () =>
       mountedRef.current &&
       loadSeqRef.current === seq &&
-      currentScopeRef.current === requestScope;
+      currentGateRef.current &&
+      currentScopeRef.current === requestScope &&
+      currentRenderScopeRef.current === requestRenderScope;
     setLoading(true);
     setError(false);
     try {
@@ -173,7 +185,7 @@ export function useInsights(params: UseInsightsParams = {}) {
       if (failed) {
         // Detalhe técnico vai apenas para console (auditoria), nunca para a UI.
         console.error("useInsights: one or more insight queries failed");
-        stateTagRef.current = renderScope;
+        stateTagRef.current = requestRenderScope;
         setInsights([]);
         setIsEmpty(false);
         setError(true);
@@ -311,10 +323,11 @@ export function useInsights(params: UseInsightsParams = {}) {
       }
 
       // A requisição pode ter sido substituída durante o processamento —
-      // somente a mais recente publica o resultado.
+      // somente a mais recente publica o resultado (isCurrent já validou que a
+      // tag capturada ainda é o renderScope atual).
       if (!isCurrent()) return;
 
-      stateTagRef.current = renderScope;
+      stateTagRef.current = requestRenderScope;
       setInsights(result);
       setIsEmpty(result.length === 0);
       setError(false);
@@ -323,7 +336,7 @@ export function useInsights(params: UseInsightsParams = {}) {
       // fail-closed de uma resposta com error — nunca dados parciais.
       if (!isCurrent()) return;
       console.error("useInsights: insight queries threw", err);
-      stateTagRef.current = renderScope;
+      stateTagRef.current = requestRenderScope;
       setInsights([]);
       setIsEmpty(false);
       setError(true);
@@ -331,7 +344,7 @@ export function useInsights(params: UseInsightsParams = {}) {
       // Encerra o carregamento somente para a requisição vigente.
       if (isCurrent()) setLoading(false);
     }
-  }, [organizationId, scope, renderScope]);
+  }, [organizationId, scope, renderScope, canQuery]);
 
   useEffect(() => {
     // Troca de renderScope (workspace ou elegibilidade): invalida imediatamente

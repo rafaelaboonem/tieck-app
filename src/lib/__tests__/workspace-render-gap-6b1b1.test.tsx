@@ -81,11 +81,17 @@ function makeRecordingFrom(opts: {
     queries.push(q);
     const b: any = {};
     let org: string | undefined;
+    // gateSource é computado uma única vez antes de qualquer .then/.catch,
+    // para que um same-organization queue reencha corretamente e um segundo
+    // call ao mesmo builder (refresh antigo) retorne o mesmo gate que já
+    // resolveu — ele não recomeça o routing de org/fila no meio da promise.
+    let gateSource: Promise<QResult> | null = null;
     const outcome = () => {
-      const gated = (org && opts.gates?.[org]) || opts.defaultGate;
-      if (gated) return gated.promise;
-      if (opts.queue) return (opts.queue.shift() ?? deferred<QResult>()).promise;
-      return Promise.resolve<QResult>({ data: [], error: null, count: 0 });
+      if (gateSource) return gateSource;
+      let gated = (org && opts.gates?.[org]) || opts.defaultGate;
+      if (!gated && opts.queue) gated = opts.queue.shift() ?? deferred<QResult>();
+      gateSource = gated ? gated.promise : Promise.resolve<QResult>({ data: [], error: null, count: 0 });
+      return gateSource;
     };
     const chain = () => vi.fn(() => b);
     b.select = chain();
@@ -243,6 +249,9 @@ describe("6B.1B.2 — useUnitCompliance: single-instance rerender + scoped callb
       const rows = snap as unknown as Array<{ unitName: string }>;
       for (const r of rows) expect(r.unitName).not.toBe("STALE-A");
     }
+
+    // Agora recarrega o builder para permitir a carga B resolver.
+    vi.mocked(supabase.from).mockImplementation(rec.from as never);
 
     // B publica somente os dados de B.
     gateB.resolve({ data: [dailyRow("org-B", "uB", "B-UNIT")], error: null });
@@ -811,5 +820,119 @@ describe("6B.1B.2 — useUnitOperationalDetails: single-instance rerender + scop
       const last = snapshots[snapshots.length - 1] as UseUnitOperationalDetailsResult;
       expect(last.data[0].taskTitle).toBe("FEV-TASK");
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 6B.1B.3 — callback criado com enabled=false deve permanecer noop para sempre:
+// mesmo depois de reabilitar o MESMO escopo, durante e depois da carga atual.
+// ---------------------------------------------------------------------------
+describe("6B.1B.3 — disabled-then-coupled refresh stays noop after re-enable", () => {
+  it("useUnitCompliance: refreshDisabled stays noop even after enabled=true, during and after the current load", async () => {
+    const gateCurrent = deferred<QResult>();
+    const rec = makeRecordingFrom({ defaultGate: gateCurrent });
+    vi.mocked(supabase.from).mockImplementation(rec.from as never);
+
+    const base = { startDate: "2026-01-01", endDate: "2026-01-31" };
+    const { Probe, snapshots } = makeProbe(
+      (props: { enabled?: boolean }) =>
+        useUnitCompliance({ ...base, organizationId: "org-1", ...props }),
+    );
+    const view = render(<Probe enabled={false} />);
+    const refreshDisabled = (snapshots[snapshots.length - 1] as UseUnitComplianceResult).refresh;
+
+    // Desabilitado: zero consulta.
+    expect(rec.queries.length).toBe(0);
+
+    // Reabilita o MESMO escopo: a carga atual inicia exatamente uma consulta,
+    // com o filtro de organização atual.
+    view.rerender(<Probe enabled={true} />);
+    expect(rec.queries.length).toBe(1);
+    expect(rec.queries[0].table).toBe("analytics_unit_daily_compliance");
+    expect(hasEq(rec.queries[0], "organization_id", "org-1")).toBe(true);
+
+    // refreshDisabled (closure |off) chamado DURANTE a carga atual: noop.
+    await act(async () => {
+      await refreshDisabled();
+    });
+    expect(rec.queries.length).toBe(1);
+
+    gateCurrent.resolve({ data: [dailyRow("org-1", "u1", "UNIT")], error: null });
+    await waitFor(() => {
+      const last = snapshots[snapshots.length - 1] as UseUnitComplianceResult;
+      expect(last.data.length).toBe(1);
+      expect(last.loading).toBe(false);
+    });
+
+    // refreshDisabled DE NOVO depois do sucesso: continua noop e o estado
+    // segue pertencendo à carga atual (UNIT, nunca UNIT-AFTER).
+    await act(async () => {
+      await refreshDisabled();
+    });
+    expect(rec.queries.length).toBe(1);
+    const final = snapshots[snapshots.length - 1] as UseUnitComplianceResult;
+    expect(final.data[0].unitName).toBe("UNIT");
+    expect(final.loading).toBe(false);
+    expect(final.error).toBeNull();
+  });
+
+  it("useInsights: refreshDisabled stays noop after re-enable; current load starts exactly its 5 queries; old callback adds no channel; success stays with the current load", async () => {
+    const gateCurrent = deferred<QResult>();
+    const rec = makeRecordingFrom({ defaultGate: gateCurrent });
+    vi.mocked(supabase.from).mockImplementation(rec.from as never);
+
+    const { Probe, snapshots } = makeProbe(
+      (props: { enabled?: boolean }) =>
+        useInsights({ organizationId: "org-1", ...props }),
+    );
+    const view = render(<Probe enabled={false} />);
+    const refreshDisabled = (snapshots[snapshots.length - 1] as ReturnType<typeof useInsights>).refresh;
+
+    // Desabilitado: zero consulta e zero canal.
+    expect(rec.queries.length).toBe(0);
+    expect(vi.mocked(supabase.channel).mock.calls.length).toBe(0);
+
+    // Reabilita o MESMO escopo: a carga atual inicia exatamente suas 5
+    // consultas, todas na organização atual, e um único canal.
+    view.rerender(<Probe enabled={true} />);
+    expect(rec.queries.length).toBe(5);
+    expect(rec.queries.every((q) => hasEq(q, "organization_id", "org-1"))).toBe(true);
+    expect(vi.mocked(supabase.channel).mock.calls.length).toBe(1);
+
+    // refreshDisabled (closure |off) durante a carga: noop — zero consulta
+    // adicional e zero canal novo.
+    await act(async () => {
+      await refreshDisabled();
+    });
+    expect(rec.queries.length).toBe(5);
+    expect(vi.mocked(supabase.channel).mock.calls.length).toBe(1);
+
+    gateCurrent.resolve({
+      data: [
+        overdueRow("TASK", "t1"),
+        overdueRow("TASK", "t1"),
+        overdueRow("TASK", "t4"),
+        overdueRow("TASK", "t4"),
+      ],
+      error: null,
+    });
+    await waitFor(() => {
+      const last = snapshots[snapshots.length - 1] as ReturnType<typeof useInsights>;
+      expect(last.insights.length).toBeGreaterThan(0);
+      expect(last.loading).toBe(false);
+    });
+
+    // refreshDisabled DE NOVO depois do sucesso: continua noop, sem canal
+    // novo; insights/error/isEmpty/loading seguem da carga atual.
+    await act(async () => {
+      await refreshDisabled();
+    });
+    expect(rec.queries.length).toBe(5);
+    expect(vi.mocked(supabase.channel).mock.calls.length).toBe(1);
+    const final = snapshots[snapshots.length - 1] as ReturnType<typeof useInsights>;
+    expect(final.insights.some((i) => i.title.includes("TASK"))).toBe(true);
+    expect(final.error).toBe(false);
+    expect(final.isEmpty).toBe(false);
+    expect(final.loading).toBe(false);
   });
 });
