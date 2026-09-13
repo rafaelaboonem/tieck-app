@@ -56,9 +56,14 @@ export function useInsights() {
   const [insights, setInsights] = useState<Insight[]>([]);
   const [loading, setLoading] = useState(true);
   const [isEmpty, setIsEmpty] = useState(true);
+  // Fail-closed: qualquer falha nas 5 consultas invalida o resultado inteiro.
+  // O detalhe técnico (SQL/tabela/schema) nunca sai daqui — a UI mostra apenas
+  // uma mensagem genérica.
+  const [error, setError] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
+    setError(false);
     const [overdueRes, criticalRes, rankRes, evPendRes, evRejRes] = await Promise.all([
       supabase.from("analytics_overdue_tasks").select("unit_id,shift_id,task_id,title,scheduled_at"),
       supabase.from("analytics_critical_failures").select("unit_id,title"),
@@ -66,6 +71,23 @@ export function useInsights() {
       supabase.from("evidences").select("id", { count: "exact", head: true }).eq("status", "pending"),
       supabase.from("evidences").select("id", { count: "exact", head: true }).eq("status", "rejected"),
     ]);
+
+    // Fail-closed: dados parciais nunca são renderizados como se fossem completos.
+    const failed =
+      overdueRes.error !== null ||
+      criticalRes.error !== null ||
+      rankRes.error !== null ||
+      evPendRes.error !== null ||
+      evRejRes.error !== null;
+    if (failed) {
+      // Detalhe técnico vai apenas para console (auditoria), nunca para a UI.
+      console.error("useInsights: one or more insight queries failed");
+      setInsights([]);
+      setIsEmpty(false);
+      setError(true);
+      setLoading(false);
+      return;
+    }
 
     const overdue = (overdueRes.data ?? []) as OverdueRow[];
     const critical = (criticalRes.data ?? []) as CriticalRow[];
@@ -199,6 +221,7 @@ export function useInsights() {
 
     setInsights(result);
     setIsEmpty(result.length === 0);
+    setError(false);
     setLoading(false);
   }, []);
 
@@ -214,5 +237,5 @@ export function useInsights() {
     };
   }, [load]);
 
-  return { insights, loading, isEmpty, refresh: load };
+  return { insights, loading, isEmpty, error, refresh: load };
 }
