@@ -11,6 +11,13 @@ A UI do Tieck comunica controle, clareza, hierarquia, confiabilidade e eficiênc
 operacional. NÃO comunica marketing exagerado, gamificação, visual futurista, UI
 experimental, efeitos decorativos ou landing page dentro do produto.
 
+> **Composição, caráter de produto e direção visual:** consulte
+> [`references/visual-direction.md`](references/visual-direction.md)
+> (shell, dual-rail, navegação, superfícies, densidade, brand, "Not Tieck" e o
+> checklist de 10 perguntas antes de criar uma UI).
+> Esta Skill continua sendo a **fonte de regras**; aquele arquivo é a fonte de
+> **direção estética/compositiva**. Em conflito, as regras daqui prevalecem.
+
 Esta Skill descreve o Tieck REAL. Antes de criar qualquer componente novo:
 
 1. **Procure componente existente** (`src/components/ui/`, `src/components/tremor/ui/`,
