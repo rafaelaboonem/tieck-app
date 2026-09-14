@@ -92,63 +92,110 @@ Direção:
   hierarquia, agrupamento e estado ativo próprios;
 - **contexto global** (quem sou eu / onde estou no produto) e **contexto de workspace**
   (qual organização estou operando) são informações diferentes e **podem ser separados**
-  visualmente;
+  visualmente **dentro da mesma sidebar** (zonas), não por multiplicação de painéis;
 - priorizar **arquitetura visual clara**: o usuário deve conseguir varrer o shell em
   uma passada de olho;
-- considerar o padrão **dual-rail** quando ele resolve hierarquia real (§5) — mas só
-  quando resolve hierarquia real.
+- a direção do Tieck no desktop é **uma sidebar única que se adapta** (§5, §6, §7).
+  Dois níveis laterais permanentes não são a direção do produto (§9).
 
 O shell NÃO deve: virar uma faixa colorida, ganhar decoração, competir com o conteúdo
 ou introduzir densidade diferente da área de trabalho.
 
 ---
 
-## 5. Dual-rail (direção preferencial a testar — não é regra obrigatória)
+## 5. Desktop Navigation — sidebar única
 
-Modelo de composição a **testar** quando existir hierarquia real entre navegação
-global, navegação contextual e conteúdo. **Não implementar automaticamente**; só
-adotar se resolver ambiguidade genuína.
+A direção principal do Tieck no desktop é **uma sidebar única**, desenhada como **uma
+peça só**: marca, contexto de workspace, navegação e sessão convivem na mesma coluna,
+separados por zonas, ritmo e hierarquia — nunca por painéis laterais extras.
 
-```text
-┌────────┬──────────────────┬─────────────────────────────────────┐
-│ rail 1 │ rail 2           │ main canvas                         │
-│ 52–60px│ 190–220px        │ conteúdo da página                  │
-│ global │ contextual       │ limpo, alinhado, independente       │
-└────────┴──────────────────┴─────────────────────────────────────┘
-```
+- **faixa inicial de estudo: ~220–248px**; a largura final é definida pelo **conteúdo
+  real** (labels completos, nome do workspace, e-mail), não pelo número;
+- **forte presença estrutural** — a sidebar é arquitetura do produto, não um menu
+  anexado ao lado do conteúdo;
+- **navegação bem hierarquizada** — destino principal, destinos contextuais (RBAC) e
+  zona secundária são legíveis em uma varredura;
+- **contexto de workspace integrado** — identidade + nome + troca pertencem à mesma
+  peça (zona de contexto), não a um control avulso;
+- **densidade alta e útil**, alinhamento rigoroso, labels curtas.
 
-**Primary rail (≈52–60px)** — navegação global:
+Evitar:
 
-- estreito e de **alta estabilidade visual**: praticamente não muda entre telas;
-- identidade (marca), áreas principais do produto;
-- ícones claros e consistentes, do mesmo sistema (§7 de `../SKILL.md`);
-- sem labels longas competindo — o rail é reconhecimento, não leitura.
-
-**Secondary contextual panel (≈190–220px)** — contexto:
-
-- workspace atual (identidade + nome + troca);
-- navegação contextual/da área atual;
-- recentes;
-- seções relacionadas ao que está aberto.
-
-**Main canvas** — conteúdo:
-
-- limpo, alinhado;
-- **visualmente independente do shell** — não herda tint, ruído ou densidade do shell;
-- a página é dona do próprio header e da própria hierarquia.
-
-Ressalvas explícitas:
-
-- os números acima são **ponto de partida**, não dogma — a largura final obedece ao
-  conteúdo real do Tieck;
-- dual-rail é **mais estrutura para manter** (dois estados, duas responsividades);
-  adotar apenas se a hierarquia justificar;
-- qualquer adoção preserva **100% do comportamento** existente: rotas, RBAC, workspace,
-  auth, busca, collapse (§16 de `../SKILL.md`).
+- lista de links genérica (ícone + label empilhados sem hierarquia);
+- **labels de seção redundantes** — só existem quando ajudam orientação (§10);
+- **card dentro da sidebar** (caixa branca com borda para "destacar" o workspace);
+- ativo padrão **"pill cinza"** (`bg-neutral-100 rounded-md` como único sinal);
+- **sidebar branca neutra sem identidade** — o plano do shell precisa ser reconhecível;
+- **multiplicar painéis laterais** para resolver hierarquia que a peça única resolve (§9).
 
 ---
 
-## 6. Navegação
+## 6. Collapsed Navigation
+
+A **mesma** sidebar pode entrar em **estado compacto**: é variação responsiva da mesma
+navegação, **não** uma segunda sidebar obrigatória no desktop.
+
+- largura aproximada: **52–60px**;
+- **ícones alinhados** na mesma coluna óptica da versão expandida;
+- logo/símbolo oficial **apenas se o asset funcionar nessa escala** — se não funcionar,
+  registrar a limitação (§11) em vez de desenhar marca nova;
+- **tooltip + `aria-label`** em todo item sem label visível;
+- **preservar o active state** — a posição continua reconhecível sem o texto;
+- **não colapsar para 0px** no desktop, salvo comportamento existente e deliberado;
+- a transição deve parecer **contínua**, nunca troca brusca de layout (§8).
+
+Leia o **rail estreito com ícones** das referências visuais como este estado: o mesmo
+shell em modo compacto/tablet — não como convite a manter dois níveis laterais no
+desktop.
+
+---
+
+## 7. Mobile Navigation
+
+- **Mobile não é dual-rail** e não mantém duas colunas laterais simultâneas.
+- Pode usar **drawer/overlay** (ou rail compacto temporário), conforme a arquitetura
+  existente do produto.
+- Priorizar **navegação essencial + contexto atual**; o resto desce na hierarquia.
+- O **conteúdo continua dominante** — o shell não rouba a tela.
+- **Evitar encolher o desktop**: reordenar prioridades (ação → status → execução →
+  conteúdo essencial) em vez de apenas reduzir larguras.
+- Mecânica de breakpoints, grids e tabelas: `../SKILL.md` §12.
+
+---
+
+## 8. Motion de navegação
+
+Motion de navegação **explica mudança de estado**, não decora a transição.
+
+- duração preferencial: **180–220ms**;
+- easing **suave / ease-out**;
+- largura e labels transicionam **de forma coordenada** (uma única mudança percebida);
+- labels podem usar **opacity + translate pequeno**;
+- **ícones permanecem visualmente estáveis** — não deslizam nem pulam;
+- sem bounce, sem overshoot, sem stagger longo;
+- respeitar `prefers-reduced-motion`;
+- **a animação nunca atrasa a navegação** — o clique navega imediatamente.
+
+---
+
+## 9. Dual-rail — padrão possível, **não** a direção do Tieck
+
+Dois níveis laterais persistentes (rail global estreito + painel contextual) existem em
+produtos cuja hierarquia **realmente exige** dois níveis simultâneos. Para o Tieck:
+
+- **não é a direção padrão** e não deve ser implementado sem necessidade real;
+- antes de considerar, é preciso nomear exatamente **qual ambiguidade de hierarquia**
+  ele resolveria e por que a sidebar única (§5) não resolve;
+- se algum dia for adotado, preserva **100% do comportamento** existente (rotas, RBAC,
+  workspace, auth, busca, collapse — §16 de `../SKILL.md`) e mantém o total das colunas
+  laterais próximo ao da sidebar única, para não consumir a área de trabalho.
+
+Um protótipo anterior tratou esse padrão como direção do desktop — **isso foi um erro
+interpretativo** e não deve ser repetido.
+
+---
+
+## 10. Navegação
 
 - A navegação deve parecer **estrutural** — parte da arquitetura, não um menu anexado.
 - **Estado ativo**: composição de **contraste + tipografia + superfície + accent mínimo**.
@@ -165,13 +212,18 @@ Ressalvas explícitas:
 
 ---
 
-## 7. Brand
+## 11. Brand
 
 - Usar a **logo oficial** existente, sem texto redundante ao lado.
 - A marca tem **presença**, mas não domina — ela identifica, não decora.
 - O **accent rosa do Tieck funciona como sinal**, não como tinta de fundo.
 - Não espalhar rosa decorativamente (sem bordas rosa, fundos rosa, ícones rosa "para
   combinar").
+- **Estado compacto (§6):** use o asset oficial só se ele funcionar em 52–60px. O asset
+  atual é um wordmark alongado (~2,9:1) com bastante margem transparente dentro de um
+  quadrado — verifique a **legibilidade real** antes de aplicá-lo num rail estreito;
+  se não funcionar, **registre a limitação** para revisão de identidade (política de
+  marca em `../SKILL.md`) em vez de criar símbolo novo.
 
 O accent serve principalmente para:
 
@@ -188,7 +240,7 @@ massiva incidental) está em `../SKILL.md`.
 
 ---
 
-## 8. Superfícies
+## 12. Superfícies
 
 Preferir:
 
@@ -207,7 +259,7 @@ Evitar:
 
 ---
 
-## 9. Dashboard (direção para telas futuras)
+## 13. Dashboard (direção para telas futuras)
 
 - O dashboard é **uma composição única** — uma página que responde perguntas, não um
   mosaico de componentes independentes.
@@ -222,7 +274,7 @@ Evitar:
 
 ---
 
-## 10. Densidade
+## 14. Densidade
 
 Tieck é SaaS operacional.
 
@@ -238,7 +290,7 @@ Regra prática: se o operador precisa rolar para comparar duas informações que
 
 ---
 
-## 11. Tipografia
+## 15. Tipografia
 
 - Títulos **objetivos** — curto, direto, sem microcopy decorativa.
 - **Forte contraste entre heading, label e metadata** — três alturas visuais distintas.
@@ -254,7 +306,7 @@ visual e não entram na UI administrativa.
 
 ---
 
-## 12. Shapes / radius
+## 16. Shapes / radius
 
 - Radius **moderado** — geometria sóbria (`--radius: 0.625rem` é a base; escala e usos
   em `../SKILL.md` §3).
@@ -264,7 +316,7 @@ visual e não entram na UI administrativa.
 
 ---
 
-## 13. Dark mode
+## 17. Dark mode
 
 As referências incluem dark mode — **isso não faz do dark uma prioridade automática**.
 
@@ -276,7 +328,7 @@ As referências incluem dark mode — **isso não faz do dark uma prioridade aut
 
 ---
 
-## 14. Glass / futurismo
+## 18. Glass / futurismo
 
 As referências incluem elementos glass/futuristas. **Não absorver como linguagem
 principal.** Explicitamente fora do Tieck:
@@ -300,7 +352,7 @@ A translação é sempre estrutural, nunca visual: aprende-se a *arquitetura*, n
 
 ---
 
-## 15. Not Tieck — o que o produto NÃO deve parecer
+## 19. Not Tieck — o que o produto NÃO deve parecer
 
 Seção explícita, para uso em revisão:
 
@@ -310,6 +362,7 @@ Seção explícita, para uso em revisão:
 - fintech gamificada (badges, streaks, confete, números gigantes);
 - produto futurista conceitual (glass, glow, neon, gradiente);
 - coleção de cards (cada seção uma caixa independente);
+- **dois níveis de navegação lateral permanentes** sem necessidade real de hierarquia (§9);
 - UI gerada por IA sem intenção (grid simétrico, ícone colorido por bloco, tudo
   `rounded-xl`, sombra suave em tudo).
 
@@ -318,7 +371,7 @@ gosto.
 
 ---
 
-## 16. Regras para agentes — antes de criar uma UI
+## 20. Regras para agentes — antes de criar uma UI
 
 Responder **todas** antes de escrever código. Se alguma resposta for vaga, o problema
 não é visual ainda.

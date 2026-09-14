@@ -13,8 +13,9 @@ experimental, efeitos decorativos ou landing page dentro do produto.
 
 > **Composição, caráter de produto e direção visual:** consulte
 > [`references/visual-direction.md`](references/visual-direction.md)
-> (shell, dual-rail, navegação, superfícies, densidade, brand, "Not Tieck" e o
-> checklist de 10 perguntas antes de criar uma UI).
+> (shell e **sidebar única**, estados colapsado/mobile, motion de navegação,
+> superfícies, densidade, brand, "Not Tieck" e o checklist de 10 perguntas antes de
+> criar uma UI).
 > Esta Skill continua sendo a **fonte de regras**; aquele arquivo é a fonte de
 > **direção estética/compositiva**. Em conflito, as regras daqui prevalecem.
 
