@@ -44,17 +44,23 @@ import {
 } from "@/lib/task-execution-status";
 import { aggregateWeighted, getOperationalStatus, STATUS_META } from "@/lib/operational-status";
 
-type UnidadeSearch = { startDate?: string; endDate?: string };
+// 6B.3: o detalhe aceita `shiftId` opcional vindo da URL (navegação do /painel
+// com turno selecionado). O turno é um filtro LOCAL do detalhe: a mudança local
+// NÃO reescreve a URL (§11 permite) — apenas o valor inicial vem dela, e um
+// turno inválido para a unidade volta para "all" sem quebrar a página.
+type UnidadeSearch = { startDate?: string; endDate?: string; shiftId?: string };
 
 export const Route = createFileRoute("/unidades/$unitId/operacao")({
   validateSearch: (raw: Record<string, unknown>): UnidadeSearch => {
     const s = sanitizeFilters({
       startDate: typeof raw.startDate === "string" ? raw.startDate : undefined,
       endDate: typeof raw.endDate === "string" ? raw.endDate : undefined,
+      shiftId: typeof raw.shiftId === "string" ? raw.shiftId : undefined,
     });
     return { 
       startDate: s.startDate || undefined, 
-      endDate: s.endDate || undefined 
+      endDate: s.endDate || undefined,
+      shiftId: s.shiftId || undefined,
     };
   },
   head: () => ({
@@ -76,7 +82,7 @@ function UnitOperacaoPage() {
 
   const filters: DashboardFilters = useMemo(
     () => sanitizeFilters({ ...search, unitId }),
-    [search.startDate, search.endDate, unitId], // eslint-disable-line react-hooks/exhaustive-deps
+    [search.startDate, search.endDate, search.shiftId, unitId], // eslint-disable-line react-hooks/exhaustive-deps
   );
 
   useEffect(() => {
@@ -152,7 +158,11 @@ function UnitOperacaoPage() {
     navigate({
       to: "/unidades/$unitId/operacao",
       params: { unitId },
-      search: { startDate: next.startDate, endDate: next.endDate },
+      search: {
+        startDate: next.startDate,
+        endDate: next.endDate,
+        ...(next.shiftId ? { shiftId: next.shiftId } : {}),
+      },
     });
   };
 
@@ -162,7 +172,15 @@ function UnitOperacaoPage() {
         <div className={`flex items-center gap-2 transition-all duration-300 ${sidebarOpen ? "pl-0" : "pl-14"}`}>
           <img src={logoUrl} alt="Logo" className="w-10 h-10 object-contain" />
           <span className="text-neutral-400">›</span>
-          <Link to="/painel" search={{ startDate: filters.startDate, endDate: filters.endDate }} className="text-neutral-500 hover:text-neutral-800">
+          <Link
+            to="/painel"
+            search={{
+              startDate: filters.startDate,
+              endDate: filters.endDate,
+              ...(filters.shiftId ? { shiftId: filters.shiftId } : {}),
+            }}
+            className="text-neutral-500 hover:text-neutral-800"
+          >
             Painel
           </Link>
           <span className="text-neutral-400">›</span>
@@ -178,7 +196,11 @@ function UnitOperacaoPage() {
             <div className="flex items-start gap-3">
               <Link
                 to="/painel"
-                search={{ startDate: filters.startDate, endDate: filters.endDate }}
+                search={{
+                  startDate: filters.startDate,
+                  endDate: filters.endDate,
+                  ...(filters.shiftId ? { shiftId: filters.shiftId } : {}),
+                }}
                 aria-label="Voltar ao painel"
                 className="inline-flex items-center justify-center w-9 h-9 rounded-lg border border-neutral-200 bg-white hover:bg-neutral-100 focus:outline-none focus:ring-2 focus:ring-[#FF007F]/40"
               >
@@ -193,7 +215,9 @@ function UnitOperacaoPage() {
                 </p>
               </div>
             </div>
-            <OperationalDashboardFilters value={filters} onChange={setFilters} />
+            {/* O detalhe tem seletor de turno próprio — o turno global não é
+                duplicado aqui (ver §11). */}
+            <OperationalDashboardFilters value={filters} onChange={setFilters} showShift={false} />
           </div>
 
           {!authLoadingRef && !hasWorkspace && (
@@ -258,11 +282,17 @@ function UnitOperacaoContent({
   backTo: { startDate: string; endDate: string };
 }) {
   void backTo; // preservado para uso futuro
+  // Turno do detalhe (6B.3): inicializado pelo `shiftId` da URL vindo da
+  // navegação do /painel e aplicado ao KPI de tarefas, à lista de tarefas e à
+  // aba Rotinas. A mudança local NÃO reescreve a URL (§11) — apenas o valor
+  // inicial vem dela.
+  const [shift, setShift] = useState<string>(filters.shiftId ?? "all");
   const compliance = useUnitCompliance({
     startDate: filters.startDate,
     endDate: filters.endDate,
     unitId: filters.unitId,
     organizationId,
+    shiftId: shift === "all" ? undefined : shift,
   });
   // A timezone da unidade é a MESMA fonte usada pela agregação: o período do
   // detalhe passa a ser o dia civil da unidade, não o dia UTC (6B.2A).
@@ -302,7 +332,6 @@ function UnitOperacaoContent({
   const meta = STATUS_META[status];
 
   // Filtros locais
-  const [shift, setShift] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   // Filtro de status PRÓPRIO das rotinas: os filtros de tarefa (criticidade,
   // evidência, canceladas) são específicos de task_executions e não podem
@@ -336,6 +365,17 @@ function UnitOperacaoContent({
     for (const o of occurrences.data) if (o.shiftId && o.shiftName) map.set(o.shiftId, o.shiftName);
     return Array.from(map, ([id, name]) => ({ id, name }));
   }, [enriched, occurrences.data]);
+
+  // Fallback seguro do turno vindo da URL: um `shiftId` que não pertence à
+  // unidade (ou é inválido) volta para "all" assim que os dados do escopo
+  // terminam de carregar — nunca consultamos a unidade com um turno impossível.
+  // Enquanto o escopo carrega, o valor é preservado (é um filtro legítimo).
+  const shiftsLoaded = !compliance.loading && !details.loading && !occurrences.loading;
+  useEffect(() => {
+    if (shift === "all") return;
+    if (!shiftsLoaded || shiftOptions.length === 0) return;
+    if (!shiftOptions.some((s) => s.id === shift)) setShift("all");
+  }, [shift, shiftsLoaded, shiftOptions]);
 
   const filtered = useMemo(() => {
     return enriched.filter(({ e, derived }) => {

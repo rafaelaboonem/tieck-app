@@ -219,7 +219,20 @@ describe('useUnitCompliance — 6B.1B workspace scope', () => {
       endDate: '2026-12-31', // janela inclui hoje
     }));
 
-    expect(supabase.channel).toHaveBeenCalledWith('compliance-org-1-2026-01-01-2026-12-31-all');
+    // 6B.3: o turno também identifica o canal — semTurno = "all".
+    expect(supabase.channel).toHaveBeenCalledWith('compliance-org-1-2026-01-01-2026-12-31-all-all');
+  });
+
+  it('realtime channel name carries the selected shift', async () => {
+    renderHook(() => useUnitCompliance({
+      ...baseParams,
+      endDate: '2026-12-31',
+      shiftId: 'shift-manha',
+    }));
+
+    expect(supabase.channel).toHaveBeenCalledWith(
+      'compliance-org-1-2026-01-01-2026-12-31-all-shift-manha',
+    );
   });
 });
 

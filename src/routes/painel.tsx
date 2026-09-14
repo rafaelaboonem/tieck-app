@@ -34,9 +34,11 @@ import { useUnitCompliance, type UnitComplianceRow } from "@/hooks/useUnitCompli
 import { useUnitOccurrenceMetrics } from "@/hooks/useUnitOccurrenceMetrics";
 import { ScheduledOccurrencesSection } from "@/components/dashboard/ScheduledOccurrencesSection";
 import { getOperationalStatus, aggregateWeighted } from "@/lib/operational-status";
+import { resolveEffectiveShiftId, shouldClearShiftId } from "@/lib/dashboard-filters";
+import { useShiftOptions } from "@/hooks/useShiftOptions";
 
 // URL-synced filters. Validação isomórfica — nunca lança para não quebrar SSR.
-type PainelSearch = { startDate?: string; endDate?: string; unitId?: string };
+type PainelSearch = { startDate?: string; endDate?: string; unitId?: string; shiftId?: string };
 
 export const Route = createFileRoute("/painel")({
   validateSearch: (raw: Record<string, unknown>): PainelSearch => {
@@ -44,11 +46,13 @@ export const Route = createFileRoute("/painel")({
       startDate: typeof raw.startDate === "string" ? raw.startDate : undefined,
       endDate: typeof raw.endDate === "string" ? raw.endDate : undefined,
       unitId: typeof raw.unitId === "string" ? raw.unitId : undefined,
+      shiftId: typeof raw.shiftId === "string" ? raw.shiftId : undefined,
     });
-    return { 
-      startDate: s.startDate || undefined, 
-      endDate: s.endDate || undefined, 
-      unitId: s.unitId || undefined 
+    return {
+      startDate: s.startDate || undefined,
+      endDate: s.endDate || undefined,
+      unitId: s.unitId || undefined,
+      shiftId: s.shiftId || undefined,
     };
   },
   head: () => ({
@@ -72,7 +76,7 @@ function PainelPage() {
   // Filtros centrais derivados da URL (fonte da verdade única, sem loop).
   const filters: DashboardFilters = useMemo(
     () => sanitizeFilters(search),
-    [search.startDate, search.endDate, search.unitId], // eslint-disable-line react-hooks/exhaustive-deps
+    [search.startDate, search.endDate, search.unitId, search.shiftId], // eslint-disable-line react-hooks/exhaustive-deps
   );
 
   // Escopo explícito: somente dados do workspace atual (defesa em profundidade
@@ -80,10 +84,32 @@ function PainelPage() {
   const canLoadOperationalData =
     !rbacLoading && !authLoading && !!user && isAdmin && !!currentWorkspace?.id;
 
+  // Turno global (6B.3): as opções são resolvidas para o escopo ATUAL (workspace
+  // + unidade). Enquanto não resolvem, nenhuma consulta de dados é disparada com
+  // um turno que pode não existir na unidade escolhida — e, se o turno selecionado
+  // não pertencer à unidade, ele é limpo da URL em vez de ficar como combinação
+  // impossível.
+  const shiftOptions = useShiftOptions({
+    organizationId: currentWorkspace?.id ?? null,
+    unitId: filters.unitId,
+    enabled: canLoadOperationalData,
+  });
+  const availableShiftIds = useMemo(
+    () => shiftOptions.shifts.map((s) => s.id),
+    [shiftOptions.shifts],
+  );
+  const effectiveShiftId = resolveEffectiveShiftId({
+    shiftId: filters.shiftId,
+    availableShiftIds,
+    optionsResolved: shiftOptions.resolved,
+  });
+  const canLoadFilteredData = canLoadOperationalData && (!filters.shiftId || shiftOptions.resolved);
+
   const compliance = useUnitCompliance({
     ...filters,
+    shiftId: effectiveShiftId,
     organizationId: currentWorkspace?.id ?? null,
-    enabled: canLoadOperationalData
+    enabled: canLoadFilteredData,
   });
   const rows = compliance.data;
 
@@ -93,17 +119,26 @@ function PainelPage() {
   // heurística). Mesmo gate e mesmo escopo do restante do painel.
   const occurrences = useUnitOccurrenceMetrics({
     ...filters,
+    shiftId: effectiveShiftId,
     organizationId: currentWorkspace?.id ?? null,
-    enabled: canLoadOperationalData,
+    enabled: canLoadFilteredData,
   });
 
-  const dueCompliance = useMemo(() => aggregateWeighted(
-    rows.map((r) => ({ weightDone: r.dueWeightDone, weightTotal: r.dueWeightTotal })),
-  ), [rows]);
+  const dueCompliance = useMemo(
+    () =>
+      aggregateWeighted(
+        rows.map((r) => ({ weightDone: r.dueWeightDone, weightTotal: r.dueWeightTotal })),
+      ),
+    [rows],
+  );
 
-  const plannedCompliance = useMemo(() => aggregateWeighted(
-    rows.map((r) => ({ weightDone: r.weightDone, weightTotal: r.weightTotal })),
-  ), [rows]);
+  const plannedCompliance = useMemo(
+    () =>
+      aggregateWeighted(
+        rows.map((r) => ({ weightDone: r.weightDone, weightTotal: r.weightTotal })),
+      ),
+    [rows],
+  );
 
   const kpis = useMemo(() => {
     let scheduled = 0,
@@ -150,17 +185,36 @@ function PainelPage() {
     }
   }, [isAdmin, rbacLoading, authLoading, user, navigate]);
 
-  const setFilters = (next: DashboardFilters) => {
+  const navigateWithFilters = (next: DashboardFilters, replace: boolean) => {
     navigate({
       to: "/painel",
       search: {
         startDate: next.startDate,
         endDate: next.endDate,
         ...(next.unitId ? { unitId: next.unitId } : {}),
+        ...(next.shiftId ? { shiftId: next.shiftId } : {}),
       },
-      replace: false,
+      replace,
     });
   };
+
+  const setFilters = (next: DashboardFilters) => navigateWithFilters(next, false);
+
+  // Limpeza da combinação impossível: um turno que não existe na unidade
+  // selecionada sai da URL automaticamente (replace, para não poluir o
+  // histórico). Só age quando as opções do escopo atual já são conhecidas.
+  useEffect(() => {
+    if (!canLoadOperationalData) return;
+    if (
+      shouldClearShiftId({
+        shiftId: filters.shiftId,
+        availableShiftIds,
+        optionsResolved: shiftOptions.resolved,
+      })
+    ) {
+      navigateWithFilters({ ...filters, shiftId: undefined }, true);
+    }
+  }, [canLoadOperationalData, filters, availableShiftIds, shiftOptions.resolved, navigate]);
 
   if (rbacLoading) {
     return (
@@ -168,7 +222,9 @@ function PainelPage() {
         <div className="p-4 sm:p-8 space-y-8">
           <Skeleton className="h-10 w-48" />
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-32 w-full" />)}
+            {[1, 2, 3, 4].map((i) => (
+              <Skeleton key={i} className="h-32 w-full" />
+            ))}
           </div>
         </div>
       </DashboardLayout>
@@ -186,9 +242,15 @@ function PainelPage() {
         <div
           className={`flex items-center gap-2 transition-all duration-300 ${!sidebarOpen && !isMobile ? "pl-14" : "pl-0"} ${isMobile && !sidebarOpen ? "pl-12" : "pl-0"}`}
         >
-          <img src={logoUrl} alt="Logo" className={`${isMobile ? "w-8 h-8" : "w-10 h-10"} object-contain`} />
+          <img
+            src={logoUrl}
+            alt="Logo"
+            className={`${isMobile ? "w-8 h-8" : "w-10 h-10"} object-contain`}
+          />
           <span className="text-neutral-400">›</span>
-          <span className="text-neutral-600 font-medium truncate max-w-[150px] sm:max-w-none">Painel operacional</span>
+          <span className="text-neutral-600 font-medium truncate max-w-[150px] sm:max-w-none">
+            Painel operacional
+          </span>
         </div>
       </header>
 
@@ -204,7 +266,11 @@ function PainelPage() {
                 {filters.unitId ? " · unidade filtrada" : " · todas as unidades"}
               </p>
             </div>
-            <OperationalDashboardFilters value={filters} onChange={setFilters} />
+            <OperationalDashboardFilters
+              value={filters}
+              onChange={setFilters}
+              shiftOptions={shiftOptions.shifts}
+            />
           </div>
 
           {compliance.error && (
@@ -336,7 +402,7 @@ function PainelPage() {
               <UnitPerformanceTable
                 rows={rows}
                 loading={compliance.loading}
-                onRowClick={(r) => openUnit(r, filters, navigate)}
+                onRowClick={(r) => openUnit(r, { ...filters, shiftId: effectiveShiftId }, navigate)}
               />
             </Card>
           </section>
@@ -348,7 +414,9 @@ function PainelPage() {
             loading={occurrences.loading}
             error={occurrences.error}
             onRetry={() => void occurrences.refresh()}
-            onUnitClick={(unitId) => openUnitById(unitId, filters, navigate)}
+            onUnitClick={(unitId) =>
+              openUnitById(unitId, { ...filters, shiftId: effectiveShiftId }, navigate)
+            }
           />
         </div>
       </main>
@@ -377,7 +445,14 @@ function openUnitById(
   navigate({
     to: "/unidades/$unitId/operacao",
     params: { unitId },
-    search: { startDate: f.startDate, endDate: f.endDate },
+    // O turno global acompanha o drill-down (6B.3): o detalhe inicializa o seu
+    // seletor a partir da URL e cai em "todos" se o turno não pertencer à
+    // unidade clicada.
+    search: {
+      startDate: f.startDate,
+      endDate: f.endDate,
+      ...(f.shiftId ? { shiftId: f.shiftId } : {}),
+    },
   });
 }
 

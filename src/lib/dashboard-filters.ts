@@ -6,6 +6,11 @@ export interface DashboardFilters {
   startDate: string; // YYYY-MM-DD
   endDate: string; // YYYY-MM-DD
   unitId?: string;
+  /**
+   * Turno global (6B.3). Ausente = TODOS os turnos, inclusive execuções/
+   * occurrences sem turno — nunca se usa NULL como sinônimo de "todos".
+   */
+  shiftId?: string;
 }
 
 export function todayISO(): string {
@@ -30,7 +35,41 @@ export function sanitizeFilters(raw: Partial<DashboardFilters>): DashboardFilter
   let end = isDate(raw.endDate) ? raw.endDate : def.endDate;
   if (start > end) [start, end] = [end, start];
   const unitId = typeof raw.unitId === "string" && raw.unitId.length > 0 ? raw.unitId : undefined;
-  return { startDate: start, endDate: end, unitId };
+  // Turno é opcional e fail-safe: string vazia, ausente ou de tipo errado sai do
+  // estado (nunca vira um filtro impossível).
+  const shiftId =
+    typeof raw.shiftId === "string" && raw.shiftId.length > 0 ? raw.shiftId : undefined;
+  return { startDate: start, endDate: end, unitId, shiftId };
+}
+
+/**
+ * Turno a ser efetivamente aplicado. Só aplica um turno quando ele é válido no
+ * escopo atual; enquanto as opções do escopo ainda não resolveram, o turno
+ * selecionado é mantido (é um filtro legítimo, não uma combinação impossível).
+ */
+export function resolveEffectiveShiftId(opts: {
+  shiftId?: string;
+  availableShiftIds: string[];
+  optionsResolved: boolean;
+}): string | undefined {
+  if (!opts.shiftId) return undefined;
+  if (!opts.optionsResolved) return opts.shiftId;
+  return opts.availableShiftIds.includes(opts.shiftId) ? opts.shiftId : undefined;
+}
+
+/**
+ * Um turno selecionado que não existe no escopo atual é uma combinação
+ * impossível: precisa ser limpo (nunca consultar a unidade B com o turno X da
+ * unidade A). Só decide depois que as opções do escopo resolveram.
+ */
+export function shouldClearShiftId(opts: {
+  shiftId?: string;
+  availableShiftIds: string[];
+  optionsResolved: boolean;
+}): boolean {
+  if (!opts.shiftId) return false;
+  if (!opts.optionsResolved) return false;
+  return !opts.availableShiftIds.includes(opts.shiftId);
 }
 
 export function detectPreset(f: DashboardFilters): PeriodPreset {

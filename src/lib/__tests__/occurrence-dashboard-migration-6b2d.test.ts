@@ -72,7 +72,7 @@ const rpcSql = sql.slice(sql.indexOf(`CREATE OR REPLACE FUNCTION public.${RPC}`)
 const rpcBody = functionBody(RPC);
 
 describe("6B.2D migration — arquivo e escopo", () => {
-  it("usa o próximo timestamp monotônico e é a única migration com esses objetos", () => {
+  it("usa o próximo timestamp monotônico e é a definidora canônica dos objetos", () => {
     expect(MIGRATION).toContain("20260914160000");
 
     const files = readdirSync(resolve(process.cwd(), MIGRATIONS_DIR)).filter((f) =>
@@ -80,11 +80,31 @@ describe("6B.2D migration — arquivo e escopo", () => {
     );
     expect(files).toContain("20260914160000_6b2d_occurrence_dashboard.sql");
 
-    const definers = files.filter((f) => {
-      const text = readFileSync(resolve(process.cwd(), MIGRATIONS_DIR, f), "utf8");
-      return text.includes(`CREATE VIEW public.${VIEW}`) || text.includes(`FUNCTION public.${RPC}`);
-    });
-    expect(definers).toEqual(["20260914160000_6b2d_occurrence_dashboard.sql"]);
+    // Próximo timestamp monotônico depois de 14150000 (5E.2D.1).
+    const sameDay = files
+      .map((f) => f.slice(0, 14))
+      .filter((v) => v.startsWith("20260914"))
+      .sort();
+    expect(sameDay[sameDay.indexOf("20260914150000") + 1]).toBe("20260914160000");
+
+    // A 6B.3 (14170000) recria a VIEW para adicionar a dimensão de turno — ela é
+    // posterior e intencional. A RPC continua sendo definida SOMENTE aqui, e
+    // nenhuma migration anterior a esta define os objetos.
+    const viewDefiners = files.filter((f) =>
+      readFileSync(resolve(process.cwd(), MIGRATIONS_DIR, f), "utf8").includes(
+        `CREATE VIEW public.${VIEW}`,
+      ),
+    );
+    expect(viewDefiners).toEqual([
+      "20260914160000_6b2d_occurrence_dashboard.sql",
+      "20260914170000_6b3_global_shift_filter.sql",
+    ]);
+    const rpcDefiners = files.filter((f) =>
+      readFileSync(resolve(process.cwd(), MIGRATIONS_DIR, f), "utf8").includes(
+        `FUNCTION public.${RPC}`,
+      ),
+    );
+    expect(rpcDefiners).toEqual(["20260914160000_6b2d_occurrence_dashboard.sql"]);
   });
 
   it("não altera nenhuma migration já aplicada", () => {

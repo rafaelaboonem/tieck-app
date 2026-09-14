@@ -21,6 +21,7 @@ import {
   type DashboardFilters,
   type PeriodPreset,
 } from "@/lib/dashboard-filters";
+import type { ShiftOption } from "@/hooks/useShiftOptions";
 
 export { defaultFilters, type DashboardFilters, type PeriodPreset };
 export { sanitizeFilters } from "@/lib/dashboard-filters";
@@ -28,9 +29,22 @@ export { sanitizeFilters } from "@/lib/dashboard-filters";
 interface Props {
   value: DashboardFilters;
   onChange: (next: DashboardFilters) => void;
+  /** Turnos válidos para o escopo atual (workspace ou unidade selecionada). */
+  shiftOptions?: ShiftOption[];
+  /**
+   * No detalhe da unidade existe um seletor de turno PRÓPRIO (escopo da unidade);
+   * renderizar também o turno global criaria dois controles disputando o mesmo
+   * conceito. O detalhe passa `false` e mantém o seu.
+   */
+  showShift?: boolean;
 }
 
-export function OperationalDashboardFilters({ value, onChange }: Props) {
+export function OperationalDashboardFilters({
+  value,
+  onChange,
+  shiftOptions = [],
+  showShift = true,
+}: Props) {
   const preset = detectPreset(value);
   const { units, loading } = useAccessibleUnits(false);
   const [openStart, setOpenStart] = useState(false);
@@ -57,7 +71,7 @@ export function OperationalDashboardFilters({ value, onChange }: Props) {
     setOpenEnd(false);
   }
 
-  const dirty = preset !== "7d" || Boolean(value.unitId);
+  const dirty = preset !== "7d" || Boolean(value.unitId) || Boolean(value.shiftId);
 
   return (
     <div className="flex flex-col md:flex-row md:items-end gap-3 flex-wrap">
@@ -150,6 +164,30 @@ export function OperationalDashboardFilters({ value, onChange }: Props) {
           </SelectContent>
         </Select>
       </div>
+
+      {showShift && (
+        <div className="flex flex-col gap-1">
+          <label htmlFor="dash-shift" className="text-xs font-medium text-neutral-600">
+            Turno
+          </label>
+          <Select
+            value={value.shiftId ?? "__all__"}
+            onValueChange={(v) => onChange({ ...value, shiftId: v === "__all__" ? undefined : v })}
+          >
+            <SelectTrigger id="dash-shift" className="w-[200px]" aria-label="Turno">
+              <SelectValue placeholder="Todos os turnos" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all__">Todos os turnos</SelectItem>
+              {shiftOptions.map((s) => (
+                <SelectItem key={s.id} value={s.id}>
+                  {s.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
 
       {dirty && (
         <Button

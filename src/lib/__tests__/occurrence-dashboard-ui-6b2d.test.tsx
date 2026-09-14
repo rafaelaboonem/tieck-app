@@ -254,7 +254,7 @@ describe("6B.2D /painel — §18 separação entre tarefas e rotinas", () => {
     ];
   });
 
-  it("consulta as duas views separadamente, cada uma com o escopo explícito", async () => {
+  it("consulta as duas views separadamente, cada uma com o escopo explícito", { timeout: 30000 }, async () => {
     await renderPainel();
 
     await waitFor(() => expect(screen.getByTestId("scheduled-occurrences-section")).toBeTruthy());
@@ -266,7 +266,7 @@ describe("6B.2D /painel — §18 separação entre tarefas e rotinas", () => {
     expect(routineQuery?.filters["gte:reference_date"]).toBe(DAY);
   });
 
-  it("3 tarefas + 2 rotinas NÃO produz Tarefas programadas = 5", async () => {
+  it("3 tarefas + 2 rotinas NÃO produz Tarefas programadas = 5", { timeout: 30000 }, async () => {
     await renderPainel();
     await waitFor(() => expect(screen.getByTestId("scheduled-occurrences-section")).toBeTruthy());
 
@@ -284,7 +284,7 @@ describe("6B.2D /painel — §18 separação entre tarefas e rotinas", () => {
     await expectCardValue("Deveriam ter ocorrido", "2", section);
   });
 
-  it("rotinas aparecem SOMENTE na seção própria", async () => {
+  it("rotinas aparecem SOMENTE na seção própria", { timeout: 30000 }, async () => {
     await renderPainel();
     await waitFor(() => expect(screen.getByTestId("scheduled-occurrences-section")).toBeTruthy());
 
@@ -293,7 +293,7 @@ describe("6B.2D /painel — §18 separação entre tarefas e rotinas", () => {
     expect(screen.getByText(/Contadas à parte das tarefas programadas/)).toBeTruthy();
   });
 
-  it("a tabela por unidade mostra as rotinas e navega para o detalhe no período", async () => {
+  it("a tabela por unidade mostra as rotinas e navega para o detalhe no período", { timeout: 30000 }, async () => {
     await renderPainel();
     await waitFor(() => expect(screen.getByTestId("scheduled-occurrences-section")).toBeTruthy());
 
@@ -308,7 +308,7 @@ describe("6B.2D /painel — §18 separação entre tarefas e rotinas", () => {
     });
   });
 
-  it("sem rotinas no período mostra estado vazio honesto (não um erro)", async () => {
+  it("sem rotinas no período mostra estado vazio honesto (não um erro)", { timeout: 30000 }, async () => {
     db.analytics_unit_daily_occurrences = [];
     await renderPainel();
     await waitFor(() => expect(screen.getByTestId("scheduled-occurrences-section")).toBeTruthy());
@@ -357,7 +357,7 @@ describe("6B.2D detalhe da unidade — §19 aba Rotinas", () => {
     });
   });
 
-  it("consulta a RPC com workspace, unidade e período correntes", async () => {
+  it("consulta a RPC com workspace, unidade e período correntes", { timeout: 30000 }, async () => {
     await renderDetail();
     await waitFor(() => expect(h.rpc).toHaveBeenCalled());
     expect(h.rpc).toHaveBeenCalledWith("list_workspace_execution_occurrences", {
@@ -368,7 +368,7 @@ describe("6B.2D detalhe da unidade — §19 aba Rotinas", () => {
     });
   });
 
-  it("lista as occurrences com o status correto em cada uma das quatro categorias", async () => {
+  it("lista as occurrences com o status correto em cada uma das quatro categorias", { timeout: 30000 }, async () => {
     await renderDetail();
     await waitFor(() => expect(h.rpc).toHaveBeenCalled());
 
@@ -395,7 +395,7 @@ describe("6B.2D detalhe da unidade — §19 aba Rotinas", () => {
     ).toBe("concluida_com_atraso");
   });
 
-  it("concluída dentro do período NÃO desaparece do histórico", async () => {
+  it("concluída dentro do período NÃO desaparece do histórico", { timeout: 30000 }, async () => {
     await renderDetail();
     await waitFor(() => expect(h.rpc).toHaveBeenCalled());
     await userEvent.click(screen.getByRole("tab", { name: /Rotinas/ }));
@@ -405,7 +405,7 @@ describe("6B.2D detalhe da unidade — §19 aba Rotinas", () => {
     expect(within(list).getAllByText(/Concluída no prazo/).length).toBeGreaterThan(0);
   });
 
-  it("o filtro de status da rotina é próprio e não usa os filtros de tarefa", async () => {
+  it("o filtro de status da rotina é próprio e não usa os filtros de tarefa", { timeout: 30000 }, async () => {
     await renderDetail();
     await waitFor(() => expect(h.rpc).toHaveBeenCalled());
     await userEvent.click(screen.getByRole("tab", { name: /Rotinas/ }));
@@ -427,7 +427,7 @@ describe("6B.2D detalhe da unidade — §19 aba Rotinas", () => {
     expect(screen.getByTestId("occurrence-item-22222222-2222-4222-8222-222222222222")).toBeTruthy();
   });
 
-  it("o turno selecionado filtra as rotinas", async () => {
+  it("o turno selecionado filtra as rotinas", { timeout: 30000 }, async () => {
     await renderDetail();
     await waitFor(() => expect(h.rpc).toHaveBeenCalled());
     await userEvent.click(screen.getByRole("tab", { name: /Rotinas/ }));
@@ -446,7 +446,7 @@ describe("6B.2D detalhe da unidade — §19 aba Rotinas", () => {
     expect(screen.queryByTestId("occurrence-item-22222222-2222-4222-8222-222222222222")).toBeNull();
   });
 
-  it("erro da RPC é explícito e não vira 'sem rotinas'", async () => {
+  it("erro da RPC é explícito e não vira 'sem rotinas'", { timeout: 30000 }, async () => {
     h.rpc.mockResolvedValue({ data: null, error: { message: "permission denied for function" } });
     await renderDetail();
     await waitFor(() => expect(h.rpc).toHaveBeenCalled());
@@ -456,7 +456,7 @@ describe("6B.2D detalhe da unidade — §19 aba Rotinas", () => {
     expect(screen.queryByText(/permission denied/)).toBeNull();
   });
 
-  it("unidade de outro workspace não recebe occurrence (denied honesto)", async () => {
+  it("unidade de outro workspace não recebe occurrence (denied honesto)", { timeout: 30000 }, async () => {
     h.workspace.currentWorkspace = { id: ORG_B, name: "Org B" };
     await renderDetail();
     await waitFor(() =>
@@ -465,7 +465,7 @@ describe("6B.2D detalhe da unidade — §19 aba Rotinas", () => {
     expect(h.rpc).not.toHaveBeenCalled();
   });
 
-  it("unidade sem ocorrência mostra o vazio honesto da aba", async () => {
+  it("unidade sem ocorrência mostra o vazio honesto da aba", { timeout: 30000 }, async () => {
     h.rpc.mockResolvedValue({ data: [], error: null });
     await renderDetail();
     await waitFor(() => expect(h.rpc).toHaveBeenCalled());

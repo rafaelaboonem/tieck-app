@@ -30,6 +30,8 @@ const OCCURRENCE_VIEW_COLUMNS = [
   "unit_id",
   "unit_name",
   "reference_date",
+  "shift_id",
+  "shift_name",
   "total_occurrences",
   "completed_occurrences",
   "completed_on_time",
@@ -62,6 +64,11 @@ export type UnitOccurrenceMetricsParams = {
   startDate: string; // YYYY-MM-DD inclusive
   endDate: string; // YYYY-MM-DD inclusive
   unitId?: string;
+  /**
+   * Turno global (6B.3). Ausente = todos os turnos (inclusive rotinas sem
+   * turno). A occurrence herda o turno do checklist.
+   */
+  shiftId?: string;
   /** workspaces.id === organization_id (explicit defense beyond RLS — 6B.1B). */
   organizationId?: string | null;
   enabled?: boolean;
@@ -77,6 +84,7 @@ type MetricsQueryParams = {
   startDate: string;
   endDate: string;
   unitId: string | null;
+  shiftId: string | null;
 };
 
 const EMPTY_ROWS: UnitOccurrenceRow[] = [];
@@ -84,9 +92,10 @@ const EMPTY_ROWS: UnitOccurrenceRow[] = [];
 export function useUnitOccurrenceMetrics(
   params: UnitOccurrenceMetricsParams,
 ): UseUnitOccurrenceMetricsResult {
-  const { startDate, endDate, unitId, organizationId, enabled = true } = params;
+  const { startDate, endDate, unitId, shiftId, organizationId, enabled = true } = params;
   const canQuery = !!enabled && !!organizationId;
-  const scope = `${organizationId ?? ""}|${startDate}|${endDate}|${unitId ?? ""}`;
+  // O turno faz parte do escopo: trocar de turno invalida respostas em voo.
+  const scope = `${organizationId ?? ""}|${startDate}|${endDate}|${unitId ?? ""}|${shiftId ?? ""}`;
 
   // Memoized on the real values so the shared hook's closures stay stable.
   const queryParams = useMemo<MetricsQueryParams>(
@@ -95,8 +104,9 @@ export function useUnitOccurrenceMetrics(
       startDate,
       endDate,
       unitId: unitId ?? null,
+      shiftId: shiftId ?? null,
     }),
-    [organizationId, startDate, endDate, unitId],
+    [organizationId, startDate, endDate, unitId, shiftId],
   );
 
   // Stable fetcher: the params are passed IN, so a stale callback can only ever
@@ -112,6 +122,9 @@ export function useUnitOccurrenceMetrics(
     // unit_id once when a specific unit is selected — same semantics as the
     // existing task query.
     if (p.unitId) q = q.eq("unit_id", p.unitId);
+    // Sem turno selecionado não há filtro de shift_id: "todos os turnos" inclui
+    // as rotinas sem turno.
+    if (p.shiftId) q = q.eq("shift_id", p.shiftId);
 
     const { data, error } = await q;
     // Generic failure only: no SQL/schema detail ever reaches the UI or the logs.

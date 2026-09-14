@@ -15,6 +15,12 @@ export interface UseUnitComplianceParams {
   endDate: string; // YYYY-MM-DD (inclusivo)
   unitId?: string;
   /**
+   * Turno global (6B.3). Ausente = TODOS os turnos (inclusive execuções sem
+   * turno). Quando informado, o cliente aplica `.eq("shift_id", shiftId)` — a
+   * view agora tem grão por turno e o filtro apenas recorta o conjunto.
+   */
+  shiftId?: string;
+  /**
    * Escopo organizacional obrigatório (workspaces.id === organization_id).
    * Fornecido pelo consumidor — defesa em profundidade além da RLS.
    */
@@ -27,6 +33,8 @@ interface DailyRow {
   unit_id: string;
   unit_name: string;
   reference_date: string;
+  shift_id: string | null;
+  shift_name: string | null;
   total_scheduled_tasks: number;
   completed_tasks: number;
   completed_on_time: number;
@@ -44,6 +52,26 @@ interface DailyRow {
   due_weight_done: number;
   due_compliance_percentage: number | null;
 }
+
+/**
+ * Contrato estrutural mínimo do cliente para a view analítica. A dimensão de
+ * turno (6B.3) ainda não existe em `supabase/types.ts`, porque a migration
+ * 20260914170000 não foi aplicada remotamente — tipamos apenas o encadeamento
+ * usado aqui, sem alterar tipos gerados a partir de um schema que ainda não os
+ * possui (mesma estratégia de useUnitOccurrenceMetrics/useShiftOptions).
+ */
+type ComplianceQuery = PromiseLike<{ data: unknown; error: { message: string } | null }> & {
+  eq: (column: string, value: string) => ComplianceQuery;
+  gte: (column: string, value: string) => ComplianceQuery;
+  lte: (column: string, value: string) => ComplianceQuery;
+};
+type ComplianceViewClient = {
+  from: (table: "analytics_unit_daily_compliance") => {
+    select: (columns: string) => ComplianceQuery;
+  };
+};
+
+const complianceView = supabase as unknown as ComplianceViewClient;
 
 export type UnitComplianceRow = UnitComplianceData & {
   completedOnTime: number;
@@ -156,14 +184,17 @@ function complianceScope(p: {
   startDate: string;
   endDate: string;
   unitId?: string;
+  shiftId?: string;
 }): string {
-  return `${p.organizationId ?? ""}|${p.startDate}|${p.endDate}|${p.unitId ?? ""}`;
+  // O turno faz parte do escopo: trocar de turno invalida respostas em voo
+  // exatamente como trocar de unidade (6B.1B/6B.3).
+  return `${p.organizationId ?? ""}|${p.startDate}|${p.endDate}|${p.unitId ?? ""}|${p.shiftId ?? ""}`;
 }
 
 export function useUnitCompliance(params: UseUnitComplianceParams): UseUnitComplianceResult {
-  const { startDate, endDate, unitId, organizationId, enabled = true } = params;
+  const { startDate, endDate, unitId, shiftId, organizationId, enabled = true } = params;
   const canQuery = !!enabled && !!organizationId;
-  const scope = complianceScope({ organizationId, startDate, endDate, unitId });
+  const scope = complianceScope({ organizationId, startDate, endDate, unitId, shiftId });
   // renderScope: escopo de dados + elegibilidade atual da consulta. A tag do
   // estado publicado inclui a elegibilidade — com enabled=false o retorno é
   // neutro sincronamente, e ao reabilitar (false → true) o estado anterior é
@@ -255,16 +286,19 @@ export function useUnitCompliance(params: UseUnitComplianceParams): UseUnitCompl
     setError(null);
     try {
       // O filtro de organização é obrigatório — nunca consultar fora do escopo.
-      let q = supabase
+      let q = complianceView
         .from("analytics_unit_daily_compliance")
         .select(
-          "organization_id,unit_id,unit_name,reference_date,total_scheduled_tasks,completed_tasks,completed_on_time,completed_late,overdue_open_tasks,delayed_tasks,critical_failures,pending_evidences,weight_total,weight_done,compliance_percentage,total_due_tasks,due_completed_tasks,due_weight_total,due_weight_done,due_compliance_percentage",
+          "organization_id,unit_id,unit_name,reference_date,shift_id,shift_name,total_scheduled_tasks,completed_tasks,completed_on_time,completed_late,overdue_open_tasks,delayed_tasks,critical_failures,pending_evidences,weight_total,weight_done,compliance_percentage,total_due_tasks,due_completed_tasks,due_weight_total,due_weight_done,due_compliance_percentage",
         )
         .eq("organization_id", organizationId)
         .gte("reference_date", startDate)
         .lte("reference_date", endDate);
 
       if (unitId) q = q.eq("unit_id", unitId);
+      // Sem shiftId NENHUM filtro de turno é aplicado: "todos os turnos" inclui
+      // as execuções sem turno, que ficam de fora de qualquer turno específico.
+      if (shiftId) q = q.eq("shift_id", shiftId);
 
       const { data: rows, error: err } = await q;
 
@@ -278,7 +312,7 @@ export function useUnitCompliance(params: UseUnitComplianceParams): UseUnitCompl
         setData([]);
       } else {
         stateTagRef.current = requestRenderScope;
-        setData(aggregateByUnit((rows ?? []) as DailyRow[]));
+        setData(aggregateByUnit((rows ?? []) as unknown as DailyRow[]));
       }
     } catch (e) {
       // Promise rejeitada (rede/exceção): fail-closed, sem dados antigos.
@@ -290,7 +324,7 @@ export function useUnitCompliance(params: UseUnitComplianceParams): UseUnitCompl
     } finally {
       if (isCurrent()) setLoading(false);
     }
-  }, [startDate, endDate, unitId, organizationId, scope, renderScope, cycle, canQuery]);
+  }, [startDate, endDate, unitId, shiftId, organizationId, scope, renderScope, cycle, canQuery]);
 
   useEffect(() => {
     // Troca de renderScope (escopo/params/elegibilidade): invalida requisições
@@ -333,7 +367,11 @@ export function useUnitCompliance(params: UseUnitComplianceParams): UseUnitCompl
     };
     const orgFilter = `organization_id=eq.${organizationId}`;
     const ch = supabase
-      .channel(`compliance-${organizationId}-${startDate}-${endDate}-${unitId ?? "all"}`)
+      // O nome do canal inclui o turno: trocar de turno abre um canal próprio
+      // em vez de reaproveitar (por nome) o canal do recorte anterior.
+      .channel(
+        `compliance-${organizationId}-${startDate}-${endDate}-${unitId ?? "all"}-${shiftId ?? "all"}`,
+      )
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "task_executions", filter: orgFilter },
@@ -354,7 +392,7 @@ export function useUnitCompliance(params: UseUnitComplianceParams): UseUnitCompl
       if (timer) clearTimeout(timer);
       supabase.removeChannel(ch);
     };
-  }, [load, startDate, endDate, unitId, organizationId, canQuery]);
+  }, [load, startDate, endDate, unitId, shiftId, organizationId, canQuery]);
 
   // Propriedade síncrona do render (antes de qualquer efeito): o estado só é
   // exposto se a tag pertencer ao renderScope ATUAL — cobre troca de escopo E
