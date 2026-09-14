@@ -19,6 +19,28 @@ experimental, efeitos decorativos ou landing page dentro do produto.
 > Esta Skill continua sendo a **fonte de regras**; aquele arquivo é a fonte de
 > **direção estética/compositiva**. Em conflito, as regras daqui prevalecem.
 
+### Prioridade de regras
+
+O projeto também carrega **skills externas auxiliares** em `.agents/skills/`
+(`anthropic-frontend-design`, `calm-ui`, `tailwind-design-system`, `design-review`).
+Ordem de precedência:
+
+1. **`tieck-ui`** (este arquivo) — regras, tokens e padrões reais do projeto.
+2. **[`references/visual-direction.md`](references/visual-direction.md)** — direção
+   estética/compositiva.
+3. **Skill externa relevante** — no máximo **uma** por tarefa
+   (matriz de uso em [`../README.md`](../README.md)).
+4. **Preferência genérica do agente.**
+
+**Se houver conflito, o Tieck vence.** Exemplo: se `anthropic-frontend-design` sugerir
+uma direção tipográfica ousada, ou `tailwind-design-system` propuser recriar o `@theme`
+com outros tokens, siga o Tieck — *Operational precision / Quiet confidence / Structured
+density / Designed, not decorated*. Conflitos já mapeados estão no registro anti-conflito
+de [`../README.md`](../README.md); a skill externa **nunca** é editada para resolver um
+conflito. Consequência prática: uma skill externa **não** autoriza, em nome de estética,
+alterar permissões, rotas, filtros, contagens, status, lifecycle, contratos de dados ou
+ações destrutivas (ver §16).
+
 Esta Skill descreve o Tieck REAL. Antes de criar qualquer componente novo:
 
 1. **Procure componente existente** (`src/components/ui/`, `src/components/tremor/ui/`,
