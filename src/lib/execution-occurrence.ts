@@ -19,6 +19,12 @@
  */
 import { supabase } from "@/integrations/supabase/client";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { deriveOccurrenceState } from "./occurrence-lifecycle";
+
+// Re-exported so the bridge's public surface is unchanged; the single
+// definition lives in the pure ./occurrence-lifecycle module (6B.2C).
+export { deriveOccurrenceState };
+export type { OccurrenceExecutionState } from "./occurrence-lifecycle";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Local narrow DB contract (types.ts untouched)
@@ -51,8 +57,6 @@ const occurrenceClient = supabase as unknown as SupabaseClient<OccurrenceDatabas
 // ─────────────────────────────────────────────────────────────────────────────
 // Context / state
 // ─────────────────────────────────────────────────────────────────────────────
-
-export type OccurrenceExecutionState = "pending" | "started" | "overdue" | "completed";
 
 export interface OccurrenceExecutionContext {
   occurrenceId: string;
@@ -175,21 +179,6 @@ export function parseOccurrenceContext(raw: unknown): OccurrenceExecutionContext
     completedAt,
     responseId: asOptionalString(row.response_id),
   };
-}
-
-/**
- * Canonical state derived ONLY from the timestamps that 5E.2A defines as the
- * truth (completed_at, due_at, started_at) — no persisted status column.
- */
-export function deriveOccurrenceState(
-  context: Pick<OccurrenceExecutionContext, "startedAt" | "completedAt" | "dueAt">,
-  now: Date = new Date(),
-): OccurrenceExecutionState {
-  if (context.completedAt) return "completed";
-  const due = Date.parse(context.dueAt);
-  if (!Number.isNaN(due) && now.getTime() > due) return "overdue";
-  if (context.startedAt) return "started";
-  return "pending";
 }
 
 /**

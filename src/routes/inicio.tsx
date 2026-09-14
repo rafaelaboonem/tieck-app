@@ -13,9 +13,15 @@ import { getAssignmentStatus, getStatusBadge } from "@/utils/assignment-status";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { HomeOperationalSummary } from "@/components/home/HomeOperationalSummary";
+import { HomeOccurrenceSummary } from "@/components/home/HomeOccurrenceSummary";
 import { HomeOperationalPriorities } from "@/components/home/HomeOperationalPriorities";
 import { useHomeCameraAttention } from "@/hooks/useHomeCameraAttention";
 import { canLoadHomeCameraAttention } from "@/lib/home-camera-attention";
+import { useMyExecutionOccurrences } from "@/hooks/useMyExecutionOccurrences";
+import {
+  canLoadMyExecutionOccurrences,
+  countHomeOpenOccurrences,
+} from "@/lib/home-execution-occurrences";
 import logoUrl from "../assets/local/logo-k.webp";
 import { toast } from "sonner";
 import {
@@ -48,6 +54,25 @@ export function Dashboard() {
   const { user, loading: authLoading, needsEmailConfirmation } = useAuth();
   const { canManage, isViewer, workspaceMemberId, role, loading: rbacLoading } = useWorkspaceRBAC(currentWorkspace?.id);
   const navigate = useNavigate();
+
+  // Home 6B.2C — as próprias ocorrências agendadas (5E) do responsável.
+  // O gate é auth + contexto de workspace resolvido; NÃO é por papel: a leitura
+  // já é estritamente do próprio membro (resolvida no banco por auth.uid() +
+  // membership ativa), e esconder de um Viewer uma obrigação atribuída a ele
+  // seria justamente o erro que esta superfície corrige.
+  const canLoadOccurrences = canLoadMyExecutionOccurrences({
+    isAuthenticated: !!user?.id,
+    isWorkspaceContext: workspaceStatus === "workspace",
+    workspaceId: currentWorkspace?.id,
+  });
+  const { occurrences, error: occurrencesError } = useMyExecutionOccurrences({
+    workspaceId: currentWorkspace?.id,
+    enabled: canLoadOccurrences,
+  });
+  // Uma leitura que falhou nunca vira "zero rotinas".
+  const occurrenceCounts = occurrencesError || !canLoadOccurrences
+    ? undefined
+    : countHomeOpenOccurrences(occurrences);
   const [glow, setGlow] = useState(false);
   const [checklists, setChecklists] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -311,9 +336,24 @@ export function Dashboard() {
             ) : checklists.length > 0 ? (
               <div className="space-y-6">
                 <HomeOperationalSummary checklists={checklists} />
+                {/* 6B.2C: rotinas agendadas são um grupo próprio — a ocorrência
+                    não é um assignment e as duas contagens nunca se fundem. */}
+                <HomeOccurrenceSummary occurrenceCounts={occurrenceCounts} />
                 <HomeOperationalPriorities
                   checklists={checklists}
                   attentionByChecklist={cameraAttention}
+                  occurrences={occurrences}
+                  onOpenOccurrence={(occurrence) => {
+                    // Home 6B.2C: cada ocorrência é uma obrigação acionável do
+                    // PRÓPRIO responsável — abre o executor occurrence-aware
+                    // para qualquer papel (viewer/editor/admin). O bridge 6B.2B
+                    // assume o lifecycle a partir do occurrenceId.
+                    navigate({
+                      to: "/executar/$id",
+                      params: { id: occurrence.checklistId },
+                      search: { occurrenceId: occurrence.occurrenceId },
+                    });
+                  }}
                   onOpen={(checklistId, kind) => {
                     // Home 6A.3: prioridade com rejeição IA → Envios (investigação da evidência).
                     if (kind === 'camera') {
