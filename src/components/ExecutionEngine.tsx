@@ -7,6 +7,7 @@ import { BlockRenderer } from "@/components/BlockRenderer";
 import { PublicCameraBlock } from "@/components/PublicCameraBlock";
 import { CameraSessionProvider } from "@/contexts/CameraSessionContext";
 import { ensureCanonicalResponseSession, type ResponseSession } from "@/lib/execution-response-session";
+import { extractFinalizedResponseId } from "@/lib/execution-occurrence";
 import { 
   ArrowRight, 
   ArrowUpRight, 
@@ -18,6 +19,8 @@ import {
   Check, 
   CheckCircle, 
   CheckCheck,
+  AlertCircle,
+  RefreshCw,
   Loader2
 } from "lucide-react";
 
@@ -95,11 +98,25 @@ export function ExecutionEngine({
   checklist, 
   onSubmitted,
   analyticsId,
+  occurrenceId,
+  onOccurrenceComplete,
   mode = "public",
   onCameraActiveChange}: { 
   checklist: any; 
   onSubmitted: () => void;
   analyticsId?: string | null;
+  /**
+   * 6B.2B — optional scheduled occurrence being executed. Without it the engine
+   * behaves exactly as before (public and authenticated execution unchanged).
+   */
+  occurrenceId?: string | null;
+  /**
+   * 6B.2B — called with the just-finalized response id AFTER
+   * `finalize_public_response` succeeded. Returning false means the occurrence
+   * could not be bound: the flow stops on a retry screen instead of finishing,
+   * so the retry repeats only the completion, never the submission.
+   */
+  onOccurrenceComplete?: (responseId: string | null) => Promise<boolean>;
   mode?: "public" | "authenticated";
   /** Public pages use this to hide page-level branding while the live camera viewfinder is open. */
   onCameraActiveChange?: (active: boolean) => void;
@@ -108,6 +125,10 @@ export function ExecutionEngine({
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<{ done: number; total: number } | null>(null);
   const [cameraActive, setCameraActive] = useState(false);
+  const [occurrenceBridgeFailed, setOccurrenceBridgeFailed] = useState(false);
+  const [retryingOccurrence, setRetryingOccurrence] = useState(false);
+  const pendingResponseIdRef = useRef<string | null>(null);
+  const pendingAnswersRef = useRef<Record<string, any>>({});
 
   // Lift the real camera-viewfinder state upward (no timers/viewport tricks).
   useEffect(() => {
@@ -205,6 +226,24 @@ export function ExecutionEngine({
     return data.publicUrl;
   };
 
+  /**
+   * Steps that follow a successful `finalize_public_response`: notifications,
+   * analytics and the legacy assignment. Extracted so the 6B.2B occurrence
+   * retry can finish the flow WITHOUT submitting a second response.
+   */
+  const runPostFinalizeSideEffects = async (resolvedAnswers: Record<string, any>) => {
+    try { supabase.functions.invoke("send-submission-emails", { body: { checklistId: checklist.id, answers: resolvedAnswers } }); } catch {}
+    if (analyticsId) await supabase.from("checklist_analytics").update({ submitted_at: new Date().toISOString() }).eq("id", analyticsId);
+
+    // Authenticated submission: mark assignment as complete BEFORE redirect
+    if (mode === 'authenticated') {
+      const { error: assignmentError } = await (supabase.rpc as any)("complete_assignment", { p_checklist_id: checklist.id });
+      if (assignmentError) {
+        console.error("Error marking assignment as complete:", assignmentError);
+      }
+    }
+  };
+
   const handleSubmit = async (e?: React.FormEvent) => {
     if (e) { e.preventDefault(); e.stopPropagation(); }
     if (uploading) return;
@@ -280,16 +319,26 @@ export function ExecutionEngine({
         setUploading(false); return;
       }
 
-      try { supabase.functions.invoke("send-submission-emails", { body: { checklistId: checklist.id, answers: resolved } }); } catch {}
-      if (analyticsId) await supabase.from("checklist_analytics").update({ submitted_at: new Date().toISOString() }).eq("id", analyticsId);
-
-      // Authenticated submission: mark assignment as complete BEFORE redirect
-      if (mode === 'authenticated') {
-        const { error: assignmentError } = await (supabase.rpc as any)("complete_assignment", { p_checklist_id: checklist.id });
-        if (assignmentError) {
-          console.error("Error marking assignment as complete:", assignmentError);
+      // 6B.2B — bind the scheduled occurrence to THIS successful submission.
+      // Runs only after finalize_public_response succeeded. On failure the
+      // occurrence stays open and the user retries the completion alone: the
+      // response is already final, so a second response is never created.
+      if (occurrenceId && onOccurrenceComplete) {
+        // finalize_public_response returns the response id as a TABLE row; the
+        // canonical session is the fallback so the binding is never skipped due
+        // to a transport shape change.
+        pendingResponseIdRef.current =
+          extractFinalizedResponseId(finalizeData) ?? session.responseId;
+        pendingAnswersRef.current = resolved;
+        const bridged = await onOccurrenceComplete(pendingResponseIdRef.current);
+        if (!bridged) {
+          setOccurrenceBridgeFailed(true);
+          setUploading(false);
+          return;
         }
       }
+
+      await runPostFinalizeSideEffects(resolved);
 
       if (checklist.settings?.redirectOnCompletion && checklist.settings?.redirectUrl) {
         let url = String(checklist.settings.redirectUrl).trim();
@@ -306,9 +355,64 @@ export function ExecutionEngine({
     } finally { setUploading(false); setUploadProgress(null); }
   };
 
+  /**
+   * 6B.2B — recovery path when the occurrence could not be completed after a
+   * successful submission. Retries ONLY the completion (no new response).
+   */
+  const retryOccurrenceCompletion = async () => {
+    if (!occurrenceId || !onOccurrenceComplete || retryingOccurrence) return;
+    setRetryingOccurrence(true);
+    const bridged = await onOccurrenceComplete(pendingResponseIdRef.current);
+    if (!bridged) {
+      setRetryingOccurrence(false);
+      toast.error(t(checklist.settings?.language, "sendError"));
+      return;
+    }
+    setOccurrenceBridgeFailed(false);
+    setRetryingOccurrence(false);
+    await runPostFinalizeSideEffects(pendingAnswersRef.current);
+    clearResponseSession();
+    onSubmitted();
+  };
+
   const settings = checklist.settings || {};
   const blocks = checklist.blocks || [];
   const isDark = settings.theme === "Escuro";
+
+  // 6B.2B — the submission is already final; only the scheduled occurrence is
+  // still pending. Honest, retryable state instead of a lost binding.
+  if (occurrenceBridgeFailed) {
+    return (
+      <CameraSessionProvider>
+        <div className={getChecklistContainerClass()} style={{ maxWidth: settings.pageWidth }}>
+          <div className="flex flex-col items-center text-center gap-4 py-16" data-testid="occurrence-bridge-retry">
+            <AlertCircle className="w-10 h-10 text-amber-500" aria-hidden />
+            <h2 className="text-2xl font-bold tracking-tight">Respostas registradas</h2>
+            <p className="opacity-70 max-w-md">
+              Suas respostas foram salvas, mas não foi possível concluir a rotina agendada.
+              Tente novamente para finalizar esta execução.
+            </p>
+            <button
+              type="button"
+              onClick={retryOccurrenceCompletion}
+              disabled={retryingOccurrence}
+              className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl font-bold shadow-lg hover:opacity-90 transition-all active:scale-95 disabled:opacity-50"
+              style={{
+                backgroundColor: settings.btnBgColor || "#FF007F",
+                color: settings.btnTextColor || "#ffffff",
+              }}
+            >
+              {retryingOccurrence ? (
+                <><Loader2 className="w-4 h-4 animate-spin" /> {t(settings.language, "sending")}</>
+              ) : (
+                <><RefreshCw className="w-4 h-4" aria-hidden /> Tentar novamente</>
+              )}
+            </button>
+          </div>
+        </div>
+      </CameraSessionProvider>
+    );
+  }
 
   return (
     <CameraSessionProvider>
