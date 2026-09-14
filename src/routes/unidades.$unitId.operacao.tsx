@@ -25,6 +25,12 @@ import {
   type DashboardFilters,
 } from "@/components/dashboard/OperationalDashboardFilters";
 import { useUnitCompliance } from "@/hooks/useUnitCompliance";
+import { useUnitOccurrenceDetails } from "@/hooks/useUnitOccurrenceDetails";
+import { OperationalOccurrenceList } from "@/components/operations/OperationalOccurrenceList";
+import {
+  filterOccurrencesByShift,
+  filterOccurrencesByStatus,
+} from "@/lib/occurrence-dashboard";
 import {
   useUnitOperationalDetails,
   type OperationalExecution,
@@ -267,6 +273,15 @@ function UnitOperacaoContent({
     organizationId,
     timezone,
   });
+  // Rotinas agendadas da unidade (6B.2D): domínio SEPARADO de task_executions,
+  // com estado e modelo próprios. O período é o mesmo dia civil da unidade, mas
+  // a leitura é feita por occurrence_date (nunca reconvertendo para UTC).
+  const occurrences = useUnitOccurrenceDetails({
+    unitId: filters.unitId,
+    startDate: filters.startDate,
+    endDate: filters.endDate,
+    organizationId,
+  });
 
   const row = compliance.data[0];
   const dueCompliance = row
@@ -289,6 +304,10 @@ function UnitOperacaoContent({
   // Filtros locais
   const [shift, setShift] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  // Filtro de status PRÓPRIO das rotinas: os filtros de tarefa (criticidade,
+  // evidência, canceladas) são específicos de task_executions e não podem
+  // esconder uma obrigação recorrente.
+  const [occurrenceStatus, setOccurrenceStatus] = useState<string>("all");
   const [weight, setWeight] = useState<string>("all");
   const [withEvidence, setWithEvidence] = useState(false);
   const [showCancelled, setShowCancelled] = useState(false);
@@ -312,8 +331,11 @@ function UnitOperacaoContent({
   const shiftOptions = useMemo(() => {
     const map = new Map<string, string>();
     for (const { e } of enriched) if (e.shiftId && e.shiftName) map.set(e.shiftId, e.shiftName);
+    // Uma rotina pode pertencer a um turno sem nenhuma tarefa no período, então
+    // o seletor de turno também considera as rotinas.
+    for (const o of occurrences.data) if (o.shiftId && o.shiftName) map.set(o.shiftId, o.shiftName);
     return Array.from(map, ([id, name]) => ({ id, name }));
-  }, [enriched]);
+  }, [enriched, occurrences.data]);
 
   const filtered = useMemo(() => {
     return enriched.filter(({ e, derived }) => {
@@ -325,6 +347,17 @@ function UnitOperacaoContent({
       return true;
     });
   }, [enriched, shift, weight, withEvidence, statusFilter, showCancelled]);
+
+  // Rotinas usam o turno selecionado (§12) e o filtro de status próprio —
+  // nunca os filtros de tarefa.
+  const filteredOccurrences = useMemo(
+    () =>
+      filterOccurrencesByShift(
+        filterOccurrencesByStatus(occurrences.data, occurrenceStatus, now),
+        shift,
+      ),
+    [occurrences.data, occurrenceStatus, shift, now],
+  );
 
   const overdueOpen = filtered.filter((x) => x.derived === "atrasada");
   const completedLate = filtered.filter((x) => x.derived === "concluida_com_atraso");
@@ -411,6 +444,9 @@ function UnitOperacaoContent({
             Evidências <Badge variant="neutral" className="ml-2">{withEvidences.length}</Badge>
           </TabsTrigger>
           <TabsTrigger value="all">Todas</TabsTrigger>
+          <TabsTrigger value="rotinas">
+            Rotinas <Badge variant="neutral" className="ml-2">{occurrences.data.length}</Badge>
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview">
@@ -448,6 +484,46 @@ function UnitOperacaoContent({
 
         <TabsContent value="all">
           <Section title="Todas as tarefas" items={filtered} onSelect={setSelected} emptyMsg="Nenhuma tarefa no período com os filtros atuais." />
+        </TabsContent>
+
+        <TabsContent value="rotinas" className="space-y-4">
+          {occurrences.error && (
+            <Card>
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-sm text-rose-600">{occurrences.error}</p>
+                <Button variant="outline" size="sm" onClick={() => void occurrences.refresh()}>
+                  Tentar novamente
+                </Button>
+              </div>
+            </Card>
+          )}
+
+          <Card>
+            <div className="flex flex-wrap gap-3 items-end">
+              <LocalSelect
+                label="Status da rotina"
+                value={occurrenceStatus}
+                onChange={setOccurrenceStatus}
+                options={[
+                  { id: "all", name: "Todos" },
+                  { id: "pendente", name: "Pendente" },
+                  { id: "atrasada", name: "Atrasada" },
+                  { id: "concluida_no_prazo", name: "Concluída no prazo" },
+                  { id: "concluida_com_atraso", name: "Concluída com atraso" },
+                ]}
+              />
+              <p className="text-xs text-neutral-400 pb-2">
+                Respeita o turno selecionado. Rotinas são contadas à parte das tarefas programadas.
+              </p>
+            </div>
+          </Card>
+
+          <OperationalOccurrenceList
+            occurrences={filteredOccurrences}
+            loading={occurrences.loading}
+            now={now}
+            emptyMessage="Nenhuma rotina agendada no período com os filtros atuais."
+          />
         </TabsContent>
       </Tabs>
 

@@ -31,6 +31,8 @@ import {
 import { UnitComplianceChart } from "@/components/dashboard/UnitComplianceChart";
 import { UnitPerformanceTable } from "@/components/dashboard/UnitPerformanceTable";
 import { useUnitCompliance, type UnitComplianceRow } from "@/hooks/useUnitCompliance";
+import { useUnitOccurrenceMetrics } from "@/hooks/useUnitOccurrenceMetrics";
+import { ScheduledOccurrencesSection } from "@/components/dashboard/ScheduledOccurrencesSection";
 import { getOperationalStatus, aggregateWeighted } from "@/lib/operational-status";
 
 // URL-synced filters. Validação isomórfica — nunca lança para não quebrar SSR.
@@ -84,6 +86,16 @@ function PainelPage() {
     enabled: canLoadOperationalData
   });
   const rows = compliance.data;
+
+  // Rotinas agendadas (6B.2D): superfície PARALELA aos KPIs de tarefas. Fonte e
+  // estado separados de propósito — uma rotina recorrente nunca entra nos
+  // números de task_executions, e vice-versa (sem double count, sem dedupe por
+  // heurística). Mesmo gate e mesmo escopo do restante do painel.
+  const occurrences = useUnitOccurrenceMetrics({
+    ...filters,
+    organizationId: currentWorkspace?.id ?? null,
+    enabled: canLoadOperationalData,
+  });
 
   const dueCompliance = useMemo(() => aggregateWeighted(
     rows.map((r) => ({ weightDone: r.dueWeightDone, weightTotal: r.dueWeightTotal })),
@@ -328,6 +340,16 @@ function PainelPage() {
               />
             </Card>
           </section>
+
+          {/* Rotinas agendadas — domínio separado dos KPIs de tarefas */}
+          <ScheduledOccurrencesSection
+            rows={occurrences.data}
+            kpis={occurrences.kpis}
+            loading={occurrences.loading}
+            error={occurrences.error}
+            onRetry={() => void occurrences.refresh()}
+            onUnitClick={(unitId) => openUnitById(unitId, filters, navigate)}
+          />
         </div>
       </main>
     </DashboardLayout>
@@ -339,9 +361,22 @@ function openUnit(
   f: DashboardFilters,
   navigate: ReturnType<typeof useNavigate>,
 ) {
+  openUnitById(r.unitId, f, navigate);
+}
+
+/**
+ * Drill-down por unidade com o MESMO período que produziu os números clicados
+ * (usado pela seção de rotinas; os KPIs de tarefas continuam passando por
+ * openUnit, sem mudança de comportamento).
+ */
+function openUnitById(
+  unitId: string,
+  f: DashboardFilters,
+  navigate: ReturnType<typeof useNavigate>,
+) {
   navigate({
     to: "/unidades/$unitId/operacao",
-    params: { unitId: r.unitId },
+    params: { unitId },
     search: { startDate: f.startDate, endDate: f.endDate },
   });
 }
