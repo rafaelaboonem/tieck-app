@@ -27,15 +27,30 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
-  import { 
-    Home, Search, Users, Globe, Settings, Sparkles, 
-    LayoutTemplate, Rocket, Map, MessageSquare, Gift, 
-    Trash2, Send, BookOpen, LifeBuoy, MessageCircle, 
+import {
+  RiHome5Line, RiHome5Fill,
+  RiDashboard3Line, RiDashboard3Fill,
+  RiFileList2Line, RiFileList2Fill,
+  RiGlobalLine, RiGlobalFill,
+  RiTeamLine, RiTeamFill,
+  RiUser3Line, RiUser3Fill,
+  RiShieldCheckLine, RiShieldCheckFill,
+  RiSearch2Line,
+  RiHistoryLine,
+  RiArrowDownSLine,
+  RiLifebuoyLine, RiFeedbackLine,
+  RiLogoutBoxRLine, RiLoginBoxLine,
+  RiRocket2Line, RiBookOpenLine, RiCustomerService2Line,
+} from "@remixicon/react";
+  import {
+    User, Sparkles,
+    LayoutTemplate, Rocket, MessageSquare,
+    Trash2, Send, BookOpen, LifeBuoy, MessageCircle,
     Plus, HelpCircle, ChevronDown, FolderPlus,
-   LogOut, User, CheckSquare, PanelLeftClose, PanelLeftOpen, ChevronsLeft, ChevronsRight, LogIn,
+   LogOut, CheckSquare, PanelLeftClose, PanelLeftOpen, ChevronsLeft, ChevronsRight, LogIn,
    BarChart3, Share2, Inbox, MousePointer2, Image, Palette, Eye, ShieldCheck, Check, Briefcase, CreditCard,
    Clock, FileText, ChevronRight, MoreHorizontal, UserPlus, Files, Layout, Bell
-  , LayoutDashboard, Menu, X as CloseIcon
+  , LayoutDashboard, Menu, X as CloseIcon, Home, Globe, Users, Settings
   } from "lucide-react";
  import { supabase } from "@/integrations/supabase/client";
  import {
@@ -45,54 +60,115 @@ import {
    DropdownMenuTrigger,
  } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
-import logoIcon from "../assets/local/logo-tieck.webp";
- 
-  type NavItem = { 
-    icon: React.ElementType; 
-    label: string; 
-    to?: string; 
+import logoIcon from "../assets/local/logo-tieck-trim.webp";
+import logoKIcon from "../assets/local/logo-k-trim.webp";
+
+  type NavItem = {
+    icon: React.ElementType;
+    label: string;
+    to?: string;
     accent?: string;
     permission?: "admin" | "manage";
   };
- 
- 
- const productNav: NavItem[] = [
-   { icon: LayoutTemplate, label: "Modelos" },
-   { icon: Rocket, label: "Novidades" },
-   { icon: MessageSquare, label: "Sugestões" },
-   { icon: Gift, label: "Recompensas" },
- ];
- 
- const helpNav: NavItem[] = [
-   { icon: Send, label: "Começar", accent: "text-blue-600" },
-   { icon: BookOpen, label: "Guias" },
-   { icon: LifeBuoy, label: "Central de ajuda" },
-   { icon: MessageCircle, label: "Suporte" },
- ];
- 
- function NavList({ items }: { items: NavItem[] }) {
-   const navigate = useNavigate();
-   return (
-     <ul className="space-y-0.5">
-       {items.map((item) => {
-         const Icon = item.icon;
-         return (
-           <li key={item.label}>
-             <button
-               type="button"
-               onClick={item.to ? () => navigate({ to: item.to }) : undefined}
-               className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-sm hover:bg-neutral-100 transition-colors ${item.accent ?? "text-neutral-700"}`}
-             >
-               <Icon className="w-4 h-4" />
-               <span>{item.label}</span>
-             </button>
-           </li>
-         );
-       })}
-     </ul>
+
+  // ── Shell icon map (Remix Icon) ─────────────────────────────────────────────
+  // Each nav item carries a Line/Fill pair: the Line glyph is the resting state,
+  // the Fill glyph signals the active destination (same geometry, more ink).
+  // Deliberate exceptions to Remix: workspace avatars (ws.icon is user data) and
+  // the ⌘K shortcut chip (plain kbd text).
+  const shellIcons = {
+    inicio:    { line: RiHome5Line,      fill: RiHome5Fill },
+    painel:    { line: RiDashboard3Line, fill: RiDashboard3Fill },
+    organizar: { line: RiFileList2Line,  fill: RiFileList2Fill },
+    dominios:  { line: RiGlobalLine,     fill: RiGlobalFill },
+    equipe:    { line: RiTeamLine,       fill: RiTeamFill },
+    admin:     { line: RiShieldCheckLine,fill: RiShieldCheckFill },
+  } as const;
+
+  // Ícone do workspace vem de dados do usuário (ws.icon) — mapa único do shell.
+  const WORKSPACE_ICON_MAP: Record<string, React.ElementType> = {
+    Files, Layout, BarChart3, Settings, MessageSquare, Bell, Globe, Users,
+  };
+
+ // Shell nav row: coluna óptica fixa (28px) → label. Seleção = rosa da marca
+ // disciplinado (fundo sutil + borda hairline + ícone/label rosa); sem glow,
+ // sem sombra, sem gradiente, sem dot extra.
+ const NAV_ROW = {
+   base: "group relative flex h-8 w-full items-center gap-2.5 rounded-md px-1 text-[13px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF007F]/40",
+   idle: "text-neutral-600 hover:text-neutral-900",
+   active: "font-semibold text-[#FF007F]",
+   icon: "grid h-7 w-7 shrink-0 place-items-center",
+   glyph: "w-[18px] h-[18px]",
+   label: "truncate transition-[opacity,translate] duration-200 ease-out motion-reduce:duration-100",
+ } as const;
+
+ // Camada de superfície da linha. Absoluta e fora do fluxo: no estado expandido
+ // acompanha a linha inteira; no rail vira um quadrado 36×36 centrado na coluna
+ // óptica (rail de 60px → 12px de margem de cada lado). Sendo uma camada
+ // absoluta, os ícones nunca se deslocam durante a animação de largura.
+ // Motion do shell: UMA transformação contínua — largura, fade e deslocamentos
+ // compartilham a mesma duração/easing (200ms ease-out). Sob prefers-reduced-motion
+ // o movimento é ENCURTADO (100ms), nunca zerado: transition-none transformaria a
+ // transição em um corte seco.
+ const ROW_SURFACE =
+   "pointer-events-none absolute inset-y-0 rounded-md border duration-200 ease-out motion-reduce:duration-100";
+
+ const rowSurfaceClass = (collapsed: boolean | undefined, active: boolean, field = false) =>
+   cn(
+     ROW_SURFACE,
+     // Só o campo de busca anima cor: no rail ele deixa de ser field e vira ícone,
+     // e esse corte é visível; nos demais a cor responde na hora (hover ágil).
+     field
+       ? "transition-[left,width,border-color,background-color]"
+       : "transition-[left,width]",
+     collapsed ? "left-0.5 w-8" : "left-0 w-full",
+     active
+       ? "border-[#FF007F]/50 bg-[#FF007F]/[0.05]"
+       : field && !collapsed
+         ? "border-neutral-200/70 bg-white group-hover:border-neutral-300"
+         : "border-transparent group-hover:bg-neutral-100"
    );
-  }
-  
+
+ function NavItemRow({
+   label,
+   to,
+   active,
+   icons,
+   onClick,
+   secondary,
+   collapsed,
+ }: {
+   label: string;
+   to: string;
+   active: boolean;
+   icons: { line: React.ElementType; fill: React.ElementType };
+   onClick: () => void;
+   secondary?: boolean;
+   collapsed?: boolean;
+ }) {
+   const Glyph = active ? icons.fill : icons.line;
+   return (
+     <button
+       type="button"
+       onClick={onClick}
+       aria-current={active ? "page" : undefined}
+       aria-label={collapsed ? label : undefined}
+       title={collapsed ? label : undefined}
+       className={cn(
+         NAV_ROW.base,
+         active ? NAV_ROW.active : NAV_ROW.idle,
+         secondary && !active && "text-neutral-500 hover:text-neutral-900"
+       )}
+     >
+       <span aria-hidden="true" className={rowSurfaceClass(collapsed, active)} />
+       <span className={cn(NAV_ROW.icon, "relative z-10")} aria-hidden="true">
+         <Glyph className={cn(NAV_ROW.glyph, active && "text-[#FF007F]")} />
+       </span>
+       <span className={cn(NAV_ROW.label, "relative z-10", collapsed && "opacity-0 -translate-x-1")}>{label}</span>
+     </button>
+   );
+ }
+
   export function DashboardLayout({ children }: { children: React.ReactNode }) {
     const { sidebarOpen, setSidebarOpen } = useSidebar();
     const { user, loading: authLoading, needsEmailConfirmation, signOut } = useAuth();
@@ -102,10 +178,11 @@ import logoIcon from "../assets/local/logo-tieck.webp";
     const [newWsIcon, setNewWsIcon] = useState("📁");
     const [isCreating, setIsCreating] = useState(false);
     const [searchOpen, setSearchOpen] = useState(false);
+    const [searchQuery, setSearchQuery] = useState("");
     const [profile, setProfile] = useState<{ display_name: string | null; avatar_url: string | null; is_admin: boolean | null; plan_type: string | null; email: string | null } | null>(null);
     const [memberCount, setMemberCount] = useState<number>(0);
     const [hasChecklists, setHasChecklists] = useState(false);
-    
+
     const { isAdmin: isWsAdmin, canManage: canWsManage, isViewer: isWsViewer, workspaceMemberId, role: wsRole, loading: rbacLoading } = useWorkspaceRBAC(currentWorkspace?.id);
     const [recentChecklists, setRecentChecklists] = useState<{id: string, title: string | null}[]>([]);
     const [allWorkspacesChecklists, setAllWorkspacesChecklists] = useState<{id: string, title: string | null, workspace_id: string | null}[]>([]);
@@ -113,106 +190,130 @@ import logoIcon from "../assets/local/logo-tieck.webp";
     const navigate = useNavigate();
     const location = useLocation();
 
-     useEffect(() => {
-       const fetchData = async () => {
-         // Fail-closed: Se estamos num workspace e o RBAC ainda está carregando, 
-         // limpamos estados contextuais e bloqueamos a execução.
-         if (workspaceStatus === 'workspace' && (rbacLoading || !user?.id)) {
-           setRecentChecklists([]);
-           setAllWorkspacesChecklists([]);
-           return;
-         }
+    // Id do checklist aberto — MESMA fonte usada pelo clique nos Recentes
+    // (/executar/$id via pathname; /checklist?id= via search). Sem heurística:
+    // se não houver id, nenhum recent fica selecionado.
+    const activeChecklistId = (() => {
+      if (location.pathname.startsWith("/executar/")) {
+        return decodeURIComponent(location.pathname.split("/")[2] ?? "") || null;
+      }
+      if (location.pathname.startsWith("/checklist")) {
+        const raw: unknown = location.search;
+        if (typeof raw === "string") return new URLSearchParams(raw).get("id");
+        if (raw && typeof raw === "object") {
+          const id = (raw as Record<string, unknown>).id;
+          return typeof id === "string" ? id : null;
+        }
+      }
+      return null;
+    })();
 
-         // Fail-closed: se o RBAC resolveu e não temos role, bloquear.
-         if (workspaceStatus === 'workspace' && !rbacLoading && !wsRole) {
-           setRecentChecklists([]);
-           setAllWorkspacesChecklists([]);
-           return;
-         }
+    const workspaceIconUrl = workspaceStatus === "workspace" ? currentWorkspace?.icon_url ?? null : null;
+    const workspaceLabel = workspaceStatus === "workspace" && currentWorkspace ? currentWorkspace.name : "Pessoal";
+    const WorkspaceGlyph =
+      (currentWorkspace?.icon ? WORKSPACE_ICON_MAP[currentWorkspace.icon] : undefined) ??
+      (workspaceStatus === "workspace" ? Files : User);
 
-         if (user?.id) {
-           // 1. Contagem de membros (apenas se temos workspace e RBAC resolvido)
-           if (currentWorkspace?.id) {
-             const { count, error: countError } = await supabase
-               .from("workspace_members")
-               .select("*", { count: 'exact', head: true })
-               .eq("workspace_id", currentWorkspace.id);
-             
-             if (!countError && count !== null) {
-               setMemberCount(count);
-             } else {
-               setMemberCount(0);
-             }
-           } else {
-             setMemberCount(0);
-           }
+    useEffect(() => {
+      const fetchData = async () => {
+        // Fail-closed: Se estamos num workspace e o RBAC ainda está carregando,
+        // limpamos estados contextuais e bloqueamos a execução.
+        if (workspaceStatus === 'workspace' && (rbacLoading || !user?.id)) {
+          setRecentChecklists([]);
+          setAllWorkspacesChecklists([]);
+          return;
+        }
 
-           // 2. Perfil
-           const { data: profileData } = await supabase
-             .from("profiles")
-             .select("display_name, avatar_url, is_admin, plan_type")
-             .eq("id", user.id)
-             .maybeSingle();
-           
-           if (profileData) {
-             setProfile({ ...profileData, email: user.email ?? null });
-           } else {
-             setProfile({
-               display_name: user.email?.split('@')[0] || "Usuário",
-               avatar_url: null,
-               is_admin: false,
-               plan_type: "free",
-               email: user.email ?? null
-             });
-           }
+        // Fail-closed: se o RBAC resolveu e não temos role, bloquear.
+        if (workspaceStatus === 'workspace' && !rbacLoading && !wsRole) {
+          setRecentChecklists([]);
+          setAllWorkspacesChecklists([]);
+          return;
+        }
 
-           // 3. Flags globais (pode carregar independente do workspace)
-           const { data: checklistsData } = await supabase
-             .from("checklists")
-             .select("id")
-             .eq("user_id", user.id)
-             .limit(1);
-           setHasChecklists(!!(checklistsData && checklistsData.length > 0));
+        if (user?.id) {
+          // 1. Contagem de membros (apenas se temos workspace e RBAC resolvido)
+          if (currentWorkspace?.id) {
+            const { count, error: countError } = await supabase
+              .from("workspace_members")
+              .select("*", { count: 'exact', head: true })
+              .eq("workspace_id", currentWorkspace.id);
 
-           // 4. Resolução de Acesso Contextual (Recentes e Busca)
-           let contextualQuery = supabase.from("checklists").select("id, title, workspace_id, updated_at");
-           
-           if (workspaceStatus === 'workspace' && currentWorkspace?.id) {
-             contextualQuery = contextualQuery.eq("workspace_id", currentWorkspace.id);
-             
-              if (isWsViewer) {
-                // FASE 5B.11: Viewer vê todos os checklists do workspace.
-                // O filtro por assignments foi removido da visibilidade.
-              }
-           } else {
-             // Contexto Pessoal
-             contextualQuery = contextualQuery.is("workspace_id", null).eq("user_id", user.id);
-           }
+            if (!countError && count !== null) {
+              setMemberCount(count);
+            } else {
+              setMemberCount(0);
+            }
+          } else {
+            setMemberCount(0);
+          }
 
-           // Executar buscas baseadas na query base filtrada
-           const [{ data: recentData }, { data: allData }] = await Promise.all([
-             contextualQuery.order("updated_at", { ascending: false }).limit(3),
-             // Note: a query de busca pode ser mais ampla se necessário, mas respeitando o filtro base
-             contextualQuery.limit(50) 
-           ]);
+          // 2. Perfil
+          const { data: profileData } = await supabase
+            .from("profiles")
+            .select("display_name, avatar_url, is_admin, plan_type")
+            .eq("id", user.id)
+            .maybeSingle();
 
-           setRecentChecklists(recentData || []);
-           setAllWorkspacesChecklists(allData || []);
+          if (profileData) {
+            setProfile({ ...profileData, email: user.email ?? null });
+          } else {
+            setProfile({
+              display_name: user.email?.split('@')[0] || "Usuário",
+              avatar_url: null,
+              is_admin: false,
+              plan_type: "free",
+              email: user.email ?? null
+            });
+          }
 
-         } else {
-           setProfile(null);
-           setRecentChecklists([]);
-           setAllWorkspacesChecklists([]);
-           setHasChecklists(false);
-         }
-       };
+          // 3. Flags globais (pode carregar independente do workspace)
+          const { data: checklistsData } = await supabase
+            .from("checklists")
+            .select("id")
+            .eq("user_id", user.id)
+            .limit(1);
+          setHasChecklists(!!(checklistsData && checklistsData.length > 0));
 
-       fetchData();
+          // 4. Resolução de Acesso Contextual (Recentes e Busca)
+          let contextualQuery = supabase.from("checklists").select("id, title, workspace_id, updated_at");
 
-       const handleOpenSearch = () => setSearchOpen(true);
-       window.addEventListener('open-search', handleOpenSearch);
-       return () => window.removeEventListener('open-search', handleOpenSearch);
-     }, [user?.id, currentWorkspace?.id, workspaceStatus, isWsViewer, rbacLoading]);
+          if (workspaceStatus === 'workspace' && currentWorkspace?.id) {
+            contextualQuery = contextualQuery.eq("workspace_id", currentWorkspace.id);
+
+            if (isWsViewer) {
+              // FASE 5B.11: Viewer vê todos os checklists do workspace.
+              // O filtro por assignments foi removido da visibilidade.
+            }
+          } else {
+            // Contexto Pessoal
+            contextualQuery = contextualQuery.is("workspace_id", null).eq("user_id", user.id);
+          }
+
+          // Executar buscas baseadas na query base filtrada
+          const [{ data: recentData }, { data: allData }] = await Promise.all([
+            contextualQuery.order("updated_at", { ascending: false }).limit(3),
+            // Note: a query de busca pode ser mais ampla se necessário, mas respeitando o filtro base
+            contextualQuery.limit(50)
+          ]);
+
+          setRecentChecklists(recentData || []);
+          setAllWorkspacesChecklists(allData || []);
+
+        } else {
+          setProfile(null);
+          setRecentChecklists([]);
+          setAllWorkspacesChecklists([]);
+          setHasChecklists(false);
+        }
+      };
+
+      fetchData();
+
+      const handleOpenSearch = () => setSearchOpen(true);
+      window.addEventListener('open-search', handleOpenSearch);
+      return () => window.removeEventListener('open-search', handleOpenSearch);
+    }, [user?.id, currentWorkspace?.id, workspaceStatus, isWsViewer, rbacLoading]);
 
     // Gate: usuário logado com e-mail não confirmado não acessa o app.
     useEffect(() => {
@@ -227,9 +328,18 @@ import logoIcon from "../assets/local/logo-tieck.webp";
       navigate({ to: "/login" });
       toast.success("Saiu com sucesso!");
     };
-  
+
     const isMobile = useIsMobile();
-  
+
+    // Desktop recolhido = rail compacto (56px); no mobile o drawer continua off-canvas.
+    const collapsed = isMobile === false && !sidebarOpen;
+    // Rótulos/metadados: fade + deslocamento curto esquerdo na MESMA duração da
+    // largura — a transição é uma só. Nada de display:none (evita corte no meio).
+    const labelFade = cn(
+      "transition-[opacity,translate] duration-200 ease-out motion-reduce:duration-100",
+      collapsed && "opacity-0 -translate-x-1"
+    );
+
     // Close sidebar on navigation (mobile only)
     useEffect(() => {
       if (isMobile === true && sidebarOpen) {
@@ -264,28 +374,11 @@ import logoIcon from "../assets/local/logo-tieck.webp";
     // We assume desktop by default for classes but don't show the sidebar if it's undecided.
     const isUndecided = isMobile === undefined;
 
-    const personalNav: NavItem[] = [
-      { icon: User, label: "Minha conta", to: "/configuracoes" }
-    ];
-
-    const workspaceNav: NavItem[] = ([
-      { icon: Home, label: "Início", to: "/inicio" },
-      { icon: BarChart3, label: "Painel", to: "/painel", permission: "admin" },
-      { icon: Layout, label: "Organizar", to: "/organizar", permission: "manage" },
-      { icon: Globe, label: "Domínios", to: "/dominios", permission: "admin" },
-      { icon: Users, label: "Equipe", to: "/equipe", permission: "admin" },
-    ] as const).filter((item: any) => {
-      if (!item.permission) return true;
-      if (item.permission === 'admin') return isWsAdmin;
-      if (item.permission === 'manage') return canWsManage;
-      return true;
-    });
-
     return (
         <div className="min-h-screen bg-white text-neutral-900 flex overflow-x-hidden">
        {/* Mobile Backdrop */}
        {isMobile === true && sidebarOpen && (
-         <div 
+         <div
            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40 animate-in fade-in duration-200"
            onClick={() => setSidebarOpen(false)}
          />
@@ -295,14 +388,19 @@ import logoIcon from "../assets/local/logo-tieck.webp";
        {(profile || user || authLoading) && (
        <aside
          className={cn(
-           "border-r border-neutral-200 flex flex-col py-4 shrink-0 transition-all duration-300 ease-in-out bg-white shadow-xl shadow-neutral-200/20",
-           isMobile === true 
-             ? "fixed top-0 left-0 h-[100dvh] z-50 w-[288px] max-w-[85vw]" 
-             : "sticky top-0 h-screen w-64 px-3",
-           (!sidebarOpen || isUndecided) && (isMobile === true ? "-translate-x-full" : "w-0 px-0 overflow-hidden opacity-0")
+           "flex flex-col shrink-0 border-r border-neutral-100 bg-white transition-[width,transform] duration-200 ease-out motion-reduce:duration-100",
+           isMobile === true
+             ? "fixed top-0 left-0 h-[100dvh] z-50 w-[288px] max-w-[85vw]"
+             : "sticky top-0 h-screen overflow-hidden",
+           isUndecided && "w-0 overflow-hidden opacity-0",
+           !isUndecided &&
+             (isMobile === true
+               ? !sidebarOpen && "-translate-x-full"
+               : sidebarOpen
+                 ? "w-[240px]"
+                 : "w-[60px]")
          )}
        >
-
          {isMobile && (
            <button
              onClick={() => setSidebarOpen(false)}
@@ -312,133 +410,227 @@ import logoIcon from "../assets/local/logo-tieck.webp";
              <CloseIcon className="w-5 h-5" />
            </button>
          )}
-        <div className="flex items-center justify-between mb-8 px-1">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                type="button"
-                className="flex items-center gap-1 p-1 rounded-md hover:bg-neutral-100 transition-colors ml-0"
-              >
-                <div className="w-8 h-8 rounded-full overflow-hidden bg-neutral-200 border border-neutral-200 shrink-0">
-                  {profile?.avatar_url ? (
-                    <img src={profile.avatar_url} alt="Avatar" className="w-full h-full object-cover" />
-                  ) : (
-                    <div className="w-full h-full bg-gradient-to-br from-orange-300 to-pink-400 flex items-center justify-center">
-                      <User className="w-4 h-4 text-white" />
-                    </div>
-                  )}
-                </div>
-                <ChevronDown className="w-4 h-4 text-neutral-500 shrink-0" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" alignOffset={-4} className="w-72 p-0 overflow-hidden">
-              <div className="bg-[#FF007F]/5 p-4">
-                <div className="flex items-center gap-3 mb-4 px-1">
-                  <div className="w-10 h-10 rounded-full overflow-hidden bg-neutral-200 border border-neutral-200 shrink-0">
-                    {profile?.avatar_url ? (
-                      <img src={profile.avatar_url} alt="Avatar" className="w-full h-full object-cover" />
-                    ) : (
-                      <div className="w-full h-full bg-gradient-to-br from-orange-300 to-pink-400 flex items-center justify-center">
-                        <User className="w-5 h-5 text-white" />
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex flex-col min-w-0">
-                    <span className="text-sm font-semibold text-neutral-900 truncate">
-                      {profile?.display_name || "Usuário"}
-                    </span>
-                    <span className="text-xs text-neutral-500">
-                      Plano {profile?.plan_type ? profile.plan_type.charAt(0).toUpperCase() + profile.plan_type.slice(1).toLowerCase() : "Free"} - {memberCount} membros
-                    </span>
-                  </div>
-                </div>
 
-                <div className="flex gap-2 px-1">
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    className="flex-1 text-[11px] h-8 gap-1.5 bg-white hover:bg-[#FF007F]/5 hover:text-[#FF007F] hover:border-[#FF007F]/20 transition-all justify-center px-1"
-                    onClick={() => navigate({ to: "/configuracoes" })}
-                  >
-                    <User className="w-3.5 h-3.5 shrink-0" />
-                    <span className="truncate">Minha conta</span>
-                  </Button>
-                </div>
-              </div>
+         {/* Conteúdo com largura FIXA: o aside anima width e recorta o excedente,
+             então nenhum ícone se desloca lateralmente durante a transição. */}
+         <div className={cn("flex h-full min-h-0 flex-col", isMobile === true ? "w-[288px]" : "w-[240px]")}>
+         {/* Brand row: wordmark completo ↔ ícone K oficial, no MESMO slot, cruzando
+             em fade + translate curto e coordenado com a animação de width
+             (container de altura fixa = nenhum reflow durante a transição). */}
+         <div className="relative mt-4 mb-3 h-7 px-4">
+           <button
+             type="button"
+             onClick={() => navigate({ to: workspaceStatus === "workspace" && currentWorkspace ? "/painel" : "/inicio" })}
+             className="absolute left-4 top-1/2 -translate-y-1/2 flex items-center rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF007F]/40"
+             aria-label={workspaceStatus === "workspace" && currentWorkspace ? currentWorkspace.name : "Início"}
+           >
+             {/* marca completa — asset oficial recortado */}
+             <img
+               src={logoIcon}
+               alt="Tieck"
+               className={cn(
+                 "w-[104px] h-auto transition-[opacity,translate,visibility] duration-200 ease-out motion-reduce:duration-100",
+                 collapsed ? "invisible -translate-x-1 opacity-0" : "visible translate-x-0 opacity-100"
+               )}
+             />
+             {/* marca compacta — asset oficial do ícone K, no mesmo eixo */}
+             <img
+               src={logoKIcon}
+               alt=""
+               aria-hidden="true"
+               className={cn(
+                 "absolute left-0.5 top-1/2 h-6 w-6 -translate-y-1/2 transition-[opacity,translate,visibility] duration-200 ease-out motion-reduce:duration-100",
+                 collapsed ? "visible translate-x-0 opacity-100" : "invisible translate-x-1 opacity-0"
+               )}
+             />
+           </button>
+           {/* Recolher: « no canto direito do topo (só no estado expandido) */}
+           {!isMobile && (
+             <button
+               type="button"
+               onClick={() => setSidebarOpen(false)}
+               className={cn(
+                 "absolute right-4 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-md text-neutral-400 hover:bg-neutral-100 hover:text-neutral-900 transition-[opacity,visibility,background-color,color] duration-200 ease-out motion-reduce:duration-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF007F]/40",
+                 collapsed ? "invisible opacity-0" : "visible opacity-100"
+               )}
+               title="Esconder menu"
+               aria-label="Esconder menu"
+               aria-expanded={sidebarOpen}
+             >
+               <ChevronsLeft className="w-4 h-4" />
+             </button>
+           )}
+         </div>
 
-              <div className="p-2 pt-0 max-h-[300px] overflow-y-auto">
-                <div className="px-2 py-1.5 text-[10px] font-bold text-neutral-400 uppercase tracking-wider">Contexto</div>
-                
-                {/* Opção Pessoal Explicita */}
-                <DropdownMenuItem
-                  onSelect={() => {
-                    setCurrentWorkspace(null);
-                    navigate({ to: "/inicio" });
-                  }}
-                  className={`w-full flex items-center justify-between py-2 px-2 rounded-md hover:bg-[#FF007F]/5 transition-colors group mb-0.5 cursor-pointer ${workspaceStatus === 'personal' ? "bg-[#FF007F]/5 text-[#FF007F]" : "text-neutral-600"}`}
-                >
-                  <div className="flex items-center gap-2 min-w-0">
-                    <div className="w-5 h-5 rounded-md overflow-hidden bg-neutral-100 flex items-center justify-center shrink-0 border border-neutral-200">
-                      <User className="w-3 h-3" />
-                    </div>
-                    <span className="text-[13px] truncate font-medium">
-                      Pessoal
-                    </span>
-                  </div>
-                  {workspaceStatus === 'personal' && <Check className="w-3.5 h-3.5" />}
-                </DropdownMenuItem>
+         {/* Expandir: existe apenas no estado recolhido e fica no TOPO do rail,
+             logo abaixo da marca. A altura anima (grid-rows) junto com a largura,
+             então o conteúdo abaixo desce de forma coordenada — sem salto. */}
+         {!isMobile && (
+           <div
+             className={cn(
+               "grid transition-[grid-template-rows,opacity] duration-200 ease-out motion-reduce:duration-100",
+               collapsed ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
+             )}
+           >
+             <div className="overflow-hidden">
+               <div className="px-3 pb-1">
+                 <button
+                   type="button"
+                   onClick={() => setSidebarOpen(true)}
+                   tabIndex={collapsed ? 0 : -1}
+                   aria-hidden={collapsed ? undefined : true}
+                   className="group relative flex h-8 w-full items-center gap-2.5 rounded-md px-1 text-[13px] text-neutral-500 hover:text-neutral-900 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF007F]/40"
+                   title="Expandir menu"
+                   aria-label="Expandir menu"
+                   aria-expanded={sidebarOpen}
+                 >
+                   <span aria-hidden="true" className={rowSurfaceClass(true, false)} />
+                   <span className="relative z-10 grid h-7 w-7 shrink-0 place-items-center" aria-hidden="true">
+                     <ChevronsRight className="w-[18px] h-[18px]" />
+                   </span>
+                 </button>
+               </div>
+             </div>
+           </div>
+         )}
 
-                <div className="px-2 py-1.5 mt-2 text-[10px] font-bold text-neutral-400 uppercase tracking-wider border-t border-neutral-100/50">Espaços de Trabalho</div>
-                {workspaces.map((ws) => (
-                  <DropdownMenuItem
-                    key={ws.id}
-                    onSelect={() => {
-                      setCurrentWorkspace(ws);
-                      navigate({ to: "/inicio" });
-                    }}
-                    className={`w-full flex items-center justify-between py-2 px-2 rounded-md hover:bg-[#FF007F]/5 transition-colors group mb-0.5 cursor-pointer ${currentWorkspace?.id === ws.id ? "bg-[#FF007F]/5 text-[#FF007F]" : "text-neutral-600"}`}
-                  >
-                    <div className="flex items-center gap-2 min-w-0">
-                      <div className="w-5 h-5 rounded-md overflow-hidden bg-neutral-100 flex items-center justify-center shrink-0 border border-neutral-200">
-                        {ws.icon_url ? (
-                          <img src={ws.icon_url} alt="Icon" className="w-full h-full object-cover" />
-                        ) : (
-                          (() => {
-                            const IconMap: Record<string, any> = { Files, Layout, BarChart3, Settings, MessageSquare, Bell, Globe, Users };
-                            const Icon = IconMap[ws.icon || "Files"] || Files;
-                            return <Icon className="w-3 h-3" />;
-                          })()
-                        )}
-                      </div>
-                      <span className="text-[13px] truncate font-medium">
-                        {ws.name}
-                      </span>
-                    </div>
-                    {currentWorkspace?.id === ws.id && <Check className="w-3.5 h-3.5" />}
-                  </DropdownMenuItem>
-                ))}
+         {/* Workspace atual — contexto estrutural acima da busca (o controle do topo foi removido) */}
+         <div className="px-3 pb-2">
+           <DropdownMenu>
+             <DropdownMenuTrigger asChild>
+               <button
+                 type="button"
+                 className="group relative flex w-full items-center gap-2.5 rounded-md h-9 px-1 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF007F]/40"
+                 title={collapsed ? "Trocar de workspace" : undefined}
+                 aria-label="Trocar de workspace"
+               >
+                 <span aria-hidden="true" className={rowSurfaceClass(collapsed, false)} />
+                <span className="relative z-10 grid h-7 w-7 shrink-0 place-items-center" aria-hidden="true">
+                   <span className="grid h-6 w-6 place-items-center overflow-hidden rounded-md border border-neutral-200 bg-neutral-50 text-neutral-500">
+                     {workspaceIconUrl ? (
+                       <img src={workspaceIconUrl} alt="" className="h-full w-full object-cover" />
+                     ) : (
+                       <WorkspaceGlyph className="h-3.5 w-3.5" />
+                     )}
+                   </span>
+                 </span>
+                 <span className={cn("relative z-10 min-w-0 truncate text-[13px] font-medium text-neutral-700", labelFade)}>
+                   {workspaceLabel}
+                 </span>
+                 <RiArrowDownSLine
+                   className={cn("relative z-10 ml-auto h-4 w-4 shrink-0 text-neutral-400", labelFade)}
+                   aria-hidden="true"
+                 />
+               </button>
+             </DropdownMenuTrigger>
+             <DropdownMenuContent align="start" alignOffset={-4} className="w-72 p-0 overflow-hidden">
+               <div className="bg-[#FF007F]/5 p-4">
+                 <div className="flex items-center gap-3 mb-4 px-1">
+                   <div className="w-10 h-10 rounded-full overflow-hidden bg-neutral-200 border border-neutral-200 shrink-0">
+                     {profile?.avatar_url ? (
+                       <img src={profile.avatar_url} alt="Avatar" className="w-full h-full object-cover" />
+                     ) : (
+                       <div className="w-full h-full bg-gradient-to-br from-orange-300 to-pink-400 flex items-center justify-center">
+                         <User className="w-5 h-5 text-white" />
+                       </div>
+                     )}
+                   </div>
+                   <div className="flex flex-col min-w-0">
+                     <span className="text-sm font-semibold text-neutral-900 truncate">
+                       {profile?.display_name || "Usuário"}
+                     </span>
+                     <span className="text-xs text-neutral-500">
+                       Plano {profile?.plan_type ? profile.plan_type.charAt(0).toUpperCase() + profile.plan_type.slice(1).toLowerCase() : "Free"} - {memberCount} membros
+                     </span>
+                   </div>
+                 </div>
 
-                <DropdownMenuSeparator className="mx-2 my-2" />
-                
-                <DropdownMenuItem asChild>
-                  <div className="flex items-center justify-between py-2 px-2 rounded-md hover:bg-[#FF007F]/5 transition-colors group cursor-pointer mb-1 mx-0">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <div className="w-5 h-5 rounded-full overflow-hidden bg-neutral-200 shrink-0">
-                        {profile?.avatar_url ? (
-                          <img src={profile.avatar_url} alt="Avatar" className="w-full h-full object-cover" />
-                        ) : (
-                          <div className="w-full h-full bg-gradient-to-br from-orange-300 to-pink-400 flex items-center justify-center text-[8px] text-white">
-                            {profile?.display_name?.charAt(0) || "U"}
-                          </div>
-                        )}
-                      </div>
-                      <span className="text-[13px] text-neutral-500 truncate group-hover:text-[#FF007F] transition-colors">
-                        {profile?.email}
-                      </span>
-                    </div>
-                    <MoreHorizontal className="w-4 h-4 text-neutral-400 group-hover:text-[#FF007F] transition-colors" />
-                  </div>
-                </DropdownMenuItem>
+                 <div className="flex gap-2 px-1">
+                   <Button
+                     variant="outline"
+                     size="sm"
+                     className="flex-1 text-[11px] h-8 gap-1.5 bg-white hover:bg-[#FF007F]/5 hover:text-[#FF007F] hover:border-[#FF007F]/20 transition-all justify-center px-1"
+                     onClick={() => navigate({ to: "/configuracoes" })}
+                   >
+                     <User className="w-3.5 h-3.5 shrink-0" />
+                     <span className="truncate">Minha conta</span>
+                   </Button>
+                 </div>
+               </div>
+
+               <div className="p-2 pt-0 max-h-[300px] overflow-y-auto">
+                 <div className="px-2 py-1.5 text-[10px] font-bold text-neutral-400 uppercase tracking-wider">Contexto</div>
+
+                 {/* Opção Pessoal Explicita */}
+                 <DropdownMenuItem
+                   onSelect={() => {
+                     setCurrentWorkspace(null);
+                     navigate({ to: "/inicio" });
+                   }}
+                   className={`w-full flex items-center justify-between py-2 px-2 rounded-md hover:bg-[#FF007F]/5 transition-colors group mb-0.5 cursor-pointer ${workspaceStatus === 'personal' ? "bg-[#FF007F]/5 text-[#FF007F]" : "text-neutral-600"}`}
+                 >
+                   <div className="flex items-center gap-2 min-w-0">
+                     <div className="w-5 h-5 rounded-md overflow-hidden bg-neutral-100 flex items-center justify-center shrink-0 border border-neutral-200">
+                       <User className="w-3 h-3" />
+                     </div>
+                     <span className="text-[13px] truncate font-medium">
+                       Pessoal
+                     </span>
+                   </div>
+                   {workspaceStatus === 'personal' && <Check className="w-3.5 h-3.5" />}
+                 </DropdownMenuItem>
+
+                 <div className="px-2 py-1.5 mt-2 text-[10px] font-bold text-neutral-400 uppercase tracking-wider border-t border-neutral-100/50">Espaços de Trabalho</div>
+                 {workspaces.map((ws) => (
+                   <DropdownMenuItem
+                     key={ws.id}
+                     onSelect={() => {
+                       setCurrentWorkspace(ws);
+                       navigate({ to: "/inicio" });
+                     }}
+                     className={`w-full flex items-center justify-between py-2 px-2 rounded-md hover:bg-[#FF007F]/5 transition-colors group mb-0.5 cursor-pointer ${currentWorkspace?.id === ws.id ? "bg-[#FF007F]/5 text-[#FF007F]" : "text-neutral-600"}`}
+                   >
+                     <div className="flex items-center gap-2 min-w-0">
+                       <div className="w-5 h-5 rounded-md overflow-hidden bg-neutral-100 flex items-center justify-center shrink-0 border border-neutral-200">
+                         {ws.icon_url ? (
+                           <img src={ws.icon_url} alt="Icon" className="w-full h-full object-cover" />
+                         ) : (
+                           (() => {
+                             const IconMap: Record<string, any> = { Files, Layout, BarChart3, Settings, MessageSquare, Bell, Globe, Users };
+                             const Icon = IconMap[ws.icon || "Files"] || Files;
+                             return <Icon className="w-3 h-3" />;
+                           })()
+                         )}
+                       </div>
+                       <span className="text-[13px] truncate font-medium">
+                         {ws.name}
+                       </span>
+                     </div>
+                     {currentWorkspace?.id === ws.id && <Check className="w-3.5 h-3.5" />}
+                   </DropdownMenuItem>
+                 ))}
+
+                 <DropdownMenuSeparator className="mx-2 my-2" />
+
+                 <DropdownMenuItem asChild>
+                   <div className="flex items-center justify-between py-2 px-2 rounded-md hover:bg-[#FF007F]/5 transition-colors group cursor-pointer mb-1 mx-0">
+                     <div className="flex items-center gap-2 min-w-0">
+                       <div className="w-5 h-5 rounded-full overflow-hidden bg-neutral-200 shrink-0">
+                         {profile?.avatar_url ? (
+                           <img src={profile.avatar_url} alt="Avatar" className="w-full h-full object-cover" />
+                         ) : (
+                           <div className="w-full h-full bg-gradient-to-br from-orange-300 to-pink-400 flex items-center justify-center text-[8px] text-white">
+                             {profile?.display_name?.charAt(0) || "U"}
+                           </div>
+                         )}
+                       </div>
+                       <span className="text-[13px] text-neutral-500 truncate group-hover:text-[#FF007F] transition-colors">
+                         {profile?.email}
+                       </span>
+                     </div>
+                     <MoreHorizontal className="w-4 h-4 text-neutral-400 group-hover:text-[#FF007F] transition-colors" />
+                   </div>
+                 </DropdownMenuItem>
 
               {(profile?.is_admin || workspaces.length === 0) && (
                 <button
@@ -459,190 +651,314 @@ import logoIcon from "../assets/local/logo-tieck.webp";
               </div>
             </DropdownMenuContent>
           </DropdownMenu>
-          {!isMobile && (
-            <button
-              type="button"
-              onClick={() => setSidebarOpen(false)}
-              className="p-1.5 rounded-md text-neutral-400 hover:text-neutral-900 hover:bg-neutral-100 transition-colors"
-              title="Esconder menu"
-              aria-label="Esconder menu"
-            >
-              <ChevronsLeft className="w-4 h-4" />
-            </button>
-          )}
         </div>
-        
- 
-           <div className="mt-2 flex-1 overflow-y-auto no-scrollbar pb-8">
-            {(profile || user) && (
-              <div className="flex flex-col gap-6">
-                <div className="px-1">
-                  <p className="px-2 text-xs font-medium text-neutral-500 mb-1">Pessoal</p>
-                  <NavList items={personalNav} />
-                </div>
 
-                <div className="px-1">
-                  <p className="px-2 text-xs font-medium text-neutral-500 mb-1">Workspace</p>
-                  <NavList items={workspaceNav} />
-                  
-                  <div className="mt-4 border-t border-neutral-100 pt-4">
-                    <button
-                      type="button"
-                      onClick={() => setRecentOpen(!recentOpen)}
-                      className="w-full flex items-center gap-2 px-2 py-1.5 text-sm text-neutral-500 hover:text-neutral-900 transition-colors"
-                    >
-                      {recentOpen ? (
-                        <ChevronDown className="w-4 h-4" />
-                      ) : (
-                        <ChevronRight className="w-4 h-4" />
-                      )}
-                      <span>Recentes</span>
-                    </button>
-                    <div 
-                      className={`transition-all duration-300 ease-in-out overflow-hidden ${
-                        recentOpen ? "max-h-[200px] overflow-y-auto no-scrollbar opacity-100 mt-1" : "max-h-0 opacity-0"
-                      }`}
-                    >
-                      <ul className="space-y-0.5 ml-6">
-                        {recentChecklists.length > 0 ? (
-                          recentChecklists.map((chk) => (
-                            <li key={chk.id}>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  if (workspaceStatus === "workspace" && isWsViewer) {
-                                    navigate({
-                                      to: "/executar/$id",
-                                      params: { id: chk.id }
-                                    });
-                                  } else {
-                                    navigate({
-                                      to: "/checklist",
-                                      search: { id: chk.id }
-                                    });
-                                  }
-                                }}
-                                className="w-full text-left py-1 text-[13px] text-neutral-400 hover:text-neutral-900 transition-colors truncate block font-medium"
-                              >
-                                {chk.title || "Sem título"}
-                              </button>
-                            </li>
-                          ))
-                        ) : (
-                          <li className="py-1 text-[12px] text-neutral-400 italic font-medium">
-                            Nenhum recente neste contexto
-                          </li>
-                        )}
-                      </ul>
-                    </div>
-                  </div>
+        <nav className="px-3 pb-4" aria-label="Principal">
+          <button
+            type="button"
+            onClick={() => setSearchOpen(true)}
+            className={cn(
+              "group relative flex w-full items-center gap-2.5 h-9 rounded-md px-1 text-[13px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF007F]/40",
+              collapsed
+                ? "text-neutral-400 hover:text-neutral-700"
+                : "text-neutral-400 hover:text-neutral-500 focus-visible:text-neutral-500"
+            )}
+            aria-keyshortcuts="Meta+K"
+            title={collapsed ? "Buscar" : undefined}
+            aria-label={collapsed ? "Buscar" : undefined}
+          >
+            <span aria-hidden="true" className={rowSurfaceClass(collapsed, false, true)} />
+            <span className={cn(NAV_ROW.icon, "relative z-10")} aria-hidden="true">
+              <RiSearch2Line className={NAV_ROW.glyph} />
+            </span>
+            <span className={cn("relative z-10 flex-1 text-left truncate", labelFade)}>Buscar…</span>
+            <kbd className={cn("relative z-10 pointer-events-none hidden sm:flex h-5 select-none items-center gap-0.5 rounded border border-neutral-200 bg-neutral-50 px-1.5 font-sans text-[10px] font-medium text-neutral-400 group-hover:border-neutral-300", labelFade)}>
+              ⌘K
+            </kbd>
+          </button>
 
-                  {profile?.is_admin && (
-                    <div className="mt-2">
-                      <button
-                        type="button"
-                        onClick={() => navigate({ to: "/admin" })}
-                        className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-sm transition-colors ${
-                          location.pathname === "/admin" 
-                            ? "bg-neutral-100 text-blue-600 font-medium" 
-                            : "hover:bg-neutral-100 text-blue-600"
-                        }`}
-                      >
-                        <ShieldCheck className="w-4 h-4" />
-                        <span>Painel Admin</span>
-                      </button>
-                    </div>
-                  )}
-                </div>
-
-            <div>
-              <p className="px-2 text-xs font-medium text-neutral-500 mb-1">Ajuda</p>
-              <NavList items={helpNav} />
-            </div>
-              </div>
+          <div className="mt-5 flex flex-col gap-1.5">
+            <NavItemRow
+              label="Início"
+              to="/inicio"
+              active={location.pathname === "/inicio"}
+              icons={shellIcons.inicio}
+              collapsed={collapsed}
+              onClick={() => navigate({ to: "/inicio" })}
+            />
+            {isWsAdmin && (
+              <NavItemRow
+                label="Painel"
+                to="/painel"
+                active={location.pathname === "/painel"}
+                icons={shellIcons.painel}
+                collapsed={collapsed}
+                onClick={() => navigate({ to: "/painel" })}
+              />
+            )}
+            {canWsManage && (
+              <NavItemRow
+                label="Organizar"
+                to="/organizar"
+                active={location.pathname === "/organizar"}
+                icons={shellIcons.organizar}
+                collapsed={collapsed}
+                onClick={() => navigate({ to: "/organizar" })}
+              />
+            )}
+            {isWsAdmin && (
+              <NavItemRow
+                label="Domínios"
+                to="/dominios"
+                active={location.pathname === "/dominios"}
+                icons={shellIcons.dominios}
+                collapsed={collapsed}
+                onClick={() => navigate({ to: "/dominios" })}
+              />
+            )}
+            {isWsAdmin && (
+              <NavItemRow
+                label="Equipe"
+                to="/equipe"
+                active={location.pathname === "/equipe"}
+                icons={shellIcons.equipe}
+                collapsed={collapsed}
+                onClick={() => navigate({ to: "/equipe" })}
+              />
+            )}
+            {profile?.is_admin && (
+              <NavItemRow
+                label="Painel Admin"
+                to="/admin"
+                active={location.pathname === "/admin"}
+                icons={shellIcons.admin}
+                collapsed={collapsed}
+                onClick={() => navigate({ to: "/admin" })}
+                secondary
+              />
             )}
           </div>
- 
-          <div className="mt-auto pt-4 space-y-4">
+
+          {(profile || user) && (
+            <div className="mt-5">
+              {/* Recentes: heading com a mesma linguagem da nav (coluna óptica 28px)
+                  + chevron rotativo; itens em árvore com o NÓ como marcador,
+                  recorte de 3 mais recentes (ordenação updated_at existente).
+                  Sem contador: a seção mostra deliberadamente só os 3 últimos. */}
+              <button
+                type="button"
+                onClick={() => (collapsed ? setSidebarOpen(true) : setRecentOpen(!recentOpen))}
+                className="group relative flex h-8 w-full items-center gap-2.5 rounded-md pl-1 pr-1.5 text-[13px] text-neutral-600 hover:text-neutral-900 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF007F]/40"
+                aria-expanded={collapsed ? sidebarOpen : recentOpen}
+                aria-label={collapsed ? "Recentes" : undefined}
+                title={collapsed ? "Recentes" : undefined}
+              >
+                <span aria-hidden="true" className={rowSurfaceClass(collapsed, false)} />
+                <span className="relative z-10 grid h-7 w-7 shrink-0 place-items-center" aria-hidden="true">
+                  <RiHistoryLine className="w-[18px] h-[18px]" />
+                </span>
+                <span className={cn("relative z-10 font-medium truncate", labelFade)}>Recentes</span>
+                <RiArrowDownSLine
+                  className={cn(
+                    "relative z-10 ml-auto w-4 h-4 shrink-0 text-neutral-400 transition-[transform,opacity] duration-200 ease-out motion-reduce:duration-100",
+                    recentOpen && "rotate-180",
+                    collapsed && "opacity-0"
+                  )}
+                  aria-hidden="true"
+                />
+              </button>
+              {/* Collapse animado via grid-rows (200ms ease-out, reduced-motion respeitado) */}
+              <div
+                className={cn(
+                  "grid transition-[grid-template-rows,opacity] duration-200 ease-out motion-reduce:duration-100",
+                  // No rail a lista fecha por altura+opacidade (nunca display:none) e
+                  // sai da árvore de foco sem desmontar — sem corte e sem flicker.
+                  collapsed
+                    ? "grid-rows-[0fr] opacity-0"
+                    : recentOpen
+                      ? "grid-rows-[1fr] opacity-100"
+                      : "grid-rows-[0fr] opacity-0"
+                )}
+                inert={collapsed || undefined}
+              >
+                <div className="overflow-hidden">
+                  {recentChecklists.length > 0 ? (
+                    <ul className="mb-1 mt-0.5">
+                      {recentChecklists.slice(0, 3).map((chk, idx, arr) => {
+                        const isLast = idx === arr.length - 1;
+                        // Seleção de árvore: mesma fonte do clique (pathname/search).
+                        const isActive = !!activeChecklistId && activeChecklistId === chk.id;
+                        return (
+                          <li key={chk.id} className="relative">
+                            {/* Árvore: linha estrutural neutra + ramo curto até o item */}
+                            <span
+                              aria-hidden="true"
+                              className={cn(
+                                "absolute left-[18px] top-0 w-px bg-neutral-200",
+                                isLast ? "h-1/2" : "h-full"
+                              )}
+                            />
+                            <span
+                              aria-hidden="true"
+                              className="absolute left-[18px] top-1/2 h-px w-[10px] bg-neutral-200"
+                            />
+                            {/* O NÓ É A BOLINHA: o ramo entra nela, como marcador do nó
+                                da árvore. Neutra nos itens normais; rosa no ativo. */}
+                            <span
+                              aria-hidden="true"
+                              className={cn(
+                                "absolute top-1/2 -translate-y-1/2 rounded-full",
+                                isActive
+                                  ? "left-[25px] h-1.5 w-1.5 bg-[#FF007F]"
+                                  : "left-[26px] h-1 w-1 bg-neutral-400"
+                              )}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (workspaceStatus === "workspace" && isWsViewer) {
+                                  navigate({
+                                    to: "/executar/$id",
+                                    params: { id: chk.id }
+                                  });
+                                } else {
+                                  navigate({
+                                    to: "/checklist",
+                                    search: { id: chk.id }
+                                  });
+                                }
+                              }}
+                              aria-current={isActive ? "page" : undefined}
+                              className={cn(
+                                "flex h-8 w-full items-center rounded-md pr-2 pl-[42px] text-left text-[13px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF007F]/40",
+                                isActive
+                                  ? "font-semibold text-[#FF007F] hover:bg-neutral-50"
+                                  : "text-neutral-500 hover:bg-neutral-50 hover:text-neutral-900"
+                              )}
+                            >
+                              <span className="truncate">{chk.title || "Sem título"}</span>
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  ) : (
+                    <p className="py-1.5 pl-[42px] text-[12px] text-neutral-400">
+                      Nenhum recente neste contexto
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+        </nav>
+
+        <div className="mt-auto border-t border-neutral-100 px-3 py-3">
+          {/* Enviar feedback existe só no estado expandido. No rail o slot fecha com
+              animação (grid-rows) — a hairline do rodapé sobe suave e a sessão,
+              ancorada embaixo, não se desloca. O controle de expandir agora vive
+              no topo do rail, junto da marca. */}
+          <div
+            className={cn(
+              "mb-2 grid transition-[grid-template-rows,opacity] duration-200 ease-out motion-reduce:duration-100",
+              collapsed ? "grid-rows-[0fr] opacity-0" : "grid-rows-[1fr] opacity-100"
+            )}
+          >
+            <div className="overflow-hidden">
+              <button
+                type="button"
+                tabIndex={collapsed ? -1 : 0}
+                aria-hidden={collapsed ? true : undefined}
+                className="group relative flex h-[30px] w-full items-center gap-2.5 rounded-md text-left text-[13px] text-neutral-500 hover:text-neutral-900 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF007F]/40"
+              >
+                <span aria-hidden="true" className={rowSurfaceClass(false, false)} />
+                <span className="relative z-10 grid h-7 w-7 shrink-0 place-items-center" aria-hidden="true">
+                  <RiFeedbackLine className="w-[18px] h-[18px]" />
+                </span>
+                <span className="relative z-10 truncate">Enviar feedback</span>
+              </button>
+            </div>
+          </div>
+          <div className={cn("flex items-center gap-1.5", collapsed && "flex-col items-start gap-1")}>
             <button
               type="button"
-              className="w-full flex items-center justify-between px-2 py-1.5 rounded-md text-sm text-blue-600 hover:bg-neutral-100"
+              onClick={() => navigate({ to: "/configuracoes" })}
+              className={cn(
+                "flex min-w-0 items-center gap-2.5 rounded-md p-1 text-left hover:bg-neutral-100 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF007F]/40",
+                collapsed ? "flex-none" : "flex-1"
+              )}
+              title="Minha conta"
+              aria-label={collapsed ? "Minha conta" : undefined}
             >
-              <span className="flex items-center gap-2">
-                <MessageCircle className="w-4 h-4" />
-                Enviar feedback
-              </span>
-              <span className="w-2 h-2 rounded-full bg-blue-600" />
+              <div className="w-7 h-7 rounded-full overflow-hidden bg-neutral-200 shrink-0">
+                {profile?.avatar_url ? (
+                  <img src={profile.avatar_url} alt="Avatar" className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full bg-gradient-to-br from-orange-300 to-pink-400 flex items-center justify-center text-[11px] font-semibold text-white">
+                    {profile?.display_name?.charAt(0) || "U"}
+                  </div>
+                )}
+              </div>
+              <div className={cn("min-w-0", labelFade)}>
+                <p className="truncate text-[13px] font-medium text-neutral-900 leading-4">
+                  {profile?.display_name || "Visitante"}
+                </p>
+                <p className="truncate text-[11px] text-neutral-400 leading-4 mt-0.5">
+                  {profile?.email || "Crie sua conta agora"}
+                </p>
+              </div>
             </button>
- 
-            <div className="pt-4 border-t border-neutral-200">
-              <div className="flex items-center justify-between group">
-                <button 
-                  onClick={() => navigate({ to: "/configuracoes" })}
-                  className="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-neutral-100 transition-colors flex-1 text-left"
-                >
-                  <div className="w-6 h-6 rounded-full overflow-hidden bg-neutral-200 shrink-0">
-                    {profile?.avatar_url ? (
-                      <img src={profile.avatar_url} alt="Avatar" className="w-full h-full object-cover" />
-                    ) : (
-                       <div className="w-full h-full bg-gradient-to-br from-neutral-200 to-neutral-300 flex items-center justify-center">
-                         <User className="w-3 h-3 text-neutral-500" />
-                       </div>
-                     )}
-                   </div>
-                   <div className="flex-1 min-w-0">
-                     <p className="text-sm font-medium text-neutral-900 truncate">
-                       {profile?.display_name || "Visitante"}
-                     </p>
-                     <p className="text-[10px] text-neutral-400 truncate">
-                       {profile?.email || "Crie sua conta agora"}
-                     </p>
-                   </div>
-                 </button>
-                 {profile ? (
-                   <button 
-                     onClick={handleLogout}
-                     className="p-1.5 text-neutral-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-colors"
-                     title="Sair"
-                   >
-                     <LogOut className="w-4 h-4" />
-                   </button>
-                 ) : (
-                   <button 
-                     onClick={() => navigate({ to: "/login" })}
-                     className="p-1.5 text-[#FF007F] hover:bg-[#FF007F]/10 rounded-md transition-colors"
-                     title="Entrar"
-                   >
-                     <LogIn className="w-4 h-4" />
-                   </button>
-                 )}
-               </div>
-             </div>
-           </div>
+            {profile ? (
+              <button
+                onClick={handleLogout}
+                className={cn(
+                  "grid shrink-0 place-items-center rounded-md text-neutral-400 hover:bg-neutral-100 hover:text-neutral-900 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF007F]/40",
+                  collapsed ? "h-9 w-9" : "h-8 w-8"
+                )}
+                title="Sair"
+                aria-label="Sair"
+              >
+                <RiLogoutBoxRLine className="w-[18px] h-[18px]" aria-hidden="true" />
+              </button>
+            ) : (
+              <button
+                onClick={() => navigate({ to: "/login" })}
+                className={cn(
+                  "grid shrink-0 place-items-center rounded-md text-[#FF007F] hover:bg-[#FF007F]/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF007F]/40",
+                  collapsed ? "h-9 w-9" : "h-8 w-8"
+                )}
+                title="Entrar"
+                aria-label="Entrar"
+              >
+                <RiLoginBoxLine className="w-[18px] h-[18px]" aria-hidden="true" />
+              </button>
+            )}
+          </div>
+        </div>
+        </div>
 
        </aside>
        )}
- 
+
        {/* Main Content Area */}
        <div className="flex-1 flex flex-col min-h-screen min-w-0 w-full max-w-full">
-         {profile && !sidebarOpen && (
+         {/* No desktop o rail compacto já traz o próprio controle de expandir;
+             o botão flutuante fica apenas no mobile (drawer off-canvas). */}
+         {profile && !sidebarOpen && isMobile === true && (
            <button
              type="button"
              onClick={() => setSidebarOpen(true)}
-             className={cn(
-               "fixed z-[120] p-1 rounded-md text-neutral-400 hover:text-neutral-900 hover:bg-neutral-100 transition-colors animate-in fade-in bg-white/80 backdrop-blur-sm border border-neutral-200 shadow-sm",
-               isMobile ? "top-4 left-4 h-11 w-11 flex items-center justify-center" : "top-[22px] left-6"
-             )}
+             className="fixed z-[120] top-4 left-4 h-11 w-11 p-1 flex items-center justify-center rounded-md text-neutral-400 hover:text-neutral-900 hover:bg-neutral-100 transition-colors animate-in fade-in bg-white/80 backdrop-blur-sm border border-neutral-200 shadow-sm"
              title="Mostrar menu"
              aria-label="Mostrar menu"
              aria-expanded={sidebarOpen}
            >
-             {isMobile ? <Menu className="w-6 h-6" /> : <ChevronsRight className="w-4 h-4" />}
+             <Menu className="w-6 h-6" />
            </button>
          )}
           {children}
         </div>
- 
+
        <button
          type="button"
          className="fixed bottom-4 right-4 w-8 h-8 rounded-full border border-neutral-200 bg-white text-neutral-500 hover:text-neutral-900 flex items-center justify-center shadow-sm z-50"
@@ -718,43 +1034,43 @@ import logoIcon from "../assets/local/logo-tieck.webp";
             <CommandGroup heading="Ações">
               {location.pathname.startsWith("/checklist") ? (
                 <>
-                  <CommandItem onSelect={() => { 
-                    setSearchOpen(false); 
+                  <CommandItem onSelect={() => {
+                    setSearchOpen(false);
                     window.dispatchEvent(new CustomEvent('checklist-action', { detail: 'add-logo' }));
                   }}>
                     <Image className="mr-2 h-4 w-4" />
                     <span>Adicionar Logo</span>
                   </CommandItem>
-                  <CommandItem onSelect={() => { 
-                    setSearchOpen(false); 
+                  <CommandItem onSelect={() => {
+                    setSearchOpen(false);
                     window.dispatchEvent(new CustomEvent('checklist-action', { detail: 'add-cover' }));
                   }}>
                     <LayoutTemplate className="mr-2 h-4 w-4" />
                     <span>Adicionar capa</span>
                   </CommandItem>
-                  <CommandItem onSelect={() => { 
-                    setSearchOpen(false); 
+                  <CommandItem onSelect={() => {
+                    setSearchOpen(false);
                     window.dispatchEvent(new CustomEvent('checklist-action', { detail: 'customize' }));
                   }}>
                     <Palette className="mr-2 h-4 w-4" />
                     <span>Personalizar</span>
                   </CommandItem>
-                  <CommandItem onSelect={() => { 
-                    setSearchOpen(false); 
+                  <CommandItem onSelect={() => {
+                    setSearchOpen(false);
                     window.dispatchEvent(new CustomEvent('checklist-action', { detail: 'preview' }));
                   }}>
                     <Eye className="mr-2 h-4 w-4" />
                     <span>Pré-visualização</span>
                   </CommandItem>
-                  <CommandItem onSelect={() => { 
-                    setSearchOpen(false); 
+                  <CommandItem onSelect={() => {
+                    setSearchOpen(false);
                     window.dispatchEvent(new CustomEvent('checklist-action', { detail: 'publish' }));
                   }}>
                     <Rocket className="mr-2 h-4 w-4" />
                     <span>Publicar</span>
                   </CommandItem>
-                  <CommandItem onSelect={() => { 
-                    setSearchOpen(false); 
+                  <CommandItem onSelect={() => {
+                    setSearchOpen(false);
                     window.dispatchEvent(new CustomEvent('checklist-action', { detail: 'settings' }));
                   }}>
                     <Settings className="mr-2 h-4 w-4" />
@@ -817,9 +1133,9 @@ import logoIcon from "../assets/local/logo-tieck.webp";
               {allWorkspacesChecklists.length > 0 && (
                 <CommandGroup heading="Checklists">
                   {allWorkspacesChecklists.map((c) => (
-                    <CommandItem 
-                      key={c.id} 
-                      onSelect={() => { 
+                    <CommandItem
+                      key={c.id}
+                      onSelect={() => {
                         setSearchOpen(false);
                         // FASE 5B.6: Redirecionamento condicional na busca também
                         if (workspaceStatus === 'workspace' && isWsViewer) {
