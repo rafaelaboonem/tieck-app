@@ -137,16 +137,44 @@ beforeEach(() => {
   h.workspace.workspaceStatus = "workspace";
 });
 
-function cardValue(label: string, scope: HTMLElement = document.body): string {
-  for (const el of within(scope).getAllByText(label)) {
-    const value = el.parentElement?.parentElement?.querySelector("div.mt-2, div.mt-1");
-    if (value) return value.textContent!.trim();
+function metricValue(label: string, scope: HTMLElement = document.body): string {
+  for (const el of within(scope).getAllByText(label, { exact: true })) {
+    const container = el.parentElement;
+    if (!container) continue;
+    const value = Array.from(container.children)
+      .map((child) => child.textContent?.trim() ?? "")
+      .find((text) => /^\d+(?:\.\d+)?%?$/.test(text));
+    if (value) return value;
   }
-  throw new Error(`card não encontrado: ${label}`);
+  throw new Error(`métrica não encontrada: ${label}`);
 }
 
-async function expectCardValue(label: string, expected: string, scope?: HTMLElement) {
-  await waitFor(() => expect(cardValue(label, scope)).toBe(expected));
+async function expectMetricValue(label: string, expected: string, scope?: HTMLElement) {
+  await waitFor(() => expect(metricValue(label, scope)).toBe(expected));
+}
+
+/**
+ * Célula da tabela REAL por unidade: encontra a coluna pelo título do header e
+ * lê o valor da linha da unidade. A composição do /painel mudou (cards →
+ * widgets + tabela), mas o DOMÍNIO verificado é o mesmo: os contadores de
+ * task_executions por unidade, recortados pelo turno da URL.
+ */
+function unitCell(unitName: string, columnLabel: string): string {
+  const table = Array.from(document.querySelectorAll("table")).find((candidate) =>
+    Array.from(candidate.querySelectorAll("thead th")).some(
+      (th) => (th.textContent ?? "").trim() === columnLabel,
+    ),
+  );
+  if (!table) throw new Error(`tabela com a coluna não encontrada: ${columnLabel}`);
+  const headers = Array.from(table.querySelectorAll("thead th")).map((th) =>
+    (th.textContent ?? "").trim(),
+  );
+  const index = headers.indexOf(columnLabel);
+  const row = Array.from(table.querySelectorAll("tbody tr")).find((tr) =>
+    (tr.textContent ?? "").includes(unitName),
+  );
+  if (!row) throw new Error(`linha não encontrada: ${unitName}`);
+  return ((row.children[index] as HTMLElement | undefined)?.textContent ?? "").trim();
 }
 
 function taskRow(over: Row = {}) {
@@ -297,14 +325,15 @@ describe("6B.3 /painel — §13/§15/§16 turno recorta os dois domínios", () =
       await renderPainel({ startDate: DAY, endDate: DAY });
       await screen.findByTestId("scheduled-occurrences-section", {}, { timeout: 20000 });
 
-      await expectCardValue("Tarefas programadas", "5");
-      await expectCardValue("Concluídas", "3");
+      // Domínio TAREFAS: soma real das unidades na tabela por unidade.
+      await waitFor(() => expect(unitCell("Unidade A", "Programadas")).toBe("5"));
+      expect(unitCell("Unidade A", "Concluídas")).toBe("3");
 
       const section = screen.getByTestId("scheduled-occurrences-section");
-      await expectCardValue("Previstas", "5", section);
-      await expectCardValue("Concluídas", "2", section);
-      await expectCardValue("Pendentes", "2", section);
-      await expectCardValue("Abertas em atraso", "1", section);
+      await expectMetricValue("Previstas", "5", section);
+      await expectMetricValue("Concluídas", "2", section);
+      await expectMetricValue("Pendentes", "2", section);
+      await expectMetricValue("Abertas em atraso", "1", section);
     },
   );
 
@@ -312,19 +341,19 @@ describe("6B.3 /painel — §13/§15/§16 turno recorta os dois domínios", () =
     await renderPainel({ startDate: DAY, endDate: DAY, shiftId: SHIFT_M });
     await screen.findByTestId("scheduled-occurrences-section", {}, { timeout: 20000 });
 
-    await expectCardValue("Tarefas programadas", "3");
+    await waitFor(() => expect(unitCell("Unidade A", "Programadas")).toBe("3"));
     const section = screen.getByTestId("scheduled-occurrences-section");
-    await expectCardValue("Previstas", "2", section);
+    await expectMetricValue("Previstas", "2", section);
   });
 
   it("turno noite recorta tarefas (2) e rotinas (3)", { timeout: 60000 }, async () => {
     await renderPainel({ startDate: DAY, endDate: DAY, shiftId: SHIFT_N });
     await screen.findByTestId("scheduled-occurrences-section", {}, { timeout: 20000 });
 
-    await expectCardValue("Tarefas programadas", "2");
+    await waitFor(() => expect(unitCell("Unidade A", "Programadas")).toBe("2"));
     const section = screen.getByTestId("scheduled-occurrences-section");
-    await expectCardValue("Previstas", "3", section);
-    await expectCardValue("Pendentes", "2", section);
+    await expectMetricValue("Previstas", "3", section);
+    await expectMetricValue("Pendentes", "2", section);
   });
 
   it("a consulta de dados aplica o turno selecionado", { timeout: 60000 }, async () => {

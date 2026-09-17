@@ -1,0 +1,323 @@
+/*
+ * ==================== ESCOPO LIGHT DO PAINEL OFICIAL ===========================
+ *
+ * Tokens LIGHT do template MIT `shadcn-dashboard-landing-template`
+ * (vite-version/src/index.css `:root`), usados SOMENTE dentro de
+ * `.tieck-panel-light` — o conteúdo do `/painel` oficial.
+ *
+ * Diferenças deliberadas em relação ao `:root` do template:
+ *   • `--primary` é o rosa da marca Tieck (#FF007F), conforme a direção desta
+ *     rodada (o rosa entra onde o template usa primary/accent).
+ *   • `--chart-1..5` ganham semântica operacional (marca / positivo / atenção /
+ *     crítico / neutro) em vez dos tons arbitrários do template.
+ *   • `--background` é levemente off-white e `--card` é branco puro, para que
+ *     as superfícies brancas se destaquem do canvas sem sombra pesada.
+ *
+ * O seletor é duplicado de propósito (`.tieck-panel-light.tieck-panel-light`,
+ * especificidade 0,2,0): vence o `:root` global do produto por especificidade,
+ * sem depender da ordem em que os CSS são injetados.
+ *
+ * Os tokens globais do Tieck NÃO são alterados: nada aqui sai deste escopo. O
+ * painel é LIGHT MODE ONLY nesta etapa — o shell do Tieck (sidebar) e as demais
+ * rotas continuam com os tokens do produto.
+ * =========================================================================
+ */
+
+.tieck-panel-light.tieck-panel-light {
+  /* a fonte original do template (injetada em runtime pelo PreviewDashboard) */
+  --font-inter: "Inter", system-ui, sans-serif;
+
+  --radius: 0.625rem;
+
+  --background: oklch(0.985 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: #ff007f;
+  --primary-foreground: #ffffff;
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.968 0 0);
+  --muted-foreground: oklch(0.505 0 0);
+  --accent: oklch(0.968 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --destructive-foreground: oklch(0.985 0 0);
+  --border: oklch(0.918 0 0);
+  --input: oklch(0.918 0 0);
+  --ring: oklch(0.7 0.19 358);
+
+  /* semântica operacional: marca · positivo · atenção · crítico · neutro */
+  --chart-1: #ff007f;
+  --chart-2: oklch(0.66 0.15 158);
+  --chart-3: oklch(0.77 0.15 72);
+  --chart-4: oklch(0.6 0.21 22);
+  --chart-5: oklch(0.55 0.035 264);
+
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: #ff007f;
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.708 0 0);
+
+  font-family: var(--font-inter);
+  font-synthesis-weight: none;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/*
+ * ==================== MICROINTERAÇÕES DOS MÓDULOS (DEV) ====================
+ *
+ * Hover de módulo: o card ganha foco visual suave e volta sozinho ao sair.
+ * Escalonado por TAMANHO do módulo — card pequeno pode subir um pouco mais,
+ * widget médio quase nada e componente grande não pode "zoomar" (o layout e a
+ * leitura ficam instáveis).
+ *
+ * Só TRANSFORM, nunca width/height/margin: transform não participa do layout,
+ * então não existe shift e o grid não se mexe.
+ *
+ * O transform é aplicado no PRÓPRIO card (`[data-slot="card"]`) — o elemento que
+ * tem background, border, radius e shadow —, com `transform-origin: center`.
+ * O retângulo inteiro cresce; nada de zoom em wrapper invisível ou conteúdo.
+ *
+ * Grupos (escalonados por TAMANHO do módulo):
+ *   .ti-hover-kpi     → KPI cards do topo: translateY(-3px) scale(1.025)
+ *   .ti-hover-widget  → widgets médios: translateY(-2px) scale(1.01)
+ *   .ti-hover-large   → charts full-width, data table, insights:
+ *                       translateY(-1px), sem zoom + shadow/border
+ *
+ * Tempos (assimétricos de propósito — entrada responsiva, saída mais macia):
+ *   ENTRADA (hover) 220ms
+ *   SAÍDA (normal)  300ms
+ *   easing          cubic-bezier(0.22, 1, 0.36, 1)
+ *   propriedades    transform / box-shadow / border-color, sempre juntas
+ *
+ * O estado normal carrega os 300ms; a regra de `:hover` sobrescreve só o
+ * `transition-duration` (220ms) para os três. Ao sair, o elemento volta a
+ * valer 300ms e o retorno é mais lento que a entrada.
+ *
+ * Todas as listas de transform têm a MESMA forma (translate3d + scale, nesta
+ * ordem) nos dois estados do grupo — inclusive nos grandes, onde o scale é 1.
+ * Assim o navegador interpola função por função em vez de cair para matriz, e o
+ * movimento não "corta". O translate3d mantém a animação na camada de composição.
+ *
+ * Hover é aplicado apenas em dispositivos com ponteiro fino (`hover: hover` +
+ * `pointer: fine`): em touch, nada de escala.
+ *
+ * `prefers-reduced-motion: reduce` NÃO vira snap: o movimento fica menor e mais
+ * curto (translateY(-1px) + scale 1.008/1.004 em 130ms ease-out). É "menos
+ * movimento", não "sem movimento".
+ *
+ * Nenhum popover/select/tooltip do Radix é afetado: eles são portalados para o
+ * body, fora da árvore do card (o transform não cria containing block para eles).
+ * =========================================================================
+ */
+
+.tieck-panel-light .ti-hover-kpi,
+.tieck-panel-light .ti-hover-widget,
+.tieck-panel-light .ti-hover-large {
+  position: relative;
+  z-index: 0;
+  transform-origin: center center;
+  transform: translate3d(0, 0, 0) scale(1);
+  /* estado NORMAL → usado na SAÍDA (300ms, retorno mais macio) */
+  transition:
+    transform 300ms cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 300ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 300ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* `will-change` só nos grupos que realmente escalam (KPI e widgets médios) —
+   os grandes animam 1px e não precisam de camada dedicada. */
+.tieck-panel-light .ti-hover-kpi,
+.tieck-panel-light .ti-hover-widget {
+  will-change: transform;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .tieck-panel-light .ti-hover-kpi:hover {
+    transform: translate3d(0, -3px, 0) scale(1.025);
+    /* ENTRADA: 220ms (sobrescreve só a duração do estado normal) */
+    transition-duration: 220ms;
+    z-index: 10;
+    border-color: color-mix(in oklab, var(--foreground) 12%, var(--border));
+    box-shadow:
+      0 12px 28px -14px color-mix(in oklab, var(--foreground) 26%, transparent),
+      0 2px 6px -2px color-mix(in oklab, var(--foreground) 8%, transparent);
+  }
+
+  .tieck-panel-light .ti-hover-widget:hover {
+    transform: translate3d(0, -2px, 0) scale(1.01);
+    transition-duration: 220ms;
+    z-index: 10;
+    border-color: color-mix(in oklab, var(--foreground) 9%, var(--border));
+    box-shadow:
+      0 10px 24px -16px color-mix(in oklab, var(--foreground) 22%, transparent),
+      0 1px 3px -1px color-mix(in oklab, var(--foreground) 6%, transparent);
+  }
+
+  .tieck-panel-light .ti-hover-large:hover {
+    transform: translate3d(0, -1px, 0) scale(1);
+    transition-duration: 220ms;
+    z-index: 10;
+    border-color: color-mix(in oklab, var(--foreground) 8%, var(--border));
+    box-shadow:
+      0 14px 30px -20px color-mix(in oklab, var(--foreground) 24%, transparent),
+      0 1px 3px -1px color-mix(in oklab, var(--foreground) 6%, transparent);
+  }
+}
+
+/*
+ * ================= SLOTS DE FILTRO DA TOOLBAR (DEV) ======================
+ *
+ * Cada filtro global (Período, Unidade, Escala) vive dentro de um
+ * `.ti-filter-slot`. Quando o usuário o esconde no personalizador, o slot
+ * colapsa para 0fr com opacidade 0 e um translateX curto — a toolbar se
+ * recompõe suavemente, sem salto e sem buraco no meio.
+ *
+ * O `margin-inline-end` negativo de um slot oculto cancela exatamente o gap
+ * (`gap-2` = 0.5rem) do flex: um item de largura zero criaria dois gaps, e
+ * devolver um deles mantém o espaçamento igual ao de dois vizinhos diretos.
+ *
+ * 200ms · cubic-bezier(0.22, 1, 0.36, 1). Sob reduced-motion, 120ms ease-out.
+ * Não há `grid-template-columns` interpolado em navegador nenhum aqui além do
+ * par 1fr↔0fr, que é barato e não altera a altura da linha.
+ * =========================================================================
+ */
+
+.tieck-panel-light .ti-filter-slot {
+  display: grid;
+  align-items: center;
+  grid-template-columns: 1fr;
+  min-width: 0;
+  margin-inline-end: 0;
+  opacity: 1;
+  transform: translateX(0);
+  transition:
+    grid-template-columns 200ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 200ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 200ms cubic-bezier(0.22, 1, 0.36, 1),
+    margin-inline-end 200ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.tieck-panel-light .ti-filter-slot--off {
+  grid-template-columns: 0fr;
+  opacity: 0;
+  transform: translateX(8px);
+  margin-inline-end: -0.5rem;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tieck-panel-light .ti-filter-slot {
+    transition-duration: 120ms;
+    transition-timing-function: ease-out;
+  }
+}
+
+/*
+ * ============== MÓDULOS DO PAINEL (mostrar / esconder) ====================
+ *
+ * Cada módulo do dashboard (indicador, gráfico, tabela, seção) entra num
+ * `.ti-section-slot` controlado pelo personalizador de painel.
+ *
+ * O slot colapsa nos DOIS eixos (grid-template 1fr→0fr) porque o mesmo envelope
+ * serve para a coluna principal, para as linhas de pares e para a faixa de
+ * indicadores: assim o módulo some sem deixar buraco em nenhuma das direções.
+ *
+ * `--ti-slot-gap` é o vão do container (`gap-4` = 1rem, `gap-6` = 1.5rem) e o
+ * estado oculto desconta esse vão por margem negativa — item de tamanho zero
+ * ainda geraria um vão fantasma. Nos indicadores a linha é flex e o
+ * `flex-grow/basis` também vão a zero: os cards que ficam se redistribuem
+ * sozinhos (4 → 3 → 2) de forma animada.
+ *
+ * O clip (`overflow: hidden`) vale SÓ durante a animação; em repouso o módulo
+ * fica sem overflow para não quebrar o `sticky` do header da DataTable.
+ *
+ * 240ms · cubic-bezier(0.22, 1, 0.36, 1); 140ms ease-out sob reduced-motion.
+ * =========================================================================
+ */
+
+.tieck-panel-light .ti-section-slot {
+  display: grid;
+  grid-template-columns: 1fr;
+  grid-template-rows: 1fr;
+  min-width: 0;
+  min-height: 0;
+  opacity: 1;
+  transform: translateY(0);
+  margin-block-end: 0;
+  margin-inline-end: 0;
+  transition:
+    grid-template-rows 240ms cubic-bezier(0.22, 1, 0.36, 1),
+    grid-template-columns 240ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 240ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 240ms cubic-bezier(0.22, 1, 0.36, 1),
+    margin 240ms cubic-bezier(0.22, 1, 0.36, 1),
+    flex-grow 240ms cubic-bezier(0.22, 1, 0.36, 1),
+    flex-basis 240ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.tieck-panel-light .ti-section-slot--animating > * {
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.tieck-panel-light .ti-section-slot--off {
+  grid-template-columns: 0fr;
+  grid-template-rows: 0fr;
+  flex-grow: 0;
+  flex-basis: 0;
+  opacity: 0;
+  transform: translateY(-6px);
+  margin-block-end: calc(var(--ti-slot-gap, 1.5rem) * -1);
+  margin-inline-end: calc(var(--ti-slot-gap, 1.5rem) * -1);
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tieck-panel-light .ti-section-slot {
+    transition-duration: 140ms;
+    transition-timing-function: ease-out;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* Reduced motion = MENOS movimento, não ausência de movimento. O card ainda
+     vem levemente para frente, bem menos e bem mais rápido — nunca um salto.
+     Este bloco não define `transition: none` em lugar nenhum. */
+  .tieck-panel-light .ti-hover-kpi,
+  .tieck-panel-light .ti-hover-widget,
+  .tieck-panel-light .ti-hover-large {
+    transition:
+      transform 130ms ease-out,
+      box-shadow 130ms ease-out,
+      border-color 130ms ease-out;
+  }
+
+  .tieck-panel-light .ti-hover-kpi:hover,
+  .tieck-panel-light .ti-hover-widget:hover,
+  .tieck-panel-light .ti-hover-large:hover {
+    transition-duration: 130ms;
+    transition-timing-function: ease-out;
+  }
+
+  .tieck-panel-light .ti-hover-kpi:hover {
+    transform: translate3d(0, -1px, 0) scale(1.008);
+  }
+
+  .tieck-panel-light .ti-hover-widget:hover {
+    transform: translate3d(0, -1px, 0) scale(1.004);
+  }
+
+  .tieck-panel-light .ti-hover-large:hover {
+    transform: translate3d(0, -1px, 0) scale(1);
+  }
+}

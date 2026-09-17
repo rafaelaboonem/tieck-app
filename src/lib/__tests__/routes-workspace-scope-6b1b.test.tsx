@@ -119,6 +119,35 @@ vi.mock("@/components/dashboard/UnitComplianceChart", () => ({
 vi.mock("@/components/dashboard/UnitPerformanceTable", () => ({
   UnitPerformanceTable: () => <div data-testid="table" />,
 }));
+// Componentes visuais reais do /painel (kit transplantado): stubs neutros —
+// esta suíte verifica apenas o escopo de workspace, não a apresentação.
+vi.mock("@/components/dashboard/real/RealMetricsOverview", () => ({
+  RealMetricsOverview: () => <div data-testid="metrics" />,
+  RealMetricCard: ({ metric }: { metric: { title: string } }) => (
+    <div data-testid="metric-card">{metric.title}</div>
+  ),
+}));
+
+// Unidades do filtro: nenhuma consulta real é executada nesta suíte (o escopo
+// verificado é o do workspace, não o da lista de unidades).
+vi.mock("@/hooks/useAccessibleUnits", () => ({
+  useAccessibleUnits: () => ({ units: [], loading: false, error: null }),
+}));
+vi.mock("@/components/dashboard/real/RealComplianceChart", () => ({
+  RealComplianceChart: () => <div data-testid="compliance-chart" />,
+}));
+vi.mock("@/components/dashboard/real/RealExecutionBreakdown", () => ({
+  RealExecutionBreakdown: () => <div data-testid="execution" />,
+}));
+vi.mock("@/components/dashboard/real/RealAttentionRanking", () => ({
+  RealAttentionRanking: () => <div data-testid="attention" />,
+}));
+vi.mock("@/components/dashboard/real/RealRecentExecutions", () => ({
+  RealRecentExecutions: () => <div data-testid="recent-executions" />,
+}));
+vi.mock("@/components/dashboard/real/RealUnitDataTable", () => ({
+  RealUnitDataTable: () => <div data-testid="units-table" />,
+}));
 vi.mock("@/components/operations/OperationalTaskItem", () => ({
   OperationalTaskItem: () => <div />,
 }));
@@ -191,7 +220,9 @@ describe("6B.1B — /painel workspace scoping", () => {
   });
 
   it("structural: organizationId flows from WorkspaceContext into the hook", () => {
-    expect(PAINEL_SRC).toContain("const { currentWorkspace } = useWorkspace()");
+    // O painel também lê `workspaceStatus` para só decidir acesso depois que o
+    // workspace resolveu; o vínculo com o hook continua obrigatório.
+    expect(PAINEL_SRC).toMatch(/const \{[^}]*currentWorkspace[^}]*\} = useWorkspace\(\)/);
     expect(PAINEL_SRC).toContain("organizationId: currentWorkspace?.id");
   });
 });

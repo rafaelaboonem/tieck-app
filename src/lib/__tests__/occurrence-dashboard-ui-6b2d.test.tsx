@@ -142,24 +142,51 @@ beforeEach(() => {
 });
 
 /**
- * Valor renderizado por um card (KpiCard do painel usa div.mt-2; o MetricCard do
- * detalhe usa div.mt-1). O rótulo pode aparecer também em cabeçalho de tabela,
- * então o card é identificado pela sua estrutura interna.
+ * Lê o valor diretamente associado ao label da métrica, sem depender de
+ * classes Tailwind ou de a métrica estar dentro de um card.
  */
-function cardValue(label: string, scope: HTMLElement = document.body): string {
-  for (const el of within(scope).getAllByText(label)) {
-    const value = el.parentElement?.parentElement?.querySelector("div.mt-2, div.mt-1");
-    if (value) return value.textContent!.trim();
+function metricValue(label: string, scope: HTMLElement = document.body): string {
+  for (const el of within(scope).getAllByText(label, { exact: true })) {
+    const container = el.parentElement;
+    if (!container) continue;
+    const value = Array.from(container.children)
+      .map((child) => child.textContent?.trim() ?? "")
+      .find((text) => /^\d+(?:\.\d+)?%?$/.test(text));
+    if (value) return value;
   }
-  throw new Error(`card não encontrado: ${label}`);
+  throw new Error(`métrica não encontrada: ${label}`);
 }
 
-async function expectCardValue(
+async function expectMetricValue(
   label: string,
   expected: string,
   scope: HTMLElement = document.body,
 ) {
-  await waitFor(() => expect(cardValue(label, scope)).toBe(expected));
+  await waitFor(() => expect(metricValue(label, scope)).toBe(expected));
+}
+
+/**
+ * Célula da tabela REAL por unidade: encontra a coluna pelo título do header e
+ * lê o valor da linha da unidade. Sem depender de classes Tailwind nem de
+ * estrutura interna — a hierarquia mudou (cards → widgets + tabela), a
+ * SEMÂNTICA (números de task_executions por unidade) é a mesma.
+ */
+function unitCell(unitName: string, columnLabel: string): string {
+  const table = Array.from(document.querySelectorAll("table")).find((candidate) =>
+    Array.from(candidate.querySelectorAll("thead th")).some(
+      (th) => (th.textContent ?? "").trim() === columnLabel,
+    ),
+  );
+  if (!table) throw new Error(`tabela com a coluna não encontrada: ${columnLabel}`);
+  const headers = Array.from(table.querySelectorAll("thead th")).map((th) =>
+    (th.textContent ?? "").trim(),
+  );
+  const index = headers.indexOf(columnLabel);
+  const row = Array.from(table.querySelectorAll("tbody tr")).find((tr) =>
+    (tr.textContent ?? "").includes(unitName),
+  );
+  if (!row) throw new Error(`linha não encontrada: ${unitName}`);
+  return ((row.children[index] as HTMLElement | undefined)?.textContent ?? "").trim();
 }
 
 /** Linha da view de conformidade de TAREFAS. */
@@ -272,16 +299,43 @@ describe("6B.2D /painel — §18 separação entre tarefas e rotinas", () => {
 
     const section = screen.getByTestId("scheduled-occurrences-section");
 
-    // KPIs de tarefa: exatamente os números de task_executions.
-    await expectCardValue("Tarefas programadas", "3");
-    await expectCardValue("Deveriam ter sido feitas", "2");
-    await expectCardValue("Abertas em atraso", "1");
+    // Métricas de tarefa: exatamente os números de task_executions, agora na
+    // tabela real por unidade (mesmo dado, nova composição).
+    await waitFor(() => expect(unitCell("Unidade A", "Programadas")).toBe("3"));
+    expect(unitCell("Unidade A", "Vencidas")).toBe("2");
+    expect(unitCell("Unidade A", "Abertas em atraso")).toBe("1");
+    // A prova do §18: 3 tarefas + 2 rotinas NUNCA viram 5 no domínio de tarefas.
+    expect(unitCell("Unidade A", "Programadas")).not.toBe("5");
 
     // KPIs de rotina: exatamente os números das occurrences.
-    await expectCardValue("Previstas", "2", section);
-    await expectCardValue("Concluídas", "1", section);
-    await expectCardValue("Abertas em atraso", "1", section);
-    await expectCardValue("Deveriam ter ocorrido", "2", section);
+    await expectMetricValue("Previstas", "2", section);
+    await expectMetricValue("Concluídas", "1", section);
+    await expectMetricValue("Abertas em atraso", "1", section);
+    await expectMetricValue("Deveriam ter ocorrido", "2", section);
+  });
+
+  it("quando as exceções são zero, mostra o estado positivo compacto", { timeout: 30000 }, async () => {
+    db.analytics_unit_daily_compliance = [
+      taskRow({
+        completed_tasks: 3,
+        completed_on_time: 3,
+        completed_late: 0,
+        overdue_open_tasks: 0,
+        critical_failures: 0,
+        pending_evidences: 0,
+        weight_total: 3,
+        weight_done: 3,
+        compliance_percentage: 100,
+        due_weight_total: 3,
+        due_weight_done: 3,
+        due_compliance_percentage: 100,
+      }),
+    ];
+    await renderPainel();
+    await waitFor(() => expect(screen.getByTestId("scheduled-occurrences-section")).toBeTruthy());
+
+    expect(screen.getByRole("status")).toHaveTextContent("Nenhuma pendência crítica no período");
+    expect(screen.getByText(/Sem falhas críticas, atrasos abertos ou evidências aguardando/)).toBeTruthy();
   });
 
   it("rotinas aparecem SOMENTE na seção própria", { timeout: 30000 }, async () => {
@@ -314,7 +368,7 @@ describe("6B.2D /painel — §18 separação entre tarefas e rotinas", () => {
     await waitFor(() => expect(screen.getByTestId("scheduled-occurrences-section")).toBeTruthy());
 
     expect(screen.getByText("Sem rotinas agendadas no período")).toBeTruthy();
-    await expectCardValue("Previstas", "0", screen.getByTestId("scheduled-occurrences-section"));
+    await expectMetricValue("Previstas", "0", screen.getByTestId("scheduled-occurrences-section"));
   });
 });
 

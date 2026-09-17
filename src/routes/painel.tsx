@@ -1,44 +1,58 @@
+/*
+ * ============================== /painel ==================================
+ *
+ * O painel OFICIAL do Tieck. A composição é a mesma que foi aprovada na vitrine
+ * de apresentação (`PanelDashboard`), agora alimentada com DADOS REAIS desta
+ * rota — não existe mais `?uiPreview=1`, nem dois dashboards competindo dentro
+ * da mesma rota.
+ *
+ * O que esta rota faz:
+ *   • resolve acesso (auth + workspace + RBAC) antes de decidir qualquer coisa;
+ *   • mantém o recorte na URL (`startDate`, `endDate`, `unitId`, `shiftId`) —
+ *     a fonte de verdade única dos filtros, já usada pelos drill-downs;
+ *   • consulta a view analítica (`useUnitCompliance`) e as rotinas
+ *     (`useUnitOccurrenceMetrics`) no escopo do workspace atual;
+ *   • agrega os KPIs do recorte e entrega tudo pronto para a composição.
+ *
+ * O que esta rota NÃO faz: inventar dado. Seção sem contrato real aparece vazia
+ * e explicando o motivo (ver `PanelDashboard`).
+ */
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo } from "react";
+import { CircleDot, OctagonAlert, TriangleAlert } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
-import { useSidebar } from "@/contexts/SidebarContext";
-import { useIsMobile } from "@/hooks/use-mobile";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { useWorkspaceRBAC } from "@/hooks/useWorkspaceRBAC";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Card } from "@/components/tremor/ui/Card";
-import { Badge } from "@/components/tremor/ui/Badge";
-import { Button } from "@/components/ui/button";
+import { sanitizeFilters, type DashboardFilters } from "@/lib/dashboard-filters";
 import {
-  CheckCircle2,
-  AlertTriangle,
-  AlertOctagon,
-  Camera,
-  Clock,
-  Timer,
-  ListChecks,
-  Hourglass,
-  CalendarClock,
-} from "lucide-react";
-import logoUrl from "../assets/local/logo-tieck.webp";
+  PanelDashboard,
+  type PanelKpis,
+} from "@/components/dashboard/panel/PanelDashboard";
 import {
-  OperationalDashboardFilters,
-  sanitizeFilters,
-  type DashboardFilters,
-} from "@/components/dashboard/OperationalDashboardFilters";
-import { UnitComplianceChart } from "@/components/dashboard/UnitComplianceChart";
-import { UnitPerformanceTable } from "@/components/dashboard/UnitPerformanceTable";
+  panelPeriodLabel,
+  panelScopeLabel,
+} from "@/components/dashboard/panel/filters";
+import type { AttentionRow } from "@/components/dashboard/real/RealAttentionRanking";
 import { useUnitCompliance, type UnitComplianceRow } from "@/hooks/useUnitCompliance";
 import { useUnitOccurrenceMetrics } from "@/hooks/useUnitOccurrenceMetrics";
-import { ScheduledOccurrencesSection } from "@/components/dashboard/ScheduledOccurrencesSection";
-import { getOperationalStatus, aggregateWeighted } from "@/lib/operational-status";
+import { useAccessibleUnits } from "@/hooks/useAccessibleUnits";
+import { STATUS_META, getOperationalStatus, aggregateWeighted } from "@/lib/operational-status";
 import { resolveEffectiveShiftId, shouldClearShiftId } from "@/lib/dashboard-filters";
 import { useShiftOptions } from "@/hooks/useShiftOptions";
 
+// Meta operacional do produto — usada na copy do painel ("meta operacional 90%").
+const OPERATIONAL_TARGET = 90;
+
 // URL-synced filters. Validação isomórfica — nunca lança para não quebrar SSR.
-type PainelSearch = { startDate?: string; endDate?: string; unitId?: string; shiftId?: string };
+type PainelSearch = {
+  startDate?: string;
+  endDate?: string;
+  unitId?: string;
+  shiftId?: string;
+};
 
 export const Route = createFileRoute("/painel")({
   validateSearch: (raw: Record<string, unknown>): PainelSearch => {
@@ -64,20 +78,66 @@ export const Route = createFileRoute("/painel")({
   component: PainelPage,
 });
 
+/** KPIs agregados do recorte — mesma conta de sempre, agora tipada para a UI. */
+function computeKpis(rows: UnitComplianceRow[]): Omit<
+  PanelKpis,
+  | "units"
+  | "exceptionsOpen"
+  | "dueCompliance"
+  | "plannedCompliance"
+  | "doneShare"
+  | "onTimeShare"
+  | "lateShare"
+> {
+  let scheduled = 0,
+    due = 0,
+    done = 0,
+    onTime = 0,
+    late = 0,
+    overdueOpen = 0;
+  let critical = 0,
+    pendingEv = 0,
+    attention = 0;
+  for (const r of rows) {
+    scheduled += r.totalScheduledTasks;
+    due += r.totalDueTasks;
+    done += r.completedTasks;
+    onTime += r.completedOnTime;
+    late += r.completedLate;
+    overdueOpen += r.overdueOpenTasks;
+    critical += r.criticalFailures;
+    pendingEv += r.pendingEvidences;
+    const s = getOperationalStatus({
+      dueCompliancePercentage: r.dueCompliancePercentage,
+      dueWeightTotal: r.dueWeightTotal,
+      criticalFailures: r.criticalFailures,
+      overdueOpenTasks: r.overdueOpenTasks,
+      completedLate: r.completedLate,
+    });
+    if (s === "critico" || s === "atencao") attention += 1;
+  }
+  return { scheduled, due, done, onTime, late, overdueOpen, critical, pendingEv, attention };
+}
+
 function PainelPage() {
   const navigate = useNavigate();
-  const { currentWorkspace } = useWorkspace();
+  const { currentWorkspace, workspaceStatus } = useWorkspace();
   const { isAdmin, loading: rbacLoading } = useWorkspaceRBAC(currentWorkspace?.id);
+  // Enquanto o workspace ainda está resolvendo, `currentWorkspace` é null e o
+  // RBAC nem é consultado — decidir "não é admin" nesse instante expulsava
+  // administradores para /inicio no primeiro carregamento da rota.
+  const workspaceLoading = workspaceStatus === "loading";
   const { user, loading: authLoading } = useAuth();
-  const { sidebarOpen } = useSidebar();
-  const isMobile = useIsMobile();
   const search = Route.useSearch();
 
-  // Filtros centrais derivados da URL (fonte da verdade única, sem loop).
+  // Recorte: SEMPRE vindo da URL (sem loop de estado local).
   const filters: DashboardFilters = useMemo(
     () => sanitizeFilters(search),
     [search.startDate, search.endDate, search.unitId, search.shiftId], // eslint-disable-line react-hooks/exhaustive-deps
   );
+
+  // "Restaurar padrão" da toolbar devolve o recorte de fábrica do produto.
+  const defaultFilters = useMemo(() => sanitizeFilters({}), []);
 
   // Escopo explícito: somente dados do workspace atual (defesa em profundidade
   // além da RLS — 6B.1B). Sem workspace selecionado, nada é consultado.
@@ -105,13 +165,19 @@ function PainelPage() {
   });
   const canLoadFilteredData = canLoadOperationalData && (!filters.shiftId || shiftOptions.resolved);
 
+  // Unidades reais do workspace (RLS já filtra). Mesma fonte que o filtro usa.
+  const { units } = useAccessibleUnits();
+  const unitOptions = useMemo(
+    () => units.map((unit) => ({ id: unit.id, name: unit.name })),
+    [units],
+  );
+
   const compliance = useUnitCompliance({
     ...filters,
     shiftId: effectiveShiftId,
     organizationId: currentWorkspace?.id ?? null,
     enabled: canLoadFilteredData,
   });
-  const rows = compliance.data;
 
   // Rotinas agendadas (6B.2D): superfície PARALELA aos KPIs de tarefas. Fonte e
   // estado separados de propósito — uma rotina recorrente nunca entra nos
@@ -124,55 +190,101 @@ function PainelPage() {
     enabled: canLoadFilteredData,
   });
 
+  const displayRows: UnitComplianceRow[] = compliance.data;
+  const displayOccurrenceRows = occurrences.data;
+
   const dueCompliance = useMemo(
     () =>
       aggregateWeighted(
-        rows.map((r) => ({ weightDone: r.dueWeightDone, weightTotal: r.dueWeightTotal })),
+        displayRows.map((r) => ({ weightDone: r.dueWeightDone, weightTotal: r.dueWeightTotal })),
       ),
-    [rows],
+    [displayRows],
   );
 
   const plannedCompliance = useMemo(
     () =>
       aggregateWeighted(
-        rows.map((r) => ({ weightDone: r.weightDone, weightTotal: r.weightTotal })),
+        displayRows.map((r) => ({ weightDone: r.weightDone, weightTotal: r.weightTotal })),
       ),
-    [rows],
+    [displayRows],
   );
 
-  const kpis = useMemo(() => {
-    let scheduled = 0,
-      due = 0,
-      done = 0,
-      onTime = 0,
-      late = 0,
-      overdueOpen = 0;
-    let critical = 0,
-      pendingEv = 0,
-      attention = 0;
-    for (const r of rows) {
-      scheduled += r.totalScheduledTasks;
-      due += r.totalDueTasks;
-      done += r.completedTasks;
-      onTime += r.completedOnTime;
-      late += r.completedLate;
-      overdueOpen += r.overdueOpenTasks;
-      critical += r.criticalFailures;
-      pendingEv += r.pendingEvidences;
-      const s = getOperationalStatus({
-        dueCompliancePercentage: r.dueCompliancePercentage,
-        dueWeightTotal: r.dueWeightTotal,
-        criticalFailures: r.criticalFailures,
-        overdueOpenTasks: r.overdueOpenTasks,
-        completedLate: r.completedLate,
-      });
-      if (s === "critico" || s === "atencao") attention += 1;
-    }
-    return { scheduled, due, done, onTime, late, overdueOpen, critical, pendingEv, attention };
-  }, [rows]);
+  const baseKpis = useMemo(() => computeKpis(displayRows), [displayRows]);
+
+  const kpis: PanelKpis = useMemo(() => {
+    const share = (part: number, total: number) => (total > 0 ? (part / total) * 100 : null);
+    return {
+      ...baseKpis,
+      units: displayRows.length,
+      exceptionsOpen: baseKpis.critical + baseKpis.overdueOpen + baseKpis.pendingEv,
+      dueCompliance,
+      plannedCompliance,
+      doneShare: share(baseKpis.done, baseKpis.scheduled),
+      onTimeShare: share(baseKpis.onTime, baseKpis.done),
+      lateShare: share(baseKpis.late, baseKpis.done),
+    };
+  }, [baseKpis, displayRows.length, dueCompliance, plannedCompliance]);
+
+  // KPIs de ROTINA vêm do próprio hook (mesma fonte das linhas) — nunca são
+  // recalculados aqui, para não existirem duas contas do mesmo domínio.
+  const occurrenceKpis = occurrences.kpis;
+
+  // Pesos agregados do recorte — usados pela MESMA regra de status do domínio,
+  // apenas para rotular a saúde da operação (nenhuma fórmula nova).
+  const aggregateDueWeightTotal = useMemo(
+    () => displayRows.reduce((acc, r) => acc + (r.dueWeightTotal ?? 0), 0),
+    [displayRows],
+  );
+
+  const healthStatus = getOperationalStatus({
+    dueCompliancePercentage: dueCompliance,
+    dueWeightTotal: aggregateDueWeightTotal,
+    criticalFailures: kpis.critical,
+    overdueOpenTasks: kpis.overdueOpen,
+    completedLate: kpis.late,
+  });
+  const healthMeta = STATUS_META[healthStatus];
+
+  // Atenção operacional — as três exceções reais, ordenadas por severidade
+  // (crítico → atenção → evidência), com participação real no total aberto.
+  const attentionRows: AttentionRow[] = useMemo(
+    () => [
+      {
+        key: "falhas",
+        label: "Falhas críticas",
+        severity: "Crítico",
+        tone: "critical",
+        count: kpis.critical,
+        detail: "tarefas com falha crítica",
+        share: kpis.exceptionsOpen > 0 ? (kpis.critical / kpis.exceptionsOpen) * 100 : null,
+        icon: OctagonAlert,
+      },
+      {
+        key: "atrasos",
+        label: "Abertas em atraso",
+        severity: "Atenção",
+        tone: "warning",
+        count: kpis.overdueOpen,
+        detail: "tarefas vencidas sem execução",
+        share: kpis.exceptionsOpen > 0 ? (kpis.overdueOpen / kpis.exceptionsOpen) * 100 : null,
+        icon: TriangleAlert,
+      },
+      {
+        key: "evidencias",
+        label: "Evidências aguardando",
+        severity: "Evidência",
+        tone: "neutral",
+        count: kpis.pendingEv,
+        detail: "evidências pendentes de revisão",
+        share: kpis.exceptionsOpen > 0 ? (kpis.pendingEv / kpis.exceptionsOpen) * 100 : null,
+        icon: CircleDot,
+      },
+    ],
+    [kpis.critical, kpis.overdueOpen, kpis.pendingEv, kpis.exceptionsOpen],
+  );
 
   useEffect(() => {
-    if (!rbacLoading && !authLoading) {
+    if (!rbacLoading && !authLoading && !workspaceLoading) {
       if (!user) {
         navigate({ to: "/login" });
         return;
@@ -183,7 +295,7 @@ function PainelPage() {
         return;
       }
     }
-  }, [isAdmin, rbacLoading, authLoading, user, navigate]);
+  }, [isAdmin, rbacLoading, authLoading, workspaceLoading, user, navigate]);
 
   const navigateWithFilters = (next: DashboardFilters, replace: boolean) => {
     navigate({
@@ -216,15 +328,19 @@ function PainelPage() {
     }
   }, [canLoadOperationalData, filters, availableShiftIds, shiftOptions.resolved, navigate]);
 
-  if (rbacLoading) {
+  if (rbacLoading || workspaceLoading) {
     return (
       <DashboardLayout>
-        <div className="p-4 sm:p-8 space-y-8">
-          <Skeleton className="h-10 w-48" />
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="space-y-6 p-6">
+          <Skeleton className="h-10 w-64" />
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
             {[1, 2, 3, 4].map((i) => (
               <Skeleton key={i} className="h-32 w-full" />
             ))}
+          </div>
+          <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+            <Skeleton className="h-72 w-full" />
+            <Skeleton className="h-72 w-full" />
           </div>
         </div>
       </DashboardLayout>
@@ -233,209 +349,52 @@ function PainelPage() {
 
   if (!isAdmin) return null;
 
-  const empty = !compliance.loading && rows.length === 0;
-  const noDueYet = !empty && rows.every((r) => r.dueWeightTotal === 0);
-
   return (
     <DashboardLayout>
-      <header className="flex items-center justify-between px-4 sm:px-6 py-4">
-        <div
-          className={`flex items-center gap-2 transition-all duration-300 ${!sidebarOpen && !isMobile ? "pl-14" : "pl-0"} ${isMobile && !sidebarOpen ? "pl-12" : "pl-0"}`}
-        >
-          <img
-            src={logoUrl}
-            alt="Logo"
-            className={`${isMobile ? "w-8 h-8" : "w-10 h-10"} object-contain`}
-          />
-          <span className="text-neutral-400">›</span>
-          <span className="text-neutral-600 font-medium truncate max-w-[150px] sm:max-w-none">
-            Painel operacional
-          </span>
-        </div>
-      </header>
-
-      <main className="flex-1 px-4 sm:px-6 py-6 overflow-y-auto bg-neutral-50/50 w-full overflow-x-hidden">
-        <div className="max-w-7xl mx-auto space-y-6 w-full">
-          <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4 w-full">
-            <div>
-              <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-neutral-900">
-                Visão da operação
-              </h1>
-              <p className="text-sm text-neutral-500">
-                {filters.startDate} → {filters.endDate}
-                {filters.unitId ? " · unidade filtrada" : " · todas as unidades"}
-              </p>
-            </div>
-            <OperationalDashboardFilters
-              value={filters}
-              onChange={setFilters}
-              shiftOptions={shiftOptions.shifts}
-            />
-          </div>
-
-          {compliance.error && (
-            <Card>
-              <div className="flex items-center justify-between">
-                <p className="text-sm text-rose-600">Erro ao carregar dados: {compliance.error}</p>
-                <Button variant="outline" size="sm" onClick={() => compliance.refresh()}>
-                  Tentar novamente
-                </Button>
-              </div>
-            </Card>
-          )}
-
-          {/* KPIs principais */}
-          <section aria-labelledby="kpi-title">
-            <h2 id="kpi-title" className="sr-only">
-              Indicadores principais
-            </h2>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-              <KpiCard
-                label="Operação agora"
-                value={dueCompliance === null ? "—" : `${dueCompliance.toFixed(1)}%`}
-                hint={
-                  dueCompliance === null
-                    ? "Nenhuma tarefa prevista venceu até o momento."
-                    : "Considera apenas tarefas cujo horário já chegou."
-                }
-                icon={<Timer className="w-4 h-4" />}
-                accent="bg-pink-50 text-[#FF007F]"
-                loading={compliance.loading}
-              />
-              <KpiCard
-                label="Planejamento do período"
-                value={plannedCompliance === null ? "—" : `${plannedCompliance.toFixed(1)}%`}
-                hint="Inclui tarefas futuras já programadas."
-                icon={<CalendarClock className="w-4 h-4" />}
-                accent="bg-blue-50 text-blue-600"
-                loading={compliance.loading}
-              />
-              <KpiCard
-                label="Tarefas programadas"
-                value={kpis.scheduled}
-                icon={<ListChecks className="w-4 h-4" />}
-                accent="bg-neutral-100 text-neutral-700"
-                loading={compliance.loading}
-              />
-              <KpiCard
-                label="Deveriam ter sido feitas"
-                value={kpis.due}
-                icon={<Hourglass className="w-4 h-4" />}
-                accent="bg-amber-50 text-amber-600"
-                loading={compliance.loading}
-              />
-              <KpiCard
-                label="Concluídas"
-                value={`${kpis.done}`}
-                hint={`${kpis.onTime} no prazo · ${kpis.late} com atraso`}
-                icon={<CheckCircle2 className="w-4 h-4" />}
-                accent="bg-emerald-50 text-emerald-600"
-                loading={compliance.loading}
-              />
-              <KpiCard
-                label="Abertas em atraso"
-                value={kpis.overdueOpen}
-                icon={<Clock className="w-4 h-4" />}
-                accent="bg-amber-50 text-amber-700"
-                loading={compliance.loading}
-              />
-              <KpiCard
-                label="Falhas críticas"
-                value={kpis.critical}
-                icon={<AlertOctagon className="w-4 h-4" />}
-                accent="bg-rose-50 text-rose-600"
-                loading={compliance.loading}
-              />
-              <KpiCard
-                label="Evidências aguardando"
-                value={kpis.pendingEv}
-                icon={<Camera className="w-4 h-4" />}
-                accent="bg-cyan-50 text-cyan-600"
-                loading={compliance.loading}
-              />
-              <KpiCard
-                label="Unidades em atenção"
-                value={kpis.attention}
-                icon={<AlertTriangle className="w-4 h-4" />}
-                accent="bg-amber-50 text-amber-600"
-                loading={compliance.loading}
-              />
-            </div>
-          </section>
-
-          {/* Gráfico */}
-          <section aria-labelledby="chart-title">
-            <div className="flex items-baseline justify-between mb-3">
-              <h2 id="chart-title" className="text-sm font-semibold text-neutral-700">
-                Conformidade operacional por unidade
-              </h2>
-              <Badge variant="neutral">{rows.length} unidades</Badge>
-            </div>
-            <Card>
-              {empty ? (
-                <EmptyState
-                  title="Sem tarefas programadas no período"
-                  detail="Ajuste o filtro de datas ou cadastre tarefas."
-                />
-              ) : noDueYet ? (
-                <EmptyState
-                  title="Sem atividade até o momento"
-                  detail="Há tarefas programadas, mas nenhuma venceu ainda."
-                />
-              ) : (
-                <UnitComplianceChart data={rows} loading={compliance.loading} metric="due" />
-              )}
-            </Card>
-          </section>
-
-          {/* Tabela */}
-          <section aria-labelledby="table-title">
-            <div className="flex items-baseline justify-between mb-3">
-              <h2 id="table-title" className="text-sm font-semibold text-neutral-700">
-                Desempenho por unidade
-              </h2>
-              <p className="text-xs text-neutral-400">
-                Ordenação padrão: críticas · atenção · padrão
-              </p>
-            </div>
-            <Card>
-              <UnitPerformanceTable
-                rows={rows}
-                loading={compliance.loading}
-                onRowClick={(r) => openUnit(r, { ...filters, shiftId: effectiveShiftId }, navigate)}
-              />
-            </Card>
-          </section>
-
-          {/* Rotinas agendadas — domínio separado dos KPIs de tarefas */}
-          <ScheduledOccurrencesSection
-            rows={occurrences.data}
-            kpis={occurrences.kpis}
-            loading={occurrences.loading}
-            error={occurrences.error}
-            onRetry={() => void occurrences.refresh()}
-            onUnitClick={(unitId) =>
-              openUnitById(unitId, { ...filters, shiftId: effectiveShiftId }, navigate)
-            }
-          />
-        </div>
+      <main className="w-full flex-1 overflow-y-auto overflow-x-hidden">
+        <PanelDashboard
+          data={{
+            filters,
+            unitOptions,
+            shiftOptions: shiftOptions.shifts,
+            onFiltersChange: setFilters,
+            defaultFilters,
+            target: OPERATIONAL_TARGET,
+            periodLabel: panelPeriodLabel(filters),
+            scopeLabel: panelScopeLabel(filters, unitOptions, shiftOptions.shifts),
+            // Rótulo REAL da saúde da operação (mesma regra de status do
+            // domínio, apenas apresentada) — nenhuma fórmula nova.
+            health: { label: healthMeta.label, dot: healthMeta.dot },
+            onRetry: () => void compliance.refresh(),
+            kpis,
+            unitRows: displayRows,
+            occurrenceRows: displayOccurrenceRows,
+            occurrenceKpis,
+            attention: attentionRows,
+            loading: {
+              kpis: compliance.loading,
+              table: compliance.loading,
+              routines: occurrences.loading,
+            },
+            error: compliance.error,
+            occurrencesError: occurrences.error,
+            onOccurrencesRetry: () => void occurrences.refresh(),
+            onRowClick: (row) =>
+              openUnitById(row.unitId, { ...filters, shiftId: effectiveShiftId }, navigate),
+            onUnitClick: (unitId) =>
+              openUnitById(unitId, { ...filters, shiftId: effectiveShiftId }, navigate),
+          }}
+        />
       </main>
     </DashboardLayout>
   );
 }
 
-function openUnit(
-  r: UnitComplianceRow,
-  f: DashboardFilters,
-  navigate: ReturnType<typeof useNavigate>,
-) {
-  openUnitById(r.unitId, f, navigate);
-}
-
 /**
- * Drill-down por unidade com o MESMO período que produziu os números clicados
- * (usado pela seção de rotinas; os KPIs de tarefas continuam passando por
- * openUnit, sem mudança de comportamento).
+ * Drill-down por unidade com o MESMO período que produziu os números clicados.
+ * O turno global acompanha o drill-down (6B.3): o detalhe inicializa o seu
+ * seletor a partir da URL e cai em "todos" se o turno não pertencer à unidade
+ * clicada.
  */
 function openUnitById(
   unitId: string,
@@ -445,58 +404,10 @@ function openUnitById(
   navigate({
     to: "/unidades/$unitId/operacao",
     params: { unitId },
-    // O turno global acompanha o drill-down (6B.3): o detalhe inicializa o seu
-    // seletor a partir da URL e cai em "todos" se o turno não pertencer à
-    // unidade clicada.
     search: {
       startDate: f.startDate,
       endDate: f.endDate,
       ...(f.shiftId ? { shiftId: f.shiftId } : {}),
     },
   });
-}
-
-function KpiCard({
-  label,
-  value,
-  icon,
-  accent,
-  hint,
-  loading,
-}: {
-  label: string;
-  value: number | string;
-  icon: React.ReactNode;
-  accent: string;
-  hint?: string;
-  loading?: boolean;
-}) {
-  return (
-    <div className="bg-white border border-neutral-200/70 rounded-xl p-4 shadow-sm">
-      <div className="flex items-center justify-between">
-        <span className="text-xs font-medium text-neutral-500">{label}</span>
-        <span className={`w-7 h-7 rounded-lg flex items-center justify-center ${accent}`}>
-          {icon}
-        </span>
-      </div>
-      {loading ? (
-        <div
-          className="mt-2 h-7 w-20 rounded bg-neutral-100 animate-pulse"
-          aria-label="Carregando"
-        />
-      ) : (
-        <div className="mt-2 text-2xl font-bold text-neutral-900">{value}</div>
-      )}
-      {hint && <p className="text-[11px] text-neutral-400 mt-1 leading-snug">{hint}</p>}
-    </div>
-  );
-}
-
-function EmptyState({ title, detail }: { title: string; detail: string }) {
-  return (
-    <div className="py-10 text-center">
-      <p className="text-sm font-semibold text-neutral-700">{title}</p>
-      <p className="text-xs text-neutral-500 mt-1">{detail}</p>
-    </div>
-  );
 }
