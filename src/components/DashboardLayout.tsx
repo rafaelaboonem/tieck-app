@@ -38,8 +38,8 @@ import {
   RiSearch2Line,
   RiHistoryLine,
   RiArrowDownSLine,
-  RiLifebuoyLine, RiFeedbackLine,
-  RiLogoutBoxRLine, RiLoginBoxLine,
+  RiLifebuoyLine,
+  RiLogoutBoxRLine,
   RiRocket2Line, RiBookOpenLine, RiCustomerService2Line,
 } from "@remixicon/react";
   import {
@@ -60,8 +60,6 @@ import {
    DropdownMenuTrigger,
  } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
-import logoIcon from "../assets/local/logo-tieck-trim.webp";
-import logoKIcon from "../assets/local/logo-k-trim.webp";
 
   type NavItem = {
     icon: React.ElementType;
@@ -90,16 +88,16 @@ import logoKIcon from "../assets/local/logo-k-trim.webp";
     Files, Layout, BarChart3, Settings, MessageSquare, Bell, Globe, Users,
   };
 
- // Shell nav row: coluna óptica fixa (28px) → label. Seleção = rosa da marca
- // disciplinado (fundo sutil + borda hairline + ícone/label rosa); sem glow,
- // sem sombra, sem gradiente, sem dot extra.
+ // Shell nav row: coluna óptica fixa (28px) → label. Seleção em repouso
+ // usa somente peso + rosa da marca; o hover recebe uma superfície neutra sutil,
+ // sem contorno permanente, glow, sombra, gradiente ou dot extra.
  const NAV_ROW = {
    base: "group relative flex h-8 w-full items-center gap-2.5 rounded-md px-1 text-[13px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF007F]/40",
    idle: "text-neutral-600 hover:text-neutral-900",
    active: "font-semibold text-[#FF007F]",
    icon: "grid h-7 w-7 shrink-0 place-items-center",
    glyph: "w-[18px] h-[18px]",
-   label: "truncate transition-[opacity,translate] duration-200 ease-out motion-reduce:duration-100",
+   label: "truncate transition-[opacity,translate] duration-[300ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:duration-100",
  } as const;
 
  // Camada de superfície da linha. Absoluta e fora do fluxo: no estado expandido
@@ -107,11 +105,10 @@ import logoKIcon from "../assets/local/logo-k-trim.webp";
  // óptica (rail de 60px → 12px de margem de cada lado). Sendo uma camada
  // absoluta, os ícones nunca se deslocam durante a animação de largura.
  // Motion do shell: UMA transformação contínua — largura, fade e deslocamentos
- // compartilham a mesma duração/easing (200ms ease-out). Sob prefers-reduced-motion
- // o movimento é ENCURTADO (100ms), nunca zerado: transition-none transformaria a
- // transição em um corte seco.
+ // compartilham a mesma duração/easing (300ms, ease-out natural). Sob
+ // prefers-reduced-motion o movimento é encurtado (100ms), sem alterar os estados finais.
  const ROW_SURFACE =
-   "pointer-events-none absolute inset-y-0 rounded-md border duration-200 ease-out motion-reduce:duration-100";
+   "pointer-events-none absolute inset-y-0 rounded-md border duration-[300ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:duration-100";
 
  const rowSurfaceClass = (collapsed: boolean | undefined, active: boolean, field = false) =>
    cn(
@@ -160,7 +157,9 @@ import logoKIcon from "../assets/local/logo-k-trim.webp";
          secondary && !active && "text-neutral-500 hover:text-neutral-900"
        )}
      >
-       <span aria-hidden="true" className={rowSurfaceClass(collapsed, active)} />
+       {/* A superfície é somente hover; o active em repouso é identificado por
+           ícone + label rosa, sem borda ou caixa persistente. */}
+       <span aria-hidden="true" className={rowSurfaceClass(collapsed, false)} />
        <span className={cn(NAV_ROW.icon, "relative z-10")} aria-hidden="true">
          <Glyph className={cn(NAV_ROW.glyph, active && "text-[#FF007F]")} />
        </span>
@@ -168,6 +167,7 @@ import logoKIcon from "../assets/local/logo-k-trim.webp";
      </button>
    );
  }
+
 
   export function DashboardLayout({ children }: { children: React.ReactNode }) {
     const { sidebarOpen, setSidebarOpen } = useSidebar();
@@ -336,7 +336,7 @@ import logoKIcon from "../assets/local/logo-k-trim.webp";
     // Rótulos/metadados: fade + deslocamento curto esquerdo na MESMA duração da
     // largura — a transição é uma só. Nada de display:none (evita corte no meio).
     const labelFade = cn(
-      "transition-[opacity,translate] duration-200 ease-out motion-reduce:duration-100",
+      "transition-[opacity,translate] duration-[300ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:duration-100",
       collapsed && "opacity-0 -translate-x-1"
     );
 
@@ -375,7 +375,7 @@ import logoKIcon from "../assets/local/logo-k-trim.webp";
     const isUndecided = isMobile === undefined;
 
     return (
-        <div className="min-h-screen bg-white text-neutral-900 flex overflow-x-hidden">
+        <div className="min-h-screen bg-white text-neutral-900 flex overflow-x-clip">
        {/* Mobile Backdrop */}
        {isMobile === true && sidebarOpen && (
          <div
@@ -388,10 +388,10 @@ import logoKIcon from "../assets/local/logo-k-trim.webp";
        {(profile || user || authLoading) && (
        <aside
          className={cn(
-           "flex flex-col shrink-0 border-r border-neutral-100 bg-white transition-[width,transform] duration-200 ease-out motion-reduce:duration-100",
+           "flex flex-col shrink-0 border-r border-neutral-100 bg-white transition-[width,transform] duration-[300ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:duration-100",
            isMobile === true
              ? "fixed top-0 left-0 h-[100dvh] z-50 w-[288px] max-w-[85vw]"
-             : "sticky top-0 h-screen overflow-hidden",
+             : "sticky top-0 h-[100dvh] max-h-[100dvh] overflow-y-auto overflow-x-hidden",
            isUndecided && "w-0 overflow-hidden opacity-0",
            !isUndecided &&
              (isMobile === true
@@ -414,43 +414,47 @@ import logoKIcon from "../assets/local/logo-k-trim.webp";
          {/* Conteúdo com largura FIXA: o aside anima width e recorta o excedente,
              então nenhum ícone se desloca lateralmente durante a transição. */}
          <div className={cn("flex h-full min-h-0 flex-col", isMobile === true ? "w-[288px]" : "w-[240px]")}>
-         {/* Brand row: wordmark completo ↔ ícone K oficial, no MESMO slot, cruzando
-             em fade + translate curto e coordenado com a animação de width
-             (container de altura fixa = nenhum reflow durante a transição). */}
-         <div className="relative mt-4 mb-3 h-7 px-4">
-           <button
-             type="button"
-             onClick={() => navigate({ to: workspaceStatus === "workspace" && currentWorkspace ? "/painel" : "/inicio" })}
-             className="absolute left-4 top-1/2 -translate-y-1/2 flex items-center rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF007F]/40"
-             aria-label={workspaceStatus === "workspace" && currentWorkspace ? currentWorkspace.name : "Início"}
-           >
-             {/* marca completa — asset oficial recortado */}
-             <img
-               src={logoIcon}
-               alt="Tieck"
+         {/* Perfil no topo: substitui a marca neste shell. Os dados vêm da sessão
+             e do perfil carregado; no rail, apenas o avatar permanece visível. */}
+         <DropdownMenu>
+         <div className="relative mt-3 mb-3 h-10 px-3">
+           <DropdownMenuTrigger asChild>
+             <button
+               type="button"
                className={cn(
-                 "w-[104px] h-auto transition-[opacity,translate,visibility] duration-200 ease-out motion-reduce:duration-100",
-                 collapsed ? "invisible -translate-x-1 opacity-0" : "visible translate-x-0 opacity-100"
+                 "group relative flex h-10 items-center gap-2.5 rounded-md text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF007F]/40",
+                 collapsed ? "w-9 justify-center" : "w-[calc(100%-2.25rem)] px-1"
                )}
-             />
-             {/* marca compacta — asset oficial do ícone K, no mesmo eixo */}
-             <img
-               src={logoKIcon}
-               alt=""
-               aria-hidden="true"
-               className={cn(
-                 "absolute left-0.5 top-1/2 h-6 w-6 -translate-y-1/2 transition-[opacity,translate,visibility] duration-200 ease-out motion-reduce:duration-100",
-                 collapsed ? "visible translate-x-0 opacity-100" : "invisible translate-x-1 opacity-0"
+               title={collapsed ? "Abrir menu da conta" : undefined}
+               aria-label="Abrir menu da conta"
+             >
+             <span aria-hidden="true" className={rowSurfaceClass(collapsed, false)} />
+             <span className="relative z-10 grid h-8 w-8 shrink-0 place-items-center overflow-hidden rounded-full border border-neutral-200 bg-neutral-100 text-neutral-500">
+               {profile?.avatar_url ? (
+                 <img src={profile.avatar_url} alt="" className="h-full w-full object-cover" />
+               ) : (
+                 <span className="text-[12px] font-semibold text-neutral-600">
+                   {(profile?.display_name || user?.user_metadata?.full_name || user?.email || "U").charAt(0).toUpperCase()}
+                 </span>
                )}
-             />
-           </button>
+             </span>
+             <span className={cn("relative z-10 min-w-0 truncate", labelFade)}>
+               <span className="block truncate text-[13px] font-semibold text-neutral-800">
+                 {profile?.display_name || user?.user_metadata?.full_name || user?.email?.split("@")[0] || "Usuário"}
+               </span>
+               <span className="mt-0.5 block truncate text-[11px] leading-4 text-neutral-400">
+                 {profile?.email || user?.email || ""}
+               </span>
+             </span>
+             </button>
+           </DropdownMenuTrigger>
            {/* Recolher: « no canto direito do topo (só no estado expandido) */}
            {!isMobile && (
              <button
                type="button"
                onClick={() => setSidebarOpen(false)}
                className={cn(
-                 "absolute right-4 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-md text-neutral-400 hover:bg-neutral-100 hover:text-neutral-900 transition-[opacity,visibility,background-color,color] duration-200 ease-out motion-reduce:duration-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF007F]/40",
+                 "absolute right-4 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-md text-neutral-400 hover:bg-neutral-100 hover:text-neutral-900 transition-[opacity,visibility,background-color,color] duration-[300ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:duration-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF007F]/40",
                  collapsed ? "invisible opacity-0" : "visible opacity-100"
                )}
                title="Esconder menu"
@@ -463,12 +467,12 @@ import logoKIcon from "../assets/local/logo-k-trim.webp";
          </div>
 
          {/* Expandir: existe apenas no estado recolhido e fica no TOPO do rail,
-             logo abaixo da marca. A altura anima (grid-rows) junto com a largura,
-             então o conteúdo abaixo desce de forma coordenada — sem salto. */}
+             logo abaixo do perfil. A altura anima junto com a largura, então o
+             conteúdo abaixo desce de forma coordenada — sem salto. */}
          {!isMobile && (
            <div
              className={cn(
-               "grid transition-[grid-template-rows,opacity] duration-200 ease-out motion-reduce:duration-100",
+               "grid transition-[grid-template-rows,opacity] duration-[300ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:duration-100",
                collapsed ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
              )}
            >
@@ -494,16 +498,13 @@ import logoKIcon from "../assets/local/logo-k-trim.webp";
            </div>
          )}
 
-         {/* Workspace atual — contexto estrutural acima da busca (o controle do topo foi removido) */}
+         {/* Workspace atual — contexto estrutural acima da busca. A troca de
+             contexto continua disponível no menu aberto pelo perfil. */}
          <div className="px-3 pb-2">
-           <DropdownMenu>
-             <DropdownMenuTrigger asChild>
-               <button
-                 type="button"
-                 className="group relative flex w-full items-center gap-2.5 rounded-md h-9 px-1 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF007F]/40"
-                 title={collapsed ? "Trocar de workspace" : undefined}
-                 aria-label="Trocar de workspace"
-               >
+           <div
+             className="group relative flex w-full items-center gap-2.5 rounded-md h-9 px-1 text-left"
+             aria-label={`Workspace atual: ${workspaceLabel}`}
+           >
                  <span aria-hidden="true" className={rowSurfaceClass(collapsed, false)} />
                 <span className="relative z-10 grid h-7 w-7 shrink-0 place-items-center" aria-hidden="true">
                    <span className="grid h-6 w-6 place-items-center overflow-hidden rounded-md border border-neutral-200 bg-neutral-50 text-neutral-500">
@@ -517,12 +518,9 @@ import logoKIcon from "../assets/local/logo-k-trim.webp";
                  <span className={cn("relative z-10 min-w-0 truncate text-[13px] font-medium text-neutral-700", labelFade)}>
                    {workspaceLabel}
                  </span>
-                 <RiArrowDownSLine
-                   className={cn("relative z-10 ml-auto h-4 w-4 shrink-0 text-neutral-400", labelFade)}
-                   aria-hidden="true"
-                 />
-               </button>
-             </DropdownMenuTrigger>
+               </div>
+         </div>
+
              <DropdownMenuContent align="start" alignOffset={-4} className="w-72 p-0 overflow-hidden">
                <div className="bg-[#FF007F]/5 p-4">
                  <div className="flex items-center gap-3 mb-4 px-1">
@@ -644,14 +642,14 @@ import logoKIcon from "../assets/local/logo-k-trim.webp";
 
               <button
                 onClick={handleLogout}
-                className="w-full text-left px-2 py-2 text-[13px] text-neutral-500 hover:text-[#FF007F] hover:bg-[#FF007F]/5 rounded-md transition-all mx-0"
+                className="w-full flex items-center gap-2 text-left px-2 py-2 text-[13px] text-neutral-500 hover:text-[#FF007F] hover:bg-[#FF007F]/5 rounded-md transition-all mx-0"
               >
-                Sair
+                <RiLogoutBoxRLine className="h-4 w-4 shrink-0" aria-hidden="true" />
+                <span>Sair</span>
               </button>
               </div>
             </DropdownMenuContent>
           </DropdownMenu>
-        </div>
 
         <nav className="px-3 pb-4" aria-label="Principal">
           <button
@@ -760,17 +758,17 @@ import logoKIcon from "../assets/local/logo-k-trim.webp";
                 <span className={cn("relative z-10 font-medium truncate", labelFade)}>Recentes</span>
                 <RiArrowDownSLine
                   className={cn(
-                    "relative z-10 ml-auto w-4 h-4 shrink-0 text-neutral-400 transition-[transform,opacity] duration-200 ease-out motion-reduce:duration-100",
+                    "relative z-10 ml-auto w-4 h-4 shrink-0 text-neutral-400 transition-[transform,opacity] duration-[300ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:duration-100",
                     recentOpen && "rotate-180",
                     collapsed && "opacity-0"
                   )}
                   aria-hidden="true"
                 />
               </button>
-              {/* Collapse animado via grid-rows (200ms ease-out, reduced-motion respeitado) */}
+              {/* Collapse animado via grid-rows (300ms ease-out, reduced-motion respeitado) */}
               <div
                 className={cn(
-                  "grid transition-[grid-template-rows,opacity] duration-200 ease-out motion-reduce:duration-100",
+                  "grid transition-[grid-template-rows,opacity] duration-[300ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:duration-100",
                   // No rail a lista fecha por altura+opacidade (nunca display:none) e
                   // sai da árvore de foco sem desmontar — sem corte e sem flicker.
                   collapsed
@@ -853,88 +851,6 @@ import logoKIcon from "../assets/local/logo-k-trim.webp";
           )}
         </nav>
 
-        <div className="mt-auto border-t border-neutral-100 px-3 py-3">
-          {/* Enviar feedback existe só no estado expandido. No rail o slot fecha com
-              animação (grid-rows) — a hairline do rodapé sobe suave e a sessão,
-              ancorada embaixo, não se desloca. O controle de expandir agora vive
-              no topo do rail, junto da marca. */}
-          <div
-            className={cn(
-              "mb-2 grid transition-[grid-template-rows,opacity] duration-200 ease-out motion-reduce:duration-100",
-              collapsed ? "grid-rows-[0fr] opacity-0" : "grid-rows-[1fr] opacity-100"
-            )}
-          >
-            <div className="overflow-hidden">
-              <button
-                type="button"
-                tabIndex={collapsed ? -1 : 0}
-                aria-hidden={collapsed ? true : undefined}
-                className="group relative flex h-[30px] w-full items-center gap-2.5 rounded-md text-left text-[13px] text-neutral-500 hover:text-neutral-900 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF007F]/40"
-              >
-                <span aria-hidden="true" className={rowSurfaceClass(false, false)} />
-                <span className="relative z-10 grid h-7 w-7 shrink-0 place-items-center" aria-hidden="true">
-                  <RiFeedbackLine className="w-[18px] h-[18px]" />
-                </span>
-                <span className="relative z-10 truncate">Enviar feedback</span>
-              </button>
-            </div>
-          </div>
-          <div className={cn("flex items-center gap-1.5", collapsed && "flex-col items-start gap-1")}>
-            <button
-              type="button"
-              onClick={() => navigate({ to: "/configuracoes" })}
-              className={cn(
-                "flex min-w-0 items-center gap-2.5 rounded-md p-1 text-left hover:bg-neutral-100 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF007F]/40",
-                collapsed ? "flex-none" : "flex-1"
-              )}
-              title="Minha conta"
-              aria-label={collapsed ? "Minha conta" : undefined}
-            >
-              <div className="w-7 h-7 rounded-full overflow-hidden bg-neutral-200 shrink-0">
-                {profile?.avatar_url ? (
-                  <img src={profile.avatar_url} alt="Avatar" className="w-full h-full object-cover" />
-                ) : (
-                  <div className="w-full h-full bg-gradient-to-br from-orange-300 to-pink-400 flex items-center justify-center text-[11px] font-semibold text-white">
-                    {profile?.display_name?.charAt(0) || "U"}
-                  </div>
-                )}
-              </div>
-              <div className={cn("min-w-0", labelFade)}>
-                <p className="truncate text-[13px] font-medium text-neutral-900 leading-4">
-                  {profile?.display_name || "Visitante"}
-                </p>
-                <p className="truncate text-[11px] text-neutral-400 leading-4 mt-0.5">
-                  {profile?.email || "Crie sua conta agora"}
-                </p>
-              </div>
-            </button>
-            {profile ? (
-              <button
-                onClick={handleLogout}
-                className={cn(
-                  "grid shrink-0 place-items-center rounded-md text-neutral-400 hover:bg-neutral-100 hover:text-neutral-900 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF007F]/40",
-                  collapsed ? "h-9 w-9" : "h-8 w-8"
-                )}
-                title="Sair"
-                aria-label="Sair"
-              >
-                <RiLogoutBoxRLine className="w-[18px] h-[18px]" aria-hidden="true" />
-              </button>
-            ) : (
-              <button
-                onClick={() => navigate({ to: "/login" })}
-                className={cn(
-                  "grid shrink-0 place-items-center rounded-md text-[#FF007F] hover:bg-[#FF007F]/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF007F]/40",
-                  collapsed ? "h-9 w-9" : "h-8 w-8"
-                )}
-                title="Entrar"
-                aria-label="Entrar"
-              >
-                <RiLoginBoxLine className="w-[18px] h-[18px]" aria-hidden="true" />
-              </button>
-            )}
-          </div>
-        </div>
         </div>
 
        </aside>
