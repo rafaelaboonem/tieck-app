@@ -8,6 +8,7 @@
  * due_at is ever saved.
  */
 import { toLocalISO, fromLocalISO } from "@/utils/date-helpers";
+import { MEMBER_NAME_FALLBACK, getMemberDisplayName } from "./member-identity";
 
 export type DeadlineMode = "date" | "days";
 
@@ -32,18 +33,20 @@ export interface WorkspaceMemberLike {
  * Best-effort human label for a workspace member.
  * Priority: display_name → "First Last" → email_normalized → "Membro".
  * Never shows the generic fallback when a usable name or e-mail exists.
+ *
+ * A cadeia NÃO é reimplementada aqui: ela delega para `getMemberDisplayName`
+ * (@/lib/member-identity), que passou a ser a única definição oficial de "qual é
+ * o nome desta pessoa" no produto. Comportamento e assinatura permanecem os
+ * mesmos desta função (5E.1.1), então nada que já a consome muda.
  */
 export function getWorkspaceMemberLabel(member: WorkspaceMemberLike | null | undefined): string {
-  if (!member) return "Membro";
-  const displayName = member.profiles?.display_name?.trim();
-  if (displayName) return displayName;
-  const first = member.profiles?.first_name?.trim();
-  const last = member.profiles?.last_name?.trim();
-  const fullName = [first, last].filter(Boolean).join(" ").trim();
-  if (fullName) return fullName;
-  const email = member.email_normalized?.trim();
-  if (email) return email;
-  return "Membro";
+  if (!member) return MEMBER_NAME_FALLBACK;
+  return getMemberDisplayName({
+    displayName: member.profiles?.display_name,
+    firstName: member.profiles?.first_name,
+    lastName: member.profiles?.last_name,
+    email: member.email_normalized,
+  });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

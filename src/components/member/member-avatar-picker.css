@@ -1,0 +1,78 @@
+/*
+ * =========================================================================
+ * Galeria de avatares (Configurações → Minha conta).
+ *
+ * Mesma linguagem de microinteração aprovada no painel (preview-light.css):
+ * só TRANSFORM, nunca width/height/margin — transform não participa do layout,
+ * então o grid não se mexe e não existe shift. O transform é aplicado no PRÓPRIO
+ * botão do avatar (o elemento com border, radius e shadow).
+ *
+ * Tempos (assimétricos de propósito — entrada responsiva, saída mais macia):
+ *   ENTRADA (hover) 200ms
+ *   SAÍDA (normal)  260ms
+ *   easing          cubic-bezier(0.22, 1, 0.36, 1)
+ *
+ * Os dois estados usam a MESMA forma de transform (translate3d + scale, nesta
+ * ordem), inclusive normal, onde scale é 1: assim o navegador interpola função
+ * por função em vez de cair para matriz, e o movimento não "corta".
+ *
+ * Hover só em ponteiro fino (`hover: hover` + `pointer: fine`): em touch nada
+ * escala. `prefers-reduced-motion: reduce` NÃO vira snap: o movimento fica menor
+ * e mais curto (2px → 1px, 1.04 → 1.01, 200ms → 130ms ease-out). É "menos
+ * movimento", não "sem movimento".
+ * =========================================================================
+ */
+
+.ti-avatar-option {
+  transform-origin: center center;
+  transform: translate3d(0, 0, 0) scale(1);
+  /* estado NORMAL → usado na SAÍDA (260ms, retorno mais macio) */
+  transition:
+    transform 260ms cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 260ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 260ms cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .ti-avatar-option:hover {
+    transform: translate3d(0, -2px, 0) scale(1.04);
+    /* ENTRADA: 200ms (sobrescreve só a duração do estado normal) */
+    transition-duration: 200ms;
+    z-index: 10;
+    box-shadow:
+      0 10px 22px -12px color-mix(in oklab, var(--foreground) 24%, transparent),
+      0 2px 6px -3px color-mix(in oklab, var(--foreground) 8%, transparent);
+  }
+}
+
+/*
+ * Cards especiais ("Sua foto" / "Automático") — mesma família de microinteração,
+ * amplitude MENOR: são cards de ~112px, e o scale do círculo (1.04) num retângulo
+ * desse tamanho invade o vizinho. A regra vem depois da de cima, com a mesma
+ * especificidade, para vencer a cascata sem `!important`.
+ */
+@media (hover: hover) and (pointer: fine) {
+  .ti-avatar-special:hover {
+    transform: translate3d(0, -2px, 0) scale(1.02);
+  }
+}
+
+/* Reduced motion: movimento bem menor, bem mais curto — nunca `transition: none`. */
+@media (prefers-reduced-motion: reduce) {
+  .ti-avatar-option {
+    transition-duration: 140ms;
+    transition-timing-function: ease-out;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) and (hover: hover) and (pointer: fine) {
+  .ti-avatar-option:hover {
+    transform: translate3d(0, -1px, 0) scale(1.01);
+    transition-duration: 130ms;
+  }
+
+  .ti-avatar-special:hover {
+    transform: translate3d(0, -1px, 0) scale(1.005);
+  }
+}
