@@ -19,6 +19,7 @@ import {
   defaultFilters,
   detectPreset,
   presetToRange,
+  toCivilDateISO,
   type DashboardFilters,
   type PeriodPreset,
 } from "@/lib/dashboard-filters";
@@ -66,14 +67,16 @@ export function OperationalDashboardFilters({
 
   function setStart(d: Date | undefined) {
     if (!d) return;
-    const iso = d.toISOString().slice(0, 10);
+    // Dia civil LOCAL (nunca o dia UTC de `toISOString`): o recorte do detalhe
+    // da unidade tem de ser o mesmo dia que o calendário mostra.
+    const iso = toCivilDateISO(d);
     const end = iso > value.endDate ? iso : value.endDate;
     onChange({ ...value, startDate: iso, endDate: end });
     setOpenStart(false);
   }
   function setEnd(d: Date | undefined) {
     if (!d) return;
-    const iso = d.toISOString().slice(0, 10);
+    const iso = toCivilDateISO(d);
     const start = iso < value.startDate ? iso : value.startDate;
     onChange({ ...value, startDate: start, endDate: iso });
     setOpenEnd(false);
