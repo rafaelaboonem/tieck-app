@@ -88,15 +88,15 @@ import { toast } from "sonner";
     Files, Layout, BarChart3, Settings, MessageSquare, Bell, Globe, Users,
   };
 
- // Shell nav row: coluna óptica fixa (28px) → label. Seleção em repouso
+ // Shell nav row: coluna óptica fixa (32px) → label. Seleção em repouso
  // usa somente peso + rosa da marca; o hover recebe uma superfície neutra sutil,
  // sem contorno permanente, glow, sombra, gradiente ou dot extra.
  const NAV_ROW = {
-   base: "group relative flex h-8 w-full items-center gap-2.5 rounded-md px-1 text-[13px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF007F]/40",
+   base: "group relative flex h-9 w-full items-center gap-3 rounded-md px-2 text-[14px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF007F]/40",
    idle: "text-neutral-600 hover:text-neutral-900",
    active: "font-semibold text-[#FF007F]",
-   icon: "grid h-7 w-7 shrink-0 place-items-center",
-   glyph: "w-[18px] h-[18px]",
+   icon: "grid h-8 w-8 shrink-0 place-items-center",
+   glyph: "w-5 h-5",
    label: "truncate transition-[opacity,translate] duration-[300ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:duration-100",
  } as const;
 
@@ -118,7 +118,7 @@ import { toast } from "sonner";
      field
        ? "transition-[left,width,border-color,background-color]"
        : "transition-[left,width]",
-     collapsed ? "left-0.5 w-8" : "left-0 w-full",
+     collapsed ? "left-0.5 w-9" : "left-0 w-full",
      active
        ? "border-[#FF007F]/50 bg-[#FF007F]/[0.05]"
        : field && !collapsed
@@ -154,7 +154,10 @@ import { toast } from "sonner";
        className={cn(
          NAV_ROW.base,
          active ? NAV_ROW.active : NAV_ROW.idle,
-         secondary && !active && "text-neutral-500 hover:text-neutral-900"
+         secondary && !active && "text-neutral-500 hover:text-neutral-900",
+         // No rail o padding volta a 4px: a coluna óptica do ícone (4..36)
+         // permanece centrada sob a superfície de hover (2..38).
+         collapsed && "px-1"
        )}
      >
        {/* A superfície é somente hover; o active em repouso é identificado por
@@ -397,7 +400,7 @@ import { toast } from "sonner";
              (isMobile === true
                ? !sidebarOpen && "-translate-x-full"
                : sidebarOpen
-                 ? "w-[240px]"
+                 ? "w-[264px]"
                  : "w-[60px]")
          )}
        >
@@ -413,7 +416,7 @@ import { toast } from "sonner";
 
          {/* Conteúdo com largura FIXA: o aside anima width e recorta o excedente,
              então nenhum ícone se desloca lateralmente durante a transição. */}
-         <div className={cn("flex h-full min-h-0 flex-col", isMobile === true ? "w-[288px]" : "w-[240px]")}>
+         <div className={cn("flex h-full min-h-0 flex-col", isMobile === true ? "w-[288px]" : "w-[264px]")}>
          {/* Perfil no topo: substitui a marca neste shell. Os dados vêm da sessão
              e do perfil carregado; no rail, apenas o avatar permanece visível. */}
          <DropdownMenu>
@@ -422,14 +425,14 @@ import { toast } from "sonner";
              <button
                type="button"
                className={cn(
-                 "group relative flex h-10 items-center gap-2.5 rounded-md text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF007F]/40",
-                 collapsed ? "w-9 justify-center" : "w-[calc(100%-2.25rem)] px-1"
+                 "group relative flex h-11 items-center gap-3 rounded-md text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF007F]/40",
+                 collapsed ? "w-10 justify-center" : "w-[calc(100%-2.25rem)] px-2"
                )}
                title={collapsed ? "Abrir menu da conta" : undefined}
                aria-label="Abrir menu da conta"
              >
              <span aria-hidden="true" className={rowSurfaceClass(collapsed, false)} />
-             <span className="relative z-10 grid h-8 w-8 shrink-0 place-items-center overflow-hidden rounded-full border border-neutral-200 bg-neutral-100 text-neutral-500">
+             <span className="relative z-10 grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-full border border-neutral-200 bg-neutral-100 text-neutral-500">
                {profile?.avatar_url ? (
                  <img src={profile.avatar_url} alt="" className="h-full w-full object-cover" />
                ) : (
@@ -439,10 +442,10 @@ import { toast } from "sonner";
                )}
              </span>
              <span className={cn("relative z-10 min-w-0 truncate", labelFade)}>
-               <span className="block truncate text-[13px] font-semibold text-neutral-800">
+               <span className="block truncate text-[14px] font-semibold text-neutral-800">
                  {profile?.display_name || user?.user_metadata?.full_name || user?.email?.split("@")[0] || "Usuário"}
                </span>
-               <span className="mt-0.5 block truncate text-[11px] leading-4 text-neutral-400">
+               <span className="block truncate text-[12px] leading-4 text-neutral-400">
                  {profile?.email || user?.email || ""}
                </span>
              </span>
@@ -483,14 +486,14 @@ import { toast } from "sonner";
                    onClick={() => setSidebarOpen(true)}
                    tabIndex={collapsed ? 0 : -1}
                    aria-hidden={collapsed ? undefined : true}
-                   className="group relative flex h-8 w-full items-center gap-2.5 rounded-md px-1 text-[13px] text-neutral-500 hover:text-neutral-900 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF007F]/40"
+                   className="group relative flex h-9 w-full items-center gap-3 rounded-md px-1 text-[14px] text-neutral-500 hover:text-neutral-900 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF007F]/40"
                    title="Expandir menu"
                    aria-label="Expandir menu"
                    aria-expanded={sidebarOpen}
                  >
                    <span aria-hidden="true" className={rowSurfaceClass(true, false)} />
-                   <span className="relative z-10 grid h-7 w-7 shrink-0 place-items-center" aria-hidden="true">
-                     <ChevronsRight className="w-[18px] h-[18px]" />
+                   <span className="relative z-10 grid h-8 w-8 shrink-0 place-items-center" aria-hidden="true">
+                     <ChevronsRight className="w-5 h-5" />
                    </span>
                  </button>
                </div>
@@ -502,11 +505,14 @@ import { toast } from "sonner";
              contexto continua disponível no menu aberto pelo perfil. */}
          <div className="px-3 pb-2">
            <div
-             className="group relative flex w-full items-center gap-2.5 rounded-md h-9 px-1 text-left"
+             className={cn(
+               "group relative flex w-full items-center gap-3 rounded-md h-10 text-left",
+               collapsed ? "px-1" : "px-2"
+             )}
              aria-label={`Workspace atual: ${workspaceLabel}`}
            >
                  <span aria-hidden="true" className={rowSurfaceClass(collapsed, false)} />
-                <span className="relative z-10 grid h-7 w-7 shrink-0 place-items-center" aria-hidden="true">
+                <span className="relative z-10 grid h-8 w-8 shrink-0 place-items-center" aria-hidden="true">
                    <span className="grid h-6 w-6 place-items-center overflow-hidden rounded-md border border-neutral-200 bg-neutral-50 text-neutral-500">
                      {workspaceIconUrl ? (
                        <img src={workspaceIconUrl} alt="" className="h-full w-full object-cover" />
@@ -515,7 +521,7 @@ import { toast } from "sonner";
                      )}
                    </span>
                  </span>
-                 <span className={cn("relative z-10 min-w-0 truncate text-[13px] font-medium text-neutral-700", labelFade)}>
+                 <span className={cn("relative z-10 min-w-0 truncate text-[14px] font-medium text-neutral-700", labelFade)}>
                    {workspaceLabel}
                  </span>
                </div>
@@ -571,7 +577,7 @@ import { toast } from "sonner";
                      <div className="w-5 h-5 rounded-md overflow-hidden bg-neutral-100 flex items-center justify-center shrink-0 border border-neutral-200">
                        <User className="w-3 h-3" />
                      </div>
-                     <span className="text-[13px] truncate font-medium">
+                     <span className="text-[14px] truncate font-medium">
                        Pessoal
                      </span>
                    </div>
@@ -600,7 +606,7 @@ import { toast } from "sonner";
                            })()
                          )}
                        </div>
-                       <span className="text-[13px] truncate font-medium">
+                       <span className="text-[14px] truncate font-medium">
                          {ws.name}
                        </span>
                      </div>
@@ -622,7 +628,7 @@ import { toast } from "sonner";
                            </div>
                          )}
                        </div>
-                       <span className="text-[13px] text-neutral-500 truncate group-hover:text-[#FF007F] transition-colors">
+                       <span className="text-[14px] text-neutral-500 truncate group-hover:text-[#FF007F] transition-colors">
                          {profile?.email}
                        </span>
                      </div>
@@ -633,7 +639,7 @@ import { toast } from "sonner";
               {(profile?.is_admin || workspaces.length === 0) && (
                 <button
                   onClick={() => { setCreateWsOpen(true); setNewWsName(""); setNewWsIcon("📁"); }}
-                  className="w-full flex items-center gap-2 px-2 py-2 mb-1 text-[13px] font-semibold text-[#FF007F] hover:bg-[#FF007F]/5 rounded-md transition-all mx-0 text-left"
+                  className="w-full flex items-center gap-2 px-2 py-2 mb-1 text-[14px] font-semibold text-[#FF007F] hover:bg-[#FF007F]/5 rounded-md transition-all mx-0 text-left"
                 >
                   <Plus className="w-4 h-4" />
                   Novo espaço de trabalho
@@ -642,7 +648,7 @@ import { toast } from "sonner";
 
               <button
                 onClick={handleLogout}
-                className="w-full flex items-center gap-2 text-left px-2 py-2 text-[13px] text-neutral-500 hover:text-[#FF007F] hover:bg-[#FF007F]/5 rounded-md transition-all mx-0"
+                className="w-full flex items-center gap-2 text-left px-2 py-2 text-[14px] text-neutral-500 hover:text-[#FF007F] hover:bg-[#FF007F]/5 rounded-md transition-all mx-0"
               >
                 <RiLogoutBoxRLine className="h-4 w-4 shrink-0" aria-hidden="true" />
                 <span>Sair</span>
@@ -656,7 +662,8 @@ import { toast } from "sonner";
             type="button"
             onClick={() => setSearchOpen(true)}
             className={cn(
-              "group relative flex w-full items-center gap-2.5 h-9 rounded-md px-1 text-[13px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF007F]/40",
+              "group relative flex w-full items-center gap-3 h-10 rounded-md text-[14px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF007F]/40",
+              collapsed ? "px-1" : "px-2",
               collapsed
                 ? "text-neutral-400 hover:text-neutral-700"
                 : "text-neutral-400 hover:text-neutral-500 focus-visible:text-neutral-500"
@@ -675,7 +682,7 @@ import { toast } from "sonner";
             </kbd>
           </button>
 
-          <div className="mt-5 flex flex-col gap-1.5">
+          <div className="mt-6 flex flex-col gap-2">
             <NavItemRow
               label="Início"
               to="/inicio"
@@ -746,14 +753,17 @@ import { toast } from "sonner";
               <button
                 type="button"
                 onClick={() => (collapsed ? setSidebarOpen(true) : setRecentOpen(!recentOpen))}
-                className="group relative flex h-8 w-full items-center gap-2.5 rounded-md pl-1 pr-1.5 text-[13px] text-neutral-600 hover:text-neutral-900 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF007F]/40"
+                className={cn(
+                  "group relative flex h-9 w-full items-center gap-3 rounded-md text-[14px] text-neutral-600 hover:text-neutral-900 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF007F]/40",
+                  collapsed ? "pl-1 pr-1.5" : "pl-2 pr-2"
+                )}
                 aria-expanded={collapsed ? sidebarOpen : recentOpen}
                 aria-label={collapsed ? "Recentes" : undefined}
                 title={collapsed ? "Recentes" : undefined}
               >
                 <span aria-hidden="true" className={rowSurfaceClass(collapsed, false)} />
-                <span className="relative z-10 grid h-7 w-7 shrink-0 place-items-center" aria-hidden="true">
-                  <RiHistoryLine className="w-[18px] h-[18px]" />
+                <span className="relative z-10 grid h-8 w-8 shrink-0 place-items-center" aria-hidden="true">
+                  <RiHistoryLine className="w-5 h-5" />
                 </span>
                 <span className={cn("relative z-10 font-medium truncate", labelFade)}>Recentes</span>
                 <RiArrowDownSLine
@@ -792,13 +802,13 @@ import { toast } from "sonner";
                             <span
                               aria-hidden="true"
                               className={cn(
-                                "absolute left-[18px] top-0 w-px bg-neutral-200",
+                                "absolute left-[24px] top-0 w-px bg-neutral-200",
                                 isLast ? "h-1/2" : "h-full"
                               )}
                             />
                             <span
                               aria-hidden="true"
-                              className="absolute left-[18px] top-1/2 h-px w-[10px] bg-neutral-200"
+                              className="absolute left-[24px] top-1/2 h-px w-[10px] bg-neutral-200"
                             />
                             {/* O NÓ É A BOLINHA: o ramo entra nela, como marcador do nó
                                 da árvore. Neutra nos itens normais; rosa no ativo. */}
@@ -807,8 +817,8 @@ import { toast } from "sonner";
                               className={cn(
                                 "absolute top-1/2 -translate-y-1/2 rounded-full",
                                 isActive
-                                  ? "left-[25px] h-1.5 w-1.5 bg-[#FF007F]"
-                                  : "left-[26px] h-1 w-1 bg-neutral-400"
+                                  ? "left-[31px] h-1.5 w-1.5 bg-[#FF007F]"
+                                  : "left-[32px] h-1 w-1 bg-neutral-400"
                               )}
                             />
                             <button
@@ -828,7 +838,7 @@ import { toast } from "sonner";
                               }}
                               aria-current={isActive ? "page" : undefined}
                               className={cn(
-                                "flex h-8 w-full items-center rounded-md pr-2 pl-[42px] text-left text-[13px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF007F]/40",
+                                "flex h-8 w-full items-center rounded-md pr-2 pl-[52px] text-left text-[14px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF007F]/40",
                                 isActive
                                   ? "font-semibold text-[#FF007F] hover:bg-neutral-50"
                                   : "text-neutral-500 hover:bg-neutral-50 hover:text-neutral-900"
@@ -841,7 +851,7 @@ import { toast } from "sonner";
                       })}
                     </ul>
                   ) : (
-                    <p className="py-1.5 pl-[42px] text-[12px] text-neutral-400">
+                    <p className="py-1.5 pl-[52px] text-[13px] text-neutral-400">
                       Nenhum recente neste contexto
                     </p>
                   )}

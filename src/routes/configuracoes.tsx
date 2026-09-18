@@ -317,11 +317,11 @@ function ConfiguracoesPage() {
         </button>
       </header>
 
-      <main className="flex-1 px-6 py-10">
-        <div className="max-w-2xl mx-auto">
-          <h1 className="text-2xl font-bold">Configurações</h1>
+      <main className="flex-1 px-6 lg:px-10 xl:px-12 py-10">
+        <div className="max-w-4xl mx-auto">
+          <h1 className="text-3xl font-bold">Configurações</h1>
 
-          <div className="mt-6 border-b border-neutral-200 flex gap-6 text-sm">
+          <div className="mt-6 border-b border-neutral-200 flex gap-8 text-[15px]">
             {visibleTabs.map((t) => (
               <button
                 key={t}
@@ -338,14 +338,14 @@ function ConfiguracoesPage() {
           </div>
 
           {activeTab === "Minha conta" && (
-            <div className="mt-8 space-y-10">
+            <div className="mt-8 space-y-12">
               {/* Profile */}
               <section className="space-y-4">
                 <div>
-                  <label className="text-sm font-medium">Foto</label>
-                  <div className="mt-2 flex items-center gap-4">
+                  <label className="text-[15px] font-medium">Foto</label>
+                  <div className="mt-2 flex items-center gap-5">
                     <div 
-                      className="w-16 h-16 rounded-full bg-neutral-100 border border-neutral-200 overflow-hidden relative group cursor-pointer"
+                      className="w-18 h-18 rounded-full bg-neutral-100 border border-neutral-200 overflow-hidden relative group cursor-pointer"
                       onClick={() => fileInputRef.current?.click()}
                     >
                       {profile?.avatar_url ? (
@@ -369,7 +369,7 @@ function ConfiguracoesPage() {
                       onChange={handleAvatarUpload}
                       disabled={isUploading}
                     />
-                    <div className="text-xs text-neutral-500">
+                    <div className="text-[13px] text-neutral-500">
                       <p>Clique na imagem para alterar.</p>
                       <p>Formatos aceitos: JPG, PNG ou GIF.</p>
                     </div>
@@ -399,7 +399,7 @@ function ConfiguracoesPage() {
                 <button 
                   onClick={handleUpdateProfile}
                   disabled={isUpdating}
-                  className="bg-neutral-900 hover:bg-neutral-800 text-white text-sm font-medium px-4 py-2 rounded-md disabled:opacity-50 flex items-center gap-2"
+                  className="bg-neutral-900 hover:bg-neutral-800 text-white text-[15px] font-medium px-5 py-2.5 rounded-md disabled:opacity-50 flex items-center gap-2"
                 >
                   {isUpdating && <Loader2 className="w-4 h-4 animate-spin" />}
                   Atualizar
@@ -416,7 +416,7 @@ function ConfiguracoesPage() {
                   escrito nesta tela. */}
               <section>
                 <h2 className="font-semibold text-lg">Avatar</h2>
-                <p className="mt-1 text-sm text-neutral-600">
+                <p className="mt-1 text-[15px] text-neutral-600">
                   Como você quer aparecer no Tieck? Você pode usar sua foto, deixar
                   o Tieck escolher ou selecionar uma ilustração.
                 </p>
@@ -447,12 +447,12 @@ function ConfiguracoesPage() {
                         decorative
                       />
                       <div className="min-w-0">
-                        <p className="text-sm font-medium text-neutral-900">
+                        <p className="text-[15px] font-medium text-neutral-900">
                           {profile?.display_name || userEmail || "Seu avatar"}
                         </p>
                         {/* Estado textual: a seleção nunca é indicada só por cor. */}
                         <p
-                          className="mt-1 text-sm text-neutral-600"
+                          className="mt-1 text-[14px] text-neutral-600"
                           role="status"
                           aria-live="polite"
                         >
@@ -488,7 +488,7 @@ function ConfiguracoesPage() {
                   WorkspaceContext; a função vem do RBAC canônico; as permissões
                   são derivadas das flags reais do hook. Vale para dono e convidado. */}
               <section>
-                <h2 className="font-semibold">Acesso ao workspace</h2>
+                <h2 className="font-semibold text-lg">Acesso ao workspace</h2>
                 <div className="mt-4 space-y-3">
                   <div className="flex items-center gap-2">
                     <span className="w-28 shrink-0 text-sm text-neutral-500">Workspace</span>
@@ -525,7 +525,7 @@ function ConfiguracoesPage() {
               <section>
                 <div className="flex items-center gap-2">
                   <Monitor className="w-4 h-4" />
-                  <h2 className="font-semibold">Verificação de dispositivo desconhecido</h2>
+                  <h2 className="font-semibold text-lg">Verificação de dispositivo desconhecido</h2>
                   <Badge tone="success">Ativado</Badge>
                 </div>
                 <p className="mt-2 text-sm text-neutral-600">
@@ -569,7 +569,7 @@ function ConfiguracoesPage() {
               <section>
                 <div className="flex items-center gap-2">
                   <AlertTriangle className="w-4 h-4 text-red-500" />
-                  <h2 className="font-semibold">Zona de perigo</h2>
+                  <h2 className="font-semibold text-lg">Zona de perigo</h2>
                 </div>
                 <h3 className="mt-3 text-sm font-medium">Excluir conta</h3>
                 <p className="mt-1 text-sm text-neutral-600">
@@ -601,7 +601,7 @@ function ConfiguracoesPage() {
                   e NÃO é reaproveitado como modalidade contratual. Modalidade,
                   status e contrato não existem no backend — estado vazio honesto. */}
               <section>
-                <h2 className="font-semibold">Assinatura atual</h2>
+                <h2 className="font-semibold text-lg">Assinatura atual</h2>
                 <div className="mt-4 space-y-3">
                   <div className="flex items-center gap-2">
                     <span className="w-28 shrink-0 text-sm text-neutral-500">Modalidade</span>
@@ -623,7 +623,7 @@ function ConfiguracoesPage() {
                   Infra de storage (checklist-assets, avatars, workspace-assets)
                   existe, mas nenhuma associação contrato↔workspace ainda. */}
               <section>
-                <h2 className="font-semibold">Contrato</h2>
+                <h2 className="font-semibold text-lg">Contrato</h2>
                 <div className="mt-3 flex items-center gap-3 text-sm text-neutral-500">
                   <FileText className="w-5 h-5 shrink-0" />
                   <span>Nenhum contrato anexado.</span>
@@ -658,7 +658,7 @@ function Field({
 }) {
   return (
     <div>
-      <label className="text-sm font-medium">{label}</label>
+      <label className="text-[15px] font-medium">{label}</label>
       <div className="mt-1.5 relative">
         <input
           defaultValue={defaultValue}
@@ -666,10 +666,10 @@ function Field({
           onChange={(e) => onChange?.(e.target.value)}
           placeholder={placeholder}
           disabled={disabled}
-          className="w-full border border-neutral-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-neutral-900/10 focus:border-neutral-400 disabled:bg-neutral-50 disabled:text-neutral-500"
+          className="w-full border border-neutral-300 rounded-md px-4 py-2.5 text-[15px] focus:outline-none focus:ring-2 focus:ring-neutral-900/10 focus:border-neutral-400 disabled:bg-neutral-50 disabled:text-neutral-500"
         />
         {trailing && (
-          <div className="absolute right-2 top-1/2 -translate-y-1/2">{trailing}</div>
+          <div className="absolute right-3 top-1/2 -translate-y-1/2">{trailing}</div>
         )}
       </div>
     </div>
@@ -703,7 +703,7 @@ function Toggle({
   return (
     <div className="flex items-start justify-between gap-6">
       <div className="flex-1">
-        <h3 className="font-semibold text-sm">{title}</h3>
+        <h3 className="font-semibold text-[15px]">{title}</h3>
         <p className="mt-1 text-sm text-neutral-600">{description}</p>
       </div>
       <button
