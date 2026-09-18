@@ -42,6 +42,7 @@ export type DashboardSectionId =
   | "attention-points"
   | "unit-performance"
   | "operation-insights"
+  | "checklist-execution-insights"
   /* rotinas (domínio separado) */
   | "scheduled-routines"
   | "routines-by-unit";
@@ -75,7 +76,8 @@ export const DASHBOARD_SECTIONS: ReadonlyArray<{
   { id: "recent-executions", label: "Últimas execuções", group: "analytics" },
   { id: "attention-points", label: "Pontos de atenção", group: "analytics" },
   { id: "unit-performance", label: "Desempenho por unidade", group: "analytics" },
-  { id: "operation-insights", label: "Insights da operação", group: "analytics" },
+  { id: "operation-insights", label: "Conformidade por turno", group: "analytics" },
+  { id: "checklist-execution-insights", label: "Execução por checklist", group: "analytics" },
 
   { id: "scheduled-routines", label: "Rotinas agendadas", group: "routines" },
   { id: "routines-by-unit", label: "Rotinas por unidade", group: "routines" },

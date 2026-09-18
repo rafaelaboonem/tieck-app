@@ -274,12 +274,14 @@ describe("conteúdo por turno", () => {
     expect(order).toEqual(["s-manha", "s-noite", "s-tarde", ""]);
   });
 
-  it("descrição fala de turno no recorte — não promete execução por checklist", () => {
+  it("é o card ESQUERDO da seção Insights: título/descrição de conformidade por turno", () => {
     render(<RealOperationalInsights rows={ALL} target={TARGET} />);
 
     const card = screen.getByTestId("operational-insights").textContent ?? "";
-    expect(card).toContain("Insights da operação");
-    expect(card).toContain("Conformidade e execução por turno no recorte selecionado");
-    expect(card).not.toContain("execução por checklist");
+    // O rótulo "Insights da operação" passou a ser o título EXTERNO da seção
+    // (PanelDashboard); o card é apresentado como "Conformidade por turno".
+    expect(card).toContain("Conformidade por turno");
+    expect(card).toContain("Conformidade ponderada das tarefas por turno no recorte selecionado");
+    expect(card).not.toContain("Insights da operação");
   });
 });

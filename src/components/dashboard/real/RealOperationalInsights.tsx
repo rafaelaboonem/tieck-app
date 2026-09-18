@@ -1,17 +1,20 @@
 /*
- * ==================== INSIGHTS DA OPERAÇÃO (REAL, 6B.2I) ==================
+ * ============ CONFORMIDADE POR TURNO (REAL, 6B.2I) ========================
  *
- * Um único Card, uma linha compacta por TURNO REAL do recorte: conformidade
- * ponderada contra a meta operacional, volume concluído e as exceções que
- * existirem. Não é uma lista de frases genéricas: são os mesmos números que os
- * KPIs e a tabela mostram, lidos de outra dimensão da MESMA resposta
+ * Card ESQUERDO da seção "Insights da operação" (o irmão direito, com contrato
+ * próprio, é o `RealChecklistExecutionInsights` da 6B.2J). Um único Card, uma
+ * linha compacta por TURNO REAL do recorte: conformidade ponderada contra a
+ * meta operacional, volume concluído e as exceções que existirem. Não é uma
+ * lista de frases genéricas: são os mesmos números que os KPIs e a tabela
+ * mostram, lidos de outra dimensão da MESMA resposta
  * (`analytics_unit_daily_compliance` via `useUnitCompliance`).
  *
  * O QUE ESTE CARD NÃO FAZ:
  *   • não consulta nada (zero Supabase aqui) — recebe `rows` prontos;
- *   • não promete "execução por checklist": esse recorte ainda não tem contrato
- *     estatístico (a RPC 6B.2E é uma lista limitada de execuções individuais,
- *     não uma série do período), então ele não aparece na descrição;
+ *   • não cobre "execução por checklist": esse recorte tem contrato PRÓPRIO
+ *     desde a 6B.2J (RPC `list_workspace_checklist_execution_metrics`, domínio
+ *     de rotinas agendadas) e pertence ao card irmão — aqui a leitura continua
+ *     sendo por turno, sobre a resposta de TAREFAS;
  *   • não cria classificação paralela: o rótulo de status vem de
  *     `getOperationalStatus` + `STATUS_META`, a regra canônica do domínio;
  *   • não mostra zeros irrelevantes: "Abertas em atraso", "Falhas críticas" e
@@ -53,8 +56,8 @@ export function RealOperationalInsights({
   loading = false,
   error = false,
   onRetry,
-  title = "Insights da operação",
-  description = "Conformidade e execução por turno no recorte selecionado",
+  title = "Conformidade por turno",
+  description = "Conformidade ponderada das tarefas por turno no recorte selecionado",
   className,
 }: {
   /** Uma linha por turno REAL (inclui o bucket sem turno, `shiftId === null`). */

@@ -15,10 +15,14 @@
  *   3. ESTRUTURA — a rota não importa mais fixture de apresentação, o link da
  *      sidebar continua `/painel` limpo e nada mais aponta para o preview.
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { render, fireEvent } from "@testing-library/react";
 import { readFileSync } from "fs";
 import { resolve } from "path";
+import {
+  DEFAULT_VISIBLE_SECTIONS,
+  DashboardSectionId,
+} from "@/components/dashboard/panel/SectionsCustomizer";
 
 const navigateSpy = vi.fn();
 
@@ -168,6 +172,31 @@ const activityState = {
 vi.mock("@/hooks/useChecklistActivity", () => ({
   useChecklistActivity: vi.fn(() => activityState),
 }));
+// "Execução por checklist" (6B.2J): mesmo padrão — a suíte controla o que a
+// rota recebe do contrato próprio de rotinas, sem rede.
+const checklistMetricsState = {
+  data: [] as Array<Record<string, unknown>>,
+  loading: false,
+  error: null as string | null,
+  refresh: vi.fn(),
+};
+vi.mock("@/hooks/useChecklistExecutionMetrics", () => ({
+  useChecklistExecutionMetrics: vi.fn(() => checklistMetricsState),
+}));
+vi.mock("@/components/dashboard/real/RealChecklistExecutionInsights", () => ({
+  RealChecklistExecutionInsights: (props: {
+    metrics?: unknown[];
+    error?: boolean;
+    loading?: boolean;
+  }) => (
+    <div
+      data-testid="checklist-execution-insights"
+      data-count={String(props.metrics?.length ?? 0)}
+      data-error={String(!!props.error)}
+      data-loading={String(!!props.loading)}
+    />
+  ),
+}));
 vi.mock("@/components/dashboard/real/RealUnitDataTable", () => ({
   RealUnitDataTable: () => <div data-testid="units-table" />,
 }));
@@ -196,6 +225,7 @@ vi.mock("@/components/dashboard/ScheduledOccurrencesSection", () => ({
 import { Route as PainelRoute } from "../../routes/painel";
 import { useRecentChecklistExecutions } from "@/hooks/useRecentChecklistExecutions";
 import { useChecklistActivity } from "@/hooks/useChecklistActivity";
+import { useChecklistExecutionMetrics } from "@/hooks/useChecklistExecutionMetrics";
 import { useUnitCompliance } from "@/hooks/useUnitCompliance";
 import { useAccessibleUnits } from "@/hooks/useAccessibleUnits";
 
@@ -223,6 +253,9 @@ beforeEach(() => {
   activityState.data = [];
   activityState.loading = false;
   activityState.error = null;
+  checklistMetricsState.data = [];
+  checklistMetricsState.loading = false;
+  checklistMetricsState.error = null;
   complianceState.data = [];
   complianceState.shiftData = [];
   complianceState.loading = false;
@@ -532,5 +565,218 @@ describe("promoção — estrutural", () => {
       expect(src, `${file} não pode importar preview-data`).not.toContain("preview-data");
       expect(src, `${file} não pode importar a vitrine DEV`).not.toContain("DashboardShowcase");
     }
+  });
+});
+
+describe("execução por checklist — contrato 6B.2J ligado na rota", () => {
+  const metricRow = {
+    checklistId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    checklistTitle: "Abertura da loja",
+    unitId: null,
+    unitName: null,
+    shiftId: null,
+    shiftName: null,
+    totalOccurrences: 20,
+    completedOccurrences: 18,
+    completedOnTime: 16,
+    completedLate: 2,
+    overdueOpenOccurrences: 1,
+    pendingOpenOccurrences: 1,
+    dueOccurrences: 19,
+    dueCompletedOccurrences: 18,
+  };
+
+  it("/painel chama o hook 6B.2J com MESMO workspace/período/unidade/turno", () => {
+    renderPainel({ startDate: "2026-09-01", endDate: "2026-09-10", unitId: "u-1", shiftId: "sh-1" });
+
+    expect(vi.mocked(useChecklistExecutionMetrics)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        organizationId: "org-1",
+        startDate: "2026-09-01",
+        endDate: "2026-09-10",
+        unitId: "u-1",
+        shiftId: "sh-1",
+        enabled: true,
+      }),
+    );
+  });
+
+  it("sem workspace resolvido, a consulta 6B.2J também é desabilitada", () => {
+    workspaceState.currentWorkspace = null;
+    renderPainel();
+
+    expect(vi.mocked(useChecklistExecutionMetrics)).toHaveBeenCalledWith(
+      expect.objectContaining({ organizationId: null, enabled: false }),
+    );
+  });
+
+  it("os dados 6B.2J chegam ao card (nada de fixture na rota)", () => {
+    checklistMetricsState.data = [metricRow];
+    const { container } = renderPainel();
+
+    // ESTRITO: o card recebe EXATAMENTE o que o hook entregou — nada de
+    // sample, fallback ou contagem alternativa.
+    const card = container.querySelector("[data-testid='checklist-execution-insights']");
+    expect(card?.getAttribute("data-count")).toBe("1");
+    expect(card?.getAttribute("data-error")).toBe("false");
+  });
+
+  it("vazio real do hook permanece vazio (nenhum fallback de sample)", () => {
+    checklistMetricsState.data = [];
+    const { container } = renderPainel();
+
+    // O card segue EXATAMENTE o que o hook entregou: vazio → 0 linhas.
+    const card = container.querySelector("[data-testid='checklist-execution-insights']");
+    expect(card?.getAttribute("data-count")).toBe("0");
+
+    // E a fiação estática do painel não conhece amostra nenhuma — só o dado
+    // real do contrato (o texto do vazio é provado no teste do card real).
+    const panelSource = readFileSync(
+      resolve(__dirname, "../../components/dashboard/panel/PanelDashboard.tsx"),
+      "utf8",
+    );
+    expect(panelSource).toContain("metrics={data.checklistExecutionMetrics}");
+    expect(panelSource).not.toContain("REVIEW_SAMPLE");
+  });
+
+  it("a seção insights tem cabeçalho próprio: 'Insights da operação'", () => {
+    renderPainel();
+
+    const heading = document.querySelector("[data-testid='operation-insights-heading']");
+    expect(heading).not.toBeNull();
+    expect(heading?.querySelector("h2")?.textContent).toBe("Insights da operação");
+    expect(heading?.textContent).toContain(
+      "Leitura da operação por turno e por checklist no recorte selecionado",
+    );
+    // Um único módulo: UM heading de seção, e o rótulo não se repete nos cards.
+    expect(document.querySelectorAll("[data-testid='operation-insights-heading']")).toHaveLength(1);
+  });
+
+  it("loading e erro 6B.2J chegam ao card como canais separados", () => {
+    checklistMetricsState.loading = true;
+    const loadingRender = renderPainel();
+    expect(
+      loadingRender.container
+        .querySelector("[data-testid='checklist-execution-insights']")
+        ?.getAttribute("data-loading"),
+    ).toBe("true");
+
+    checklistMetricsState.loading = false;
+    checklistMetricsState.error = "Falha ao carregar execução por checklist.";
+    const errorRender = renderPainel();
+    expect(
+      errorRender.container
+        .querySelector("[data-testid='checklist-execution-insights']")
+        ?.getAttribute("data-error"),
+    ).toBe("true");
+  });
+
+  it("6B.2I segue sem consulta própria: useUnitCompliance é chamado UMA vez", () => {
+    renderPainel();
+
+    expect(vi.mocked(useUnitCompliance).mock.calls.length).toBe(1);
+  });
+});
+
+describe("visibilidade dos módulos de insights — personalizador", () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+  });
+
+  afterEach(() => {
+    window.localStorage.clear();
+  });
+
+  function customizerSource(): string {
+    return readFileSync(
+      resolve(__dirname, "../../components/dashboard/panel/SectionsCustomizer.tsx"),
+      "utf8",
+    );
+  }
+
+  it("operation-insights virou 'Conformidade por turno' no registro central", () => {
+    expect(customizerSource()).toContain(
+      '{ id: "operation-insights", label: "Conformidade por turno", group: "analytics" }',
+    );
+  });
+
+  it("existe o módulo 'checklist-execution-insights' → 'Execução por checklist'", () => {
+    expect(customizerSource()).toContain(
+      '{ id: "checklist-execution-insights", label: "Execução por checklist", group: "analytics" }',
+    );
+    expect(customizerSource()).toContain('| "checklist-execution-insights"');
+  });
+
+  it("os dois módulos aparecem no popover do personalizador", () => {
+    const { container } = renderPainel();
+
+    fireEvent.click(container.querySelector("button[aria-label='Personalizar painel']")!);
+    const popover = document.querySelector("[data-testid='panel-customizer-popover']");
+    expect(popover?.textContent).toContain("Conformidade por turno");
+    expect(popover?.textContent).toContain("Execução por checklist");
+  });
+
+  /** Semeia a preferência pela MESMA chave que o toggle do popover alimenta —
+      a fiação persistida é exatamente o que o checkbox escreve. */
+  function seedSections(keep: (id: DashboardSectionId) => boolean) {
+    window.localStorage.setItem(
+      "tieck:dashboard:visible-sections",
+      JSON.stringify(DEFAULT_VISIBLE_SECTIONS.filter((id) => keep(id))),
+    );
+  }
+
+  it("esconder 'Conformidade por turno' remove só o card esquerdo", () => {
+    seedSections((id) => id !== "operation-insights");
+    const { container } = renderPainel();
+
+    expect(container.querySelector("[data-section-slot='operation-insights']")).toBeNull();
+    expect(
+      container.querySelector("[data-section-slot='checklist-execution-insights']"),
+    ).not.toBeNull();
+    // O card de turno saiu; o de execução continua montado (com o cabeçalho).
+    expect(document.querySelector("[data-testid='operation-insights-heading']")).not.toBeNull();
+  });
+
+  it("esconder 'Execução por checklist' remove só o card direito", () => {
+    seedSections((id) => id !== "checklist-execution-insights");
+    const { container } = renderPainel();
+
+    expect(
+      container.querySelector("[data-section-slot='checklist-execution-insights']"),
+    ).toBeNull();
+    expect(container.querySelector("[data-section-slot='operation-insights']")).not.toBeNull();
+    expect(document.querySelector("[data-testid='operation-insights-heading']")).not.toBeNull();
+  });
+
+  it("esconder os dois remove todo o bloco 'Insights da operação'", () => {
+    seedSections(
+      (id) => id !== "operation-insights" && id !== "checklist-execution-insights",
+    );
+    const { container } = renderPainel();
+
+    expect(container.querySelector("[data-section-slot='operation-insights']")).toBeNull();
+    expect(
+      container.querySelector("[data-section-slot='checklist-execution-insights']"),
+    ).toBeNull();
+    expect(document.querySelector("[data-testid='operation-insights-heading']")).toBeNull();
+    expect(container.textContent).not.toContain("Leitura da operação por turno e por checklist");
+  });
+
+  it("'Restaurar padrão' reativa os dois módulos", () => {
+    window.localStorage.setItem(
+      "tieck:dashboard:visible-sections",
+      JSON.stringify(["scheduled"]),
+    );
+    const { container, unmount } = renderPainel();
+    expect(container.querySelector("[data-section-slot='operation-insights']")).toBeNull();
+
+    fireEvent.click(container.querySelector("button[aria-label='Personalizar painel']")!);
+    fireEvent.click(
+      [...document.querySelectorAll("button")].find((b) => b.textContent === "Restaurar padrão")!,
+    );
+
+    expect(JSON.parse(window.localStorage.getItem("tieck:dashboard:visible-sections") || "[]")).
+      toEqual(expect.arrayContaining(["operation-insights", "checklist-execution-insights"]));
+    unmount();
   });
 });

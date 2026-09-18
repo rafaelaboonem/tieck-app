@@ -11,13 +11,16 @@
  *   • mantém o recorte na URL (`startDate`, `endDate`, `unitId`, `shiftId`) —
  *     a fonte de verdade única dos filtros, já usada pelos drill-downs;
  *   • consulta a view analítica (`useUnitCompliance`), a série diária de
- *     atividade (`useChecklistActivity`), as últimas execuções (6B.2E) e as
- *     rotinas (`useUnitOccurrenceMetrics`) no escopo do workspace atual;
+ *     atividade (`useChecklistActivity`), as últimas execuções (6B.2E), a
+ *     execução por checklist (6B.2J, domínio ROTINAS) e as rotinas
+ *     (`useUnitOccurrenceMetrics`) no escopo do workspace atual;
  *   • agrega os KPIs do recorte e entrega tudo pronto para a composição.
  *
  * O que esta rota NÃO faz: inventar dado, nem abrir consulta redundante para o
- * mesmo número. "Insights da operação" é a mesma resposta de `useUnitCompliance`
- * vista por turno (6B.2I) — nenhuma consulta própria, nenhum canal próprio.
+ * mesmo número. A metade "Conformidade por turno" de "Insights da operação" é
+ * a mesma resposta de `useUnitCompliance` vista por turno (6B.2I) — nenhuma
+ * consulta/canal próprio; a metade "Execução por checklist" tem consulta
+ * PRÓPRIA e separada, a RPC 6B.2J do domínio de rotinas agendadas.
  */
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo } from "react";
@@ -42,6 +45,7 @@ import { useUnitCompliance, type UnitComplianceRow } from "@/hooks/useUnitCompli
 import { useUnitOccurrenceMetrics } from "@/hooks/useUnitOccurrenceMetrics";
 import { useRecentChecklistExecutions } from "@/hooks/useRecentChecklistExecutions";
 import { useChecklistActivity } from "@/hooks/useChecklistActivity";
+import { useChecklistExecutionMetrics } from "@/hooks/useChecklistExecutionMetrics";
 import { useAccessibleUnits } from "@/hooks/useAccessibleUnits";
 import { STATUS_META, getOperationalStatus, aggregateWeighted } from "@/lib/operational-status";
 import { resolveEffectiveShiftId, shouldClearShiftId } from "@/lib/dashboard-filters";
@@ -216,6 +220,18 @@ function PainelPage() {
   // KPIs), uma consulta workspace-scoped agregada por dia civil. Mesmo gate e
   // mesmos filtros do resto do painel — e realtime pelo mesmo domínio.
   const activity = useChecklistActivity({
+    organizationId: currentWorkspace?.id ?? null,
+    startDate: filters.startDate,
+    endDate: filters.endDate,
+    unitId: filters.unitId,
+    shiftId: effectiveShiftId,
+    enabled: canLoadFilteredData,
+  });
+  // "Execução por checklist" (6B.2J): contrato PRÓPRIO do domínio de rotinas
+  // (occurrences agregadas por checklist_id). Mesmo recorte do painel
+  // (workspace + período + unidade + turno), mesmo gate administrativo —
+  // mas consulta separada da de tarefas, porque é domínio distinto.
+  const checklistExecutionMetrics = useChecklistExecutionMetrics({
     organizationId: currentWorkspace?.id ?? null,
     startDate: filters.startDate,
     endDate: filters.endDate,
@@ -410,6 +426,9 @@ function PainelPage() {
             // Insights por turno: MESMA resposta de `useUnitCompliance` (nenhuma
             // consulta, canal ou estado assíncrono adicional).
             shiftInsights: compliance.shiftData,
+            // Execução por checklist (6B.2J): consulta própria do domínio de
+            // rotinas — loading/erro/retry próprios, sem realtime.
+            checklistExecutionMetrics: checklistExecutionMetrics.data,
             loading: {
               kpis: compliance.loading,
               table: compliance.loading,
@@ -417,14 +436,17 @@ function PainelPage() {
               recentExecutions: recentExecutions.loading,
               activity: activity.loading,
               shiftInsights: compliance.loading,
+              checklistExecutionMetrics: checklistExecutionMetrics.loading,
             },
             error: compliance.error,
             occurrencesError: occurrences.error,
             recentExecutionsError: recentExecutions.error,
             activityError: activity.error,
+            checklistExecutionMetricsError: checklistExecutionMetrics.error,
             onOccurrencesRetry: () => void occurrences.refresh(),
             onRecentExecutionsRetry: () => void recentExecutions.refresh(),
             onActivityRetry: () => void activity.refresh(),
+            onChecklistExecutionMetricsRetry: () => void checklistExecutionMetrics.refresh(),
             onRowClick: (row) =>
               openUnitById(row.unitId, { ...filters, shiftId: effectiveShiftId }, navigate),
             onUnitClick: (unitId) =>

@@ -20,7 +20,9 @@
  *   • KPIs, tabela, gráfico, pontos de atenção — view de tarefas
  *     (`analytics_unit_daily_compliance`), agregada por unidade;
  *   • "Atividade dos checklists" — a MESMA view, agregada por dia civil;
- *   • "Insights da operação" — a MESMA resposta, agregada por turno (6B.2I);
+ *   • "Insights da operação" — DOIS cards: conformidade por turno (a MESMA
+ *     resposta, agregada por turno, 6B.2I) e execução por checklist
+ *     (occurrences de rotinas agendadas agregadas por checklist_id, RPC 6B.2J);
  *   • "Últimas execuções" e "Rotinas agendadas" — contracts próprios (6B.2E/6B.2D).
  * Nenhum número de exemplo, nenhuma fixture e nenhuma seção "em breve".
  *
@@ -45,6 +47,7 @@ import { cn } from "@/lib/utils";
 import type { OccurrenceKpis, UnitOccurrenceRow } from "@/lib/occurrence-dashboard";
 import type { ChecklistActivityDay } from "@/lib/checklist-activity";
 import type { ShiftComplianceRow } from "@/lib/shift-compliance";
+import type { ChecklistExecutionMetric } from "@/lib/checklist-execution-metrics";
 import type { UnitComplianceRow } from "@/hooks/useUnitCompliance";
 
 import { RealAttentionRanking, type AttentionRow } from "../real/RealAttentionRanking";
@@ -54,6 +57,7 @@ import { RealExecutionBreakdown } from "../real/RealExecutionBreakdown";
 import { RealMetricCard, type RealMetric } from "../real/RealMetricsOverview";
 import { RealRecentExecutions, type RecentExecution } from "../real/RealRecentExecutions";
 import { RealOperationalInsights } from "../real/RealOperationalInsights";
+import { RealChecklistExecutionInsights } from "../real/RealChecklistExecutionInsights";
 import { RealUnitDataTable } from "../real/RealUnitDataTable";
 import { ScheduledOccurrencesSection } from "../ScheduledOccurrencesSection";
 import { PanelToolbar } from "./Toolbar";
@@ -117,6 +121,14 @@ export type PanelDashboardData = {
    */
   shiftInsights: ShiftComplianceRow[];
   /**
+   * "Execução por checklist" (6B.2J): grão REAL da RPC de ROTINAS — uma linha
+   * por checklist_id no recorte (parser fail-closed no hook). Domínio distinto
+   * do das tarefas: nunca `analytics_unit_daily_compliance`.
+   */
+  checklistExecutionMetrics: ChecklistExecutionMetric[];
+  checklistExecutionMetricsError: string | null;
+  onChecklistExecutionMetricsRetry?: () => void;
+  /**
    * "Atividade dos checklists": série diária REAL do recorte — TAREFAS
    * programadas × concluídas por dia (`analytics_unit_daily_compliance`). Mesmo
    * domínio dos KPIs, nunca resposta de checklist nem ocorrência de rotina.
@@ -135,6 +147,8 @@ export type PanelDashboardData = {
     activity: boolean;
     /** Mesmo `loading` de `useUnitCompliance` — não é um segundo estado. */
     shiftInsights: boolean;
+    /** Carregamento próprio da RPC 6B.2J (seção rotinas, sem realtime). */
+    checklistExecutionMetrics: boolean;
   };
   error: string | null;
   occurrencesError: string | null;
@@ -248,6 +262,15 @@ export function PanelDashboard({ data }: { data: PanelDashboardData }) {
 
   const showRoutinesSummary = sectionVisible("scheduled-routines");
   const showRoutinesByUnit = sectionVisible("routines-by-unit");
+
+  /* Insights da operação = DOIS módulos independentes (seus próprios slots do
+     personalizador): conformidade por turno (`operation-insights`, id
+     histórico preservado) e execução por checklist (6B.2J). O cabeçalho só
+     existe se pelo menos um dos dois estiver ativo; esconder um não afeta a
+     consulta nem o dado do outro. */
+  const showShiftInsights = sectionVisible("operation-insights");
+  const showChecklistExecutionInsights = sectionVisible("checklist-execution-insights");
+  const showOperationInsights = showShiftInsights || showChecklistExecutionInsights;
 
   return (
     <div
@@ -468,19 +491,60 @@ export function PanelDashboard({ data }: { data: PanelDashboardData }) {
         </CollapsibleSection>
 
         {/* --------------------------- insights da operação ------------------ */}
-        {/* Derivado da MESMA consulta de conformidade (agregação por turno), logo
-            o recorte é o da toolbar e não existe estado assíncrono paralelo:
-            loading/erro/retry são os de `useUnitCompliance`. */}
-        <CollapsibleSection id="operation-insights" visible={sectionVisible("operation-insights")}>
-          <RealOperationalInsights
-            rows={data.shiftInsights}
-            target={target}
-            loading={data.loading.shiftInsights}
-            error={!!data.error}
-            onRetry={data.onRetry}
-            className="ti-hover-large"
-          />
-        </CollapsibleSection>
+        {/* DOIS módulos independentes, cada um com seu slot do personalizador:
+            à esquerda, conformidade por turno (`operation-insights`, id
+            histórico preservado — derivada da MESMA consulta de conformidade,
+            sem consulta/canal/estado paralelo); à direita, execução por
+            checklist (RPC 6B.2J do domínio ROTINAS, estados próprios). O
+            cabeçalho comum aparece só quando pelo menos um está ativo. 50/50
+            no desktop, empilhados no mobile; um slot oculto some por inteiro
+            (o padrão de slot já desconta o gap na animação). */}
+        {showOperationInsights && (
+          <section>
+            {/* Cabeçalho da SEÇÃO (mesma hierarquia/tipografia das demais: h2 +
+                descrição muted). Os cards abaixo são os dois módulos. */}
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-col gap-1" data-testid="operation-insights-heading">
+                <h2 className="text-lg font-semibold tracking-tight">Insights da operação</h2>
+                <p className="text-muted-foreground text-sm">
+                  Leitura da operação por turno e por checklist no recorte selecionado
+                </p>
+              </div>
+              <div className="flex flex-col gap-6 @5xl:flex-row">
+                <CollapsibleSection
+                  id="operation-insights"
+                  visible={showShiftInsights}
+                  className="min-w-0 @5xl:flex-1"
+                >
+                  <RealOperationalInsights
+                    rows={data.shiftInsights}
+                    target={target}
+                    loading={data.loading.shiftInsights}
+                    error={!!data.error}
+                    onRetry={data.onRetry}
+                    title="Conformidade por turno"
+                    description="Conformidade ponderada das tarefas por turno no recorte selecionado"
+                    className="ti-hover-large h-full"
+                  />
+                </CollapsibleSection>
+                <CollapsibleSection
+                  id="checklist-execution-insights"
+                  visible={showChecklistExecutionInsights}
+                  className="min-w-0 @5xl:flex-1"
+                >
+                  <RealChecklistExecutionInsights
+                    metrics={data.checklistExecutionMetrics}
+                    loading={data.loading.checklistExecutionMetrics}
+                    error={!!data.checklistExecutionMetricsError}
+                    onRetry={data.onChecklistExecutionMetricsRetry}
+                    onOpenChecklist={data.onOpenChecklist}
+                    className="ti-hover-large h-full"
+                  />
+                </CollapsibleSection>
+              </div>
+            </div>
+          </section>
+        )}
 
         {/* ---------------------------- rotinas agendadas -------------------- */}
         {/* Domínio separado das tarefas. Os dois blocos internos (resumo e
