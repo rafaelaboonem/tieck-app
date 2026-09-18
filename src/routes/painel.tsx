@@ -38,6 +38,7 @@ import {
 import type { AttentionRow } from "@/components/dashboard/real/RealAttentionRanking";
 import { useUnitCompliance, type UnitComplianceRow } from "@/hooks/useUnitCompliance";
 import { useUnitOccurrenceMetrics } from "@/hooks/useUnitOccurrenceMetrics";
+import { useRecentChecklistExecutions } from "@/hooks/useRecentChecklistExecutions";
 import { useAccessibleUnits } from "@/hooks/useAccessibleUnits";
 import { STATUS_META, getOperationalStatus, aggregateWeighted } from "@/lib/operational-status";
 import { resolveEffectiveShiftId, shouldClearShiftId } from "@/lib/dashboard-filters";
@@ -187,6 +188,18 @@ function PainelPage() {
     ...filters,
     shiftId: effectiveShiftId,
     organizationId: currentWorkspace?.id ?? null,
+    enabled: canLoadFilteredData,
+  });
+
+  // Últimas execuções (6B.2E): occurrences de rotinas CONCLUÍDAS do recorte,
+  // numa única consulta workspace-scoped (sem fan-out por unidade). Mesmo gate e
+  // mesmos filtros do resto do painel; resposta avulsa nunca entra aqui.
+  const recentExecutions = useRecentChecklistExecutions({
+    organizationId: currentWorkspace?.id ?? null,
+    startDate: filters.startDate,
+    endDate: filters.endDate,
+    unitId: filters.unitId,
+    shiftId: effectiveShiftId,
     enabled: canLoadFilteredData,
   });
 
@@ -371,18 +384,27 @@ function PainelPage() {
             occurrenceRows: displayOccurrenceRows,
             occurrenceKpis,
             attention: attentionRows,
+            recentExecutions: recentExecutions.data,
             loading: {
               kpis: compliance.loading,
               table: compliance.loading,
               routines: occurrences.loading,
+              recentExecutions: recentExecutions.loading,
             },
             error: compliance.error,
             occurrencesError: occurrences.error,
+            recentExecutionsError: recentExecutions.error,
             onOccurrencesRetry: () => void occurrences.refresh(),
+            onRecentExecutionsRetry: () => void recentExecutions.refresh(),
             onRowClick: (row) =>
               openUnitById(row.unitId, { ...filters, shiftId: effectiveShiftId }, navigate),
             onUnitClick: (unitId) =>
               openUnitById(unitId, { ...filters, shiftId: effectiveShiftId }, navigate),
+            // "Ver Checklist" de uma execução: MESMO destino que Recentes,
+            // início e organizar já usam — `/checklist?id=<checklistId>` (id
+            // real do checklist; nunca busca por título).
+            onOpenChecklist: (checklistId) =>
+              navigate({ to: "/checklist", search: { id: checklistId } }),
           }}
         />
       </main>

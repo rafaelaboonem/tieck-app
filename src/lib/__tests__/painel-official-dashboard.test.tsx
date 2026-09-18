@@ -113,8 +113,29 @@ vi.mock("@/components/dashboard/real/RealExecutionBreakdown", () => ({
 vi.mock("@/components/dashboard/real/RealAttentionRanking", () => ({
   RealAttentionRanking: () => <div data-testid="attention" />,
 }));
+// O card é stub, mas expõe o que RECEBEU da rota: é assim que esta suíte prova
+// que ele está ligado ao hook real (e não a `items={[]}` hardcoded).
 vi.mock("@/components/dashboard/real/RealRecentExecutions", () => ({
-  RealRecentExecutions: () => <div data-testid="recent-executions" />,
+  RealRecentExecutions: (props: { items?: unknown[]; error?: boolean; loading?: boolean }) => (
+    <div
+      data-testid="recent-executions"
+      data-items={String(props.items?.length ?? 0)}
+      data-error={String(!!props.error)}
+      data-loading={String(!!props.loading)}
+    />
+  ),
+}));
+
+// "Últimas execuções": o estado vem de fora para que a suíte controle o que a
+// rota recebe, sem rede.
+const recentExecutionsState = {
+  data: [] as Array<Record<string, unknown>>,
+  loading: false,
+  error: null as string | null,
+  refresh: vi.fn(),
+};
+vi.mock("@/hooks/useRecentChecklistExecutions", () => ({
+  useRecentChecklistExecutions: vi.fn(() => recentExecutionsState),
 }));
 vi.mock("@/components/dashboard/real/RealUnitDataTable", () => ({
   RealUnitDataTable: () => <div data-testid="units-table" />,
@@ -124,6 +145,7 @@ vi.mock("@/components/dashboard/ScheduledOccurrencesSection", () => ({
 }));
 
 import { Route as PainelRoute } from "../../routes/painel";
+import { useRecentChecklistExecutions } from "@/hooks/useRecentChecklistExecutions";
 
 const PAINEL_SRC = readFileSync(resolve(__dirname, "../../routes/painel.tsx"), "utf8");
 const LAYOUT_SRC = readFileSync(
@@ -143,6 +165,9 @@ beforeEach(() => {
   vi.clearAllMocks();
   workspaceState.currentWorkspace = { id: "org-1", name: "Org Um" };
   workspaceState.workspaceStatus = "workspace";
+  recentExecutionsState.data = [];
+  recentExecutionsState.loading = false;
+  recentExecutionsState.error = null;
 });
 
 describe("promoção — /painel é o dashboard oficial", () => {
@@ -193,6 +218,61 @@ describe("promoção — /painel é o dashboard oficial", () => {
     renderPainel();
     expect(document.querySelector("button[aria-label='Personalizar filtros']")).not.toBeNull();
     expect(document.querySelector("button[aria-label='Personalizar painel']")).not.toBeNull();
+  });
+});
+
+describe("últimas execuções — dados reais ligados na rota (6B.2E)", () => {
+  const item = {
+    id: "occ-1",
+    checklist: "Checklist de abertura",
+    executor: "Juliana Prado",
+    context: "Unidade Norte",
+    statusLabel: "Concluída no prazo",
+    statusTone: "done" as const,
+    occurredAt: "hoje · 08:12",
+    relative: "há 3 h",
+  };
+
+  it("o card recebe as execuções do hook — nunca `items=[]` fixo", () => {
+    recentExecutionsState.data = [item];
+    const { container } = renderPainel();
+    const card = container.querySelector("[data-testid='recent-executions']");
+    expect(card?.getAttribute("data-items")).toBe("1");
+    expect(card?.getAttribute("data-error")).toBe("false");
+  });
+
+  it("a rota consulta o recorte REAL do painel (período + unidade + turno)", () => {
+    renderPainel({ startDate: "2026-09-01", endDate: "2026-09-10", unitId: "u-1" });
+
+    expect(vi.mocked(useRecentChecklistExecutions)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        organizationId: "org-1",
+        startDate: "2026-09-01",
+        endDate: "2026-09-10",
+        unitId: "u-1",
+      }),
+    );
+  });
+
+  it("sem execuções no recorte, o card fica vazio — mas NÃO em erro", () => {
+    const { container } = renderPainel();
+    const card = container.querySelector("[data-testid='recent-executions']");
+    expect(card?.getAttribute("data-items")).toBe("0");
+    expect(card?.getAttribute("data-error")).toBe("false");
+  });
+
+  it("falha de leitura chega ao card como ERRO (não como vazio)", () => {
+    recentExecutionsState.error = "Falha ao carregar as últimas execuções.";
+    const { container } = renderPainel();
+    const card = container.querySelector("[data-testid='recent-executions']");
+    expect(card?.getAttribute("data-error")).toBe("true");
+  });
+
+  it("enquanto carrega, o card sabe que está carregando", () => {
+    recentExecutionsState.loading = true;
+    const { container } = renderPainel();
+    const card = container.querySelector("[data-testid='recent-executions']");
+    expect(card?.getAttribute("data-loading")).toBe("true");
   });
 });
 

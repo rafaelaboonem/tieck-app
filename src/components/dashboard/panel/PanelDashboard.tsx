@@ -49,7 +49,7 @@ import { RealAttentionRanking, type AttentionRow } from "../real/RealAttentionRa
 import { RealComplianceChart } from "../real/RealComplianceChart";
 import { RealExecutionBreakdown } from "../real/RealExecutionBreakdown";
 import { RealMetricCard, type RealMetric } from "../real/RealMetricsOverview";
-import { RealRecentExecutions } from "../real/RealRecentExecutions";
+import { RealRecentExecutions, type RecentExecution } from "../real/RealRecentExecutions";
 import { RealUnitDataTable } from "../real/RealUnitDataTable";
 import { ScheduledOccurrencesSection } from "../ScheduledOccurrencesSection";
 import { PanelToolbar } from "./Toolbar";
@@ -106,12 +106,29 @@ export type PanelDashboardData = {
   occurrenceRows: UnitOccurrenceRow[];
   occurrenceKpis: OccurrenceKpis;
   attention: AttentionRow[];
-  loading: { kpis: boolean; table: boolean; routines: boolean };
+  /**
+   * "Últimas execuções": execuções CONCLUÍDAS de rotinas agendadas no recorte
+   * (6B.2E). Resposta avulsa/pública não entra — não tem executor confiável.
+   */
+  recentExecutions: RecentExecution[];
+  loading: {
+    kpis: boolean;
+    table: boolean;
+    routines: boolean;
+    recentExecutions: boolean;
+  };
   error: string | null;
   occurrencesError: string | null;
+  recentExecutionsError: string | null;
   onOccurrencesRetry?: () => void;
+  onRecentExecutionsRetry?: () => void;
   onRowClick: (row: UnitComplianceRow) => void;
   onUnitClick: (unitId: string) => void;
+  /**
+   * Navegação para o checklist de origem de uma execução
+   * (`/checklist?id=<checklistId>`), sempre pelo id REAL do checklist.
+   */
+  onOpenChecklist?: (checklistId: string) => void;
 };
 
 function pct(value: number | null) {
@@ -412,17 +429,17 @@ export function PanelDashboard({ data }: { data: PanelDashboardData }) {
             visible={sectionVisible("recent-executions")}
             className="min-w-0 @5xl:flex-1"
           >
-            {/* Sem contrato real de respostas individuais: o card informa isso
-                em vez de listar execuções de exemplo. */}
+            {/* Dados REAIS do recorte (6B.2E): loading → erro → vazio/linhas.
+                A seção cobre rotinas agendadas concluídas — não respostas
+                avulsas, que não têm executor identificável. */}
             <RealRecentExecutions
-              items={[]}
-              description="Checklists respondidos — o que acabou de acontecer na operação."
+              items={data.recentExecutions}
+              description="Rotinas concluídas recentemente no período."
+              loading={data.loading.recentExecutions}
+              error={!!data.recentExecutionsError}
+              onRetry={data.onRecentExecutionsRetry}
+              onOpenChecklist={data.onOpenChecklist}
               className="ti-hover-widget"
-              unavailable={{
-                title: "Aguardando conexão de dados",
-                helper:
-                  "As últimas execuções do workspace ainda não estão disponíveis neste painel: nenhum contrato carregado pela rota devolve respostas individuais.",
-              }}
             />
           </CollapsibleSection>
 
