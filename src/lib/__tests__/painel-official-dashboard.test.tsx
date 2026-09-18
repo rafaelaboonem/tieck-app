@@ -58,13 +58,17 @@ vi.mock("@/integrations/supabase/client", () => ({
 
 // Consultas: nenhuma rede nesta suíte. As unidades e turnos são REAIS na forma,
 // apenas injetados — é isso que a toolbar oficial consome.
+// `useUnitCompliance` alimenta DUAS seções (KPIs/tabela e Insights por turno): o
+// mock expõe as duas visões da mesma resposta.
+const complianceState = {
+  data: [] as Array<Record<string, unknown>>,
+  shiftData: [] as Array<Record<string, unknown>>,
+  loading: false,
+  error: null as string | null,
+  refresh: vi.fn(),
+};
 vi.mock("@/hooks/useUnitCompliance", () => ({
-  useUnitCompliance: vi.fn(() => ({
-    data: [],
-    loading: false,
-    error: null,
-    refresh: vi.fn(),
-  })),
+  useUnitCompliance: vi.fn(() => complianceState),
 }));
 vi.mock("@/hooks/useUnitOccurrenceMetrics", () => ({
   useUnitOccurrenceMetrics: vi.fn(() => ({
@@ -167,6 +171,24 @@ vi.mock("@/hooks/useChecklistActivity", () => ({
 vi.mock("@/components/dashboard/real/RealUnitDataTable", () => ({
   RealUnitDataTable: () => <div data-testid="units-table" />,
 }));
+// "Insights da operação": stub que registra o que a rota entregou (linhas por
+// turno, meta, loading e erro) — a promoção da fonte fica amarrada por aqui.
+vi.mock("@/components/dashboard/real/RealOperationalInsights", () => ({
+  RealOperationalInsights: (props: {
+    rows?: unknown[];
+    target?: number;
+    loading?: boolean;
+    error?: boolean;
+  }) => (
+    <div
+      data-testid="operational-insights"
+      data-rows={String(props.rows?.length ?? 0)}
+      data-target={String(props.target ?? "")}
+      data-loading={String(!!props.loading)}
+      data-error={String(!!props.error)}
+    />
+  ),
+}));
 vi.mock("@/components/dashboard/ScheduledOccurrencesSection", () => ({
   ScheduledOccurrencesSection: () => <div data-testid="occurrences" />,
 }));
@@ -174,6 +196,7 @@ vi.mock("@/components/dashboard/ScheduledOccurrencesSection", () => ({
 import { Route as PainelRoute } from "../../routes/painel";
 import { useRecentChecklistExecutions } from "@/hooks/useRecentChecklistExecutions";
 import { useChecklistActivity } from "@/hooks/useChecklistActivity";
+import { useUnitCompliance } from "@/hooks/useUnitCompliance";
 import { useAccessibleUnits } from "@/hooks/useAccessibleUnits";
 
 const PAINEL_SRC = readFileSync(resolve(__dirname, "../../routes/painel.tsx"), "utf8");
@@ -200,6 +223,10 @@ beforeEach(() => {
   activityState.data = [];
   activityState.loading = false;
   activityState.error = null;
+  complianceState.data = [];
+  complianceState.shiftData = [];
+  complianceState.loading = false;
+  complianceState.error = null;
 });
 
 describe("promoção — /painel é o dashboard oficial", () => {
@@ -376,6 +403,76 @@ describe("atividade dos checklists — série diária real ligada na rota (6B.2H
 
     expect(container.querySelector("[data-testid='checklist-activity']")?.getAttribute("data-loading")).toBe("true");
   });
+});
+
+describe("insights da operação — por turno, da MESMA resposta (6B.2I)", () => {
+  const shiftRow = {
+    shiftId: "s-manha",
+    shiftName: "Manhã",
+    totalScheduledTasks: 20,
+    completedTasks: 18,
+    completedOnTime: 16,
+    completedLate: 2,
+    overdueOpenTasks: 0,
+    criticalFailures: 0,
+    pendingEvidences: 0,
+    dueWeightTotal: 40,
+    dueWeightDone: 37,
+    dueCompliancePercentage: 92.4,
+    completionPercentage: 90,
+  };
+
+  it("o card recebe as linhas por turno e a meta operacional do painel", () => {
+    complianceState.shiftData = [shiftRow];
+    const { container } = renderPainel();
+
+    const card = container.querySelector("[data-testid='operational-insights']");
+    expect(card?.getAttribute("data-rows")).toBe("1");
+    expect(card?.getAttribute("data-target")).toBe("90");
+    expect(card?.getAttribute("data-error")).toBe("false");
+  });
+
+  it("NENHUMA consulta própria: os insights saem do MESMO hook de conformidade", () => {
+    renderPainel();
+
+    // O hook é chamado uma única vez por render, e o card é alimentado por ele.
+    expect(vi.mocked(useUnitCompliance).mock.calls.length).toBe(1);
+    const card = document.querySelector("[data-testid='operational-insights']");
+    expect(card?.getAttribute("data-rows")).toBe("0");
+  });
+
+  it("loading e erro dos insights são os MESMOS da conformidade (um só estado)", () => {
+    complianceState.loading = true;
+    const loadingRender = renderPainel();
+    expect(
+      loadingRender.container
+        .querySelector("[data-testid='operational-insights']")
+        ?.getAttribute("data-loading"),
+    ).toBe("true");
+
+    complianceState.loading = false;
+    complianceState.error = "Falha ao carregar dados de conformidade.";
+    const errorRender = renderPainel();
+    expect(
+      errorRender.container
+        .querySelector("[data-testid='operational-insights']")
+        ?.getAttribute("data-error"),
+    ).toBe("true");
+  });
+
+  it("o último módulo SEM FONTE saiu do painel (nenhum estado 'em breve')", () => {
+    renderPainel();
+
+    const text = document.body.textContent ?? "";
+    expect(text).not.toContain("ainda não têm fonte conectada");
+    expect(text).not.toContain("A série diária de atividade ainda não tem fonte");
+    expect(container_has_no_section_without_data()).toBe(true);
+  });
+
+  function container_has_no_section_without_data(): boolean {
+    const src = readFileSync(resolve(__dirname, "../../components/dashboard/panel/PanelDashboard.tsx"), "utf8");
+    return !src.includes("SectionWithoutData");
+  }
 });
 
 describe("promoção — estrutural", () => {

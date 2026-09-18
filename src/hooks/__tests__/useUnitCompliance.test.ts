@@ -328,3 +328,157 @@ describe('useUnitCompliance — 6B.1B races/rejection/unmount (deferred)', () =>
     expect(result.current.error).toBeNull();
   });
 });
+
+// ---------------------------------------------------------------------------
+// 6B.2I — segunda agregação (POR TURNO) da MESMA resposta.
+//
+// "Insights da operação" não abre consulta, canal nem estado assíncrono próprio:
+// ele lê `shiftData`, publicado no MESMO ponto em que `data` é publicado. Estes
+// testes fixam exatamente isso.
+// ---------------------------------------------------------------------------
+describe('useUnitCompliance — 6B.2I shiftData (mesma resposta)', () => {
+  type D<T> = { promise: Promise<T>; resolve: (v: T) => void; reject: (e: unknown) => void };
+  function deferred<T>(): D<T> {
+    let resolve!: (v: T) => void;
+    let reject!: (e: unknown) => void;
+    const promise = new Promise<T>((res, rej) => { resolve = res; reject = rej; });
+    return { promise, resolve, reject };
+  }
+
+  function gatedBuilder(gate: D<QResult>) {
+    const b: any = {};
+    b.then = (onF: any, onR: any) => gate.promise.then(onF, onR);
+    b.catch = (onR: any) => gate.promise.catch(onR);
+    b.finally = (cb: any) => gate.promise.finally(cb);
+    const chain = () => vi.fn(() => b);
+    b.select = chain();
+    b.eq = chain();
+    b.gte = chain();
+    b.lte = chain();
+    return b;
+  }
+
+  const drain = async () => { for (let i = 0; i < 10; i++) await Promise.resolve(); };
+
+  const dailyRow = (unit: string, shiftId: string | null, shiftName: string | null, total: number, done: number) => ({
+    organization_id: 'org-1',
+    unit_id: unit,
+    unit_name: unit === 'u1' ? 'Unidade Norte' : 'Unidade Centro',
+    reference_date: '2026-01-01',
+    shift_id: shiftId,
+    shift_name: shiftName,
+    total_scheduled_tasks: total,
+    completed_tasks: done,
+    completed_on_time: done,
+    completed_late: 0,
+    overdue_open_tasks: 0,
+    delayed_tasks: 0,
+    critical_failures: 0,
+    pending_evidences: 0,
+    weight_total: total,
+    weight_done: done,
+    compliance_percentage: null,
+    total_due_tasks: total,
+    due_completed_tasks: done,
+    due_weight_total: total * 2,
+    due_weight_done: done * 2,
+    due_compliance_percentage: null,
+  });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('publica data (unidade) e shiftData (turno) da MESMA resposta', async () => {
+    const gate = deferred<QResult>();
+    vi.mocked(supabase.from).mockImplementation((() => gatedBuilder(gate)) as never);
+
+    const { result } = renderHook(() => useUnitCompliance({ ...baseParams, startDate: '2026-01-01' }));
+
+    gate.resolve({
+      data: [
+        dailyRow('u1', 'sh-manha', 'Manhã', 6, 5),
+        dailyRow('u2', 'sh-manha', 'Manhã', 4, 3),
+        dailyRow('u1', 'sh-noite', 'Noite', 2, 2),
+        dailyRow('u1', null, null, 3, 1),
+      ],
+      error: null,
+    });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    // Por unidade (como sempre): 2 unidades.
+    expect(result.current.data).toHaveLength(2);
+    // Por turno: 3 buckets — o turno repetido em duas unidades foi somado UMA vez.
+    const byShift = Object.fromEntries(
+      result.current.shiftData.map((r) => [r.shiftId ?? 'null', r]),
+    );
+    expect(Object.keys(byShift).sort()).toEqual(['null', 'sh-manha', 'sh-noite']);
+    expect(byShift['sh-manha'].totalScheduledTasks).toBe(10);
+    expect(byShift['sh-manha'].completedTasks).toBe(8);
+    expect(byShift['null'].shiftId).toBeNull();
+    expect(byShift['null'].totalScheduledTasks).toBe(3);
+
+    // Invariável: as duas agregações fecham o mesmo total.
+    const shiftScheduled = result.current.shiftData.reduce((a, r) => a + r.totalScheduledTasks, 0);
+    const unitScheduled = result.current.data.reduce((a, r) => a + r.totalScheduledTasks, 0);
+    expect(shiftScheduled).toBe(unitScheduled);
+  });
+
+  it('o refresh (que é o que o realtime dispara) recalcula as DUAS agregações juntas', async () => {
+    const gateA = deferred<QResult>();
+    const gateB = deferred<QResult>();
+    let call = 0;
+    vi.mocked(supabase.from).mockImplementation((() => gatedBuilder(++call <= 1 ? gateA : gateB)) as never);
+
+    const { result } = renderHook(() => useUnitCompliance(baseParams));
+    gateA.resolve({ data: [dailyRow('u1', 'sh-manha', 'Manhã', 6, 5)], error: null });
+    await waitFor(() => expect(result.current.shiftData).toHaveLength(1));
+    expect(result.current.shiftData[0].completedTasks).toBe(5);
+
+    await act(async () => {
+      void result.current.refresh();
+      await drain();
+    });
+
+    gateB.resolve({
+      data: [dailyRow('u1', 'sh-manha', 'Manhã', 6, 6), dailyRow('u2', 'sh-noite', 'Noite', 4, 1)],
+      error: null,
+    });
+    await waitFor(() => expect(result.current.shiftData).toHaveLength(2));
+
+    // As duas dimensões mudaram no MESMO update — nenhum estado assíncrono paralelo.
+    expect(result.current.shiftData.map((r) => r.shiftId)).toEqual(['sh-manha', 'sh-noite']);
+    expect(result.current.shiftData[0].completedTasks).toBe(6);
+    expect(result.current.data).toHaveLength(2);
+    expect(vi.mocked(supabase.from).mock.calls.length).toBe(2);
+  });
+
+  it('sem workspace: shiftData também é neutro e nenhuma consulta sai', async () => {
+    const { result } = renderHook(() => useUnitCompliance({ ...baseParams, organizationId: null }));
+    await act(async () => {});
+
+    expect(supabase.from).not.toHaveBeenCalled();
+    expect(result.current.shiftData).toEqual([]);
+  });
+
+  it('falha de leitura limpa data E shiftData (sem sobra da resposta anterior)', async () => {
+    const gateA = deferred<QResult>();
+    const gateB = deferred<QResult>();
+    let call = 0;
+    vi.mocked(supabase.from).mockImplementation((() => gatedBuilder(++call <= 1 ? gateA : gateB)) as never);
+
+    const { result } = renderHook(() => useUnitCompliance(baseParams));
+    gateA.resolve({ data: [dailyRow('u1', 'sh-manha', 'Manhã', 6, 5)], error: null });
+    await waitFor(() => expect(result.current.shiftData).toHaveLength(1));
+
+    await act(async () => {
+      void result.current.refresh();
+      await drain();
+    });
+    gateB.resolve({ data: null, error: { message: 'boom' } });
+    await waitFor(() => expect(result.current.error).not.toBeNull());
+
+    expect(result.current.data).toEqual([]);
+    expect(result.current.shiftData).toEqual([]);
+  });
+});

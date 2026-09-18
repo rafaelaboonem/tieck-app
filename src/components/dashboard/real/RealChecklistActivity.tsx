@@ -27,6 +27,8 @@
  * SEMÂNTICA: a fonte é `analytics_unit_daily_compliance`, o mesmo domínio dos
  * KPIs de tarefa. As séries se chamam "Programadas" e "Concluídas"; nunca
  * "Respondidas" — isto NÃO é resposta de checklist nem ocorrência de rotina.
+ * A descrição repete essa leitura sem prometer taxa ("programadas por dia e
+ * quantas foram concluídas"), porque o eixo é volume, não percentual.
  *
  * ESTADOS: loading (esqueleto no lugar do gráfico) → erro (com retry) → vazio
  * honesto quando o recorte inteiro é zero. Nenhum gráfico zerado é desenhado
@@ -100,7 +102,7 @@ export function RealChecklistActivity({
   error = false,
   onRetry,
   title = "Atividade dos checklists",
-  description = "Tarefas programadas e concluídas por dia",
+  description = "Tarefas programadas por dia e quantas foram concluídas",
   empty,
   className,
 }: {

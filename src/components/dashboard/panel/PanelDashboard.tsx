@@ -14,17 +14,15 @@
  * e para a vitrine DEV, sem que nenhum número de exemplo possa escorregar para
  * produção — não existe caminho de código que injete fixture aqui.
  *
- * SEM CONTRATO REAL → ESTADO VAZIO HONESTO. Uma seção ainda não tem fonte no
- * produto (os recortes de insights), e ela aparece desligada, com o motivo
- * escrito, em vez de números inventados:
- *   • "Insights da operação" — nenhum contrato devolve conformidade por turno
- *     nem execução por checklist.
- * As outras duas superfícies que já tiveram esse estado hoje têm fonte real:
- *   • "Atividade dos checklists" — série diária da view analítica de tarefas
- *     (`analytics_unit_daily_compliance`), agregada por dia civil;
- *   • "Últimas execuções" — execuções concluídas de rotinas agendadas (6B.2E).
- * Nas duas a rota consulta e passa o dado pronto; o card cobre
- * loading → erro → vazio/linhas.
+ * ZERO MÓDULOS SEM FONTE. Todas as seções configuráveis recebem dado real do
+ * recorte — a rota consulta e passa o dado pronto, e cada card cobre
+ * loading → erro → vazio/linhas:
+ *   • KPIs, tabela, gráfico, pontos de atenção — view de tarefas
+ *     (`analytics_unit_daily_compliance`), agregada por unidade;
+ *   • "Atividade dos checklists" — a MESMA view, agregada por dia civil;
+ *   • "Insights da operação" — a MESMA resposta, agregada por turno (6B.2I);
+ *   • "Últimas execuções" e "Rotinas agendadas" — contracts próprios (6B.2E/6B.2D).
+ * Nenhum número de exemplo, nenhuma fixture e nenhuma seção "em breve".
  *
  * DOIS RECORTES INDEPENDENTES: os FILTROS vêm de fora (URL) e alimentam todas as
  * seções; a VISIBILIDADE dos módulos é só apresentação — esconder um módulo não
@@ -46,15 +44,16 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import type { OccurrenceKpis, UnitOccurrenceRow } from "@/lib/occurrence-dashboard";
 import type { ChecklistActivityDay } from "@/lib/checklist-activity";
+import type { ShiftComplianceRow } from "@/lib/shift-compliance";
 import type { UnitComplianceRow } from "@/hooks/useUnitCompliance";
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../kit/ui/card";
 import { RealAttentionRanking, type AttentionRow } from "../real/RealAttentionRanking";
 import { RealChecklistActivity } from "../real/RealChecklistActivity";
 import { RealComplianceChart } from "../real/RealComplianceChart";
 import { RealExecutionBreakdown } from "../real/RealExecutionBreakdown";
 import { RealMetricCard, type RealMetric } from "../real/RealMetricsOverview";
 import { RealRecentExecutions, type RecentExecution } from "../real/RealRecentExecutions";
+import { RealOperationalInsights } from "../real/RealOperationalInsights";
 import { RealUnitDataTable } from "../real/RealUnitDataTable";
 import { ScheduledOccurrencesSection } from "../ScheduledOccurrencesSection";
 import { PanelToolbar } from "./Toolbar";
@@ -112,6 +111,12 @@ export type PanelDashboardData = {
   occurrenceKpis: OccurrenceKpis;
   attention: AttentionRow[];
   /**
+   * "Insights da operação": conformidade/execução por TURNO, da MESMA resposta
+   * de `useUnitCompliance` (nenhuma consulta própria). `shiftId = null` é o
+   * bucket real de execuções sem turno.
+   */
+  shiftInsights: ShiftComplianceRow[];
+  /**
    * "Atividade dos checklists": série diária REAL do recorte — TAREFAS
    * programadas × concluídas por dia (`analytics_unit_daily_compliance`). Mesmo
    * domínio dos KPIs, nunca resposta de checklist nem ocorrência de rotina.
@@ -128,6 +133,8 @@ export type PanelDashboardData = {
     routines: boolean;
     recentExecutions: boolean;
     activity: boolean;
+    /** Mesmo `loading` de `useUnitCompliance` — não é um segundo estado. */
+    shiftInsights: boolean;
   };
   error: string | null;
   occurrencesError: string | null;
@@ -147,35 +154,6 @@ export type PanelDashboardData = {
 
 function pct(value: number | null) {
   return value === null ? "—" : `${value.toFixed(1).replace(".", ",")}%`;
-}
-
-/**
- * Estado vazio de uma seção que ainda NÃO tem contrato de dados. É um card do
- * kit (mesma moldura das outras seções), com o motivo real escrito — nunca um
- * gráfico em branco fingindo estar carregando.
- */
-function SectionWithoutData({
-  title,
-  description,
-  message,
-}: {
-  title: string;
-  description: string;
-  message: string;
-}) {
-  return (
-    <Card className="ti-hover-large h-fit">
-      <CardHeader>
-        <CardTitle>{title}</CardTitle>
-        <CardDescription>{description}</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <p className="rounded-lg border border-dashed px-4 py-6 text-sm text-muted-foreground">
-          {message}
-        </p>
-      </CardContent>
-    </Card>
-  );
 }
 
 export function PanelDashboard({ data }: { data: PanelDashboardData }) {
@@ -485,11 +463,17 @@ export function PanelDashboard({ data }: { data: PanelDashboardData }) {
         </CollapsibleSection>
 
         {/* --------------------------- insights da operação ------------------ */}
+        {/* Derivado da MESMA consulta de conformidade (agregação por turno), logo
+            o recorte é o da toolbar e não existe estado assíncrono paralelo:
+            loading/erro/retry são os de `useUnitCompliance`. */}
         <CollapsibleSection id="operation-insights" visible={sectionVisible("operation-insights")}>
-          <SectionWithoutData
-            title="Insights da operação"
-            description="Conformidade, turnos e execução por checklist"
-            message="Os recortes de insights ainda não têm fonte conectada neste painel."
+          <RealOperationalInsights
+            rows={data.shiftInsights}
+            target={target}
+            loading={data.loading.shiftInsights}
+            error={!!data.error}
+            onRetry={data.onRetry}
+            className="ti-hover-large"
           />
         </CollapsibleSection>
 

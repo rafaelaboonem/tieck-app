@@ -281,7 +281,7 @@ describe("Y) vocabulário do domínio", () => {
     render(<RealChecklistActivity data={SERIES} />);
 
     const text = document.body.textContent?.toLowerCase() ?? "";
-    expect(text).toContain("tarefas programadas e concluídas por dia");
+    expect(text).toContain("tarefas programadas por dia e quantas foram concluídas");
     expect(text).not.toContain("respondid");
     expect(text).not.toContain("checklist response");
   });

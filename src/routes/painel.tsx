@@ -10,12 +10,14 @@
  *   • resolve acesso (auth + workspace + RBAC) antes de decidir qualquer coisa;
  *   • mantém o recorte na URL (`startDate`, `endDate`, `unitId`, `shiftId`) —
  *     a fonte de verdade única dos filtros, já usada pelos drill-downs;
- *   • consulta a view analítica (`useUnitCompliance`) e as rotinas
- *     (`useUnitOccurrenceMetrics`) no escopo do workspace atual;
+ *   • consulta a view analítica (`useUnitCompliance`), a série diária de
+ *     atividade (`useChecklistActivity`), as últimas execuções (6B.2E) e as
+ *     rotinas (`useUnitOccurrenceMetrics`) no escopo do workspace atual;
  *   • agrega os KPIs do recorte e entrega tudo pronto para a composição.
  *
- * O que esta rota NÃO faz: inventar dado. Seção sem contrato real aparece vazia
- * e explicando o motivo (ver `PanelDashboard`).
+ * O que esta rota NÃO faz: inventar dado, nem abrir consulta redundante para o
+ * mesmo número. "Insights da operação" é a mesma resposta de `useUnitCompliance`
+ * vista por turno (6B.2I) — nenhuma consulta própria, nenhum canal próprio.
  */
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo } from "react";
@@ -405,12 +407,16 @@ function PainelPage() {
             attention: attentionRows,
             recentExecutions: recentExecutions.data,
             activity: activity.data,
+            // Insights por turno: MESMA resposta de `useUnitCompliance` (nenhuma
+            // consulta, canal ou estado assíncrono adicional).
+            shiftInsights: compliance.shiftData,
             loading: {
               kpis: compliance.loading,
               table: compliance.loading,
               routines: occurrences.loading,
               recentExecutions: recentExecutions.loading,
               activity: activity.loading,
+              shiftInsights: compliance.loading,
             },
             error: compliance.error,
             occurrencesError: occurrences.error,

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { todayISO } from "@/lib/dashboard-filters";
+import { aggregateByShift, type ShiftComplianceRow } from "@/lib/shift-compliance";
 import type { UnitComplianceData } from "@/components/dashboard/UnitComplianceChart";
 
 // Regra oficial (idêntica à view analytics_unit_daily_compliance):
@@ -90,12 +91,23 @@ export type UnitComplianceRow = UnitComplianceData & {
 
 export interface UseUnitComplianceResult {
   data: UnitComplianceRow[];
+  /**
+   * A MESMA resposta agregada por TURNO (6B.2I) — alimenta "Insights da
+   * operação" sem consulta nova, sem canal novo e sem estado assíncrono
+   * paralelo. Sempre publicada junto com `data`: as duas vêm do mesmo payload.
+   */
+  shiftData: ShiftComplianceRow[];
   loading: boolean;
   error: string | null;
   refresh: () => Promise<void>;
 }
 
-function aggregateByUnit(rows: DailyRow[]): UnitComplianceRow[] {
+/**
+ * Linhas da view agregadas POR UNIDADE. Exportada também para os testes de
+ * invariável compararem as duas agregações reais (unidade × turno) sobre o
+ * MESMO conjunto de linhas.
+ */
+export function aggregateByUnit(rows: DailyRow[]): UnitComplianceRow[] {
   const map = new Map<
     string,
     {
@@ -203,6 +215,10 @@ export function useUnitCompliance(params: UseUnitComplianceParams): UseUnitCompl
   const renderScope = `${scope}|${canQuery ? "on" : "off"}`;
 
   const [data, setData] = useState<UnitComplianceRow[]>([]);
+  // Segunda visão do MESMO payload (agregação por turno). Vive no mesmo estado
+  // assíncrono: é escrita exatamente nos mesmos pontos em que `data` é escrita,
+  // nunca por uma requisição própria.
+  const [shiftData, setShiftData] = useState<ShiftComplianceRow[]>([]);
   const [loading, setLoading] = useState(canQuery);
   const [error, setError] = useState<string | null>(null);
 
@@ -307,13 +323,18 @@ export function useUnitCompliance(params: UseUnitComplianceParams): UseUnitCompl
       // descarta sem tocar em nenhum estado.
       if (!isCurrent()) return;
 
+      const dailyRows = (rows ?? []) as unknown as DailyRow[];
+
       if (err) {
         stateTagRef.current = requestRenderScope;
         setError(err.message);
         setData([]);
+        setShiftData([]);
       } else {
         stateTagRef.current = requestRenderScope;
-        setData(aggregateByUnit((rows ?? []) as unknown as DailyRow[]));
+        // As duas agregações saem do MESMO array de linhas, no mesmo instante.
+        setData(aggregateByUnit(dailyRows));
+        setShiftData(aggregateByShift(dailyRows));
       }
     } catch (e) {
       // Promise rejeitada (rede/exceção): fail-closed, sem dados antigos.
@@ -322,6 +343,7 @@ export function useUnitCompliance(params: UseUnitComplianceParams): UseUnitCompl
       stateTagRef.current = requestRenderScope;
       setError("Falha ao carregar dados de conformidade.");
       setData([]);
+      setShiftData([]);
     } finally {
       if (isCurrent()) setLoading(false);
     }
@@ -333,6 +355,7 @@ export function useUnitCompliance(params: UseUnitComplianceParams): UseUnitCompl
     if (stateTagRef.current !== renderScope) {
       loadSeqRef.current += 1;
       setData([]);
+      setShiftData([]);
       setError(null);
       stateTagRef.current = renderScope;
     }
@@ -341,6 +364,7 @@ export function useUnitCompliance(params: UseUnitComplianceParams): UseUnitCompl
       loadSeqRef.current += 1;
       setLoading(false);
       setData([]);
+      setShiftData([]);
       setError(null);
       stateTagRef.current = renderScope;
       return;
@@ -404,8 +428,8 @@ export function useUnitCompliance(params: UseUnitComplianceParams): UseUnitCompl
   // resultado do novo renderScope devolve loading=true (nunca um vazio falso).
   // Sem setState durante o render.
   if (stateTagRef.current !== renderScope) {
-    return { data: [], error: null, loading: canQuery, refresh: load };
+    return { data: [], shiftData: [], error: null, loading: canQuery, refresh: load };
   }
 
-  return { data, loading, error, refresh: load };
+  return { data, shiftData, loading, error, refresh: load };
 }

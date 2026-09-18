@@ -91,7 +91,15 @@ vi.mock("@/components/dashboard/ScheduledOccurrencesSection", () => ({
 
 // Hooks de dados: nenhuma consulta real é executada nesta suíte.
 vi.mock("@/hooks/useUnitCompliance", () => ({
-  useUnitCompliance: vi.fn(() => ({ data: [], loading: false, error: null, refresh: vi.fn() })),
+  useUnitCompliance: vi.fn(() => ({
+    // `shiftData` é a segunda visão da MESMA resposta (6B.2I) e alimenta os
+    // insights por turno — o stub precisa do contrato completo do hook.
+    data: [],
+    shiftData: [],
+    loading: false,
+    error: null,
+    refresh: vi.fn(),
+  })),
 }));
 vi.mock("@/hooks/useUnitOccurrenceMetrics", () => ({
   useUnitOccurrenceMetrics: vi.fn(() => ({
