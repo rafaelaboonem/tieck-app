@@ -39,6 +39,7 @@ import type { AttentionRow } from "@/components/dashboard/real/RealAttentionRank
 import { useUnitCompliance, type UnitComplianceRow } from "@/hooks/useUnitCompliance";
 import { useUnitOccurrenceMetrics } from "@/hooks/useUnitOccurrenceMetrics";
 import { useRecentChecklistExecutions } from "@/hooks/useRecentChecklistExecutions";
+import { useChecklistActivity } from "@/hooks/useChecklistActivity";
 import { useAccessibleUnits } from "@/hooks/useAccessibleUnits";
 import { STATUS_META, getOperationalStatus, aggregateWeighted } from "@/lib/operational-status";
 import { resolveEffectiveShiftId, shouldClearShiftId } from "@/lib/dashboard-filters";
@@ -201,6 +202,18 @@ function PainelPage() {
   // numa única consulta workspace-scoped (sem fan-out por unidade). Mesmo gate e
   // mesmos filtros do resto do painel; resposta avulsa nunca entra aqui.
   const recentExecutions = useRecentChecklistExecutions({
+    organizationId: currentWorkspace?.id ?? null,
+    startDate: filters.startDate,
+    endDate: filters.endDate,
+    unitId: filters.unitId,
+    shiftId: effectiveShiftId,
+    enabled: canLoadFilteredData,
+  });
+
+  // Atividade dos checklists: série diária de TAREFAS (mesma view analítica dos
+  // KPIs), uma consulta workspace-scoped agregada por dia civil. Mesmo gate e
+  // mesmos filtros do resto do painel — e realtime pelo mesmo domínio.
+  const activity = useChecklistActivity({
     organizationId: currentWorkspace?.id ?? null,
     startDate: filters.startDate,
     endDate: filters.endDate,
@@ -391,17 +404,21 @@ function PainelPage() {
             occurrenceKpis,
             attention: attentionRows,
             recentExecutions: recentExecutions.data,
+            activity: activity.data,
             loading: {
               kpis: compliance.loading,
               table: compliance.loading,
               routines: occurrences.loading,
               recentExecutions: recentExecutions.loading,
+              activity: activity.loading,
             },
             error: compliance.error,
             occurrencesError: occurrences.error,
             recentExecutionsError: recentExecutions.error,
+            activityError: activity.error,
             onOccurrencesRetry: () => void occurrences.refresh(),
             onRecentExecutionsRetry: () => void recentExecutions.refresh(),
+            onActivityRetry: () => void activity.refresh(),
             onRowClick: (row) =>
               openUnitById(row.unitId, { ...filters, shiftId: effectiveShiftId }, navigate),
             onUnitClick: (unitId) =>

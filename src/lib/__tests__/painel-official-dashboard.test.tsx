@@ -142,6 +142,28 @@ const recentExecutionsState = {
 vi.mock("@/hooks/useRecentChecklistExecutions", () => ({
   useRecentChecklistExecutions: vi.fn(() => recentExecutionsState),
 }));
+// "Atividade dos checklists": o card é stub, mas registra o que recebeu da rota
+// (série real, loading e erro) — é assim que a promoção da fonte fica amarrada.
+vi.mock("@/components/dashboard/real/RealChecklistActivity", () => ({
+  RealChecklistActivity: (props: { data?: unknown[]; error?: boolean; loading?: boolean }) => (
+    <div
+      data-testid="checklist-activity"
+      data-points={String(props.data?.length ?? 0)}
+      data-error={String(!!props.error)}
+      data-loading={String(!!props.loading)}
+    />
+  ),
+}));
+
+const activityState = {
+  data: [] as Array<Record<string, unknown>>,
+  loading: false,
+  error: null as string | null,
+  refresh: vi.fn(),
+};
+vi.mock("@/hooks/useChecklistActivity", () => ({
+  useChecklistActivity: vi.fn(() => activityState),
+}));
 vi.mock("@/components/dashboard/real/RealUnitDataTable", () => ({
   RealUnitDataTable: () => <div data-testid="units-table" />,
 }));
@@ -151,6 +173,7 @@ vi.mock("@/components/dashboard/ScheduledOccurrencesSection", () => ({
 
 import { Route as PainelRoute } from "../../routes/painel";
 import { useRecentChecklistExecutions } from "@/hooks/useRecentChecklistExecutions";
+import { useChecklistActivity } from "@/hooks/useChecklistActivity";
 import { useAccessibleUnits } from "@/hooks/useAccessibleUnits";
 
 const PAINEL_SRC = readFileSync(resolve(__dirname, "../../routes/painel.tsx"), "utf8");
@@ -174,6 +197,9 @@ beforeEach(() => {
   recentExecutionsState.data = [];
   recentExecutionsState.loading = false;
   recentExecutionsState.error = null;
+  activityState.data = [];
+  activityState.loading = false;
+  activityState.error = null;
 });
 
 describe("promoção — /painel é o dashboard oficial", () => {
@@ -298,6 +324,57 @@ describe("últimas execuções — dados reais ligados na rota (6B.2E)", () => {
     const { container } = renderPainel();
     const card = container.querySelector("[data-testid='recent-executions']");
     expect(card?.getAttribute("data-loading")).toBe("true");
+  });
+});
+
+describe("atividade dos checklists — série diária real ligada na rota (6B.2H)", () => {
+  const day = { date: "2026-09-17", scheduled: 12, completed: 9 };
+
+  it("o card recebe a série do hook (nunca um array fixo)", () => {
+    activityState.data = [day];
+    const { container } = renderPainel();
+
+    const card = container.querySelector("[data-testid='checklist-activity']");
+    expect(card?.getAttribute("data-points")).toBe("1");
+    expect(card?.getAttribute("data-error")).toBe("false");
+  });
+
+  it("a série é pedida no MESMO recorte do painel (período + unidade + turno)", () => {
+    renderPainel({ startDate: "2026-09-01", endDate: "2026-09-10", unitId: "u-1", shiftId: "sh-1" });
+
+    expect(vi.mocked(useChecklistActivity)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        organizationId: "org-1",
+        startDate: "2026-09-01",
+        endDate: "2026-09-10",
+        unitId: "u-1",
+        shiftId: "sh-1",
+        enabled: true,
+      }),
+    );
+  });
+
+  it("sem workspace resolvido, a série também não é pedida", () => {
+    workspaceState.currentWorkspace = null;
+    renderPainel();
+
+    expect(vi.mocked(useChecklistActivity)).toHaveBeenCalledWith(
+      expect.objectContaining({ organizationId: null, enabled: false }),
+    );
+  });
+
+  it("falha vira ERRO no card (não um gráfico vazio)", () => {
+    activityState.error = "Não foi possível carregar a atividade.";
+    const { container } = renderPainel();
+
+    expect(container.querySelector("[data-testid='checklist-activity']")?.getAttribute("data-error")).toBe("true");
+  });
+
+  it("enquanto carrega, o card sabe que está carregando", () => {
+    activityState.loading = true;
+    const { container } = renderPainel();
+
+    expect(container.querySelector("[data-testid='checklist-activity']")?.getAttribute("data-loading")).toBe("true");
   });
 });
 

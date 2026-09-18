@@ -105,6 +105,11 @@ vi.mock("@/hooks/useUnitOccurrenceMetrics", () => ({
 vi.mock("@/hooks/useShiftOptions", () => ({
   useShiftOptions: vi.fn(() => ({ shifts: [], resolved: true, loading: false })),
 }));
+// Série diária de atividade: neutra e JÁ carregada — este teste olha o gate de
+// acesso, e o esqueleto do card não pode ficar pendurado no recorte resolvido.
+vi.mock("@/hooks/useChecklistActivity", () => ({
+  useChecklistActivity: vi.fn(() => ({ data: [], loading: false, error: null, refresh: vi.fn() })),
+}));
 
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {

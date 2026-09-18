@@ -14,14 +14,17 @@
  * e para a vitrine DEV, sem que nenhum número de exemplo possa escorregar para
  * produção — não existe caminho de código que injete fixture aqui.
  *
- * SEM CONTRATO REAL → ESTADO VAZIO HONESTO. Duas seções ainda não têm fonte no
- * produto (série diária de atividade e os recortes de insights). Elas aparecem
- * desligadas, com o motivo escrito, em vez de números inventados:
- *   • "Atividade dos checklists" — nenhum contrato devolve a série diária;
+ * SEM CONTRATO REAL → ESTADO VAZIO HONESTO. Uma seção ainda não tem fonte no
+ * produto (os recortes de insights), e ela aparece desligada, com o motivo
+ * escrito, em vez de números inventados:
  *   • "Insights da operação" — nenhum contrato devolve conformidade por turno
  *     nem execução por checklist.
- * "Últimas execuções" TEM fonte real desde a 6B.2E: a rota passa as execuções de
- * rotinas concluídas no recorte e o card cobre loading → erro → vazio/linhas.
+ * As outras duas superfícies que já tiveram esse estado hoje têm fonte real:
+ *   • "Atividade dos checklists" — série diária da view analítica de tarefas
+ *     (`analytics_unit_daily_compliance`), agregada por dia civil;
+ *   • "Últimas execuções" — execuções concluídas de rotinas agendadas (6B.2E).
+ * Nas duas a rota consulta e passa o dado pronto; o card cobre
+ * loading → erro → vazio/linhas.
  *
  * DOIS RECORTES INDEPENDENTES: os FILTROS vêm de fora (URL) e alimentam todas as
  * seções; a VISIBILIDADE dos módulos é só apresentação — esconder um módulo não
@@ -42,10 +45,12 @@ import "./panel-light.css";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import type { OccurrenceKpis, UnitOccurrenceRow } from "@/lib/occurrence-dashboard";
+import type { ChecklistActivityDay } from "@/lib/checklist-activity";
 import type { UnitComplianceRow } from "@/hooks/useUnitCompliance";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../kit/ui/card";
 import { RealAttentionRanking, type AttentionRow } from "../real/RealAttentionRanking";
+import { RealChecklistActivity } from "../real/RealChecklistActivity";
 import { RealComplianceChart } from "../real/RealComplianceChart";
 import { RealExecutionBreakdown } from "../real/RealExecutionBreakdown";
 import { RealMetricCard, type RealMetric } from "../real/RealMetricsOverview";
@@ -107,6 +112,12 @@ export type PanelDashboardData = {
   occurrenceKpis: OccurrenceKpis;
   attention: AttentionRow[];
   /**
+   * "Atividade dos checklists": série diária REAL do recorte — TAREFAS
+   * programadas × concluídas por dia (`analytics_unit_daily_compliance`). Mesmo
+   * domínio dos KPIs, nunca resposta de checklist nem ocorrência de rotina.
+   */
+  activity: ChecklistActivityDay[];
+  /**
    * "Últimas execuções": execuções CONCLUÍDAS de rotinas agendadas no recorte
    * (6B.2E). Resposta avulsa/pública não entra — não tem executor confiável.
    */
@@ -116,12 +127,15 @@ export type PanelDashboardData = {
     table: boolean;
     routines: boolean;
     recentExecutions: boolean;
+    activity: boolean;
   };
   error: string | null;
   occurrencesError: string | null;
   recentExecutionsError: string | null;
+  activityError: string | null;
   onOccurrencesRetry?: () => void;
   onRecentExecutionsRetry?: () => void;
+  onActivityRetry?: () => void;
   onRowClick: (row: UnitComplianceRow) => void;
   onUnitClick: (unitId: string) => void;
   /**
@@ -372,15 +386,16 @@ export function PanelDashboard({ data }: { data: PanelDashboardData }) {
         )}
 
         {/* --------------------------- atividade diária ---------------------- */}
-        {/* Nenhum contrato devolve a série diária (programados × respondidos por
-            dia), então a seção existe e diz isso. O gráfico que a preenche
-            volta para cá no dia em que a fonte existir — nenhuma série é
-            inventada para deixar o card "bonito". */}
+        {/* Série diária REAL do recorte (tarefas programadas × concluídas por
+            dia), do MESMO domínio dos KPIs. O recorte de período é o da toolbar
+            — o card não tem filtro próprio. */}
         <CollapsibleSection id="checklist-activity" visible={sectionVisible("checklist-activity")}>
-          <SectionWithoutData
-            title="Atividade dos checklists"
-            description="Programados e respondidos por dia"
-            message="A série diária de atividade ainda não tem fonte conectada neste painel."
+          <RealChecklistActivity
+            data={data.activity}
+            loading={data.loading.activity}
+            error={!!data.activityError}
+            onRetry={data.onActivityRetry}
+            className="ti-hover-widget"
           />
         </CollapsibleSection>
 
