@@ -173,9 +173,12 @@ export function panelPeriodLabel(filters: DashboardFilters): string {
 }
 
 /**
- * Rótulo do recorte (unidade + escala), derivado das OPÇÕES REAIS: se o id
- * selecionado não está na lista, mostra o próprio id em vez de mentir que é
- * "todas".
+ * Rótulo COMPACTO do subtítulo do header: apenas os filtros ATIVOS, com os
+ * NOMES reais das opções (id fora da lista vira o próprio id, nunca um
+ * "todas" inventado). Sem unidade/turno aplicados retorna STRING VAZIA — o
+ * subtítulo mostra só o período. "Todas as unidades"/"Todos os turnos"
+ * continuam existindo nos próprios controles da toolbar; aqui é recusa de
+ * redundância, não de informação.
  */
 export function panelScopeLabel(
   filters: DashboardFilters,
@@ -187,9 +190,10 @@ export function panelScopeLabel(
     ? shiftOptions.find((option) => option.id === filters.shiftId)
     : null;
 
-  const unitLabel = filters.unitId ? (unit?.name ?? filters.unitId) : "Todas as unidades";
-  const shiftLabel = filters.shiftId ? (shift?.name ?? filters.shiftId) : "Todos os turnos";
-  return `${unitLabel} · ${shiftLabel}`;
+  const parts: string[] = [];
+  if (filters.unitId) parts.push(unit?.name ?? filters.unitId);
+  if (filters.shiftId) parts.push(shift?.name ?? filters.shiftId);
+  return parts.join(" · ");
 }
 
 /**

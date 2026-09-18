@@ -17,7 +17,7 @@
  */
 import * as React from "react";
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { render, screen, cleanup } from "@testing-library/react";
+import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 
 const areaChartSpy = vi.fn();
 
@@ -264,6 +264,93 @@ describe("refinamento visual (legenda, traço linear, respiro no plot)", () => {
     render(<RealChecklistActivity data={SERIES} />);
 
     expect(screen.queryByTestId("y-axis")).toBeNull();
+  });
+});
+
+describe("seletor Padrão × Suave (só o traço muda, nunca o dado)", () => {
+  it("A/B) modo inicial é Padrão: as duas áreas começam type='linear'", () => {
+    render(<RealChecklistActivity data={SERIES} />);
+
+    expect(screen.getAllByTestId("chart-area").map((el) => el.getAttribute("data-type"))).toEqual([
+      "linear",
+      "linear",
+    ]);
+    expect(screen.getByRole("button", { name: "Padrão" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("button", { name: "Suave" }).getAttribute("aria-pressed")).toBe("false");
+  });
+
+  it("C) clicar em Suave muda AS DUAS áreas para type='monotone'", () => {
+    render(<RealChecklistActivity data={SERIES} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Suave" }));
+
+    expect(screen.getAllByTestId("chart-area").map((el) => el.getAttribute("data-type"))).toEqual([
+      "monotone",
+      "monotone",
+    ]);
+  });
+
+  it("D/G) clicar em Padrão restaura linear e inverte o aria-pressed", () => {
+    render(<RealChecklistActivity data={SERIES} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Suave" }));
+    expect(screen.getByRole("button", { name: "Suave" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("button", { name: "Padrão" }).getAttribute("aria-pressed")).toBe("false");
+
+    fireEvent.click(screen.getByRole("button", { name: "Padrão" }));
+    expect(screen.getAllByTestId("chart-area").map((el) => el.getAttribute("data-type"))).toEqual([
+      "linear",
+      "linear",
+    ]);
+    expect(screen.getByRole("button", { name: "Padrão" }).getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("E/F) trocar o modo NÃO altera array de dados nem os dataKeys", () => {
+    render(<RealChecklistActivity data={SERIES} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Suave" }));
+
+    // O array passado ao recharts continua o MESMO, ponto a ponto.
+    expect(JSON.parse(screen.getByTestId("area-chart").getAttribute("data-points") ?? "[]")).toEqual(
+      SERIES,
+    );
+    expect(screen.getAllByTestId("chart-area").map((el) => el.getAttribute("data-key"))).toEqual([
+      "scheduled",
+      "completed",
+    ]);
+  });
+
+  it("K) o grupo e a legenda continuam presentes após a troca", () => {
+    render(<RealChecklistActivity data={SERIES} />);
+
+    expect(
+      screen
+        .getByTestId("checklist-activity-view-toggle")
+        .getAttribute("aria-label"),
+    ).toBe("Visualização do gráfico");
+
+    fireEvent.click(screen.getByRole("button", { name: "Suave" }));
+
+    const legend = screen.getByTestId("checklist-activity-legend");
+    expect(legend.textContent).toContain("Programadas");
+    expect(legend.textContent).toContain("Concluídas");
+  });
+
+  it("H/I/J) o controle NÃO existe em loading, erro ou vazio", () => {
+    const { unmount } = render(<RealChecklistActivity data={[]} loading />);
+    expect(screen.queryByTestId("checklist-activity-view-toggle")).toBeNull();
+    unmount();
+
+    render(<RealChecklistActivity data={[]} error />);
+    expect(screen.queryByTestId("checklist-activity-view-toggle")).toBeNull();
+    cleanup();
+
+    render(
+      <RealChecklistActivity
+        data={SERIES.map((d) => ({ ...d, scheduled: 0, completed: 0 }))}
+      />,
+    );
+    expect(screen.queryByTestId("checklist-activity-view-toggle")).toBeNull();
   });
 });
 

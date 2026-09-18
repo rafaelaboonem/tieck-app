@@ -16,10 +16,14 @@
  *     "programadas" — empilhar inflaria o total e sugeriria um número falso;
  *   • LEGENDA discreta no header (ponto + rótulo), alimentada pela MESMA config
  *     das séries — a cor da legenda, da curva e do tooltip é uma só;
- *   • INTERPOLAÇÃO `linear`: a série é de contagens DIÁRIAS discretas, então a
- *     curva passa exatamente pelos pontos do dia. `monotone`/`natural`
- *     arredondavam as quinas e davam aparência de onda contínua que o dado não
- *     tem (os valores e a quantidade de pontos são os mesmos — muda só o traço);
+ *   • INTERPOLAÇÃO com dois modos, escolha do usuário no header:
+ *       "Padrão" → `linear`   (contagens DIÁRIAS discretas: a curva passa
+ *                             exatamente pelos pontos do dia, sem onda);
+ *       "Suave"  → `monotone` (mesma série, traço com quinas arredondadas).
+ *     A troca muda SOMENTE o traço: array, valores, datas, dataKeys, tooltip,
+ *     cores e gradientes são os mesmos — nenhum ponto intermediário, nenhuma
+ *     média. O padrão continua `linear`; a preferência é estado local do
+ *     componente (voltar a "Padrão" no refresh é aceitável por enquanto);
  *   • RESPIRO horizontal no plot (`margin` esquerda/direita): o primeiro e o
  *     último ponto do recorte deixam de encostar na borda, sem remover nenhum
  *     ponto nem aumentar o card.
@@ -49,6 +53,7 @@ import {
   ChartTooltipContent,
 } from "../kit/ui/chart";
 import { formatShortDay } from "../panel/filters";
+import { cn } from "@/lib/utils";
 import type { ChecklistActivityDay } from "@/lib/checklist-activity";
 
 /**
@@ -96,6 +101,66 @@ function ActivityLegend() {
   );
 }
 
+/**
+ * Modos de interpolação do traço. `linear` é o PADRÃO aprovado; `smooth`
+ * mapeia para `monotone` (nunca `natural`) e muda apenas o desenho — os dados
+ * são intocados.
+ */
+type ActivityViewMode = "linear" | "smooth";
+
+const ACTIVITY_VIEW_OPTIONS: Array<{ mode: ActivityViewMode; label: string }> = [
+  { mode: "linear", label: "Padrão" },
+  { mode: "smooth", label: "Suave" },
+];
+
+function curveTypeFor(mode: ActivityViewMode): "linear" | "monotone" {
+  return mode === "smooth" ? "monotone" : "linear";
+}
+
+/**
+ * Seletor compacto "Padrão | Suave" ao lado da legenda: container `muted`
+ * suave, botão ativo destacado com fundo do card e sombra — parte do design
+ * existente, sem controle novo pesado. Botões reais (foco por teclado,
+ * Enter/Space nativos) com `aria-pressed`; o grupo rotula a função.
+ */
+function ActivityViewToggle({
+  mode,
+  onChange,
+}: {
+  mode: ActivityViewMode;
+  onChange: (mode: ActivityViewMode) => void;
+}) {
+  return (
+    <div
+      role="group"
+      aria-label="Visualização do gráfico"
+      data-testid="checklist-activity-view-toggle"
+      className="bg-muted/60 flex items-center gap-0.5 rounded-md p-0.5"
+    >
+      {ACTIVITY_VIEW_OPTIONS.map((option) => {
+        const active = option.mode === mode;
+        return (
+          <button
+            key={option.mode}
+            type="button"
+            aria-pressed={active}
+            data-view-button={option.mode}
+            onClick={() => onChange(option.mode)}
+            className={cn(
+              "cursor-pointer rounded-[5px] px-2 py-1 text-xs font-medium transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none",
+              active
+                ? "bg-card text-foreground shadow-xs border border-border/60"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            {option.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 export function RealChecklistActivity({
   data,
   loading = false,
@@ -121,16 +186,22 @@ export function RealChecklistActivity({
   // Recortes curtos (a semana padrão do painel tem 7 dias) mostram TODOS os dias
   // no eixo; recortes longos deixam o recharts espaçar os rótulos.
   const denseTicks = data.length <= 8;
+  // Preferência de traço, LOCAL ao componente: "Padrão" no refresh.
+  const [viewMode, setViewMode] = React.useState<ActivityViewMode>("linear");
+  const curveType = curveTypeFor(viewMode);
 
   return (
     <Card className={["h-fit", className].filter(Boolean).join(" ")}>
       <CardHeader>
         <CardTitle>{title}</CardTitle>
         <CardDescription>{description}</CardDescription>
-        {/* Legenda só quando há gráfico: ela descreve as séries desenhadas. */}
+        {/* Legenda + seletor de traço só quando há gráfico: ambos descrevem o
+            que está desenhado. `flex-wrap` deixa quebrar em telas estreitas
+            sem overflow nem esmagar título/descrição. */}
         {!loading && !error && hasData && (
-          <CardAction>
+          <CardAction className="flex max-w-full flex-wrap items-center justify-end gap-x-3 gap-y-1.5">
             <ActivityLegend />
+            <ActivityViewToggle mode={viewMode} onChange={setViewMode} />
           </CardAction>
         )}
       </CardHeader>
@@ -199,15 +270,18 @@ export function RealChecklistActivity({
                   />
                 }
               />
+              {/* `curveType` é apresentação pura: o `data` é o MESMO array
+                  recebido — trocar de modo não cria ponto, não média, não
+                  altera valor. */}
               <Area
                 dataKey="scheduled"
-                type="linear"
+                type={curveType}
                 fill="url(#fillScheduled)"
                 stroke="var(--color-scheduled)"
               />
               <Area
                 dataKey="completed"
-                type="linear"
+                type={curveType}
                 fill="url(#fillCompleted)"
                 stroke="var(--color-completed)"
               />

@@ -259,13 +259,21 @@ describe("promoção — /painel é o dashboard oficial", () => {
     expect(withFlag.container.querySelector("[data-testid='preview-dashboard']")).toBeNull();
   });
 
-  it("a toolbar oficial recebe as UNIDADES e TURNOS reais (não fixture)", () => {
+  it("o subtítulo mostra o período e NÃO repete 'todas/todos/meta' da toolbar", () => {
     const { container } = renderPainel();
-    const subtitle = container.textContent ?? "";
+    const subtitle = container.querySelector("[data-testid='panel-subtitle']")?.textContent ?? "";
 
-    // Recorte padrão do produto (7 dias) com as opções reais disponíveis.
-    expect(subtitle).toContain("Todas as unidades · Todos os turnos");
+    // Recorte padrão: SÓ o período. "Todas as unidades"/"Todos os turnos"/
+    // "meta operacional" continuam existindo nos CONTROLES da toolbar — não
+    // no subtítulo.
+    expect(subtitle).toContain("Período");
+    expect(subtitle).not.toContain("Todas as unidades");
+    expect(subtitle).not.toContain("Todos os turnos");
+    expect(subtitle).not.toContain("meta operacional");
+    // A toolbar continua com seus controles e opções completas.
     expect(container.querySelector('[role="group"][aria-label="Período"]')).not.toBeNull();
+    expect(container.textContent).toContain("Todas as unidades");
+    expect(container.textContent).toContain("Todos os turnos");
   });
 
   it("as unidades são pedidas no ESCOPO do workspace atual (6B.2F)", () => {
@@ -281,10 +289,28 @@ describe("promoção — /painel é o dashboard oficial", () => {
     expect(useAccessibleUnits).toHaveBeenCalledWith({ workspaceId: null, enabled: false });
   });
 
-  it("o rótulo do recorte usa o NOME real da unidade selecionada", () => {
+  it("o subtítulo usa o NOME real da unidade selecionada (e não anuncia turno)", () => {
     const { container } = renderPainel({ unitId: "u-1" });
+    const subtitle = container.querySelector("[data-testid='panel-subtitle']")?.textContent ?? "";
 
-    expect(container.textContent).toContain("Unidade Norte · Todos os turnos");
+    expect(subtitle).toContain("Período");
+    expect(subtitle).toContain("Unidade Norte");
+    expect(subtitle).not.toContain("Todos os turnos");
+  });
+
+  it("o subtítulo usa o NOME real do turno selecionado (e não anuncia unidade)", () => {
+    const { container } = renderPainel({ shiftId: "sh-2" });
+    const subtitle = container.querySelector("[data-testid='panel-subtitle']")?.textContent ?? "";
+
+    expect(subtitle).toContain("Noite");
+    expect(subtitle).not.toContain("Todas as unidades");
+  });
+
+  it("unidade + turno aplicados aparecem na ordem Período · Unidade · Turno", () => {
+    const { container } = renderPainel({ unitId: "u-1", shiftId: "sh-2" });
+    const subtitle = container.querySelector("[data-testid='panel-subtitle']")?.textContent ?? "";
+
+    expect(subtitle).toMatch(/Período .* · Unidade Norte · Noite$/);
   });
 
   it("o recorte vem da URL: datas aplicadas aparecem no subtítulo", () => {

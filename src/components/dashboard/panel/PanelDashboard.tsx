@@ -271,8 +271,13 @@ export function PanelDashboard({ data }: { data: PanelDashboardData }) {
                 {data.health.label}
               </span>
             </div>
-            <p className="text-muted-foreground">
-              Período {data.periodLabel} · {data.scopeLabel} · meta operacional {target}%
+            {/* Subtítulo compacto: período sempre; unidade/turno SÓ quando
+                aplicados (os nomes vêm de `panelScopeLabel`, das opções
+                reais) — e nada de "todas/todos/meta", que já vivem nos
+                controles da toolbar. */}
+            <p className="text-muted-foreground" data-testid="panel-subtitle">
+              Período {data.periodLabel}
+              {data.scopeLabel ? ` · ${data.scopeLabel}` : ""}
             </p>
           </div>
           <PanelToolbar
