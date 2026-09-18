@@ -64,12 +64,24 @@ const rpcSql = sql.slice(sql.indexOf(`CREATE OR REPLACE FUNCTION public.${RPC}`)
 const rpcBody = functionBody(RPC);
 
 describe("6B.2E migration — arquivo e escopo", () => {
-  it("existe com timestamp posterior a todas as migrations do projeto", () => {
+  it("existe e é posterior a todas as migrations de que depende", () => {
+    // A 6B.2E foi a última quando nasceu; migrations posteriores (ex.: 6B.2J)
+    // existem legitimamente. O invariante real é a ORDEM contra as
+    // dependências: has_role_in_workspace (4A), o domínio 5E.2A e a ponte 6B.2B.
     const files = readdirSync(resolve(process.cwd(), MIGRATIONS_DIR))
       .filter((f) => f.endsWith(".sql"))
       .sort();
-    expect(files).toContain("20260917120000_6b2e_recent_checklist_executions.sql");
-    expect(files[files.length - 1]).toBe("20260917120000_6b2e_recent_checklist_executions.sql");
+    const idx = files.indexOf("20260917120000_6b2e_recent_checklist_executions.sql");
+    expect(idx).toBeGreaterThan(-1);
+    for (const dependency of [
+      "20260815065226_03516198-fe99-4d95-aea9-9969a93f4b80.sql",
+      "20260910120000_5e2a_execution_schedules_occurrences.sql",
+      "20260914140000_6b2b_occurrence_execution_bridge.sql",
+    ]) {
+      const depIdx = files.indexOf(dependency);
+      expect(depIdx, `${dependency} deve existir e preceder a 6B.2E`).toBeGreaterThanOrEqual(0);
+      expect(depIdx).toBeLessThan(idx);
+    }
   });
 
   it("não altera tabela, coluna, RLS, policy, trigger, índice, cron ou dado", () => {
