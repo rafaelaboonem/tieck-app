@@ -5,7 +5,9 @@
  * soma por checklist (a RPC já agrupa; o parser NÃO re-agrega nem deduplica),
  * identidade por id (títulos iguais não fundem), shift NULL válido, taxa
  * due_completed/due com null quando não há devidas, invariantes do lifecycle,
- * payload malformado rejeitado (fail-closed) e ordenação estável.
+ * payload malformado E semanticamente impossível rejeitado (fail-closed,
+ * sem clamp), UUID opcional distinguindo ausência de id inválido e
+ * ordenação estável.
  */
 import { describe, it, expect } from "vitest";
 
@@ -58,10 +60,10 @@ describe("6B.2J parser — agregação chega pronta da RPC", () => {
     expect(parsed[0]?.completedOccurrences).toBe(2);
   });
 
-  it("A) duas linhas do mesmo checklist somam no consumidor sem perder linha", () => {
+  it("A) payload com duas linhas do mesmo id atravessa SEM dedupe — somar é papel do consumidor (a RPC garante 1 linha por checklist_id)", () => {
     const parsed = parseChecklistExecutionMetrics([
-      row({ total_occurrences: "10", completed_occurrences: "8" }),
-      row({ total_occurrences: "10", completed_occurrences: "7" }),
+      row({ total_occurrences: "10", completed_occurrences: "8", completed_on_time: "7", completed_late: "1", overdue_open_occurrences: "1", pending_open_occurrences: "1", due_occurrences: "10", due_completed_occurrences: "8" }),
+      row({ total_occurrences: "10", completed_occurrences: "7", completed_on_time: "6", completed_late: "1", overdue_open_occurrences: "2", pending_open_occurrences: "1", due_occurrences: "9", due_completed_occurrences: "7" }),
     ]);
     const total = parsed.reduce((acc, m) => acc + m.totalOccurrences, 0);
     const completed = parsed.reduce((acc, m) => acc + m.completedOccurrences, 0);
@@ -82,7 +84,7 @@ describe("6B.2J parser — agregação chega pronta da RPC", () => {
   it("C) múltiplos dias chegam somados por checklist (grão é checklist, não dia)", () => {
     // 3 dias × 4 ocorrências = 12, já agregadas pelo GROUP BY do banco.
     const parsed = parseChecklistExecutionMetrics([
-      row({ total_occurrences: "12", completed_occurrences: "9", due_occurrences: "12", due_completed_occurrences: "9" }),
+      row({ total_occurrences: "12", completed_occurrences: "9", completed_on_time: "8", completed_late: "1", overdue_open_occurrences: "2", pending_open_occurrences: "1", due_occurrences: "12", due_completed_occurrences: "9" }),
     ]);
     expect(parsed[0]?.totalOccurrences).toBe(12);
     expect(parsed[0]?.dueOccurrences).toBe(12);
@@ -127,6 +129,93 @@ describe("6B.2J parser — agregação chega pronta da RPC", () => {
     // Linha boa sobrevive ao lado da ruim.
     const mixed = parseChecklistExecutionMetrics([row(), row({ checklist_id: "x" })]);
     expect(mixed).toHaveLength(1);
+  });
+});
+
+describe("6B.2J invariantes semânticas do parser (fail-closed, sem clamp)", () => {
+  it("rejeita completed != on_time + late", () => {
+    expect(
+      parseChecklistExecutionMetrics([
+        row({ completed_occurrences: "10", completed_on_time: "3", completed_late: "2" }),
+      ]),
+    ).toEqual([]);
+  });
+
+  it("rejeita total != completed + overdue_open + pending_open", () => {
+    // 19 ≠ 18 concluídas + 1 + 1 = 20; due=19 ≤ total e due_completed ok.
+    expect(parseChecklistExecutionMetrics([row({ total_occurrences: "19" })])).toEqual([]);
+  });
+
+  it("rejeita due_occurrences > total_occurrences", () => {
+    expect(parseChecklistExecutionMetrics([row({ due_occurrences: "25" })])).toEqual([]);
+  });
+
+  it("rejeita due_completed_occurrences > due_occurrences", () => {
+    // 12 > 10 devidas, mas 12 ≤ 18 concluídas — só esta regra falha.
+    expect(
+      parseChecklistExecutionMetrics([row({ due_occurrences: "10", due_completed_occurrences: "12" })]),
+    ).toEqual([]);
+  });
+
+  it("rejeita due_completed_occurrences > completed_occurrences (única regra violada)", () => {
+    // 10 concluídas (8+2), 5 abertas em atraso, 5 pendentes → total 20;
+    // 15 devidas com 12 concluídas: só due_completed > completed falha.
+    expect(
+      parseChecklistExecutionMetrics([
+        row({
+          total_occurrences: "20",
+          completed_occurrences: "10",
+          completed_on_time: "8",
+          completed_late: "2",
+          overdue_open_occurrences: "5",
+          pending_open_occurrences: "5",
+          due_occurrences: "15",
+          due_completed_occurrences: "12",
+        }),
+      ]),
+    ).toEqual([]);
+  });
+
+  it("linha boa sobrevive ao lado de uma semanticamente impossível", () => {
+    const parsed = parseChecklistExecutionMetrics([
+      row(),
+      row({ checklist_id: ID_B, completed_occurrences: "10", completed_on_time: "3", completed_late: "2" }),
+    ]);
+    expect(parsed).toHaveLength(1);
+    expect(parsed[0]?.checklistId).toBe(ID_A);
+  });
+});
+
+describe("6B.2J UUID opcional — ausência legítima != id inválido", () => {
+  it("unit_id ausente/null é válido (unitId null)", () => {
+    const parsed = parseChecklistExecutionMetrics([row({ unit_id: null, unit_name: null })]);
+    expect(parsed).toHaveLength(1);
+    expect(parsed[0]?.unitId).toBeNull();
+  });
+
+  it("shift_id ausente/undefined é válido (shiftId null)", () => {
+    const parsed = parseChecklistExecutionMetrics([row({ shift_id: undefined, shift_name: undefined })]);
+    expect(parsed).toHaveLength(1);
+    expect(parsed[0]?.shiftId).toBeNull();
+  });
+
+  it("unit_id presente porém inválido descarta a linha", () => {
+    expect(parseChecklistExecutionMetrics([row({ unit_id: "abc" })])).toEqual([]);
+    expect(parseChecklistExecutionMetrics([row({ unit_id: 42 as unknown as string })])).toEqual([]);
+  });
+
+  it("shift_id presente porém inválido descarta a linha (nunca vira bucket 'sem turno')", () => {
+    expect(parseChecklistExecutionMetrics([row({ shift_id: "abc" })])).toEqual([]);
+    expect(parseChecklistExecutionMetrics([row({ shift_id: "" })])).toEqual([]);
+  });
+
+  it("id inválido numa linha não derruba a linha boa vizinha", () => {
+    const parsed = parseChecklistExecutionMetrics([
+      row(),
+      row({ checklist_id: ID_B, shift_id: "abc" }),
+    ]);
+    expect(parsed).toHaveLength(1);
+    expect(parsed[0]?.checklistId).toBe(ID_A);
   });
 });
 
