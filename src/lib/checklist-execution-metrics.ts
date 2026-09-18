@@ -106,6 +106,20 @@ function asUuid(value: unknown): string | null {
 }
 
 /**
+ * UUID opcional fail-closed — distingue AUSÊNCIA legítima de ID INVÁLIDO:
+ *
+ * - `null`/`undefined` → ausência legítima (`unit_id`/`shift_id` são
+ *   nullable; shift NULL é partição real) → `null`, linha válida;
+ * - valor presente que não é um UUID (ex.: "abc") → violação de contrato →
+ *   `undefined`, que DESCARTA a linha — nunca vira bucket "sem turno"
+ *   nem id inventado.
+ */
+function parseOptionalUuid(value: unknown): string | null | undefined {
+  if (value === null || value === undefined) return null;
+  return typeof value === "string" && UUID_RE.test(value.trim()) ? value.trim() : undefined;
+}
+
+/**
  * Contador do contrato. PostgREST serializa `bigint` como string — número ou
  * dígito são aceitos; qualquer outra coisa (falta, negativo, não-inteiro,
  * NaN) é violação de contrato e derruba a linha (fail-closed, nunca 0
@@ -124,7 +138,14 @@ function asCounter(value: unknown): number | null {
  * linha malformada é DESCARTADA em vez de agregada com contador inventado.
  *
  * Opcionais: título, unidade e turno — rotina sem unidade/turno é válida
- * (shift_id NULL é partição real) e não pode derrubar a linha.
+ * (shift_id NULL é partição real) e não derruba a linha; id de unidade/turno
+ * PRESENTE porém inválido viola o contrato e derruba a linha.
+ *
+ * Além do shape, os contadores devem ser MATEMATICAMENTE coerentes com o
+ * lifecycle 5E.2A — completed = on_time + late; total = completed +
+ * overdue_open + pending_open; due ≤ total; due_completed ≤ due e ≤
+ * completed. Combinação impossível é DESCARTADA: sem clamp, sem corrigir
+ * número, sem transformar inconsistência em zero.
  */
 export function parseChecklistExecutionMetrics(raw: unknown): ChecklistExecutionMetric[] {
   if (!Array.isArray(raw)) return [];
@@ -135,6 +156,8 @@ export function parseChecklistExecutionMetrics(raw: unknown): ChecklistExecution
     const row = entry as Record<string, unknown>;
 
     const checklistId = asUuid(row.checklist_id);
+    const unitId = parseOptionalUuid(row.unit_id);
+    const shiftId = parseOptionalUuid(row.shift_id);
     const totalOccurrences = asCounter(row.total_occurrences);
     const completedOccurrences = asCounter(row.completed_occurrences);
     const completedOnTime = asCounter(row.completed_on_time);
@@ -153,7 +176,23 @@ export function parseChecklistExecutionMetrics(raw: unknown): ChecklistExecution
       overdueOpenOccurrences === null ||
       pendingOpenOccurrences === null ||
       dueOccurrences === null ||
-      dueCompletedOccurrences === null
+      dueCompletedOccurrences === null ||
+      unitId === undefined ||
+      shiftId === undefined
+    ) {
+      continue;
+    }
+
+    // Invariantes do lifecycle (5E.2A) sobre contadores já não-nulos:
+    // linha que as viola é matematicamente impossível e não atravessa a
+    // fronteira.
+    if (
+      completedOccurrences !== completedOnTime + completedLate ||
+      totalOccurrences !==
+        completedOccurrences + overdueOpenOccurrences + pendingOpenOccurrences ||
+      dueOccurrences > totalOccurrences ||
+      dueCompletedOccurrences > dueOccurrences ||
+      dueCompletedOccurrences > completedOccurrences
     ) {
       continue;
     }
@@ -161,9 +200,9 @@ export function parseChecklistExecutionMetrics(raw: unknown): ChecklistExecution
     out.push({
       checklistId,
       checklistTitle: asString(row.checklist_title),
-      unitId: asUuid(row.unit_id),
+      unitId,
       unitName: asString(row.unit_name),
-      shiftId: asUuid(row.shift_id),
+      shiftId,
       shiftName: asString(row.shift_name),
       totalOccurrences,
       completedOccurrences,
