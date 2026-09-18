@@ -166,8 +166,14 @@ function PainelPage() {
   });
   const canLoadFilteredData = canLoadOperationalData && (!filters.shiftId || shiftOptions.resolved);
 
-  // Unidades reais do workspace (RLS já filtra). Mesma fonte que o filtro usa.
-  const { units } = useAccessibleUnits();
+  // Unidades reais do workspace ATUAL — escopo explícito (`workspace_id` na
+  // consulta, além da RLS) e o mesmo gate do resto do painel: sem workspace
+  // válido não há consulta, e trocar de workspace nunca publica unidades do
+  // anterior. Mesma fonte que o filtro de unidade usa.
+  const { units } = useAccessibleUnits({
+    workspaceId: currentWorkspace?.id ?? null,
+    enabled: canLoadOperationalData,
+  });
   const unitOptions = useMemo(
     () => units.map((unit) => ({ id: unit.id, name: unit.name })),
     [units],

@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { useAccessibleUnits } from "@/hooks/useAccessibleUnits";
+import { useWorkspace } from "@/contexts/WorkspaceContext";
 import {
   defaultFilters,
   detectPreset,
@@ -46,7 +47,14 @@ export function OperationalDashboardFilters({
   showShift = true,
 }: Props) {
   const preset = detectPreset(value);
-  const { units, loading } = useAccessibleUnits(false);
+  // Escopo explícito: o filtro lista as unidades do WORKSPACE atual (inclusive
+  // inativas, porque esta é a variante administrativa). Sem workspace
+  // selecionado não há consulta — nunca "todas as unidades que a RLS deixa ver".
+  const { currentWorkspace } = useWorkspace();
+  const { units, loading } = useAccessibleUnits({
+    workspaceId: currentWorkspace?.id ?? null,
+    includeInactive: true,
+  });
   const [openStart, setOpenStart] = useState(false);
   const [openEnd, setOpenEnd] = useState(false);
 

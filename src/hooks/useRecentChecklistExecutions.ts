@@ -24,10 +24,10 @@
  *   6. loading e error são canais separados — falha nunca é apresentada como
  *      "sem execuções".
  *
- * A RPC é nova: enquanto a migration 6B.2E não estiver aplicada no ambiente, a
- * chamada falha e o card mostra o estado de ERRO (com retry) — deliberadamente
- * diferente do estado vazio, para que a ausência do contrato não seja lida como
- * "nada aconteceu na operação".
+ * Se o contrato não existir no ambiente (RPC ausente ou indisponível), a chamada
+ * falha e o card mostra o estado de ERRO (com retry) — deliberadamente diferente
+ * do estado vazio, para que a ausência do contrato nunca seja lida como "nada
+ * aconteceu na operação".
  */
 import { useCallback, useMemo } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";

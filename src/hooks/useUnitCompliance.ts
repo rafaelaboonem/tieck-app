@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { todayISO } from "@/lib/dashboard-filters";
 import type { UnitComplianceData } from "@/components/dashboard/UnitComplianceChart";
 
 // Regra oficial (idêntica à view analytics_unit_daily_compliance):
@@ -356,7 +357,10 @@ export function useUnitCompliance(params: UseUnitComplianceParams): UseUnitCompl
   // bloqueado pelo gate de escopo dentro do load.
   useEffect(() => {
     if (!canQuery || !organizationId) return;
-    const today = new Date().toISOString().slice(0, 10);
+    // "Hoje" na data civil LOCAL (6B.2F): com o dia UTC, a janela que termina
+    // hoje deixava de "incluir hoje" nas últimas horas do dia local e o canal
+    // em tempo real simplesmente não abria.
+    const today = todayISO();
     if (endDate < today) return;
     let timer: ReturnType<typeof setTimeout> | null = null;
     const trigger = () => {

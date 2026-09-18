@@ -20,8 +20,8 @@
  *   • "Atividade dos checklists" — nenhum contrato devolve a série diária;
  *   • "Insights da operação" — nenhum contrato devolve conformidade por turno
  *     nem execução por checklist.
- * "Últimas execuções" também não tem fonte (nenhum contrato carregado pela rota
- * devolve respostas individuais) e usa o estado indisponível do próprio card.
+ * "Últimas execuções" TEM fonte real desde a 6B.2E: a rota passa as execuções de
+ * rotinas concluídas no recorte e o card cobre loading → erro → vazio/linhas.
  *
  * DOIS RECORTES INDEPENDENTES: os FILTROS vêm de fora (URL) e alimentam todas as
  * seções; a VISIBILIDADE dos módulos é só apresentação — esconder um módulo não

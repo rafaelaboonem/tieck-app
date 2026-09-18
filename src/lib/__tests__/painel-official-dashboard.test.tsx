@@ -85,15 +85,20 @@ vi.mock("@/hooks/useShiftOptions", () => ({
     loading: false,
   }),
 }));
+// As unidades são REAIS na forma, injetadas aqui — e o hook registra o ESCOPO
+// com que a rota o chamou (workspace + elegibilidade), que é justamente o que a
+// 6B.2F tornou explícito.
+const accessibleUnitsState = {
+  units: [
+    { id: "u-1", name: "Unidade Norte", is_active: true, workspace_id: "org-1" },
+    { id: "u-2", name: "Unidade Centro", is_active: true, workspace_id: "org-1" },
+  ],
+  loading: false,
+  error: null as string | null,
+  refresh: vi.fn(),
+};
 vi.mock("@/hooks/useAccessibleUnits", () => ({
-  useAccessibleUnits: () => ({
-    units: [
-      { id: "u-1", name: "Unidade Norte", is_active: true, workspace_id: "org-1" },
-      { id: "u-2", name: "Unidade Centro", is_active: true, workspace_id: "org-1" },
-    ],
-    loading: false,
-    error: null,
-  }),
+  useAccessibleUnits: vi.fn(() => accessibleUnitsState),
 }));
 
 // Apresentação pesada (recharts/canvas): stubs neutros — o objeto aqui é a
@@ -146,6 +151,7 @@ vi.mock("@/components/dashboard/ScheduledOccurrencesSection", () => ({
 
 import { Route as PainelRoute } from "../../routes/painel";
 import { useRecentChecklistExecutions } from "@/hooks/useRecentChecklistExecutions";
+import { useAccessibleUnits } from "@/hooks/useAccessibleUnits";
 
 const PAINEL_SRC = readFileSync(resolve(__dirname, "../../routes/painel.tsx"), "utf8");
 const LAYOUT_SRC = readFileSync(
@@ -207,6 +213,25 @@ describe("promoção — /painel é o dashboard oficial", () => {
     // Recorte padrão do produto (7 dias) com as opções reais disponíveis.
     expect(subtitle).toContain("Todas as unidades · Todos os turnos");
     expect(container.querySelector('[role="group"][aria-label="Período"]')).not.toBeNull();
+  });
+
+  it("as unidades são pedidas no ESCOPO do workspace atual (6B.2F)", () => {
+    renderPainel();
+
+    expect(useAccessibleUnits).toHaveBeenCalledWith({ workspaceId: "org-1", enabled: true });
+  });
+
+  it("sem workspace resolvido, nem unidades nem dados são pedidos", () => {
+    workspaceState.currentWorkspace = null;
+    renderPainel();
+
+    expect(useAccessibleUnits).toHaveBeenCalledWith({ workspaceId: null, enabled: false });
+  });
+
+  it("o rótulo do recorte usa o NOME real da unidade selecionada", () => {
+    const { container } = renderPainel({ unitId: "u-1" });
+
+    expect(container.textContent).toContain("Unidade Norte · Todos os turnos");
   });
 
   it("o recorte vem da URL: datas aplicadas aparecem no subtítulo", () => {

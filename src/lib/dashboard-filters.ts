@@ -13,14 +13,39 @@ export interface DashboardFilters {
   shiftId?: string;
 }
 
-export function todayISO(): string {
-  return new Date().toISOString().slice(0, 10);
+/**
+ * Data CIVIL LOCAL no formato `YYYY-MM-DD`.
+ *
+ * Nunca usar `toISOString()` para obter "o dia de hoje": ele devolve o dia
+ * UTC, então às 21h de um fuso UTC-3 o recorte "Hoje" já apontaria para
+ * amanhã. Aqui o dia vem dos componentes locais do navegador — exatamente o
+ * que o calendário produz quando o usuário clica num dia (`toIsoDate` da
+ * toolbar usa a mesma conversão, então preset e calendário concordam).
+ */
+export function toCivilDateISO(date: Date): string {
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${date.getFullYear()}-${month}-${day}`;
 }
 
-export function daysAgoISO(days: number): string {
-  const d = new Date();
+/**
+ * "Hoje" na data civil LOCAL. Aceita um instante injetado para testes.
+ */
+export function todayISO(now: Date = new Date()): string {
+  return toCivilDateISO(now);
+}
+
+/**
+ * Data civil local N dias atrás.
+ *
+ * Parte da meia-noite LOCAL do dia e subtrai pelo calendário (`setDate`), de
+ * modo que o resultado é sempre um dia civil — somar/subtrair milissegundos
+ * erraria o dia em viradas de horário de verão.
+ */
+export function daysAgoISO(days: number, now: Date = new Date()): string {
+  const d = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   d.setDate(d.getDate() - days);
-  return d.toISOString().slice(0, 10);
+  return toCivilDateISO(d);
 }
 
 export function defaultFilters(): DashboardFilters {
