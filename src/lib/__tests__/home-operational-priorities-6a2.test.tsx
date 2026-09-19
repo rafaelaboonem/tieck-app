@@ -231,39 +231,47 @@ describe('Home 6A.2 — estrutura da rota /inicio (L, M, N)', () => {
   const source = readFileSync(resolve(process.cwd(), 'src/routes/inicio.tsx'), 'utf8');
 
   it('Prioridades fica entre o resumo e o título "Checklists"', () => {
-    const summaryIdx = source.indexOf('<HomeOperationalSummary checklists={checklists} />');
-    const prioritiesIdx = source.indexOf('<HomeOperationalPriorities');
+    // 6B.2L: a composição aprovada da Home não renderiza mais Prioridades — os
+    // 3 cards vêm antes da seção "Checklists", que é a superfície final.
+    const summaryIdx = source.indexOf('<HomeSummaryCards checklists={checklists} />');
     const headingIdx = source.indexOf('{isSelectionMode ? `${selectedIds.length} selecionado(s)` : "Checklists"}');
     expect(summaryIdx).toBeGreaterThan(-1);
-    expect(prioritiesIdx).toBeGreaterThan(summaryIdx);
-    expect(headingIdx).toBeGreaterThan(prioritiesIdx);
+    expect(headingIdx).toBeGreaterThan(summaryIdx);
+    expect(source).not.toContain('<HomeOperationalPriorities');
   });
 
   it('L) Viewer → callback navega para /executar/$id', () => {
-    const prioritiesSection = source.slice(
-      source.indexOf('<HomeOperationalPriorities'),
-      source.indexOf('<div className="flex items-center justify-between">')
+    // A regra continua valendo e agora vive no handler ÚNICO da rota
+    // (`handleOpen`), usado pela linha, pelo título e por "Abrir checklist".
+    const openSection = source.slice(
+      source.indexOf('const handleOpen ='),
+      source.indexOf('const handleCopyLink =')
     );
-    expect(prioritiesSection).toContain(`to: "/executar/$id"`);
-    expect(prioritiesSection).toContain(`params: { id: checklistId }`);
-    expect(prioritiesSection).toContain('isViewer');
+    expect(openSection).toContain(`to: "/executar/$id"`);
+    expect(openSection).toContain('params: { id: item.id }');
+    expect(openSection).toContain('isViewer');
   });
 
   it('M) demais roles → callback navega para /checklist?id=...', () => {
-    const prioritiesSection = source.slice(
-      source.indexOf('<HomeOperationalPriorities'),
-      source.indexOf('<div className="flex items-center justify-between">')
+    const openSection = source.slice(
+      source.indexOf('const handleOpen ='),
+      source.indexOf('const handleCopyLink =')
     );
-    expect(prioritiesSection).toContain(`to: "/checklist"`);
-    expect(prioritiesSection).toContain(`search: { id: checklistId }`);
+    expect(openSection).toContain(`to: "/checklist"`);
+    expect(openSection).toContain('search: { id: item.id }');
   });
 
   it('N) nenhuma query Supabase nova na seção de prioridades', () => {
-    const prioritiesSection = source.slice(
-      source.indexOf('<HomeOperationalPriorities'),
-      source.indexOf('<div className="flex items-center justify-between">')
+    const listSection = source.slice(
+      source.indexOf('<section aria-label="Checklists"'),
+      source.indexOf('<HomeChecklistList')
     );
-    expect(prioritiesSection).not.toContain('supabase');
+    expect(listSection).not.toContain('supabase');
+    const listSource = readFileSync(
+      resolve(process.cwd(), 'src/components/home/HomeChecklistList.tsx'),
+      'utf8'
+    );
+    expect(listSource).not.toContain('supabase');
     const componentSource = readFileSync(
       resolve(process.cwd(), 'src/components/home/HomeOperationalPriorities.tsx'),
       'utf8'

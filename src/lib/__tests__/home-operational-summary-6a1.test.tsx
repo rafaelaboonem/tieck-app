@@ -158,25 +158,35 @@ describe('Home 6A.1 — componente HomeOperationalSummary', () => {
 describe('Home 6A.1 — estrutura da rota /inicio (J)', () => {
   const source = readFileSync(resolve(process.cwd(), 'src/routes/inicio.tsx'), 'utf8');
 
-  it('J) resumo operacional vem ANTES do título/lista "Checklists"', () => {
-    const summaryIdx = source.indexOf('<HomeOperationalSummary checklists={checklists} />');
+  it('J) os 3 cards de resumo vêm ANTES do título/lista "Checklists"', () => {
+    // 6B.2L: a Home aprovada usa 3 cards (`HomeSummaryCards`) com o MESMO
+    // `buildHomeOperationalSummary`, e a seção `Checklists` é a superfície final.
+    const summaryIdx = source.indexOf('<HomeSummaryCards checklists={checklists} />');
     const headingIdx = source.indexOf('{isSelectionMode ? `${selectedIds.length} selecionado(s)` : "Checklists"}');
     expect(summaryIdx).toBeGreaterThan(-1);
     expect(headingIdx).toBeGreaterThan(summaryIdx);
   });
 
-  it('J2) a lista/cards de checklists continua presente abaixo do resumo', () => {
-    expect(source).toContain('{checklists.map((item) => (');
+  it('J2) a lista de checklists continua presente abaixo do resumo', () => {
+    // 6B.2L: a lista virou UMA superfície única (`HomeChecklistList`), sempre
+    // abaixo do título da seção (o mapeamento das linhas vive no componente).
+    expect(source).toContain('<HomeChecklistList');
     const headingIdx = source.indexOf('"Checklists"}');
-    const listIdx = source.indexOf('{checklists.map((item) => (');
+    const listIdx = source.indexOf('<HomeChecklistList');
     expect(listIdx).toBeGreaterThan(headingIdx);
   });
 
   it('J3) o resumo usa apenas os checklists já carregados (sem query nova)', () => {
     const summarySection = source.slice(
-      source.indexOf('<HomeOperationalSummary checklists={checklists} />') - 400,
-      source.indexOf('<HomeOperationalSummary checklists={checklists} />')
+      source.indexOf('<HomeSummaryCards checklists={checklists} />') - 400,
+      source.indexOf('<HomeSummaryCards checklists={checklists} />')
     );
     expect(summarySection).not.toContain('supabase');
+    // E o componente dos cards é puro: nenhuma consulta própria.
+    const cardsSource = readFileSync(
+      resolve(process.cwd(), 'src/components/home/HomeSummaryCards.tsx'),
+      'utf8'
+    );
+    expect(cardsSource).not.toContain('supabase');
   });
 });

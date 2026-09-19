@@ -377,36 +377,40 @@ describe('Home 6A.3 — componente (Q, R)', () => {
 
 describe('Home 6A.3 — estrutura da rota /inicio', () => {
   const source = readFileSync(resolve(process.cwd(), 'src/routes/inicio.tsx'), 'utf8');
-  const prioritiesSection = source.slice(
-    source.indexOf('<HomeOperationalPriorities'),
-    source.indexOf('<div className="flex items-center justify-between">')
+  const openSection = source.slice(
+    source.indexOf('const handleOpen ='),
+    source.indexOf('const handleCopyLink =')
   );
 
-  it('hook é usado com gate RBAC explícito e atenção passa ao componente', () => {
-    expect(source).toContain('useHomeCameraAttention({');
-    expect(source).toContain('canLoadHomeCameraAttention({');
-    expect(source).toContain('isWorkspaceContext: workspaceStatus === \'workspace\'');
-    expect(source).toContain('isViewer,');
-    expect(source).toContain('canManage,');
-    expect(source).toContain('isAuthenticated: !!user?.id');
-    expect(prioritiesSection).toContain('attentionByChecklist={cameraAttention}');
+  // 6B.2L: a composição aprovada da Home não consome atenção de câmera — a
+  // superfície de Prioridades saiu do /inicio. As regras do hook e do gate
+  // continuam cobertas pelos testes acima, e a atenção segue acionável onde
+  // sempre foi (SubmissionsTab / editor → aba Envios).
+  it('a Home nova não consome atenção de câmera nem a superfície de Prioridades', () => {
+    expect(source).not.toContain('useHomeCameraAttention');
+    expect(source).not.toContain('canLoadHomeCameraAttention');
+    expect(source).not.toContain('<HomeOperationalPriorities');
   });
 
-  it('Q) prioridade IA navega para Configurações → aba Envios (settings + settingsTab)', () => {
-    expect(prioritiesSection).toContain(`settings: true`);
-    expect(prioritiesSection).toContain(`settingsTab: "envios"`);
-    // O branch camera vem antes das navegações de prazo.
-    expect(prioritiesSection.indexOf('kind === \'camera\'')).toBeGreaterThan(-1);
+  it('Q) a Home nova não navega para a aba Envios (o atalho era da superfície removida)', () => {
+    expect(source).not.toContain('settingsTab');
+    // O deep-link de Envios continua vivo no editor real.
+    const routeSource = readFileSync(resolve(process.cwd(), 'src/routes/checklist.tsx'), 'utf8');
+    expect(routeSource).toContain('settingsTab');
   });
 
-  it('R) prioridade só de prazo mantém Viewer → /executar/$id e demais → /checklist', () => {
-    expect(prioritiesSection).toContain(`to: "/executar/$id"`);
-    expect(prioritiesSection).toContain(`to: "/checklist"`);
-    expect(prioritiesSection).toContain('search: { id: checklistId }');
+  it('R) a navegação real mantém Viewer → /executar/$id e demais → /checklist', () => {
+    expect(openSection).toContain(`to: "/executar/$id"`);
+    expect(openSection).toContain(`to: "/checklist"`);
+    expect(openSection).toContain('search: { id: item.id }');
   });
 
-  it('nenhuma query supabase dentro da seção de prioridades', () => {
-    expect(prioritiesSection).not.toContain('supabase');
+  it('nenhuma query supabase dentro da seção de checklists', () => {
+    const listSection = source.slice(
+      source.indexOf('<section aria-label="Checklists"'),
+      source.indexOf('<HomeChecklistList')
+    );
+    expect(listSection).not.toContain('supabase');
   });
 
   it('componente não importa supabase', () => {

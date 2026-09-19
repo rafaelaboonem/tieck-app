@@ -1,0 +1,64 @@
+/*
+ * ==================== MICROINTERAÇÃO DOS CARDS DA HOME ======================
+ *
+ * Réplica EXATA do grupo `.ti-hover-kpi` de
+ * src/components/dashboard/panel/panel-light.css (cards KPI do /painel):
+ * lift -3px + scale 1.025, entrada 220ms, saída 300ms, easing
+ * cubic-bezier(0.22, 1, 0.36, 1), propriedades transform/box-shadow/border-color
+ * sempre juntas, hover apenas em ponteiro fino e reduced-motion com MENOS
+ * movimento (-1px, scale 1.008, 130ms) — nunca ausência de movimento.
+ *
+ * Por que réplica e não reuso direto: no /painel o seletor é
+ * `.tieck-panel-light .ti-hover-kpi` e o escopo `.tieck-panel-light` só existe
+ * dentro do /painel (ele também define os tokens LIGHT da página). Envolver a
+ * Home nesse escopo importaria os tokens do painel; reutilizar a classe bruta
+ * não aplicaria efeito nenhum. Reproduzimos o MESMO padrão sob um escopo
+ * próprio da Home (`.tieck-home`), sem tocar em panel-light.css.
+ *
+ * Mesmo sendo visual, o card NÃO é clicável: sem cursor-pointer, sem onClick —
+ * a microinteração é só refinamento, não affordance de navegação.
+ * ==========================================================================
+ */
+
+.tieck-home .ti-hover-kpi {
+  position: relative;
+  z-index: 0;
+  transform-origin: center center;
+  transform: translate3d(0, 0, 0) scale(1);
+  /* estado NORMAL → usado na SAÍDA (300ms, retorno mais macio) */
+  transition:
+    transform 300ms cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 300ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 300ms cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .tieck-home .ti-hover-kpi:hover {
+    transform: translate3d(0, -3px, 0) scale(1.025);
+    /* ENTRADA: 220ms (sobrescreve só a duração do estado normal) */
+    transition-duration: 220ms;
+    z-index: 10;
+    border-color: color-mix(in oklab, var(--foreground) 12%, var(--border));
+    box-shadow:
+      0 12px 28px -14px color-mix(in oklab, var(--foreground) 26%, transparent),
+      0 2px 6px -2px color-mix(in oklab, var(--foreground) 8%, transparent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* Reduced motion = MENOS movimento, não ausência de movimento (idêntico ao
+     /painel). Este bloco não define `transition: none` em lugar nenhum. */
+  .tieck-home .ti-hover-kpi {
+    transition:
+      transform 130ms ease-out,
+      box-shadow 130ms ease-out,
+      border-color 130ms ease-out;
+  }
+
+  .tieck-home .ti-hover-kpi:hover {
+    transition-duration: 130ms;
+    transition-timing-function: ease-out;
+    transform: translate3d(0, -1px, 0) scale(1.008);
+  }
+}

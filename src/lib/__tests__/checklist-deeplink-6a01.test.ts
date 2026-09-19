@@ -64,8 +64,12 @@ describe("Promotion 6A.0.1 — deep-link Envios sem 5E", () => {
     expect(effectIdx).toBeGreaterThan(stateIdx);
   });
 
-  it("D/E/F) inicio.tsx navega com settings + settingsTab, sem surface 5E", () => {
-    expect(inicioSource).toContain(`search: { id: checklistId, settings: true, settingsTab: "envios" }`);
+  it("D/E/F) o deep-link de Envios vive no editor, sem surface 5E na Home", () => {
+    // 6B.2L: o atalho "Ver envio" saiu da Home junto com a superfície de
+    // Prioridades; o contrato de settingsTab continua no editor (/checklist),
+    // que é quem recebe o deep-link.
+    expect(inicioSource).not.toContain("settingsTab");
+    expect(routeSource).toContain("settingsTab");
     // Nenhuma união/string de settings à moda 5E em nenhum dos dois arquivos.
     expect(inicioSource).not.toContain(`settings: "envios"`);
     expect(routeSource).not.toMatch(/settings\?: boolean \| string/);

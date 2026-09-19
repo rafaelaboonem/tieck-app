@@ -172,7 +172,16 @@ import { toast } from "sonner";
  }
 
 
-  export function DashboardLayout({ children }: { children: React.ReactNode }) {
+  export function DashboardLayout({
+    children,
+    /**
+     * Opção explícita do shell para a página esconder o botão flutuante de
+     * ajuda (`?`). Default `true` — nenhuma outra rota muda de comportamento; a
+     * Home passa `false` porque aquele botão não faz parte do layout aprovado
+     * dela. Nada de hack de CSS nem de lógica espalhada.
+     */
+    showFloatingHelp = true,
+  }: { children: React.ReactNode; showFloatingHelp?: boolean }) {
     const { sidebarOpen, setSidebarOpen } = useSidebar();
     const { user, loading: authLoading, needsEmailConfirmation, signOut } = useAuth();
     const { workspaces, currentWorkspace, setCurrentWorkspace, refreshWorkspaces, workspaceStatus } = useWorkspace();
@@ -317,6 +326,20 @@ import { toast } from "sonner";
       window.addEventListener('open-search', handleOpenSearch);
       return () => window.removeEventListener('open-search', handleOpenSearch);
     }, [user?.id, currentWorkspace?.id, workspaceStatus, isWsViewer, rbacLoading]);
+
+    // Home 6B.2L: a Home pede o MESMO diálogo real de criação de workspace
+    // (nenhum fluxo paralelo). O evento é o contrato — igual a 'open-search' —
+    // e o gate é idêntico ao do dropdown do perfil.
+    useEffect(() => {
+      const handleOpenCreateWorkspace = () => {
+        if (!(profile?.is_admin || (workspaces?.length ?? 0) === 0)) return;
+        setCreateWsOpen(true);
+        setNewWsName("");
+        setNewWsIcon("📁");
+      };
+      window.addEventListener("open-create-workspace", handleOpenCreateWorkspace);
+      return () => window.removeEventListener("open-create-workspace", handleOpenCreateWorkspace);
+    }, [profile?.is_admin, workspaces?.length]);
 
     // Gate: usuário logado com e-mail não confirmado não acessa o app.
     useEffect(() => {
@@ -885,12 +908,14 @@ import { toast } from "sonner";
           {children}
         </div>
 
-       <button
-         type="button"
-         className="fixed bottom-4 right-4 w-8 h-8 rounded-full border border-neutral-200 bg-white text-neutral-500 hover:text-neutral-900 flex items-center justify-center shadow-sm z-50"
-       >
-         <HelpCircle className="w-4 h-4" />
-       </button>
+       {showFloatingHelp && (
+         <button
+           type="button"
+           className="fixed bottom-4 right-4 w-8 h-8 rounded-full border border-neutral-200 bg-white text-neutral-500 hover:text-neutral-900 flex items-center justify-center shadow-sm z-50"
+         >
+           <HelpCircle className="w-4 h-4" />
+         </button>
+       )}
 
        <Dialog open={createWsOpen} onOpenChange={setCreateWsOpen}>
          <DialogContent className="sm:max-w-md">

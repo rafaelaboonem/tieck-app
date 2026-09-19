@@ -282,82 +282,28 @@ describe("6B.2C — resumo: rotinas contadas à parte", () => {
   });
 });
 
-describe("6B.2C — rota /inicio", () => {
-  it("carrega as próprias occurrences no contexto de workspace", async () => {
+describe("6B.2C — a nova Home (6B.2L) e as rotinas agendadas", () => {
+  it("a rota /inicio não consulta a RPC de occurrences e não renderiza as superfícies de rotina", async () => {
+    // 6B.2L: a composição aprovada da Home não renderiza mais Prioridades nem o
+    // resumo de rotinas — a leitura de occurrences deixou de ser feita aqui.
     render(<Dashboard />);
 
-    await waitFor(() =>
-      expect(h.rpc).toHaveBeenCalledWith("list_my_checklist_execution_occurrences", {
-        p_workspace_id: WS,
-      }),
-    );
-    await waitFor(() => expect(screen.getAllByTestId("home-occurrence-priority")).toHaveLength(2));
-    expect(screen.getByTestId("home-occurrence-summary")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByTestId("home-checklist-list")).toBeInTheDocument());
+
+    expect(
+      h.rpc.mock.calls.filter((c) => c[0] === "list_my_checklist_execution_occurrences"),
+    ).toHaveLength(0);
+    expect(screen.queryAllByTestId("home-occurrence-priority")).toHaveLength(0);
+    expect(screen.queryByTestId("home-occurrence-summary")).toBeNull();
+    expect(screen.queryByText(/Rotinas agendadas|Rotinas atrasadas|Rotinas pendentes/)).toBeNull();
+    expect(screen.queryByText("Prioridades")).toBeNull();
+    // A superfície do /inicio continua sendo a lista REAL de checklists.
+    expect(screen.getByText("Checklist legado")).toBeInTheDocument();
+    // E os 3 cards continuam vindo só de buildHomeOperationalSummary.
+    expect(screen.getByTestId("home-summary-card-checklists")).toBeInTheDocument();
   });
 
-  it.each([
-    ["viewer", "viewer", true],
-    ["editor", "editor", false],
-    ["admin", "admin", false],
-  ])("papel %s abre o executor occurrence-aware", async (_label, role, viewer) => {
-    h.rbac.role = role;
-    h.rbac.isViewer = viewer;
-    h.rbac.canManage = role !== "viewer";
-
-    render(<Dashboard />);
-
-    await waitFor(() => expect(screen.getAllByTestId("home-occurrence-priority")).toHaveLength(2));
-
-    fireEvent.click(screen.getAllByTestId("home-occurrence-priority")[0]);
-
-    expect(h.navigate).toHaveBeenCalledWith({
-      to: "/executar/$id",
-      params: { id: CHK },
-      search: { occurrenceId: OCC_YESTERDAY },
-    });
-  });
-
-  it("a prioridade legada continua igual (viewer → /executar, editor → /checklist)", async () => {
-    h.rbac.role = "editor";
-    h.rbac.isViewer = false;
-    h.rbac.canManage = true;
-    h.rpc.mockImplementation(async (name: string) =>
-      name === "list_my_checklist_execution_occurrences"
-        ? { data: [], error: null }
-        : { data: null, error: null },
-    );
-
-    render(<Dashboard />);
-
-    const priorities = () => within(screen.getByLabelText("Prioridades"));
-    await waitFor(() => expect(priorities().getByText("Checklist legado")).toBeInTheDocument());
-    fireEvent.click(priorities().getByText("Checklist legado"));
-
-    expect(h.navigate).toHaveBeenCalledWith({ to: "/checklist", search: { id: CHK } });
-  });
-
-  it("a prioridade Camera AI continua abrindo /checklist?settings=true", async () => {
-    h.attention = { [CHK]: { rejectedCount: 2, latestSubmittedAt: "2026-09-01T00:00:00Z" } };
-    h.rpc.mockImplementation(async (name: string) =>
-      name === "list_my_checklist_execution_occurrences"
-        ? { data: [], error: null }
-        : { data: null, error: null },
-    );
-
-    render(<Dashboard />);
-
-    await waitFor(() =>
-      expect(screen.getByText(/IA não aprovou 2 verificações/)).toBeInTheDocument(),
-    );
-    fireEvent.click(screen.getByText(/IA não aprovou 2 verificações/));
-
-    expect(h.navigate).toHaveBeenCalledWith({
-      to: "/checklist",
-      search: { id: CHK, settings: true, settingsTab: "envios" },
-    });
-  });
-
-  it("contexto pessoal nunca consulta a RPC de occurrences", async () => {
+  it("contexto pessoal também não consulta a RPC de occurrences", async () => {
     h.workspace.workspaceStatus = "personal";
     h.workspace.currentWorkspace = null;
     h.rbac.role = null;
@@ -366,84 +312,10 @@ describe("6B.2C — rota /inicio", () => {
 
     render(<Dashboard />);
 
-    await waitFor(() =>
-      expect(
-        within(screen.getByLabelText("Prioridades")).getByText("Checklist legado"),
-      ).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByTestId("home-checklist-list")).toBeInTheDocument());
     expect(
       h.rpc.mock.calls.filter((c) => c[0] === "list_my_checklist_execution_occurrences"),
     ).toHaveLength(0);
-    expect(screen.queryAllByTestId("home-occurrence-priority")).toHaveLength(0);
-    expect(screen.queryByTestId("home-occurrence-summary")).toBeNull();
   });
 
-  it("falha na leitura não é apresentada como zero rotinas", async () => {
-    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-    h.rpc.mockImplementation(async (name: string) => {
-      if (name === "list_my_checklist_execution_occurrences") {
-        return { data: null, error: { message: "permission denied for function" } };
-      }
-      if (name === "list_my_checklist_assignments") {
-        return {
-          data: [
-            {
-              id: "assignment-1",
-              checklist_id: CHK,
-              due_at: "2020-01-01T00:00:00Z",
-              completed_at: null,
-              workspace_member_id: WM,
-            },
-          ],
-          error: null,
-        };
-      }
-      return { data: null, error: null };
-    });
-
-    render(<Dashboard />);
-
-    await waitFor(() =>
-      expect(
-        within(screen.getByLabelText("Prioridades")).getByText("Checklist legado"),
-      ).toBeInTheDocument(),
-    );
-    await waitFor(() =>
-      expect(
-        h.rpc.mock.calls.filter((c) => c[0] === "list_my_checklist_execution_occurrences"),
-      ).toHaveLength(1),
-    );
-
-    // Nenhuma rotina é inventada (nem como linha, nem como contagem no resumo).
-    expect(screen.queryAllByTestId("home-occurrence-priority")).toHaveLength(0);
-    expect(screen.queryByTestId("home-occurrence-summary")).toBeNull();
-    expect(screen.queryByText(/Rotinas atrasadas|Rotinas pendentes/)).toBeNull();
-    errorSpy.mockRestore();
-  });
-
-  it("rotina de checklist diferente também é exibida com a identidade correta", async () => {
-    h.rpc.mockImplementation(async (name: string) => {
-      if (name === "list_my_checklist_execution_occurrences") {
-        return {
-          data: [
-            row(OCC_YESTERDAY),
-            row(OCC_OTHER, { checklist_id: CHK_B, checklist_title: "Rotina da noite" }),
-          ],
-          error: null,
-        };
-      }
-      return { data: null, error: null };
-    });
-
-    render(<Dashboard />);
-
-    await waitFor(() => expect(screen.getByText("Rotina da noite")).toBeInTheDocument());
-    fireEvent.click(screen.getByText("Rotina da noite"));
-
-    expect(h.navigate).toHaveBeenCalledWith({
-      to: "/executar/$id",
-      params: { id: CHK_B },
-      search: { occurrenceId: OCC_OTHER },
-    });
-  });
 });

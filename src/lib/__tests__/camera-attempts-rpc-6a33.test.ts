@@ -245,10 +245,12 @@ describe('6A.3.3 — Integração client (M–R)', () => {
     expect(
       canLoadHomeCameraAttention({ isWorkspaceContext: true, isViewer: true, canManage: true, isAuthenticated: true })
     ).toBe(false);
-    // A rota /inicio continua condicionando o hook ao gate RBAC.
+    // O gate duplo do hook permanece (assert acima). A composição aprovada do
+    // /inicio (6B.2L) não consome mais atenção de câmera: a superfície de
+    // Prioridades saiu da Home e a atenção segue acionável em SubmissionsTab.
     const inicioSource = readFileSync(resolve(process.cwd(), 'src/routes/inicio.tsx'), 'utf8');
-    expect(inicioSource).toContain('canLoadHomeCameraAttention({');
-    expect(inicioSource).toContain('useHomeCameraAttention({');
+    expect(inicioSource).not.toContain('canLoadHomeCameraAttention');
+    expect(inicioSource).not.toContain('useHomeCameraAttention');
   });
 
   it('R) erro do RPC → Home fail-closed (retorna vazio, não quebra)', async () => {
